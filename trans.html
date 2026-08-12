@@ -227,7 +227,7 @@
             width: 22px; height: 22px; font-size: 11px; cursor: pointer; flex: 0 0 auto;
         }
         .tg-remove-group:hover { border-color: #ef4444; }
-        .tg-group-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; }
+        .tg-group-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px 10px; }
         .tg-group-field label {
             display: block; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
             color: var(--text-muted); margin-bottom: 3px;
@@ -256,7 +256,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard</h1>
+            <h1>🚂 Transport Dashboard (Rev.03)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
@@ -277,11 +277,17 @@
                 <strong>B5</strong> (X offset) and <strong>B6</strong> (Y offset): editing either
                 field here writes it straight to Excel, and the ⇩ button next to each label pulls
                 the latest value back in. New trains start with the same line spacing and X/Y
-                offset as the trailer above them. Split each train's axle range into
-                <strong>axle groups</strong> (e.g. axles 1&ndash;5 @ 25&nbsp;t, axles 6&ndash;10 @
-                50&nbsp;t) and pick one of the <strong>4 fixed groups</strong> for each range from
-                the dropdown &mdash; or mark a group <strong>No line load</strong> for axles that
-                carry no cargo weight. If a train is actually made up of several separate physical
+                offset as the trailer above them. Split each train's axle-line range into
+                <strong>axle groups</strong> (e.g. axle lines 1&ndash;5 @ 25&nbsp;t, axle lines
+                6&ndash;10 @ 50&nbsp;t) and pick one of the <strong>4 fixed groups</strong> for
+                each range from the dropdown &mdash; or mark a group <strong>No line load</strong>
+                for axles that carry no cargo weight. For a Goldhofer or SPMT preset trailer, each
+                axle line is really a pair of physical axles (a right axle and a left axle sitting
+                opposite each other) &mdash; use each group's <strong>Axle row</strong> field to
+                apply that group to <strong>both</strong> axles, the <strong>right axle only</strong>,
+                or the <strong>left axle only</strong>, so e.g. a 6-line/12-axle Goldhofer can have
+                columns 1&ndash;2 in one group (both rows) while columns 3&ndash;6's right axles sit
+                in a second group and their left axles sit in a third. If a train is actually made up of several separate physical
                 SPMT units (e.g. a 10-line train built from a 4-line unit followed by a 6-line
                 unit), use that train's <strong>AutoCAD split</strong> field to enter the axle-line
                 count per unit, front&nbsp;&rarr;&nbsp;back (e.g. <em>4,6</em>) &mdash; each unit
@@ -372,15 +378,35 @@
             4: { in: 'SCH_SPMT_4L_top_view_AFT', out: 'SCH_SPMT_4L_top_view_FWD' },
             6: { in: 'SCH_SPMT_6L_top_view_AFT', out: 'SCH_SPMT_6L_top_view_FWD' }
         };
-        // Excel/dashboard values are in metres; set to 1 if the target
-        // AutoCAD drawing's units are already metres instead of mm.
-        const CAD_UNIT_SCALE = 1000;
+        // Excel/dashboard values are in millimetres; set to 1000 if the
+        // target AutoCAD drawing's units are metres instead of mm.
+        const CAD_UNIT_SCALE = 1;
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
         // kept in sync with. B5 = X offset, B6 = Y offset. ----
         const INPUT_SHEET_NAME = "Input";
         const INPUT_X_OFFSET_CELL = "B5";
         const INPUT_Y_OFFSET_CELL = "B6";
+
+        // ---- Fixed trailer manufacturer presets (all mm) ----
+        // Each preset describes ONE physical trailer's top-deck footprint
+        // and axle-line layout, with the deck's own top-left corner
+        // treated as local (0,0) — i.e. offsets *from* the train's
+        // X offset / Y offset (which is the deck's top-left corner in
+        // world space). Axle line 1 sits at (axle1X, axle1Y) from that
+        // corner; its paired wheel ("clone") sits axlePairOffsetY further
+        // in +Y; each subsequent axle line moves lineSpacingX further in
+        // +X, for axleLines total lines.
+        const TRAILER_PRESETS = {
+            goldhofer: {
+                4: { deckLength: 6000, deckWidth: 3000, axle1X: 750, axle1Y: 600, axlePairOffsetY: 1800, lineSpacingX: 1500, axleLines: 4 },
+                6: { deckLength: 9000, deckWidth: 3000, axle1X: 750, axle1Y: 600, axlePairOffsetY: 1800, lineSpacingX: 1500, axleLines: 6 }
+            },
+            spmt: {
+                4: { deckLength: 5600, deckWidth: 4300, axle1X: 700, axle1Y: 490, axlePairOffsetY: 1450, lineSpacingX: 1400, axleLines: 4 },
+                6: { deckLength: 8400, deckWidth: 2430, axle1X: 700, axle1Y: 490, axlePairOffsetY: 1450, lineSpacingX: 1400, axleLines: 6 }
+            }
+        };
 
         // ============================================================
         let trailerGenTrains = [];
@@ -408,7 +434,12 @@
         function getGroupColor(groupNumber) { return getGroupDef(groupNumber).color; }
         function getGroupLabel(groupNumber) { return getGroupDef(groupNumber).label; }
 
-        function defaultAxleGroup(fromAxle, toAxle, load, groupNumber) {
+        // 'row' says which physical axle(s) of each axle LINE in [fromAxle,
+        // toAxle] this group covers: 'both' (right + left), 'right' only,
+        // or 'left' only. Only meaningful for preset trailers (which have
+        // a right/left axle pair per line, axlePairOffsetY set); custom/
+        // manual trailers have one physical axle per line and ignore it.
+        function defaultAxleGroup(fromAxle, toAxle, load, groupNumber, row) {
             return {
                 id: trailerGenNextGroupId++,
                 groupNumber: groupNumber,
@@ -416,24 +447,92 @@
                 to: toAxle,
                 load: load,
                 noLoad: false,
+                row: row || 'both',
                 color: getGroupColor(groupNumber)
             };
+        }
+
+        // Number of physical axles a group actually covers. For custom/
+        // manual trailers (no axlePairOffsetY) each axle line is a single
+        // physical axle. For preset trailers, a 'both' row group counts
+        // both the right and left axle of every line in range; a
+        // 'right'/'left' row group counts only that one side.
+        function axleCountForGroup(train, group) {
+            const lineCount = Math.max(0, (parseInt(group.to, 10) || 0) - (parseInt(group.from, 10) || 0) + 1);
+            if (!train.axlePairOffsetY) return lineCount;
+            return (group.row === 'right' || group.row === 'left') ? lineCount : lineCount * 2;
         }
 
         function defaultTrailerGenTrain(index) {
             return {
                 id: trailerGenNextId++,
                 name: `Train ${index}`,
-                spacing: 1.40,
-                x: 30 + (index - 1) * 15,   // X offset (m) — see INPUT_X_OFFSET_CELL
-                y: (index % 2 === 1) ? 3.2 : -3.2, // Y offset (m) — see INPUT_Y_OFFSET_CELL
-                vcg: 4.2,
-                groups: [defaultAxleGroup(1, 5, 25, 1)],
+                spacing: 1400,
+                x: 30000 + (index - 1) * 15000,   // X offset (mm) — see INPUT_X_OFFSET_CELL
+                y: (index % 2 === 1) ? 3200 : -3200, // Y offset (mm) — see INPUT_Y_OFFSET_CELL
+                vcg: 4200,
+                groups: [defaultAxleGroup(1, 5, 25, 1, 'both')],
                 // AutoCAD-export-only: how this train's axle lines are
                 // split across physical SPMT units for block insertion.
                 // Blank/empty = "auto" (whole train = one block).
-                cadSplit: ''
+                cadSplit: '',
+                // Trailer manufacturer preset ('custom' | 'goldhofer' | 'spmt').
+                // When not 'custom', deckLength/deckWidth/axle1OffsetX/
+                // axle1OffsetY/axlePairOffsetY are auto-filled from
+                // TRAILER_PRESETS and drawn/used as described above.
+                trailerType: 'custom',
+                axleLineCount: null,
+                deckLength: null,
+                deckWidth: null,
+                axle1OffsetX: null,
+                axle1OffsetY: null,
+                axlePairOffsetY: null
             };
+        }
+
+        // Applies (or clears) a fixed trailer preset to a train: sets its
+        // deck footprint, axle #1 inset, line spacing/direction, and
+        // resets its axle groups to a single group spanning all axle
+        // lines (keeping the previous load value as the new default).
+        // presetValue is 'custom', or a combined manufacturer+axle-line-count
+        // token like 'goldhofer4' / 'goldhofer6' / 'spmt4' / 'spmt6' (the
+        // trailer-type dropdown folds axle-line count into the same option
+        // so there's no separate "4 axle line / 6 axle line" dropdown).
+        function applyTrailerPreset(id, presetValue) {
+            const train = trailerGenTrains.find(t => t.id === id);
+            if (!train) return;
+            const m = /^(goldhofer|spmt)(4|6)$/.exec(presetValue || '');
+            if (!m) {
+                train.trailerType = 'custom';
+                train.axleLineCount = null;
+                train.deckLength = null;
+                train.deckWidth = null;
+                train.axle1OffsetX = null;
+                train.axle1OffsetY = null;
+                train.axlePairOffsetY = null;
+                renderTrailerDashboard();
+                return;
+            }
+            train.trailerType = m[1];
+            const axleLineCount = parseInt(m[2], 10);
+            const preset = TRAILER_PRESETS[train.trailerType][axleLineCount];
+            if (!preset) return;
+            train.axleLineCount = axleLineCount;
+            train.deckLength = preset.deckLength;
+            train.deckWidth = preset.deckWidth;
+            train.axle1OffsetX = preset.axle1X;
+            train.axle1OffsetY = preset.axle1Y;
+            train.axlePairOffsetY = preset.axlePairOffsetY;
+            // Negative spacing: computeTrailerGenRows() does
+            // `x = baseX - (axleNum-1)*spacing`, so a negative spacing
+            // makes axle lines move in +X (away from axle #1, toward
+            // the far end of the deck) instead of -X.
+            train.spacing = -preset.lineSpacingX;
+            const existingLoad = (train.groups[0] && !train.groups[0].noLoad) ? train.groups[0].load : 25;
+            // Single group spanning every axle line, applied to BOTH the
+            // right and left physical axle of each line.
+            train.groups = [defaultAxleGroup(1, axleLineCount, existingLoad, 1, 'both')];
+            renderTrailerDashboard();
         }
 
         // Parses a train's cadSplit text ("4,6" / "4 6" / "4, 6, ...")
@@ -535,7 +634,7 @@
 
                 const rebuiltTrains = clusters.map((cluster, idx) => {
                     const rows = cluster.rows.slice().sort((a, b) => b.x - a.x);
-                    const spacing = rows.length > 1 ? (rows[0].x - rows[1].x) : 1.40;
+                    const spacing = rows.length > 1 ? (rows[0].x - rows[1].x) : 1400;
 
                     const groups = [];
                     rows.forEach((row, i) => {
@@ -555,6 +654,7 @@
                                 to: axleNum,
                                 load: row.load,
                                 noLoad,
+                                row: 'both',
                                 color: getGroupColor(groupNumber)
                             });
                         }
@@ -567,8 +667,19 @@
                         x: rows[0].x,
                         y: cluster.y,
                         vcg: cluster.vcg,
-                        groups: groups.length ? groups : [defaultAxleGroup(1, 1, 0, 1)],
-                        cadSplit: ''
+                        groups: groups.length ? groups : [defaultAxleGroup(1, 1, 0, 1, 'both')],
+                        cadSplit: '',
+                        // Data pulled back from Excel is always treated as
+                        // custom/manual (axle #1 == X/Y offset exactly) —
+                        // re-apply a trailer preset above if it should be
+                        // read back as a fixed Goldhofer/SPMT footprint.
+                        trailerType: 'custom',
+                        axleLineCount: null,
+                        deckLength: null,
+                        deckWidth: null,
+                        axle1OffsetX: null,
+                        axle1OffsetY: null,
+                        axlePairOffsetY: null
                     };
                 });
 
@@ -714,7 +825,7 @@
             const from = lastTo + 1;
             const to = from + 4;
             const nextGroupNumber = (train.groups.length % TRAILER_GROUP_DEFS.length) + 1;
-            train.groups.push(defaultAxleGroup(from, to, 25, nextGroupNumber));
+            train.groups.push(defaultAxleGroup(from, to, 25, nextGroupNumber, 'both'));
             renderTrailerDashboard();
         }
 
@@ -722,11 +833,11 @@
             const train = trailerGenTrains.find(t => t.id === trainId);
             if (!train) return;
             train.groups = train.groups.filter(g => g.id !== groupId);
-            if (train.groups.length === 0) train.groups.push(defaultAxleGroup(1, 5, 25, 1));
+            if (train.groups.length === 0) train.groups.push(defaultAxleGroup(1, 5, 25, 1, 'both'));
             renderTrailerDashboard();
         }
 
-        // field: 'groupNumber' | 'from' | 'to' | 'load' | 'loadMode' ('load' or 'none')
+        // field: 'groupNumber' | 'from' | 'to' | 'load' | 'loadMode' ('load' or 'none') | 'row' ('both'/'right'/'left')
         function updateAxleGroupField(trainId, groupId, field, rawValue) {
             const train = trailerGenTrains.find(t => t.id === trainId);
             if (!train) return;
@@ -743,6 +854,11 @@
                 renderTrailerDashboard();
                 return;
             }
+            if (field === 'row') {
+                group.row = (rawValue === 'right' || rawValue === 'left') ? rawValue : 'both';
+                renderTrailerDashboard();
+                return;
+            }
             if (field === 'from' || field === 'to') {
                 const v = Math.max(1, Math.round(parseFloat(rawValue)) || 1);
                 group[field] = v;
@@ -753,24 +869,44 @@
             renderTrailerGenPreview();
         }
 
-        // Expands all trains into individual axle-line rows, in train
-        // then axle-number order, matching the write order used for
-        // Load_Editor!D:G. Axle #1 of each train sits exactly at the
-        // train's entered X offset; every following axle's X is the
-        // previous axle's X minus the line spacing. Y offset and VCG
-        // are shared across every axle in a train.
+        // Expands all trains into individual PHYSICAL axle rows, in train
+        // then axle-line then side (right, then left) order, matching the
+        // write order used for Load_Editor!D:G. Axle line #1 of each train
+        // sits exactly at the train's entered X offset; every following
+        // axle line's X is the previous line's X minus the line spacing.
+        // For a custom/manual train there's one physical axle per axle
+        // line (Y offset + VCG shared across all of them, as before). For
+        // a preset (Goldhofer/SPMT) train each axle line is a pair of
+        // physical axles — a right axle at Y offset, and a left axle at Y
+        // offset + axlePairOffsetY — and each group's 'row' field ('both'
+        // / 'right' / 'left') decides which of the two it applies to, so
+        // the right and left axle of the same line can end up in
+        // different groups (and so different loads/no line load).
         function computeTrailerGenRows() {
             const rows = [];
             const groupLineCounters = {};
             trailerGenTrains.forEach(train => {
                 const spacing = parseFloat(train.spacing) || 0;
-                const baseX = parseFloat(train.x) || 0;
-                const y = parseFloat(train.y) || 0;
+                // train.x / train.y is the deck's top-left corner in world
+                // space. For preset trailers, axle line #1 sits inset from
+                // that corner by axle1OffsetX/axle1OffsetY; for custom/
+                // manual trains those offsets are null (0), so axle line
+                // #1 sits exactly at train.x/train.y as before.
+                const baseX = (parseFloat(train.x) || 0) + (parseFloat(train.axle1OffsetX) || 0);
+                const y = (parseFloat(train.y) || 0) + (parseFloat(train.axle1OffsetY) || 0);
                 const vcg = parseFloat(train.vcg) || 0;
+                const axlePairOffsetY = parseFloat(train.axlePairOffsetY) || 0;
                 const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
-                for (let axleNum = 1; axleNum <= maxAxle; axleNum++) {
-                    const group = train.groups.find(g => axleNum >= (parseInt(g.from, 10) || 0) && axleNum <= (parseInt(g.to, 10) || 0));
-                    if (!group) continue;
+
+                const findGroup = (axleNum, side) => train.groups.find(g => {
+                    const from = parseInt(g.from, 10) || 0;
+                    const to = parseInt(g.to, 10) || 0;
+                    if (axleNum < from || axleNum > to) return false;
+                    const r = g.row || 'both';
+                    return r === 'both' || r === side;
+                });
+
+                const pushRow = (axleNum, side, group, yPos) => {
                     const gNum = group.groupNumber;
                     groupLineCounters[gNum] = (groupLineCounters[gNum] || 0) + 1;
                     rows.push({
@@ -779,14 +915,33 @@
                         groupName: getGroupLabel(gNum),
                         color: group.color,
                         axleNumber: axleNum,
+                        side: side,
+                        // true when this row is one physical axle of a
+                        // preset trailer's right/left pair (used by the
+                        // preview to draw a small wheel box + connecting
+                        // beam instead of a single full-width axle box).
+                        paired: !!axlePairOffsetY,
                         lineInGroup: groupLineCounters[gNum],
                         excelName: `Group_${gNum}_line_${groupLineCounters[gNum]}`,
                         load: group.noLoad ? 0 : (parseFloat(group.load) || 0),
                         noLoad: !!group.noLoad,
                         x: baseX - ((axleNum - 1) * spacing),
-                        y: y,
+                        y: yPos,
                         vcg: vcg
                     });
+                };
+
+                for (let axleNum = 1; axleNum <= maxAxle; axleNum++) {
+                    if (axlePairOffsetY) {
+                        const rightGroup = findGroup(axleNum, 'right');
+                        const leftGroup = findGroup(axleNum, 'left');
+                        if (rightGroup) pushRow(axleNum, 'right', rightGroup, y);
+                        if (leftGroup) pushRow(axleNum, 'left', leftGroup, y + axlePairOffsetY);
+                    } else {
+                        const group = findGroup(axleNum, 'both');
+                        if (!group) continue;
+                        pushRow(axleNum, 'both', group, y);
+                    }
                 }
             });
             return rows;
@@ -800,8 +955,9 @@
             if (!list) return;
             list.innerHTML = trailerGenTrains.map(train => {
                 const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+                const trainAxleCount = train.groups.reduce((s, g) => s + axleCountForGroup(train, g), 0);
                 const totalLoad = train.groups.reduce((s, g) => {
-                    const n = Math.max(0, (parseInt(g.to, 10) || 0) - (parseInt(g.from, 10) || 0) + 1);
+                    const n = axleCountForGroup(train, g);
                     return s + (g.noLoad ? 0 : (parseFloat(g.load) || 0) * n);
                 }, 0);
                 return `
@@ -815,22 +971,33 @@
                     </div>
                     <div class="tg-field-grid">
                         <div class="tg-field">
-                            <label>Line spacing (m)</label>
-                            <input type="number" step="any" value="${train.spacing}" title="Distance along X between adjacent axles: axle N = axle (N-1) X minus this spacing"
+                            <label>Trailer type</label>
+                            <select title="Pick a fixed manufacturer preset (including its axle-line count) to auto-fill the deck footprint and axle-line layout below, or Custom / Manual to enter your own."
+                                    onchange="applyTrailerPreset(${train.id}, this.value)">
+                                <option value="custom" ${train.trailerType === 'custom' || !train.trailerType ? 'selected' : ''}>Custom / Manual</option>
+                                <option value="goldhofer4" ${train.trailerType === 'goldhofer' && train.axleLineCount === 4 ? 'selected' : ''}>Goldhofer (4 axle line)</option>
+                                <option value="goldhofer6" ${train.trailerType === 'goldhofer' && train.axleLineCount === 6 ? 'selected' : ''}>Goldhofer (6 axle line)</option>
+                                <option value="spmt4" ${train.trailerType === 'spmt' && train.axleLineCount === 4 ? 'selected' : ''}>SPMT (4 axle line)</option>
+                                <option value="spmt6" ${train.trailerType === 'spmt' && train.axleLineCount === 6 ? 'selected' : ''}>SPMT (6 axle line)</option>
+                            </select>
+                        </div>
+                        <div class="tg-field">
+                            <label>Line spacing (mm)</label>
+                            <input type="number" step="any" value="${train.spacing}" title="Distance along X between adjacent axles: axle N = axle (N-1) X minus this spacing. Auto-filled (and may be negative) when a trailer preset is selected above."
                                    onchange="updateTrailerGenField(${train.id}, 'spacing', this.value)">
                         </div>
                         <div class="tg-field">
-                            <label>X offset (m) <button type="button" class="tg-xy-sync-btn" title="Pull X offset from Excel Input!${INPUT_X_OFFSET_CELL}" onclick="pullOffsetField(${train.id}, 'x')">⇩</button></label>
-                            <input type="number" step="any" value="${train.x}" title="Distance from origin (0,0) to the top-left corner of the trailer / axle #1's X position. Synced with Excel sheet 'Input'!${INPUT_X_OFFSET_CELL}. Every following axle = previous axle X - line spacing."
+                            <label>X offset (mm) <button type="button" class="tg-xy-sync-btn" title="Pull X offset from Excel Input!${INPUT_X_OFFSET_CELL}" onclick="pullOffsetField(${train.id}, 'x')">⇩</button></label>
+                            <input type="number" step="any" value="${train.x}" title="Distance from origin (0,0) to the top-left corner of the trailer deck (axle #1 sits inset from this corner when a trailer preset is selected). Synced with Excel sheet 'Input'!${INPUT_X_OFFSET_CELL}."
                                    onchange="updateTrailerGenField(${train.id}, 'x', this.value)">
                         </div>
                         <div class="tg-field">
-                            <label>Y offset (m) <button type="button" class="tg-xy-sync-btn" title="Pull Y offset from Excel Input!${INPUT_Y_OFFSET_CELL}" onclick="pullOffsetField(${train.id}, 'y')">⇩</button></label>
-                            <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer, shared by every axle in this train. Synced with Excel sheet 'Input'!${INPUT_Y_OFFSET_CELL}."
+                            <label>Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="Pull Y offset from Excel Input!${INPUT_Y_OFFSET_CELL}" onclick="pullOffsetField(${train.id}, 'y')">⇩</button></label>
+                            <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train. Synced with Excel sheet 'Input'!${INPUT_Y_OFFSET_CELL}."
                                    onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
                         </div>
                         <div class="tg-field">
-                            <label>VCG from deck (m)</label>
+                            <label>VCG from deck (mm)</label>
                             <input type="number" step="any" value="${train.vcg}" title="Shared VCG for every axle in this train"
                                    onchange="updateTrailerGenField(${train.id}, 'vcg', this.value)">
                         </div>
@@ -873,15 +1040,25 @@
                             </div>
                             <div class="tg-group-field-grid">
                                 <div class="tg-group-field">
-                                    <label>From axle #</label>
-                                    <input type="number" min="1" step="1" value="${group.from}" title="First axle number in this group"
+                                    <label>From axle line #</label>
+                                    <input type="number" min="1" step="1" value="${group.from}" title="First axle-line number in this group"
                                            onchange="updateAxleGroupField(${train.id}, ${group.id}, 'from', this.value)">
                                 </div>
                                 <div class="tg-group-field">
-                                    <label>To axle #</label>
-                                    <input type="number" min="1" step="1" value="${group.to}" title="Last axle number in this group"
+                                    <label>To axle line #</label>
+                                    <input type="number" min="1" step="1" value="${group.to}" title="Last axle-line number in this group"
                                            onchange="updateAxleGroupField(${train.id}, ${group.id}, 'to', this.value)">
                                 </div>
+                                ${train.axlePairOffsetY ? `
+                                <div class="tg-group-field">
+                                    <label>Axle row</label>
+                                    <select title="Which physical axle(s) of each axle line in this range this group applies to — both the right and left axle, the right axle only, or the left axle only. e.g. for a 6-line/12-axle Goldhofer, columns 1–2 could be 'Both' while columns 3–6's right axles go to one group and their left axles to another."
+                                            onchange="updateAxleGroupField(${train.id}, ${group.id}, 'row', this.value)">
+                                        <option value="both" ${(!group.row || group.row === 'both') ? 'selected' : ''}>Both (right + left)</option>
+                                        <option value="right" ${group.row === 'right' ? 'selected' : ''}>Right axle only</option>
+                                        <option value="left" ${group.row === 'left' ? 'selected' : ''}>Left axle only</option>
+                                    </select>
+                                </div>` : ''}
                                 <div class="tg-group-field">
                                     <label>Load type</label>
                                     <select onchange="updateAxleGroupField(${train.id}, ${group.id}, 'loadMode', this.value)">
@@ -892,23 +1069,26 @@
                                 <div class="tg-group-field">
                                     <label>Load per axle (t)</label>
                                     <input type="number" step="any" min="0" value="${group.load}" ${group.noLoad ? 'disabled' : ''}
-                                           title="Load carried by EACH axle in this group"
+                                           title="Load carried by EACH physical axle in this group"
                                            onchange="updateAxleGroupField(${train.id}, ${group.id}, 'load', this.value)">
                                 </div>
                             </div>
                             <div class="tg-group-summary">
                                 ${(() => {
-                                    const n = Math.max(0, (parseInt(group.to,10)||0) - (parseInt(group.from,10)||0) + 1);
+                                    const n = axleCountForGroup(train, group);
+                                    const rowNote = train.axlePairOffsetY
+                                        ? (group.row === 'right' ? ', right axle only' : (group.row === 'left' ? ', left axle only' : ', both rows'))
+                                        : '';
                                     return group.noLoad
-                                        ? `${n} axle line(s) (#${group.from}–#${group.to}) · no line load`
-                                        : `${n} axle line(s) (#${group.from}–#${group.to}) · ${group.load} t/axle · ${(n * (parseFloat(group.load)||0)).toFixed(1)} t total`;
+                                        ? `${n} axle(s) (line #${group.from}–#${group.to}${rowNote}) · no line load`
+                                        : `${n} axle(s) (line #${group.from}–#${group.to}${rowNote}) · ${group.load} t/axle · ${(n * (parseFloat(group.load)||0)).toFixed(1)} t total`;
                                 })()}
                             </div>
                         </div>
                     `).join('')}
                     <button type="button" class="tg-add-group-btn" onclick="addAxleGroup(${train.id})">+ Add Axle Group</button>
 
-                    <div class="tg-train-summary">${maxAxle} axle(s) total (#1–#${maxAxle || 0}) · ${totalLoad.toFixed(1)} t total for this train</div>
+                    <div class="tg-train-summary">${maxAxle} axle line(s) (#1–#${maxAxle || 0}) · ${trainAxleCount} axle(s) total · ${totalLoad.toFixed(1)} t total for this train</div>
                 </div>
             `;
             }).join('');
@@ -990,28 +1170,68 @@
             const rows = computeTrailerGenRows();
             if (rows.length === 0) { wrap.innerHTML = ''; return; }
 
-            const svgW = 680, svgH = 200;
-            const padL = 50, padR = 50, padT = 34, padB = 26;
+            const svgW = 680, svgH = 220;
+            const padL = 55, padR = 50, padT = 34, padB = 30;
             const plotW = svgW - padL - padR, plotH = svgH - padT - padB;
 
+            // Bounding box always includes the world origin (0,0) — so
+            // the origin sign/arrows are always in view — plus every
+            // preset trailer's full deck-rectangle footprint, not just
+            // the axle points. Each row already carries its own real Y
+            // (right and left axles of a preset trailer are separate
+            // rows), so no extra pairing offset is needed here.
             const xs = rows.map(r => r.x);
             const ys = rows.map(r => r.y);
-            const minX = Math.min(...xs, 0) - 5, maxX = Math.max(...xs, 10) + 5;
-            const minY = Math.min(...ys, -4), maxY = Math.max(...ys, 4);
+            trailerGenTrains.forEach(t => {
+                if (t.deckLength) { xs.push(parseFloat(t.x) || 0, (parseFloat(t.x) || 0) + t.deckLength); }
+                if (t.deckWidth) { ys.push(parseFloat(t.y) || 0, (parseFloat(t.y) || 0) + t.deckWidth); }
+            });
+            xs.push(0); ys.push(0);
+            const rawMinX = Math.min(...xs), rawMaxX = Math.max(...xs);
+            const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
+            const marginX = Math.max((rawMaxX - rawMinX) * 0.08, 500);
+            const marginY = Math.max((rawMaxY - rawMinY) * 0.08, 500);
+            const minX = rawMinX - marginX, maxX = rawMaxX + marginX;
+            const minY = rawMinY - marginY, maxY = rawMaxY + marginY;
             const spanX = Math.max(maxX - minX, 1);
             const spanY = Math.max(maxY - minY, 1);
             const sx = x => padL + ((x - minX) / spanX) * plotW;
-            const sy = y => padT + (1 - ((y - minY) / spanY)) * plotH;
+            // No vertical flip: +Y renders DOWNWARD on screen, matching
+            // the origin sign (X-axis arrow points right, Y-axis arrow
+            // points down) and the "top-left corner, +X / +Y" convention
+            // used to describe trailer decks and axle offsets.
+            const sy = y => padT + ((y - minY) / spanY) * plotH;
 
             const trainClusters = {};
             const trainClusterOrder = [];
             rows.forEach(r => {
-                const key = r.trainName + ' :: ' + r.groupNumber;
+                // Clustered by train + group + actual Y: for a preset
+                // trailer's right/left axles (different Y even within the
+                // same 'both'-row group) this keeps each side as its own
+                // band instead of averaging two different Y's together.
+                const key = r.trainName + ' :: ' + r.groupNumber + ' :: ' + r.y;
                 if (!trainClusters[key]) {
                     trainClusters[key] = { trainName: r.trainName, groupNumber: r.groupNumber, groupName: r.groupName, color: r.color, rows: [] };
                     trainClusterOrder.push(key);
                 }
                 trainClusters[key].rows.push(r);
+            });
+
+            // Thin grey beam connecting the right and left physical axle
+            // of the same axle line on a preset trailer, drawn even when
+            // the two sides end up in different groups/colors.
+            let pairBeamSvg = '';
+            const axleColumnMap = {};
+            rows.forEach(r => {
+                if (!r.paired) return;
+                const key = r.trainName + ':' + r.axleNumber;
+                (axleColumnMap[key] = axleColumnMap[key] || []).push(r);
+            });
+            Object.values(axleColumnMap).forEach(pair => {
+                if (pair.length < 2) return;
+                const cx = sx(pair[0].x);
+                const y1 = sy(pair[0].y), y2 = sy(pair[1].y);
+                pairBeamSvg += `<line x1="${cx}" y1="${y1}" x2="${cx}" y2="${y2}" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5" opacity="0.4"/>`;
             });
 
             let linesSvg = '';
@@ -1025,12 +1245,51 @@
                 linesSvg += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${c.color}" stroke-width="2" opacity="0.55"/>`;
                 c.rows.forEach(r => {
                     const cx = sx(r.x);
-                    axlesSvg += `<rect x="${cx - 5}" y="${y - 12}" width="10" height="24" rx="3" fill="${c.color}" opacity="${r.noLoad ? 0.35 : 0.9}"/>`;
+                    const opacity = r.noLoad ? 0.35 : 0.9;
+                    if (r.paired) {
+                        // Preset trailer: this row is ONE physical axle
+                        // (right or left) of a line — draw it as a small
+                        // wheel box; the connecting beam to its opposite
+                        // side is drawn separately in pairBeamSvg.
+                        axlesSvg += `<rect x="${cx - 5}" y="${y - 6}" width="10" height="12" rx="2.5" fill="${c.color}" opacity="${opacity}"/>`;
+                    } else {
+                        axlesSvg += `<rect x="${cx - 5}" y="${y - 12}" width="10" height="24" rx="3" fill="${c.color}" opacity="${opacity}"/>`;
+                    }
                 });
                 const centerX = pts.reduce((a, b) => a + b, 0) / pts.length;
                 if (!trainSpines[c.trainName]) trainSpines[c.trainName] = [];
                 trainSpines[c.trainName].push({ centerX, centerY: y });
             });
+
+            // Deck rectangles for any train using a fixed trailer preset —
+            // drawn from the deck's own top-left corner (train.x, train.y)
+            // in world space, per TRAILER_PRESETS.
+            let deckSvg = '';
+            trailerGenTrains.forEach(t => {
+                if (!t.deckLength || !t.deckWidth) return;
+                const ox = parseFloat(t.x) || 0, oy = parseFloat(t.y) || 0;
+                const rx1 = sx(ox), ry1 = sy(oy);
+                const rx2 = sx(ox + t.deckLength), ry2 = sy(oy + t.deckWidth);
+                const rw = rx2 - rx1, rh = ry2 - ry1;
+                const label = `${t.name} — ${t.trailerType === 'goldhofer' ? 'Goldhofer' : 'SPMT'} ${t.axleLineCount}-line deck`;
+                deckSvg += `<g>` +
+                    `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>` +
+                    `<text x="${rx1 + 3}" y="${ry1 - 4}" font-size="9" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>` +
+                    `</g>`;
+            });
+
+            // Origin sign at world (0,0): X-axis arrow pointing right
+            // (+X), Y-axis arrow pointing down (+Y).
+            const ox0 = sx(0), oy0 = sy(0);
+            const axisLen = 32;
+            let originSvg = `<g>` +
+                `<line x1="${ox0}" y1="${oy0}" x2="${ox0 + axisLen}" y2="${oy0}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1.75" marker-end="url(#tgArrowX)"/>` +
+                `<line x1="${ox0}" y1="${oy0}" x2="${ox0}" y2="${oy0 + axisLen}" stroke="var(--accent-green, #10b981)" stroke-width="1.75" marker-end="url(#tgArrowY)"/>` +
+                `<circle cx="${ox0}" cy="${oy0}" r="2.5" fill="var(--text-main, #e2e8f0)"/>` +
+                `<text x="${ox0 + axisLen + 4}" y="${oy0 + 3}" font-size="9" fill="var(--accent-blue, #38bdf8)">X</text>` +
+                `<text x="${ox0 - 3}" y="${oy0 + axisLen + 11}" font-size="9" fill="var(--accent-green, #10b981)" text-anchor="middle">Y</text>` +
+                `<text x="${ox0 + 4}" y="${oy0 - 5}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
+                `</g>`;
 
             let spineSvg = '';
             Object.values(trainSpines).forEach(points => {
@@ -1079,10 +1338,10 @@
                 const uniformLoad = loads.length === 1 ? loads[0] : null;
                 const totalLoad = allRows.reduce((s, r) => s + r.load, 0);
                 const labelText = allNoLoad
-                    ? `${g.groupName} · ${n} line(s) · no line load`
+                    ? `${g.groupName} · ${n} axle(s) · no line load`
                     : (uniformLoad !== null
-                        ? `${g.groupName} · ${n} line(s) · ${uniformLoad} t/axle · ${totalLoad.toFixed(1)} t`
-                        : `${g.groupName} · ${n} line(s) · ${totalLoad.toFixed(1)} t total`);
+                        ? `${g.groupName} · ${n} axle(s) · ${uniformLoad} t/axle · ${totalLoad.toFixed(1)} t`
+                        : `${g.groupName} · ${n} axle(s) · ${totalLoad.toFixed(1)} t total`);
                 const boxW = Math.max(70, labelText.length * 5.6);
                 const boxH = 16;
                 const labelX = overallX;
@@ -1134,8 +1393,16 @@
             });
 
             wrap.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
+                <defs>
+                    <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-blue, #38bdf8)"/>
+                    </marker>
+                    <marker id="tgArrowY" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-green, #10b981)"/>
+                    </marker>
+                </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${spineSvg}${linesSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${splitMarkersSvg}
+                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${splitMarkersSvg}${originSvg}
             </svg>`;
         }
 
