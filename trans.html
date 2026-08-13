@@ -18,6 +18,19 @@
             --accent-green: #10b981;
         }
 
+        /* ---- Day (light) mode — toggled via #themeModeToggle / body.tg-light-theme ---- */
+        body.tg-light-theme {
+            --bg-dark: #f3f5f8;
+            --panel-bg: #ffffff;
+            --panel-border: #d7dde6;
+            --tank-box-bg: #eef1f6;
+            --input-bg: rgba(255,255,255,0.95);
+            --text-main: #1a2433;
+            --text-muted: #5b6b81;
+            --accent-blue: #0284c7;
+            --accent-green: #059669;
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -52,6 +65,13 @@
         header h1 { font-size: 16px; letter-spacing: 0.3px; }
         header .header-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
         #connectionStatus { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+        .tg-header-right { display: flex; align-items: center; gap: 12px; }
+        #themeModeToggle {
+            padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
+            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
+            cursor: pointer; white-space: nowrap;
+        }
+        #themeModeToggle:hover { border-color: var(--accent-blue); color: var(--text-main); }
 
         .tg-page {
             max-width: 1180px;
@@ -114,7 +134,18 @@
 
         .tg-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
         .tg-modal-header h2 { font-size: 15px; margin: 0; }
-        .tg-modal-sub { font-size: 11px; color: var(--text-muted); margin: 0 0 14px; }
+        .tg-help-btn {
+            padding: 5px 10px; font-size: 11px; font-weight: 700; border-radius: 6px;
+            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
+            cursor: pointer; white-space: nowrap;
+        }
+        .tg-help-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        .tg-modal-sub {
+            font-size: 11px; color: var(--text-muted); margin: 0 0 14px;
+            display: none; border: 1px solid var(--panel-border); background: var(--tank-box-bg);
+            border-radius: 8px; padding: 10px 12px;
+        }
+        .tg-modal-sub.tg-help-open { display: block; }
 
         .tg-train-card {
             border: 1px solid var(--panel-border);
@@ -137,6 +168,16 @@
         .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
         .tg-preview-toggle input { cursor: pointer; }
         .tg-preview-external-note { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-muted); font-style: italic; }
+
+        /* Group detail legend — shown below the preview instead of the
+           on-canvas labels when "Show group label in preview" is off.
+           Each row is tinted in its own group's color to keep the same
+           at-a-glance color mapping that the on-canvas labels gave. */
+        .tg-preview-group-details { padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 4px; }
+        .tg-preview-group-detail-row {
+            font-size: 10.5px; font-weight: 600; padding: 4px 8px; border-radius: 5px;
+            border-left: 3px solid; background: var(--panel-bg);
+        }
 
         .tg-remove-train {
             background: none; border: 1px solid var(--panel-border); color: #ef4444;
@@ -256,18 +297,22 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.03)</h1>
+            <h1>🚂 Transport Dashboard (Rev.04)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
-        <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
+        <div class="tg-header-right">
+            <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
+            <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
+        </div>
     </header>
 
     <div class="tg-page">
         <div class="tg-modal">
             <div class="tg-modal-header">
                 <h2>🚂 Generate Trailer</h2>
+                <button type="button" class="tg-help-btn" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓ Help</button>
             </div>
-            <p class="tg-modal-sub">
+            <p class="tg-modal-sub" id="tgHelpPanel">
                 Define one or more trailer trains. Axle #1 of each train sits at the entered
                 <strong>X offset</strong> — the distance from the barge's origin (0,0) to the
                 top-left corner of the trailer; every following axle = previous axle's X &minus;
@@ -321,8 +366,17 @@
                                 <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
                                 ⧉ Show axle preview in separate window (compatible with two monitors)
                             </label>
+                            <label class="tg-preview-toggle">
+                                <input type="checkbox" id="tgGroupLabelToggle" checked onchange="toggleTgGroupLabels(this.checked)">
+                                🏷 Show group label in preview
+                            </label>
+                            <label class="tg-preview-toggle">
+                                <input type="checkbox" id="tgDimensionToggle" checked onchange="toggleTgDimensions(this.checked)">
+                                📏 Show dimensions
+                            </label>
                         </div>
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
+                        <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
                     </div>
 
                     <div class="tg-totals" id="tgTotals"></div>
@@ -347,6 +401,47 @@
     </div>
 
     <script>
+        // ============================================================
+        // HELP PANEL (collapsed by default — was a permanently-visible
+        // description block, now shown on demand via the ❓ Help button)
+        // ============================================================
+        function toggleTgHelp() {
+            const panel = document.getElementById('tgHelpPanel');
+            const btn = document.getElementById('tgHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+        }
+
+        // ============================================================
+        // DAY / NIGHT MODE
+        // ============================================================
+        const THEME_STORAGE_KEY = 'tgThemeMode'; // 'light' | 'dark'
+
+        function applyThemeMode(mode) {
+            const isLight = mode === 'light';
+            document.body.classList.toggle('tg-light-theme', isLight);
+            const btn = document.getElementById('themeModeToggle');
+            if (btn) btn.textContent = isLight ? '☀️ Day' : '🌙 Night';
+            syncExternalThemeVars();
+        }
+
+        function toggleThemeMode() {
+            const current = document.body.classList.contains('tg-light-theme') ? 'light' : 'dark';
+            const next = current === 'light' ? 'dark' : 'light';
+            try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch (e) { /* ignore storage errors */ }
+            applyThemeMode(next);
+        }
+
+        function initThemeMode() {
+            let saved = 'dark';
+            try {
+                saved = localStorage.getItem(THEME_STORAGE_KEY)
+                    || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+            } catch (e) { /* ignore storage errors */ }
+            applyThemeMode(saved);
+        }
+
         // ============================================================
         // OFFICE / EXCEL CONNECTION STATE
         // ============================================================
@@ -403,10 +498,41 @@
                 6: { deckLength: 9000, deckWidth: 3000, axle1X: 750, axle1Y: 600, axlePairOffsetY: 1800, lineSpacingX: 1500, axleLines: 6 }
             },
             spmt: {
-                4: { deckLength: 5600, deckWidth: 4300, axle1X: 700, axle1Y: 490, axlePairOffsetY: 1450, lineSpacingX: 1400, axleLines: 4 },
+                4: { deckLength: 5600, deckWidth: 2430, axle1X: 700, axle1Y: 490, axlePairOffsetY: 1450, lineSpacingX: 1400, axleLines: 4 },
                 6: { deckLength: 8400, deckWidth: 2430, axle1X: 700, axle1Y: 490, axlePairOffsetY: 1450, lineSpacingX: 1400, axleLines: 6 }
             }
         };
+
+        // ---- Extrapolated axle-line counts (8AL–50AL, even) ----
+        // Only 4-line/6-line factory footprints are known above. Longer
+        // trains are modeled by repeating the same line-spacing pattern:
+        // deckLength = axleLines * lineSpacingX (this matches BOTH known
+        // entries above exactly — 4*1500=6000, 6*1500=9000 for Goldhofer;
+        // 4*1400=5600, 6*1400=8400 for SPMT). axle1X / axle1Y /
+        // axlePairOffsetY / lineSpacingX are identical between the 4-line
+        // and 6-line entries for each manufacturer, so they're carried
+        // forward unchanged; deckWidth reuses each manufacturer's 6-line
+        // value. This is a geometric approximation, NOT a factory spec —
+        // real trailers beyond 6 lines are normally several physical
+        // units coupled together (see the "AutoCAD split" field), and
+        // actual deck width/footprint can differ by product line. Verify
+        // against the manufacturer's datasheet before relying on these
+        // for anything beyond a rough layout preview.
+        const TRAILER_PRESET_EXTRA_AXLE_LINES = [8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50];
+        ['goldhofer', 'spmt'].forEach(mfr => {
+            const ref = TRAILER_PRESETS[mfr][6];
+            TRAILER_PRESET_EXTRA_AXLE_LINES.forEach(n => {
+                TRAILER_PRESETS[mfr][n] = {
+                    deckLength: n * ref.lineSpacingX,
+                    deckWidth: ref.deckWidth,
+                    axle1X: ref.axle1X,
+                    axle1Y: ref.axle1Y,
+                    axlePairOffsetY: ref.axlePairOffsetY,
+                    lineSpacingX: ref.lineSpacingX,
+                    axleLines: n
+                };
+            });
+        });
 
         // ============================================================
         let trailerGenTrains = [];
@@ -501,7 +627,7 @@
         function applyTrailerPreset(id, presetValue) {
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
-            const m = /^(goldhofer|spmt)(4|6)$/.exec(presetValue || '');
+            const m = /^(goldhofer|spmt)(\d+)$/.exec(presetValue || '');
             if (!m) {
                 train.trailerType = 'custom';
                 train.axleLineCount = null;
@@ -975,10 +1101,8 @@
                             <select title="Pick a fixed manufacturer preset (including its axle-line count) to auto-fill the deck footprint and axle-line layout below, or Custom / Manual to enter your own."
                                     onchange="applyTrailerPreset(${train.id}, this.value)">
                                 <option value="custom" ${train.trailerType === 'custom' || !train.trailerType ? 'selected' : ''}>Custom / Manual</option>
-                                <option value="goldhofer4" ${train.trailerType === 'goldhofer' && train.axleLineCount === 4 ? 'selected' : ''}>Goldhofer (4 axle line)</option>
-                                <option value="goldhofer6" ${train.trailerType === 'goldhofer' && train.axleLineCount === 6 ? 'selected' : ''}>Goldhofer (6 axle line)</option>
-                                <option value="spmt4" ${train.trailerType === 'spmt' && train.axleLineCount === 4 ? 'selected' : ''}>SPMT (4 axle line)</option>
-                                <option value="spmt6" ${train.trailerType === 'spmt' && train.axleLineCount === 6 ? 'selected' : ''}>SPMT (6 axle line)</option>
+                                ${['goldhofer', 'spmt'].map(mfr => Object.keys(TRAILER_PRESETS[mfr]).map(Number).sort((a, b) => a - b).map(n => `
+                                <option value="${mfr}${n}" ${train.trailerType === mfr && train.axleLineCount === n ? 'selected' : ''}>${mfr === 'goldhofer' ? 'Goldhofer' : 'SPMT'} (${n} axle line)</option>`).join('')).join('')}
                             </select>
                         </div>
                         <div class="tg-field">
@@ -1100,6 +1224,31 @@
         let tgPreviewExternal = false;
         let tgPreviewWindow = null;
 
+        // When true (default), each axle group's name/count/load is drawn
+        // as an on-canvas label in the preview SVG. When false, on-canvas
+        // labels are omitted and the same info is instead listed as a
+        // separate, color-coded legend below the preview (see
+        // #tgPreviewGroupDetails / renderTrailerGenPreview()).
+        let tgShowGroupLabels = true;
+
+        function toggleTgGroupLabels(checked) {
+            tgShowGroupLabels = checked;
+            renderTrailerGenPreview();
+        }
+
+        // When true (default), the preview draws small CAD-style
+        // dimension call-outs for each preset (Goldhofer/SPMT) trailer:
+        // deck top-left corner → axle line 1 in X and Y, the +X spacing
+        // between axle line 1 and axle line 2, and the +Y offset between
+        // an axle line's right and left physical axle. Purely a display
+        // toggle — it never changes the underlying preset values.
+        let tgShowDimensions = true;
+
+        function toggleTgDimensions(checked) {
+            tgShowDimensions = checked;
+            renderTrailerGenPreview();
+        }
+
         function syncExternalThemeVars() {
             if (!tgPreviewWindow || tgPreviewWindow.closed) return;
             const mainCs = getComputedStyle(document.body);
@@ -1195,12 +1344,20 @@
             const minY = rawMinY - marginY, maxY = rawMaxY + marginY;
             const spanX = Math.max(maxX - minX, 1);
             const spanY = Math.max(maxY - minY, 1);
-            const sx = x => padL + ((x - minX) / spanX) * plotW;
+            // Uniform scale (px-per-mm), shared by X and Y, so real-world
+            // distances render in true proportion to each other instead
+            // of each axis independently stretching to fill the box.
+            const scale = Math.min(plotW / spanX, plotH / spanY);
+            const usedW = spanX * scale, usedH = spanY * scale;
+            // Center the (possibly narrower) used area within the padded box.
+            const offsetX = padL + (plotW - usedW) / 2;
+            const offsetY = padT + (plotH - usedH) / 2;
+            const sx = x => offsetX + (x - minX) * scale;
             // No vertical flip: +Y renders DOWNWARD on screen, matching
             // the origin sign (X-axis arrow points right, Y-axis arrow
             // points down) and the "top-left corner, +X / +Y" convention
             // used to describe trailer decks and axle offsets.
-            const sy = y => padT + ((y - minY) / spanY) * plotH;
+            const sy = y => offsetY + (y - minY) * scale;
 
             const trainClusters = {};
             const trainClusterOrder = [];
@@ -1278,6 +1435,69 @@
                     `</g>`;
             });
 
+            // Dimension call-outs for preset (Goldhofer/SPMT) trailers —
+            // real mm distances, drawn to scale now that sx/sy share a
+            // single uniform scale: corner→axle1 in X and Y, the +X
+            // spacing between axle line 1 and axle line 2, and the +Y
+            // offset between an axle line's right and left physical axle.
+            let dimensionsSvg = '';
+            if (tgShowDimensions) {
+                const dimColorCorner = 'var(--accent-blue, #38bdf8)';
+                const dimColorPair = 'var(--accent-green, #10b981)';
+                const dimColorSpacing = 'var(--text-muted, #94a3b8)';
+
+                const dimH = (xa, xb, yWorld, tier, label, color) => {
+                    const x1 = sx(xa), x2 = sx(xb);
+                    const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
+                    const y = sy(yWorld) - 20 - tier * 13;
+                    const boxW = Math.max(20, label.length * 5.4);
+                    return `<g opacity="0.9">` +
+                        `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="8" text-anchor="middle" fill="${color}">${escapeHtml(label)}</text>` +
+                        `</g>`;
+                };
+                const dimV = (ya, yb, xWorld, tier, label, color, side) => {
+                    const y1 = sy(ya), y2 = sy(yb);
+                    const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
+                    const dir = side === 'left' ? -1 : 1;
+                    const x = sx(xWorld) + dir * (10 + tier * 12);
+                    return `<g opacity="0.9">` +
+                        `<line x1="${x}" y1="${lo}" x2="${x}" y2="${hi}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${x - 3}" y1="${lo}" x2="${x + 3}" y2="${lo}" stroke="${color}" stroke-width="1"/>` +
+                        `<line x1="${x - 3}" y1="${hi}" x2="${x + 3}" y2="${hi}" stroke="${color}" stroke-width="1"/>` +
+                        `<text x="${x + (dir === 1 ? 4 : -4)}" y="${(lo + hi) / 2 + 3}" font-size="8" text-anchor="${dir === 1 ? 'start' : 'end'}" fill="${color}">${escapeHtml(label)}</text>` +
+                        `</g>`;
+                };
+
+                trailerGenTrains.forEach(t => {
+                    if (t.axle1OffsetX == null || t.axle1OffsetY == null) return; // custom/manual trailer — no deck reference corner
+                    const ox = parseFloat(t.x) || 0, oy = parseFloat(t.y) || 0;
+                    const axle1OffsetX = parseFloat(t.axle1OffsetX) || 0;
+                    const axle1OffsetY = parseFloat(t.axle1OffsetY) || 0;
+                    const axle1X = ox + axle1OffsetX, axle1Y = oy + axle1OffsetY;
+                    const spacing = parseFloat(t.spacing) || 0;
+                    const maxAxleForTrain = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+
+                    // Corner → axle line 1, X.
+                    dimensionsSvg += dimH(ox, axle1X, oy, 0, `${Math.round(axle1OffsetX)}mm`, dimColorCorner);
+                    // Corner → axle line 1, Y.
+                    dimensionsSvg += dimV(oy, axle1Y, ox, 0, `${Math.round(axle1OffsetY)}mm`, dimColorCorner, 'left');
+                    // Axle line 1 → axle line 2, X (line spacing).
+                    if (maxAxleForTrain >= 2 && spacing) {
+                        const axle2X = axle1X - spacing;
+                        dimensionsSvg += dimH(axle1X, axle2X, oy, 1, `${Math.abs(Math.round(spacing))}mm`, dimColorSpacing);
+                    }
+                    // Right axle → left axle, Y (axle pair offset).
+                    if (t.axlePairOffsetY) {
+                        const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
+                        dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, axle1X, 0, `${Math.round(axlePairOffsetY)}mm`, dimColorPair, 'right');
+                    }
+                });
+            }
+
             // Origin sign at world (0,0): X-axis arrow pointing right
             // (+X), Y-axis arrow pointing down (+Y).
             const ox0 = sx(0), oy0 = sy(0);
@@ -1316,6 +1536,7 @@
 
             let connectSvg = '';
             let labelsSvg = '';
+            const groupDetailRows = [];
             groupOrder.forEach(gNum => {
                 const g = groupAgg[gNum];
                 const overallX = g.clusters.reduce((s, c) => s + c.centerX, 0) / g.clusters.length;
@@ -1342,15 +1563,22 @@
                     : (uniformLoad !== null
                         ? `${g.groupName} · ${n} axle(s) · ${uniformLoad} t/axle · ${totalLoad.toFixed(1)} t`
                         : `${g.groupName} · ${n} axle(s) · ${totalLoad.toFixed(1)} t total`);
-                const boxW = Math.max(70, labelText.length * 5.6);
-                const boxH = 16;
-                const labelX = overallX;
-                const labelY = overallY - 18;
+                if (tgShowGroupLabels) {
+                    const boxW = Math.max(70, labelText.length * 5.6);
+                    const boxH = 16;
+                    const labelX = overallX;
+                    const labelY = overallY - 18;
 
-                labelsSvg += `<g>` +
-                    `<rect x="${labelX - boxW / 2}" y="${labelY - boxH + 4}" width="${boxW}" height="${boxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="${g.color}" stroke-width="1"/>` +
-                    `<text x="${labelX}" y="${labelY - 3}" font-size="10.5" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${escapeHtml(labelText)}</text>` +
-                    `</g>`;
+                    labelsSvg += `<g>` +
+                        `<rect x="${labelX - boxW / 2}" y="${labelY - boxH + 4}" width="${boxW}" height="${boxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="${g.color}" stroke-width="1"/>` +
+                        `<text x="${labelX}" y="${labelY - 3}" font-size="10.5" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${escapeHtml(labelText)}</text>` +
+                        `</g>`;
+                } else {
+                    // Labels hidden on canvas — collect the same detail
+                    // text to render as a separate, color-coded legend
+                    // below the preview instead.
+                    groupDetailRows.push({ color: g.color, text: labelText });
+                }
             });
 
             let groupChainSvg = '';
@@ -1376,14 +1604,22 @@
                 const totalAxles = trainRows[trainRows.length - 1].axleNumber;
                 const sum = segments.reduce((s, n) => s + n, 0);
                 if (sum !== totalAxles) return;
+                // Vertical placement: center of the trailer, not the
+                // near-side axle row — deck center (train.y + deckWidth/2)
+                // for preset (Goldhofer/SPMT) trailers with a known deck
+                // width, or the single axle row's own Y for custom/manual
+                // trailers (which have no deck rectangle to center on).
+                const centerYWorld = train.deckWidth
+                    ? (parseFloat(train.y) || 0) + (parseFloat(train.deckWidth) || 0) / 2
+                    : trainRows[0].y;
+                const y = sy(centerYWorld);
                 let cum = 0;
                 segments.slice(0, -1).forEach(n => {
                     cum += n;
                     const rowA = trainRows.find(r => r.axleNumber === cum);
                     const rowB = trainRows.find(r => r.axleNumber === cum + 1);
                     if (!rowA || !rowB) return;
-                    const midX = (sx(rowA.x) + sx(rowB.x)) / 2;
-                    const y = sy(rowA.y);
+                    const midX = sx((rowA.x + rowB.x) / 2);
                     splitMarkersSvg += `<g>` +
                         `<line x1="${midX}" y1="${y - 15}" x2="${midX}" y2="${y + 15}" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5" stroke-dasharray="1 3"/>` +
                         `<circle cx="${midX}" cy="${y}" r="4.5" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5"/>` +
@@ -1402,8 +1638,17 @@
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${splitMarkersSvg}${originSvg}
+                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
             </svg>`;
+
+            // Detail legend lives in the main document (not the pop-out
+            // preview window) directly below the preview, per group color.
+            const detailsEl = document.getElementById('tgPreviewGroupDetails');
+            if (detailsEl) {
+                detailsEl.innerHTML = tgShowGroupLabels ? '' : groupDetailRows.map(r =>
+                    `<div class="tg-preview-group-detail-row" style="border-left-color:${r.color}; color:${r.color};">${escapeHtml(r.text)}</div>`
+                ).join('');
+            }
         }
 
         function renderTrailerGeneratorTotals() {
@@ -1562,6 +1807,7 @@
         // PAGE / OFFICE INIT
         // ============================================================
         async function initDashboard() {
+            initThemeMode();
             if (trailerGenTrains.length === 0) {
                 trailerGenTrains.push(defaultTrailerGenTrain(1));
             }
