@@ -306,7 +306,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.06)</h1>
+            <h1>🚂 Transport Dashboard (Rev.07)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -322,7 +322,14 @@
                 <button type="button" class="tg-help-btn" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓ Help</button>
             </div>
             <p class="tg-modal-sub" id="tgHelpPanel">
-                Define one or more trailer trains. Axle #1 of each train sits at the entered
+                Set <strong>Number of trains</strong> and <strong>Number of Hydraulic Groups</strong>
+                at the top of the train list to size the dashboard: e.g. Number of trains = 2 gives
+                you 2 trains, Number of Hydraulic Groups = 3 gives EVERY train 3 axle groups (max
+                4, since there are only 4 fixed groups). Both are kept in sync with Excel sheet
+                <strong>"Input"</strong>, cells <strong>B1</strong> (Number of trains) and
+                <strong>B2</strong> (Number of Hydraulic Groups): editing either here writes it
+                straight to Excel, and the ⇩ button pulls the latest value back in and resizes the
+                dashboard to match. Define one or more trailer trains. Axle #1 of each train sits at the entered
                 <strong>X offset</strong> — the distance from the barge's origin (0,0) to the
                 top-left corner of the trailer; every following axle = previous axle's X &minus;
                 line spacing, all sharing the same <strong>Y offset</strong> — the distance from
@@ -368,6 +375,8 @@
 
             <div class="tg-modal-body" id="tgModalBody">
                 <div class="tg-modal-col-left">
+                    <div id="tgGlobalSettings"><!-- Number of trains / Number of Hydraulic Groups rendered by JS --></div>
+
                     <div id="tgTrainList"><!-- train cards rendered by JS --></div>
 
                     <div class="tg-train-list-actions">
@@ -504,8 +513,11 @@
         const CAD_UNIT_SCALE = 1;
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
-        // kept in sync with. B5 = X offset, B6 = Y offset. ----
+        // kept in sync with. B5 = X offset, B6 = Y offset. B1 = Number
+        // of trains, B2 = Number of Hydraulic Groups. ----
         const INPUT_SHEET_NAME = "Input";
+        const INPUT_NUM_TRAINS_CELL = "B1";
+        const INPUT_NUM_GROUPS_CELL = "B2";
         const INPUT_X_OFFSET_CELL = "B5";
         const INPUT_Y_OFFSET_CELL = "B6";
 
@@ -732,6 +744,65 @@
             }
             trailerGenTrains.push(newTrain);
             renderTrailerDashboard();
+        }
+
+        // Adds/removes trains at the end so trailerGenTrains.length
+        // matches n exactly (n=1 -> 1 train, n=2 -> 2 trains, ...). New
+        // trains reuse the previous train's spacing/X offset, same as
+        // "+ Add Train". By default also pushes the new count to Excel
+        // Input!B1 — pass {skipPush:true} when the value just came FROM
+        // Excel (pull / startup seed) to avoid writing it straight back.
+        function setNumberOfTrains(rawValue, opts) {
+            opts = opts || {};
+            let n = parseInt(rawValue, 10);
+            if (!Number.isFinite(n) || n < 1) n = 1;
+            n = Math.min(n, ADJUST_MAX_TRAIN_BLOCKS); // matches the Adjust_Wheels sheet's fixed train-block cap
+            const current = trailerGenTrains.length;
+            if (n > current) {
+                for (let i = current; i < n; i++) {
+                    const prevTrain = trailerGenTrains[trailerGenTrains.length - 1];
+                    const newTrain = defaultTrailerGenTrain(trailerGenTrains.length + 1);
+                    if (prevTrain) {
+                        newTrain.spacing = prevTrain.spacing;
+                        newTrain.x = prevTrain.x;
+                    }
+                    trailerGenTrains.push(newTrain);
+                }
+            } else if (n < current) {
+                trailerGenTrains.length = Math.max(n, 1);
+            }
+            renderTrailerDashboard();
+            if (!opts.skipPush) pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
+        }
+
+        // Adds/removes axle groups at the end of EVERY train so each
+        // train.groups.length matches n exactly (clamped to the 4 fixed
+        // TRAILER_GROUP_DEFS — there's no "Group 5" to assign). New
+        // groups get sequential axle-line ranges continuing after the
+        // train's current last axle line, group number = their position
+        // (1st new group = Group 1, 2nd = Group 2, ...). By default also
+        // pushes n to Excel Input!B2 — pass {skipPush:true} when the
+        // value just came FROM Excel (pull / startup seed).
+        function setNumberOfHydraulicGroups(rawValue, opts) {
+            opts = opts || {};
+            let n = parseInt(rawValue, 10);
+            if (!Number.isFinite(n) || n < 1) n = 1;
+            n = Math.min(n, TRAILER_GROUP_DEFS.length);
+            trailerGenTrains.forEach(train => {
+                const current = train.groups.length;
+                if (n > current) {
+                    for (let g = current; g < n; g++) {
+                        const lastTo = train.groups.reduce((m, gr) => Math.max(m, parseInt(gr.to, 10) || 0), 0);
+                        const from = lastTo + 1;
+                        const to = from + 4;
+                        train.groups.push(defaultAxleGroup(from, to, 25, g + 1, 'both'));
+                    }
+                } else if (n < current) {
+                    train.groups.length = Math.max(n, 1);
+                }
+            });
+            renderTrailerDashboard();
+            if (!opts.skipPush) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, n, 'Number of Hydraulic Groups');
         }
 
         // ============================================================
@@ -1263,9 +1334,8 @@
         }
 
         // ---- Push / pull X offset & Y offset to/from Excel "Input" sheet ----
-        async function pushOffsetToExcel(field, value) {
+        async function pushValueToInputCell(cell, value, label) {
             if (!isOfficeInitialized) return;
-            const cell = (field === 'x') ? INPUT_X_OFFSET_CELL : INPUT_Y_OFFSET_CELL;
             try {
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
@@ -1273,8 +1343,13 @@
                     await context.sync();
                 });
             } catch (e) {
-                console.warn(`Could not write ${field === 'x' ? 'X' : 'Y'} offset to ${INPUT_SHEET_NAME}!${cell}`, e);
+                console.warn(`Could not write ${label} to ${INPUT_SHEET_NAME}!${cell}`, e);
             }
+        }
+
+        async function pushOffsetToExcel(field, value) {
+            const cell = (field === 'x') ? INPUT_X_OFFSET_CELL : INPUT_Y_OFFSET_CELL;
+            await pushValueToInputCell(cell, value, field === 'x' ? 'X offset' : 'Y offset');
         }
 
         async function pullOffsetField(trainId, field) {
@@ -1306,28 +1381,98 @@
 
         // Seeds the very first train's X offset / Y offset from Excel on
         // startup, if a workbook is connected and the cells hold values.
+        // Also seeds Number of trains (B1) and Number of Hydraulic
+        // Groups (B2) BEFORE the X/Y offset, so the offset ends up on
+        // whichever train is actually "train 1" once the count is applied.
         async function seedInitialOffsetsFromExcel() {
             if (!isOfficeInitialized || trailerGenTrains.length === 0) return;
             try {
-                let xRaw = null, yRaw = null;
+                let numTrainsRaw = null, numGroupsRaw = null, xRaw = null, yRaw = null;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    const numTrainsRange = sheet.getRange(INPUT_NUM_TRAINS_CELL);
+                    const numGroupsRange = sheet.getRange(INPUT_NUM_GROUPS_CELL);
                     const xRange = sheet.getRange(INPUT_X_OFFSET_CELL);
                     const yRange = sheet.getRange(INPUT_Y_OFFSET_CELL);
+                    numTrainsRange.load("values");
+                    numGroupsRange.load("values");
                     xRange.load("values");
                     yRange.load("values");
                     await context.sync();
+                    numTrainsRaw = numTrainsRange.values[0][0];
+                    numGroupsRaw = numGroupsRange.values[0][0];
                     xRaw = xRange.values[0][0];
                     yRaw = yRange.values[0][0];
                 });
+
+                const numTrains = parseInt(numTrainsRaw, 10);
+                if (Number.isFinite(numTrains) && numTrains >= 1) setNumberOfTrains(numTrains, { skipPush: true });
+
+                const numGroups = parseInt(numGroupsRaw, 10);
+                if (Number.isFinite(numGroups) && numGroups >= 1) setNumberOfHydraulicGroups(numGroups, { skipPush: true });
+
                 const train = trailerGenTrains[0];
                 const xNum = parseFloat(xRaw), yNum = parseFloat(yRaw);
                 if (!isNaN(xNum)) train.x = xNum;
                 if (!isNaN(yNum)) train.y = yNum;
                 renderTrailerDashboard();
-                logMsg(`↺ Loaded initial X/Y offset from ${INPUT_SHEET_NAME}!${INPUT_X_OFFSET_CELL}/${INPUT_Y_OFFSET_CELL}.`);
+                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${INPUT_X_OFFSET_CELL}/${INPUT_Y_OFFSET_CELL} (X/Y offset).`);
             } catch (e) {
-                console.warn('Could not seed initial offsets from Input sheet', e);
+                console.warn('Could not seed initial values from Input sheet', e);
+            }
+        }
+
+        async function pullNumTrainsFromExcel() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Number of trains.');
+                return;
+            }
+            try {
+                let raw = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    const range = sheet.getRange(INPUT_NUM_TRAINS_CELL);
+                    range.load("values");
+                    await context.sync();
+                    raw = range.values[0][0];
+                });
+                const n = parseInt(raw, 10);
+                if (!Number.isFinite(n) || n < 1) {
+                    alert(`${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} doesn't hold a valid positive whole number.`);
+                    return;
+                }
+                setNumberOfTrains(n, { skipPush: true });
+                logMsg(`↺ Pulled Number of trains (${n}) from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} — dashboard now has ${trailerGenTrains.length} train(s).`);
+            } catch (e) {
+                console.warn(`Could not read ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL}`, e);
+                alert(`Could not read ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL}. Make sure a sheet named "${INPUT_SHEET_NAME}" exists with the value in that cell.`);
+            }
+        }
+
+        async function pullNumHydraulicGroupsFromExcel() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Number of Hydraulic Groups.');
+                return;
+            }
+            try {
+                let raw = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    const range = sheet.getRange(INPUT_NUM_GROUPS_CELL);
+                    range.load("values");
+                    await context.sync();
+                    raw = range.values[0][0];
+                });
+                const n = parseInt(raw, 10);
+                if (!Number.isFinite(n) || n < 1) {
+                    alert(`${INPUT_SHEET_NAME}!${INPUT_NUM_GROUPS_CELL} doesn't hold a valid positive whole number.`);
+                    return;
+                }
+                setNumberOfHydraulicGroups(n, { skipPush: true });
+                logMsg(`↺ Pulled Number of Hydraulic Groups (${Math.min(n, TRAILER_GROUP_DEFS.length)}) from ${INPUT_SHEET_NAME}!${INPUT_NUM_GROUPS_CELL} — applied to every train.`);
+            } catch (e) {
+                console.warn(`Could not read ${INPUT_SHEET_NAME}!${INPUT_NUM_GROUPS_CELL}`, e);
+                alert(`Could not read ${INPUT_SHEET_NAME}!${INPUT_NUM_GROUPS_CELL}. Make sure a sheet named "${INPUT_SHEET_NAME}" exists with the value in that cell.`);
             }
         }
 
@@ -1490,6 +1635,26 @@
         function renderTrailerDashboard() {
             const startLabel = document.getElementById('tgStartRowLabel');
             if (startLabel) startLabel.textContent = String(AXLE_START_ROW);
+
+            const globalSettings = document.getElementById('tgGlobalSettings');
+            if (globalSettings) {
+                const currentNumGroups = trailerGenTrains[0] ? trailerGenTrains[0].groups.length : 1;
+                globalSettings.innerHTML = `
+                <div class="tg-field-grid">
+                    <div class="tg-field">
+                        <label>Number of trains <button type="button" class="tg-xy-sync-btn" title="Pull Number of trains from Excel Input!${INPUT_NUM_TRAINS_CELL}" onclick="pullNumTrainsFromExcel()">⇩</button></label>
+                        <input type="number" step="1" min="1" value="${trailerGenTrains.length}"
+                               title="How many trains the dashboard should have. Adds/removes trains to match. Synced with Excel sheet 'Input'!${INPUT_NUM_TRAINS_CELL}."
+                               onchange="setNumberOfTrains(this.value)">
+                    </div>
+                    <div class="tg-field">
+                        <label>Number of Hydraulic Groups <button type="button" class="tg-xy-sync-btn" title="Pull Number of Hydraulic Groups from Excel Input!${INPUT_NUM_GROUPS_CELL}" onclick="pullNumHydraulicGroupsFromExcel()">⇩</button></label>
+                        <input type="number" step="1" min="1" max="${TRAILER_GROUP_DEFS.length}" value="${currentNumGroups}"
+                               title="How many axle groups (1-${TRAILER_GROUP_DEFS.length}) EVERY train should have. Adds/removes groups per train to match. Synced with Excel sheet 'Input'!${INPUT_NUM_GROUPS_CELL}."
+                               onchange="setNumberOfHydraulicGroups(this.value)">
+                    </div>
+                </div>`;
+            }
 
             const list = document.getElementById('tgTrainList');
             if (!list) return;
