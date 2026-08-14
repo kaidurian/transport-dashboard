@@ -356,7 +356,14 @@
                 with axle lines as rows (A4&nbsp;=&nbsp;Line&nbsp;1 … A123&nbsp;=&nbsp;Line&nbsp;120)
                 and one 6&#8209;column block per train (Train&nbsp;1&nbsp;=&nbsp;B:G, Train&nbsp;2&nbsp;=&nbsp;H:M,
                 Train&nbsp;3&nbsp;=&nbsp;N:S, …: left x-pos/y-pos/Group then right x-pos/y-pos/Group).
-                "Load positions (Adjust_Wheels)" reads it back the other way.
+                <strong>Adjust_Wheels stores axle-CENTER positions</strong> (distance from origin
+                0,0 to the center of each axle), which is different from X offset/Y offset (distance
+                from 0,0 to the trailer deck's <strong>top-left corner</strong>) — the preview's
+                dimension callouts show both. "Load positions (Adjust_Wheels)" reads the axle grid
+                back the other way; the first train's X offset/Y offset is then re-linked to
+                <strong>Input!B5/B6</strong> rather than left as a raw axle position, so it stays
+                the deck-corner value everywhere. Editing X offset/Y offset on the dashboard is
+                always picked up automatically the next time you push, since nothing is cached.
             </p>
 
             <div class="tg-modal-body" id="tgModalBody">
@@ -912,6 +919,18 @@
         // groups reuse the load/noLoad of a matching group (same
         // groupNumber + row) on the train of the same name/position if
         // one currently exists, else default to 25 t.
+        //
+        // Adjust_Wheels stores axle-CENTER world positions, not the
+        // deck top-left corner — but "X offset (mm)" / "Y offset (mm)"
+        // in the dashboard, and Excel sheet "Input"!B5/B6, always mean
+        // the deck top-left corner (see computeAdjustWheelsTrains()).
+        // So after pulling, the first train's X offset / Y offset is
+        // re-anchored to Input!B5/B6 (the authoritative source for that
+        // field) rather than left as the raw axle-1 position: the axle-1
+        // world position pulled from Adjust_Wheels is kept exactly (by
+        // folding the difference into axle1OffsetX/axle1OffsetY), so
+        // nothing about the actual axle geometry moves — only which
+        // number is displayed/stored as "X offset (mm)" / "Y offset (mm)".
         async function pullWheelDataFromExcel() {
             if (!isOfficeInitialized) {
                 alert('Not connected to Excel — open this add-in inside an Excel workbook to pull wheel data.');
@@ -919,6 +938,7 @@
             }
             try {
                 let lineLabels = [], blockValues = [], trainNameRow = [];
+                let inputXOffset = NaN, inputYOffset = NaN;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
                     const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
@@ -930,10 +950,28 @@
                     labelRange.load("values");
                     dataRange.load("values");
                     nameRange.load("values");
+
+                    // Also grab the Input-sheet X/Y offset in the same
+                    // batch, so the primary train's offset can be
+                    // re-linked to it below instead of the raw axle-1
+                    // position read back from Adjust_Wheels.
+                    let inputXRange = null, inputYRange = null;
+                    try {
+                        const inputSheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                        inputXRange = inputSheet.getRange(INPUT_X_OFFSET_CELL);
+                        inputYRange = inputSheet.getRange(INPUT_Y_OFFSET_CELL);
+                        inputXRange.load("values");
+                        inputYRange.load("values");
+                    } catch (inputErr) {
+                        inputXRange = null; inputYRange = null;
+                    }
+
                     await context.sync();
                     lineLabels = labelRange.values;
                     blockValues = dataRange.values;
                     trainNameRow = nameRange.values[0];
+                    if (inputXRange) inputXOffset = parseFloat(inputXRange.values[0][0]);
+                    if (inputYRange) inputYOffset = parseFloat(inputYRange.values[0][0]);
                 });
 
                 // How many axle-line rows actually hold data.
@@ -1049,9 +1087,29 @@
                     return;
                 }
 
+                // Re-anchor the first (primary) train's X offset / Y
+                // offset to Input!B5/B6, keeping its axle-1 world
+                // position exactly as read from Adjust_Wheels by moving
+                // the difference into axle1OffsetX/axle1OffsetY. Other
+                // trains have no matching Input-sheet cell, so their X
+                // offset / Y offset stay exactly as read (axle-1 world
+                // position, inset = 0) as before.
+                let offsetLinkMsg = '';
+                if (!isNaN(inputXOffset) && !isNaN(inputYOffset)) {
+                    const t0 = rebuiltTrains[0];
+                    const axle1WorldX = t0.x, axle1WorldY = t0.y;
+                    t0.x = inputXOffset;
+                    t0.y = inputYOffset;
+                    t0.axle1OffsetX = axle1WorldX - inputXOffset;
+                    t0.axle1OffsetY = axle1WorldY - inputYOffset;
+                    offsetLinkMsg = ` "${t0.name}"'s X/Y offset re-linked to ${INPUT_SHEET_NAME}!${INPUT_X_OFFSET_CELL}/${INPUT_Y_OFFSET_CELL}.`;
+                } else {
+                    console.warn(`Could not read ${INPUT_SHEET_NAME}!${INPUT_X_OFFSET_CELL}/${INPUT_Y_OFFSET_CELL} — first train's X/Y offset left as its raw axle-1 position from ${ADJUST_SHEET_NAME}.`);
+                }
+
                 trailerGenTrains = rebuiltTrains;
                 renderTrailerDashboard();
-                logMsg(`📥 Pulled ${rebuiltTrains.length} train(s) / ${lineCount} axle line(s) from ${ADJUST_SHEET_NAME} for editing.`);
+                logMsg(`📥 Pulled ${rebuiltTrains.length} train(s) / ${lineCount} axle line(s) from ${ADJUST_SHEET_NAME} for editing.${offsetLinkMsg}`);
             } catch (e) {
                 console.warn('Adjust_Wheels pull error', e);
                 alert(`Could not pull wheel data from Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
@@ -1196,6 +1254,12 @@
             if (field === 'cadSplit') updateCadSplitStatus(train.id);
             if (field === 'x') pushOffsetToExcel('x', train.x);
             if (field === 'y') pushOffsetToExcel('y', train.y);
+            // Note: nothing extra to refresh for Adjust_Wheels here —
+            // pushWheelDataToExcel() always calls computeAdjustWheelsTrains()
+            // fresh from trailerGenTrains at push time (there's no cached
+            // copy of the wheel grid), so an X offset / Y offset edit is
+            // automatically reflected the next time "Push to
+            // Adjust_Wheels" is clicked.
         }
 
         // ---- Push / pull X offset & Y offset to/from Excel "Input" sheet ----
@@ -1822,9 +1886,22 @@
                         `</g>`;
                 };
 
-                trailerGenTrains.forEach(t => {
-                    if (t.axle1OffsetX == null || t.axle1OffsetY == null) return; // custom/manual trailer — no deck reference corner
+                const dimColorOffset = '#f59e0b'; // amber — distinct from the corner→axle1 blue
+
+                trailerGenTrains.forEach((t, trainIdx) => {
                     const ox = parseFloat(t.x) || 0, oy = parseFloat(t.y) || 0;
+
+                    // World origin (0,0) → deck top-left corner (train.x,
+                    // train.y) — i.e. "X offset (mm)" / "Y offset (mm)" as
+                    // entered in the dashboard and synced with Excel sheet
+                    // "Input"!B5/B6. Drawn for EVERY train (preset or
+                    // custom/manual), since this offset always applies —
+                    // unlike the corner→axle1 inset below, which only
+                    // exists for preset trailers.
+                    dimensionsSvg += dimH(0, ox, 0, 2 + trainIdx, `${t.name} X offset: ${Math.round(ox)}mm`, dimColorOffset);
+                    dimensionsSvg += dimV(0, oy, 0, 2 + trainIdx, `${t.name} Y offset: ${Math.round(oy)}mm`, dimColorOffset, 'left');
+
+                    if (t.axle1OffsetX == null || t.axle1OffsetY == null) return; // custom/manual trailer — no deck reference corner
                     const axle1OffsetX = parseFloat(t.axle1OffsetX) || 0;
                     const axle1OffsetY = parseFloat(t.axle1OffsetY) || 0;
                     const axle1X = ox + axle1OffsetX, axle1Y = oy + axle1OffsetY;
