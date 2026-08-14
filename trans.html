@@ -306,7 +306,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.05)</h1>
+            <h1>🚂 Transport Dashboard (Rev.06)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -351,6 +351,12 @@
                 <strong>D:G</strong> starting at row <strong id="tgStartRowLabel">124</strong>
                 (D&nbsp;=&nbsp;Line load t, E&nbsp;=&nbsp;X, F&nbsp;=&nbsp;Y, G&nbsp;=&nbsp;VCG).
                 Use "Load from Excel" to pull an already-generated trailer back in for editing.
+                Separately, <strong>"Push to Adjust_Wheels"</strong> writes each axle LINE's X/Y
+                position and group number (no load/VCG) to sheet <strong>Adjust_Wheels</strong>,
+                with axle lines as rows (A4&nbsp;=&nbsp;Line&nbsp;1 … A123&nbsp;=&nbsp;Line&nbsp;120)
+                and one 6&#8209;column block per train (Train&nbsp;1&nbsp;=&nbsp;B:G, Train&nbsp;2&nbsp;=&nbsp;H:M,
+                Train&nbsp;3&nbsp;=&nbsp;N:S, …: left x-pos/y-pos/Group then right x-pos/y-pos/Group).
+                "Load positions (Adjust_Wheels)" reads it back the other way.
             </p>
 
             <div class="tg-modal-body" id="tgModalBody">
@@ -361,6 +367,8 @@
                         <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
                         <button type="button" class="tg-add-train-btn" title="Read existing trailer axle data back from Load_Editor!B/D:G into these trains for editing"
                                 onclick="pullTrailerDataFromExcel()">⇩ Load from Excel</button>
+                        <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing"
+                                onclick="pullWheelDataFromExcel()">⇩ Load positions (Adjust_Wheels)</button>
                     </div>
                 </div>
 
@@ -403,6 +411,8 @@
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
                 <button type="button" class="tg-btn tg-btn-primary" onclick="generateTrailerAndWriteToExcel()">Generate &amp; Write to Excel</button>
+                <button type="button" class="tg-btn" title="Write each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train)."
+                        onclick="pushWheelDataToExcel()">📤 Push to Adjust_Wheels</button>
             </div>
 
             <div class="tg-log" id="tgLog"></div>
@@ -715,6 +725,337 @@
             }
             trailerGenTrains.push(newTrain);
             renderTrailerDashboard();
+        }
+
+        // ============================================================
+        // ADJUST_WHEELS PUSH / PULL
+        // ------------------------------------------------------------
+        // Separate from the Load_Editor push/pull above: this syncs
+        // per-axle-line POSITION + GROUP data (no load/VCG) against a
+        // sheet named "Adjust_Wheels", laid out with axle lines as ROWS
+        // and one 6-column block per TRAIN:
+        //   Column A            = axle line label ("Line 1" ... "Line 120"),
+        //                          rows 4..123 (ADJUST_START_ROW.. +119).
+        //   Train N block, 6 cols, starting at column
+        //   ADJUST_FIRST_TRAIN_COL + (N-1)*6 (Train 1 = B..G, Train 2 =
+        //   H..M, Train 3 = N..S, ...):
+        //     col+0 = Left  x-pos   col+3 = Right x-pos
+        //     col+1 = Left  y-pos   col+4 = Right y-pos
+        //     col+2 = Left  Group   col+5 = Right Group
+        // ============================================================
+        const ADJUST_SHEET_NAME = "Adjust_Wheels";
+        const ADJUST_START_ROW = 4;          // "Line 1" row
+        const ADJUST_MAX_LINES = 120;        // Line 1..120 -> rows 4..123
+        const ADJUST_FIRST_TRAIN_COL = 2;    // column B
+        const ADJUST_BLOCK_WIDTH = 6;        // columns per train
+        const ADJUST_MAX_TRAIN_BLOCKS = 40;  // fixed clear-range safety cap
+
+        // 1-indexed column number -> Excel column letter(s) (1 -> "A").
+        function colLetter(n) {
+            let s = '';
+            while (n > 0) {
+                const m = (n - 1) % 26;
+                s = String.fromCharCode(65 + m) + s;
+                n = Math.floor((n - 1) / 26);
+            }
+            return s;
+        }
+
+        // Expands every train into its per-axle-LINE (not per-physical-
+        // axle) left/right position + group numbers, matching the
+        // Adjust_Wheels column layout. Unlike computeTrailerGenRows()
+        // (which flattens to one row per physical axle for Load_Editor),
+        // this keeps each axle line as a single entry with both sides.
+        // For a custom/manual train (no axlePairOffsetY) the left and
+        // right columns end up identical, since there's only one
+        // physical axle per line.
+        function computeAdjustWheelsTrains() {
+            return trailerGenTrains.map(train => {
+                const spacing = parseFloat(train.spacing) || 0;
+                const baseX = (parseFloat(train.x) || 0) + (parseFloat(train.axle1OffsetX) || 0);
+                const yBase = (parseFloat(train.y) || 0) + (parseFloat(train.axle1OffsetY) || 0);
+                const axlePairOffsetY = parseFloat(train.axlePairOffsetY) || 0;
+                const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+
+                const findGroup = (axleNum, side) => train.groups.find(g => {
+                    const from = parseInt(g.from, 10) || 0;
+                    const to = parseInt(g.to, 10) || 0;
+                    if (axleNum < from || axleNum > to) return false;
+                    const r = g.row || 'both';
+                    return r === 'both' || r === side;
+                });
+
+                const lines = [];
+                for (let axleNum = 1; axleNum <= maxAxle; axleNum++) {
+                    const rightGroup = findGroup(axleNum, 'right');
+                    const leftGroup = findGroup(axleNum, 'left');
+                    lines.push({
+                        x: baseX - (axleNum - 1) * spacing,
+                        rightY: yBase,
+                        leftY: yBase + axlePairOffsetY,
+                        rightGroupNumber: rightGroup ? rightGroup.groupNumber : null,
+                        leftGroupNumber: leftGroup ? leftGroup.groupNumber : null
+                    });
+                }
+                return { name: train.name, lines };
+            });
+        }
+
+        // ---- Push current trains' axle positions/groups to Adjust_Wheels ----
+        async function pushWheelDataToExcel() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
+                return;
+            }
+            const trainsData = computeAdjustWheelsTrains();
+            const maxLines = trainsData.reduce((m, t) => Math.max(m, t.lines.length), 0);
+            if (maxLines === 0) {
+                alert('Add at least one train with at least one axle group before pushing.');
+                return;
+            }
+            if (maxLines > ADJUST_MAX_LINES) {
+                alert(`${maxLines} axle lines exceeds the ${ADJUST_MAX_LINES}-line ${ADJUST_SHEET_NAME} block. Reduce axle counts and try again.`);
+                return;
+            }
+            if (trainsData.length > ADJUST_MAX_TRAIN_BLOCKS) {
+                alert(`${trainsData.length} trains exceeds the ${ADJUST_MAX_TRAIN_BLOCKS}-train ${ADJUST_SHEET_NAME} block. Reduce train count and try again.`);
+                return;
+            }
+
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
+                    const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
+                    const lastClearCol = colLetter(ADJUST_FIRST_TRAIN_COL + ADJUST_MAX_TRAIN_BLOCKS * ADJUST_BLOCK_WIDTH - 1);
+
+                    // Clear the whole fixed block first so a smaller/
+                    // shorter push doesn't leave stale data behind from a
+                    // previous, larger push.
+                    sheet.getRange(`A${ADJUST_START_ROW}:${lastClearCol}${lastRow}`).clear(Excel.ClearApplyTo.contents);
+
+                    const lineLabels = [];
+                    for (let i = 0; i < maxLines; i++) lineLabels.push([`Line ${i + 1}`]);
+                    sheet.getRange(`A${ADJUST_START_ROW}:A${ADJUST_START_ROW + maxLines - 1}`).values = lineLabels;
+
+                    trainsData.forEach((train, idx) => {
+                        const blockStart = ADJUST_FIRST_TRAIN_COL + idx * ADJUST_BLOCK_WIDTH;
+                        const c0 = colLetter(blockStart);
+                        const c5 = colLetter(blockStart + 5);
+
+                        sheet.getRange(`${colLetter(blockStart + 2)}1`).values = [[train.name]];
+                        sheet.getRange(`${colLetter(blockStart + 1)}2`).values = [['Left']];
+                        sheet.getRange(`${colLetter(blockStart + 4)}2`).values = [['Right']];
+                        sheet.getRange(`${c0}3:${c5}3`).values = [['x-pos', 'y-pos', 'Group', 'x-pos', 'y-pos', 'Group']];
+
+                        if (train.lines.length === 0) return;
+                        const values = train.lines.map(l => [
+                            l.x, l.leftY, l.leftGroupNumber,
+                            l.x, l.rightY, l.rightGroupNumber
+                        ]);
+                        const endRow = ADJUST_START_ROW + train.lines.length - 1;
+                        sheet.getRange(`${c0}${ADJUST_START_ROW}:${c5}${endRow}`).values = values;
+                    });
+
+                    await context.sync();
+                });
+                const lastUsedCol = colLetter(ADJUST_FIRST_TRAIN_COL + trainsData.length * ADJUST_BLOCK_WIDTH - 1);
+                logMsg(`📤 Pushed ${trainsData.length} train(s) / ${maxLines} axle line(s) to ${ADJUST_SHEET_NAME}!A${ADJUST_START_ROW}:${lastUsedCol}${ADJUST_START_ROW + maxLines - 1}.`);
+            } catch (e) {
+                console.warn('Adjust_Wheels push error', e);
+                alert(`Could not push wheel data to Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
+            }
+        }
+
+        // Consecutive-run compression: turns a flat array of group
+        // numbers (indexed by axleNum-1, null = no group) into axle-line
+        // range entries {groupNumber, from, to}.
+        function buildSideGroupRanges(groupNumbers) {
+            const ranges = [];
+            let cur = null;
+            groupNumbers.forEach((gn, idx) => {
+                const axleNum = idx + 1;
+                if (gn === null || gn === undefined || gn === '') { cur = null; return; }
+                if (cur && cur.groupNumber === gn && cur.to === axleNum - 1) {
+                    cur.to = axleNum;
+                } else {
+                    cur = { groupNumber: gn, from: axleNum, to: axleNum };
+                    ranges.push(cur);
+                }
+            });
+            return ranges;
+        }
+
+        // Merges left/right range lists: identical from/to/groupNumber
+        // pairs collapse into one row:'both' group; everything else
+        // stays row:'left' / row:'right'.
+        function mergeSideGroupRanges(leftRanges, rightRanges) {
+            const merged = [];
+            const usedRight = new Set();
+            leftRanges.forEach(lr => {
+                const matchIdx = rightRanges.findIndex((rr, i) =>
+                    !usedRight.has(i) && rr.from === lr.from && rr.to === lr.to && rr.groupNumber === lr.groupNumber);
+                if (matchIdx !== -1) {
+                    usedRight.add(matchIdx);
+                    merged.push({ ...lr, row: 'both' });
+                } else {
+                    merged.push({ ...lr, row: 'left' });
+                }
+            });
+            rightRanges.forEach((rr, i) => {
+                if (!usedRight.has(i)) merged.push({ ...rr, row: 'right' });
+            });
+            return merged;
+        }
+
+        // ---- Pull axle positions/groups back from Adjust_Wheels ----
+        // Load (t) and VCG aren't stored in this sheet — pulled-back
+        // groups reuse the load/noLoad of a matching group (same
+        // groupNumber + row) on the train of the same name/position if
+        // one currently exists, else default to 25 t.
+        async function pullWheelDataFromExcel() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull wheel data.');
+                return;
+            }
+            try {
+                let lineLabels = [], blockValues = [], trainNameRow = [];
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
+                    const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
+                    const lastCol = colLetter(ADJUST_FIRST_TRAIN_COL + ADJUST_MAX_TRAIN_BLOCKS * ADJUST_BLOCK_WIDTH - 1);
+
+                    const labelRange = sheet.getRange(`A${ADJUST_START_ROW}:A${lastRow}`);
+                    const dataRange = sheet.getRange(`B${ADJUST_START_ROW}:${lastCol}${lastRow}`);
+                    const nameRange = sheet.getRange(`B1:${lastCol}1`);
+                    labelRange.load("values");
+                    dataRange.load("values");
+                    nameRange.load("values");
+                    await context.sync();
+                    lineLabels = labelRange.values;
+                    blockValues = dataRange.values;
+                    trainNameRow = nameRange.values[0];
+                });
+
+                // How many axle-line rows actually hold data.
+                let lineCount = 0;
+                for (let i = 0; i < lineLabels.length; i++) {
+                    const lbl = (lineLabels[i][0] || '').toString().trim();
+                    const rowHasData = blockValues[i].some(v => v !== '' && v !== null && v !== undefined);
+                    if (!lbl && !rowHasData) break;
+                    lineCount++;
+                }
+                if (lineCount === 0) {
+                    alert(`No wheel data found in ${ADJUST_SHEET_NAME}!A${ADJUST_START_ROW}:G${ADJUST_START_ROW + ADJUST_MAX_LINES - 1}.`);
+                    return;
+                }
+
+                // Detect populated train blocks: contiguous from Train 1,
+                // stopping at the first block whose name is blank AND
+                // has no data in any of its 6 columns across lineCount rows.
+                const prevTrains = trailerGenTrains.slice();
+                const rebuiltTrains = [];
+                for (let b = 0; b < ADJUST_MAX_TRAIN_BLOCKS; b++) {
+                    const localBase = b * ADJUST_BLOCK_WIDTH; // offset within blockValues (col B = index 0)
+                    const nameLocalIdx = localBase + 2; // name label sits over col+2 (D for train 1)
+                    const rawName = (trainNameRow[nameLocalIdx] || '').toString().trim();
+
+                    let blockHasData = false;
+                    for (let i = 0; i < lineCount && !blockHasData; i++) {
+                        for (let c = 0; c < ADJUST_BLOCK_WIDTH; c++) {
+                            const v = blockValues[i][localBase + c];
+                            if (v !== '' && v !== null && v !== undefined) { blockHasData = true; break; }
+                        }
+                    }
+                    if (!rawName && !blockHasData) break;
+
+                    // Rows actually in use for THIS train (left-x or
+                    // right-x present); trailing blank rows end it.
+                    const leftGroupNums = [], rightGroupNums = [];
+                    let xVals = [], rightYVals = [], leftYVals = [];
+                    let trainLineCount = 0;
+                    for (let i = 0; i < lineCount; i++) {
+                        const row = blockValues[i];
+                        const lx = row[localBase + 0], ly = row[localBase + 1], lg = row[localBase + 2];
+                        const rx = row[localBase + 3], ry = row[localBase + 4], rg = row[localBase + 5];
+                        const hasX = (lx !== '' && lx !== null && lx !== undefined) || (rx !== '' && rx !== null && rx !== undefined);
+                        if (!hasX) break;
+                        trainLineCount++;
+                        xVals.push(parseFloat(lx !== '' && lx !== null ? lx : rx) || 0);
+                        leftYVals.push(parseFloat(ly) || 0);
+                        rightYVals.push(parseFloat(ry) || 0);
+                        leftGroupNums.push((lg === '' || lg === null || lg === undefined) ? null : (parseInt(lg, 10) || null));
+                        rightGroupNums.push((rg === '' || rg === null || rg === undefined) ? null : (parseInt(rg, 10) || null));
+                    }
+                    if (trainLineCount === 0) continue;
+
+                    const spacing = trainLineCount > 1 ? (xVals[0] - xVals[1]) : (prevTrains[b] ? prevTrains[b].spacing : 1400);
+                    const trainX = xVals[0];
+                    const trainY = rightYVals[0];
+                    const axlePairOffsetY = leftYVals[0] - rightYVals[0];
+
+                    const leftRanges = buildSideGroupRanges(leftGroupNums);
+                    const rightRanges = buildSideGroupRanges(rightGroupNums);
+                    const merged = mergeSideGroupRanges(leftRanges, rightRanges);
+
+                    const oldTrain = prevTrains.find(t => t.name === rawName) || prevTrains[b];
+                    const findOldLoad = (groupNumber, row) => {
+                        if (!oldTrain) return null;
+                        const g = oldTrain.groups.find(g => g.groupNumber === groupNumber && (g.row || 'both') === row) ||
+                                  oldTrain.groups.find(g => g.groupNumber === groupNumber);
+                        return g ? { load: g.load, noLoad: !!g.noLoad } : null;
+                    };
+
+                    const groups = merged.map(r => {
+                        const old = findOldLoad(r.groupNumber, r.row);
+                        return {
+                            id: trailerGenNextGroupId++,
+                            groupNumber: r.groupNumber,
+                            from: r.from,
+                            to: r.to,
+                            load: old ? old.load : 25,
+                            noLoad: old ? old.noLoad : false,
+                            row: r.row,
+                            color: getGroupColor(r.groupNumber)
+                        };
+                    });
+
+                    rebuiltTrains.push({
+                        id: trailerGenNextId++,
+                        name: rawName || `Train ${rebuiltTrains.length + 1}`,
+                        spacing: spacing,
+                        x: trainX,
+                        y: trainY,
+                        vcg: oldTrain ? oldTrain.vcg : 4200,
+                        groups: groups.length ? groups : [defaultAxleGroup(1, 1, 25, 1, 'both')],
+                        cadSplit: oldTrain ? oldTrain.cadSplit : '',
+                        // Pulled-back data is always treated as custom/
+                        // manual (axle #1 == X/Y offset exactly, and any
+                        // left/right split comes from the raw Y values,
+                        // not a re-applied manufacturer preset) — re-apply
+                        // a trailer preset above if it should snap back to
+                        // a fixed Goldhofer/SPMT footprint.
+                        trailerType: 'custom',
+                        axleLineCount: null,
+                        deckLength: null,
+                        deckWidth: null,
+                        axle1OffsetX: null,
+                        axle1OffsetY: null,
+                        axlePairOffsetY: axlePairOffsetY
+                    });
+                }
+
+                if (rebuiltTrains.length === 0) {
+                    alert(`No wheel data found in ${ADJUST_SHEET_NAME}!B1:G${ADJUST_START_ROW + ADJUST_MAX_LINES - 1}.`);
+                    return;
+                }
+
+                trailerGenTrains = rebuiltTrains;
+                renderTrailerDashboard();
+                logMsg(`📥 Pulled ${rebuiltTrains.length} train(s) / ${lineCount} axle line(s) from ${ADJUST_SHEET_NAME} for editing.`);
+            } catch (e) {
+                console.warn('Adjust_Wheels pull error', e);
+                alert(`Could not pull wheel data from Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
+            }
         }
 
         // ---- Pull existing trailer axle data back from Excel ----
