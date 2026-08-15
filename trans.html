@@ -173,10 +173,19 @@
             margin-bottom: 14px;
             background: var(--tank-box-bg);
         }
-        .tg-preview-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; padding: 0 6px 6px; }
+        .tg-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 0 6px 6px; }
         .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
         .tg-preview-toggle input { cursor: pointer; }
+        .tg-preview-toggles-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
         .tg-preview-external-note { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-muted); font-style: italic; }
+
+        /* Stacked Top / Side / End view sections in the preview panel. */
+        .tg-view-section { margin-bottom: 18px; }
+        .tg-view-section:last-child { margin-bottom: 0; }
+        .tg-view-section-label {
+            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); padding: 0 6px 4px;
+        }
 
         /* Group detail legend — shown below the preview instead of the
            on-canvas labels when "Show group label in preview" is off.
@@ -306,7 +315,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.07)</h1>
+            <h1>🚂 Transport Dashboard (Rev.08)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -391,22 +400,25 @@
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
                         <div class="tg-preview-toolbar">
-                            <label class="tg-preview-toggle">
-                                <input type="checkbox" id="tgPreviewSideToggle" onchange="toggleTgPreviewSide(this.checked)">
-                                ⬌ Show preview beside input data
-                            </label>
-                            <label class="tg-preview-toggle">
-                                <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
-                                ⧉ Show axle preview in separate window (compatible with two monitors)
-                            </label>
-                            <label class="tg-preview-toggle">
-                                <input type="checkbox" id="tgGroupLabelToggle" checked onchange="toggleTgGroupLabels(this.checked)">
-                                🏷 Show group label in preview
-                            </label>
-                            <label class="tg-preview-toggle">
-                                <input type="checkbox" id="tgDimensionToggle" checked onchange="toggleTgDimensions(this.checked)">
-                                📏 Show dimensions
-                            </label>
+                            <div class="tg-preview-toggles-right" style="margin-left: auto;">
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tgPreviewSideToggle" onchange="toggleTgPreviewSide(this.checked)">
+                                    ⬌ Show preview beside input data
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
+                                    ⧉ Show axle preview in separate window (compatible with two monitors)
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tgGroupLabelToggle" checked onchange="toggleTgGroupLabels(this.checked)">
+                                    🏷 Show group label in preview
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tgDimensionToggle" checked onchange="toggleTgDimensions(this.checked)">
+
+                                    📏 Show dimensions
+                                </label>
+                            </div>
                         </div>
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
                         <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
@@ -1896,8 +1908,32 @@
             if (!wrap) return;
 
             const rows = computeTrailerGenRows();
-            if (rows.length === 0) { wrap.innerHTML = ''; return; }
+            if (rows.length === 0) { wrap.innerHTML = ''; const d = document.getElementById('tgPreviewGroupDetails'); if (d) d.innerHTML = ''; return; }
 
+            // Top view renders on its own (plan), and side+end render
+            // together as one aligned elevation drawing directly below it
+            // — one combined sheet instead of three separate boxes, in
+            // the same layout convention as a standard GA drawing (plan
+            // above, elevation below with the end view projected off the
+            // side view at a shared height scale).
+            const topResult = renderTrailerGenTopView(rows);
+            const topHtml = topResult.svg;
+            // Side view reuses the top view's own X mapping (scale +
+            // offset + canvas width) so every axle line's horizontal
+            // position sits directly below its position in the plan
+            // view above, instead of the elevation panel picking its
+            // own independent horizontal layout.
+            const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
+            wrap.innerHTML = `
+                <div class="tg-view-section"><div class="tg-view-section-label">Top view (plan)</div>${topHtml}</div>
+                <div class="tg-view-section"><div class="tg-view-section-label">Side + end view (combined, true scale)</div>${elevationHtml}</div>
+            `;
+        }
+
+        // ---- Top (plan) view — original live axle-line preview ----
+        // Returns an SVG markup string (rather than writing to wrap
+        // directly) so all three views can be stacked together.
+        function renderTrailerGenTopView(rows) {
             const svgW = 680, svgH = 220;
             const padL = 55, padR = 50, padT = 34, padB = 30;
             const plotW = svgW - padL - padR, plotH = svgH - padT - padB;
@@ -2043,11 +2079,17 @@
                     const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
                     const dir = side === 'left' ? -1 : 1;
                     const x = sx(xWorld) + dir * (10 + tier * 12);
+                    // Text runs vertically (reading bottom-to-top), centered
+                    // along the dimension line, so it stays readable
+                    // without widening the callout the way horizontal text
+                    // would for a tall/narrow Y-dimension.
+                    const textX = x + (dir === 1 ? 9 : -9);
+                    const textY = (lo + hi) / 2;
                     return `<g opacity="0.9">` +
                         `<line x1="${x}" y1="${lo}" x2="${x}" y2="${hi}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${x - 3}" y1="${lo}" x2="${x + 3}" y2="${lo}" stroke="${color}" stroke-width="1"/>` +
                         `<line x1="${x - 3}" y1="${hi}" x2="${x + 3}" y2="${hi}" stroke="${color}" stroke-width="1"/>` +
-                        `<text x="${x + (dir === 1 ? 4 : -4)}" y="${(lo + hi) / 2 + 3}" font-size="8" text-anchor="${dir === 1 ? 'start' : 'end'}" fill="${color}">${escapeHtml(label)}</text>` +
+                        `<text x="${textX}" y="${textY}" font-size="8" text-anchor="middle" fill="${color}" transform="rotate(-90 ${textX} ${textY})">${escapeHtml(label)}</text>` +
                         `</g>`;
                 };
 
@@ -2220,7 +2262,7 @@
                 });
             });
 
-            wrap.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
+            const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-blue, #38bdf8)"/>
@@ -2241,6 +2283,190 @@
                     `<div class="tg-preview-group-detail-row" style="border-left-color:${r.color}; color:${r.color};">${escapeHtml(r.text)}</div>`
                 ).join('');
             }
+
+            return {
+                svg: svgMarkup, scale,
+                // Exposed so the side view below can reuse this exact
+                // X mapping (offsetX + (x - minX) * scale) and canvas
+                // width, so axle positions line up vertically between
+                // the two stacked drawings.
+                minX, offsetX, padL, padR, plotW, svgW
+            };
+        }
+
+        // Generic visualization-only constants for the Side/End elevation
+        // views below. The dashboard doesn't track a per-axle vertical
+        // (Z) position anywhere, so these are representative SPMT figures
+        // (deck height ~1.5m above ground, ~0.7m tire diameter) used only
+        // to draw a believable elevation — not read from any data field.
+        const TG_ELEV_DECK_HEIGHT = 1500;
+        const TG_ELEV_DECK_THICK = 300;
+        const TG_ELEV_WHEEL_DIAM = 700;
+        const TG_ELEV_TIRE_WIDTH = 400;
+
+        // ---- Combined Side + End elevation — one drawing sheet instead
+        // of two separate boxes. Both panels share a single true px/mm
+        // scale for the vertical (Z) axis, the same ground line, and the
+        // same deck-height/wheel-diameter geometry, so the end view reads
+        // as a direct height-projection off the side view (the same
+        // convention used on a printed GA drawing: side view left, end
+        // view projected to its right, dashed projection lines tying the
+        // ground and deck-top lines across both). The side view keeps its
+        // own true X-scale (length) and the end view its own true
+        // Y-scale (width) — only the shared Z axis has to match between
+        // the two for the projection to line up. ----
+        function renderTrailerGenElevationCombined(rows, topView) {
+            const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
+            const zSpanMm = TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK + 260; // ground(0) to just above deck top
+            // Reuse the plan (top) view's own X mapping wholesale — same
+            // scale, same left offset, same canvas width — so an axle's
+            // horizontal position in the side view lands at the exact
+            // same on-screen X as that same axle in the plan view
+            // directly above it. Falls back to a standalone layout if no
+            // top-view mapping was supplied.
+            const scale = (topView && topView.scale) || (160 / zSpanMm);
+            const padL = (topView && topView.padL) || 69;
+            const padR = (topView && topView.padR) || 26;
+            const svgWTop = (topView && topView.svgW) || 680;
+            const sideW = (topView && topView.plotW) || 400;
+            const sideOffsetX = (topView && topView.offsetX) || padL;
+            const minX = (topView && topView.minX) || 0;
+            const panelH = zSpanMm * scale;  // ground→deck-top height, derived from the shared scale
+
+            // ---- Y extents (end view / width) — independent of the
+            // plan view's X mapping, since the end view isn't required
+            // to align horizontally with it. ----
+            const ys = rows.map(r => r.y);
+            trailerGenTrains.forEach(t => { if (t.deckWidth) ys.push((parseFloat(t.y) || 0), (parseFloat(t.y) || 0) + t.deckWidth); });
+            ys.push(0);
+            const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
+            const marginY = Math.max((rawMaxY - rawMinY) * 0.10, 350);
+            const minY = rawMinY - marginY, maxY = rawMaxY + marginY;
+            const spanY = Math.max(maxY - minY, 1);
+            const endW = spanY * scale;
+
+            // Canvas width matches the plan view's own canvas width
+            // (unless the end view happens to need more room than the
+            // plan view's plot area, in which case it grows to fit).
+            const contentW = Math.max(sideW, endW);
+            const svgW = Math.max(svgWTop, padL + contentW + padR);
+            const endOffsetX = padL + (contentW - endW) / 2;
+
+            const sideGroundY = padT + panelH;
+            const endPadT = padT + panelH + padGap;
+            const endGroundY = endPadT + panelH;
+            const svgH = endGroundY + padB;
+
+            const sx = x => sideOffsetX + (x - minX) * scale;          // side view local X — identical formula to the plan view's sx()
+            const sy = y => endOffsetX + (y - minY) * scale;           // end view local X (world Y)
+            const sz = z => sideGroundY - z * scale;                   // side view Z
+            const szEnd = z => endGroundY - z * scale;                 // end view Z (own ground line, same scale)
+
+            // Text in this SVG is sized in local viewBox units, which get
+            // scaled up/down to fit the container's rendered width. The
+            // plan (top) view always uses a fixed 680-wide viewBox, so to
+            // make text here read at the SAME on-screen size as the plan
+            // view (regardless of how wide/narrow this true-scale drawing
+            // ends up being), font sizes are scaled by this view's actual
+            // width relative to that 680 reference.
+            const fontScale = svgW / 680;
+            const fLabel = (9 * fontScale).toFixed(2);   // matches plan view's deck-label / axis-label size
+            const fDim = (8 * fontScale).toFixed(2);     // matches plan view's dimension-text size
+
+            const wheelR = Math.max(3, TG_ELEV_WHEEL_DIAM * scale / 2);
+            const deckTopY = sz(TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK);
+            const deckTopYEnd = szEnd(TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK);
+            const deckThickPx = TG_ELEV_DECK_THICK * scale;
+
+            // Ground lines — one per panel (no side-by-side projection
+            // lines needed now that the panels are stacked instead of
+            // sitting next to each other).
+            let groundSvg = `<line x1="${sideOffsetX - 15}" y1="${sideGroundY}" x2="${sideOffsetX + sideW + 15}" y2="${sideGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
+            groundSvg += `<line x1="${endOffsetX - 15}" y1="${endGroundY}" x2="${endOffsetX + endW + 15}" y2="${endGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
+
+            // ---- Side view: one wheel + deck strip per train ----
+            let sideWheelsSvg = '', sideDecksSvg = '';
+            const byTrain = {};
+            rows.forEach(r => { (byTrain[r.trainName] = byTrain[r.trainName] || []).push(r); });
+            Object.keys(byTrain).forEach(trainName => {
+                const train = trailerGenTrains.find(t => t.name === trainName) || {};
+                const trainRows = byTrain[trainName];
+                const uniqueX = [...new Set(trainRows.map(r => r.x))].sort((a, b) => a - b);
+                uniqueX.forEach(xw => {
+                    const cluster = trainRows.filter(r => r.x === xw);
+                    const color = cluster[0].color;
+                    const cx = sx(xw);
+                    sideWheelsSvg += `<circle cx="${cx}" cy="${sz(TG_ELEV_WHEEL_DIAM / 2)}" r="${wheelR}" fill="${color}" opacity="0.85" stroke="${color}" stroke-width="1.5"/>`;
+                    sideWheelsSvg += `<line x1="${cx}" y1="${sideGroundY}" x2="${cx}" y2="${deckTopY + deckThickPx}" stroke="${color}" stroke-width="1.5" opacity="0.6"/>`;
+                });
+                const deckX1 = train.deckLength ? (parseFloat(train.x) || 0) : Math.min(...uniqueX) - 300;
+                const deckX2 = train.deckLength ? deckX1 + train.deckLength : Math.max(...uniqueX) + 300;
+                const dx1 = sx(deckX1), dx2 = sx(deckX2);
+                sideDecksSvg += `<rect x="${dx1}" y="${deckTopY}" width="${dx2 - dx1}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
+                sideDecksSvg += `<text x="${dx1 + 4}" y="${deckTopY - 5}" font-size="${fLabel}" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
+            });
+
+            // ---- End view: one tire block per unique (train, Y) ----
+            let endWheelsSvg = '', endDecksSvg = '';
+            const tireW = Math.max(6, TG_ELEV_TIRE_WIDTH * scale);
+            const seen = new Set();
+            rows.forEach(r => {
+                const key = r.trainName + ':' + r.y;
+                if (seen.has(key)) return;
+                seen.add(key);
+                const cx = sy(r.y);
+                endWheelsSvg += `<rect x="${cx - tireW / 2}" y="${szEnd(TG_ELEV_WHEEL_DIAM)}" width="${tireW}" height="${TG_ELEV_WHEEL_DIAM * scale}" rx="3" fill="${r.color}" opacity="0.85" stroke="${r.color}" stroke-width="1"/>`;
+            });
+            trailerGenTrains.forEach(t => {
+                if (!t.deckWidth) return;
+                const oy = parseFloat(t.y) || 0;
+                const dx1 = sy(oy), dx2 = sy(oy + t.deckWidth);
+                endDecksSvg += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
+                endDecksSvg += `<text x="${Math.min(dx1, dx2) + 4}" y="${deckTopYEnd - 5}" font-size="${fLabel}" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
+            });
+
+            // ---- Dimensions ----
+            let dimSvg = '';
+            if (tgShowDimensions) {
+                const allSx = rows.map(r => sx(r.x));
+                const lo = Math.min(...allSx), hi = Math.max(...allSx);
+                const dimY = deckTopY - 16;
+                const overallLenMm = Math.round(Math.max(...rows.map(r => r.x)) - Math.min(...rows.map(r => r.x)));
+                dimSvg += `<g opacity="0.9">` +
+                    `<line x1="${lo}" y1="${dimY}" x2="${hi}" y2="${dimY}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
+                    `<line x1="${lo}" y1="${dimY - 3}" x2="${lo}" y2="${dimY + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                    `<line x1="${hi}" y1="${dimY - 3}" x2="${hi}" y2="${dimY + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                    `<text x="${(lo + hi) / 2}" y="${dimY - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${overallLenMm}mm axle span</text>` +
+                    `</g>`;
+                // Deck-height dimension — drawn on the side view panel;
+                // labeled "(typ.)" since the same shared Z scale/height
+                // applies to the end view panel below it.
+                const heightMidY = (sideGroundY + deckTopY) / 2;
+                dimSvg += `<g opacity="0.9">` +
+                    `<line x1="${sideOffsetX - 12}" y1="${sideGroundY}" x2="${sideOffsetX - 12}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1" stroke-dasharray="2 2"/>` +
+                    `<line x1="${sideOffsetX - 16}" y1="${sideGroundY}" x2="${sideOffsetX - 8}" y2="${sideGroundY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
+                    `<line x1="${sideOffsetX - 16}" y1="${deckTopY}" x2="${sideOffsetX - 8}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
+                    `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK}mm ht (typ.)</text>` +
+                    `</g>`;
+                trailerGenTrains.forEach(t => {
+                    if (!t.deckWidth) return;
+                    const oy = parseFloat(t.y) || 0;
+                    const dx1 = sy(oy), dx2 = sy(oy + t.deckWidth);
+                    const y = deckTopYEnd - 16;
+                    dimSvg += `<g opacity="0.9">` +
+                        `<line x1="${dx1}" y1="${y}" x2="${dx2}" y2="${y}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${dx1}" y1="${y - 3}" x2="${dx1}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                        `<line x1="${dx2}" y1="${y - 3}" x2="${dx2}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                        `<text x="${(dx1 + dx2) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${Math.round(t.deckWidth)}mm width</text>` +
+                        `</g>`;
+                });
+            }
+
+            return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
+                <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                <rect x="${endOffsetX - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${dimSvg}
+            </svg>`;
         }
 
         function renderTrailerGeneratorTotals() {
