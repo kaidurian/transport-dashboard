@@ -315,7 +315,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.08)</h1>
+            <h1>🚂 Transport Dashboard (Rev.09)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -366,8 +366,7 @@
                 written to <strong>Load_Editor!B</strong> (name, e.g. <em>Group_1_line_1</em>) and
                 <strong>D:G</strong> starting at row <strong id="tgStartRowLabel">124</strong>
                 (D&nbsp;=&nbsp;Line load t, E&nbsp;=&nbsp;X, F&nbsp;=&nbsp;Y, G&nbsp;=&nbsp;VCG).
-                Use "Load from Excel" to pull an already-generated trailer back in for editing.
-                Separately, <strong>"Push to Adjust_Wheels"</strong> writes each axle LINE's X/Y
+                <strong>"Push to Adjust_Wheels"</strong> writes each axle LINE's X/Y
                 position and group number (no load/VCG) to sheet <strong>Adjust_Wheels</strong>,
                 with axle lines as rows (A4&nbsp;=&nbsp;Line&nbsp;1 … A123&nbsp;=&nbsp;Line&nbsp;120)
                 and one 6&#8209;column block per train (Train&nbsp;1&nbsp;=&nbsp;B:G, Train&nbsp;2&nbsp;=&nbsp;H:M,
@@ -375,11 +374,24 @@
                 <strong>Adjust_Wheels stores axle-CENTER positions</strong> (distance from origin
                 0,0 to the center of each axle), which is different from X offset/Y offset (distance
                 from 0,0 to the trailer deck's <strong>top-left corner</strong>) — the preview's
-                dimension callouts show both. "Load positions (Adjust_Wheels)" reads the axle grid
+                dimension callouts show both. "⇩ Refresh from Adjust_Wheels" reads the axle grid
                 back the other way; the first train's X offset/Y offset is then re-linked to
                 <strong>Input!B5/B6</strong> rather than left as a raw axle position, so it stays
                 the deck-corner value everywhere. Editing X offset/Y offset on the dashboard is
                 always picked up automatically the next time you push, since nothing is cached.
+                This same read also runs automatically the first time the panel opens (and on every
+                refresh) whenever <strong>Adjust_Wheels</strong> isn't blank. While reading, each
+                train's <strong>Trailer type</strong> is auto-detected from the spacing between its
+                axle lines: exactly <strong>1500&nbsp;mm</strong> &rarr; Goldhofer, exactly
+                <strong>1400&nbsp;mm</strong> &rarr; SPMT (anything else stays Custom / Manual), and
+                its axle-line count is taken directly from how many <em>Line N</em> rows that
+                train's block has in Adjust_Wheels. On <strong>Generate &amp; Write to Excel</strong>,
+                besides the axle rows written to Load_Editor, each train's AutoCAD split segments
+                are also written to <strong>Input!A11:C30</strong> (row 10 = "Set Train Group"): one
+                row per split segment (or one row for the whole train if AutoCAD split is blank),
+                column A/D/G/… = split type (e.g. <em>GHF 4</em>), and the next two columns = that
+                segment's first axle line's Group Nr for the left and right axle respectively — 3
+                columns per train, Train 1 = A:C, Train 2 = D:F, and so on through Train 10.
             </p>
 
             <div class="tg-modal-body" id="tgModalBody">
@@ -390,10 +402,8 @@
 
                     <div class="tg-train-list-actions">
                         <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
-                        <button type="button" class="tg-add-train-btn" title="Read existing trailer axle data back from Load_Editor!B/D:G into these trains for editing"
-                                onclick="pullTrailerDataFromExcel()">⇩ Load from Excel</button>
-                        <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing"
-                                onclick="pullWheelDataFromExcel()">⇩ Load positions (Adjust_Wheels)</button>
+                        <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
+                                onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
                     </div>
                 </div>
 
@@ -532,6 +542,22 @@
         const INPUT_NUM_GROUPS_CELL = "B2";
         const INPUT_X_OFFSET_CELL = "B5";
         const INPUT_Y_OFFSET_CELL = "B6";
+
+        // ---- "Set Train Group" block — Input!A11:C30 (row 10 is the
+        // "Set Train Group" header) ----
+        // 3 columns per train: split-type label, Group Nr Left,
+        // Group Nr Right. Train 1 = A:C, Train 2 = D:F, Train 3 = G:I,
+        // ... Train 10 = AB:AD (matches the Number of trains / Number of
+        // Hydraulic Groups / X offset / Y offset column layout above).
+        // One row per AutoCAD split segment (see the "AutoCAD split"
+        // field): a train with no split (whole train = one block) gets a
+        // single row. Group Nr Left/Right = that segment's first axle
+        // line's group number for the left/right axle respectively.
+        const SETGROUP_START_ROW = 11;   // A11 = first split-type row
+        const SETGROUP_MAX_ROWS = 20;    // rows 11..30
+        const SETGROUP_FIRST_TRAIN_COL = 1; // column A
+        const SETGROUP_BLOCK_WIDTH = 3;     // columns per train
+        const SETGROUP_MAX_TRAINS = 10;     // Input sheet only has 10 train blocks (Train 1..10)
 
         // ---- Fixed trailer manufacturer presets (all mm) ----
         // Each preset describes ONE physical trailer's top-deck footprint
@@ -718,6 +744,78 @@
             if (!raw || !String(raw).trim()) return null;
             const parts = String(raw).split(/[,\s]+/).map(s => parseInt(s, 10)).filter(n => Number.isFinite(n) && n > 0);
             return parts.length ? parts : null;
+        }
+
+        // ---- "Set Train Group" rows for one train (Input!A11:C30 block) ----
+        // One row per AutoCAD split segment, front -> back: split-type
+        // label ("GHF 4" / "SPMT 6" / "Custom 4" depending on trailerType),
+        // plus that segment's first axle line's Group Nr for the left and
+        // right axle. A train with no AutoCAD split (or a split that
+        // doesn't add up to its axle count) is treated as one segment =
+        // the whole train, same as the AutoCAD export's own fallback.
+        function computeSetTrainGroupRows(train) {
+            const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+            if (maxAxle === 0) return [];
+            const parsedSplit = parseCadSplitString(train.cadSplit);
+            const segments = (parsedSplit && parsedSplit.reduce((s, n) => s + n, 0) === maxAxle) ? parsedSplit : [maxAxle];
+            const findGroup = (axleNum, side) => train.groups.find(g => {
+                const from = parseInt(g.from, 10) || 0;
+                const to = parseInt(g.to, 10) || 0;
+                if (axleNum < from || axleNum > to) return false;
+                const r = g.row || 'both';
+                return r === 'both' || r === side;
+            });
+            const prefix = train.trailerType === 'goldhofer' ? 'GHF'
+                : (train.trailerType === 'spmt' ? 'SPMT' : 'Custom');
+
+            const rows = [];
+            let cum = 0;
+            segments.forEach(segLen => {
+                const firstAxle = cum + 1;
+                cum += segLen;
+                const leftGroup = findGroup(firstAxle, 'left');
+                const rightGroup = findGroup(firstAxle, 'right');
+                rows.push({
+                    label: `${prefix} ${segLen}`,
+                    left: leftGroup ? leftGroup.groupNumber : null,
+                    right: rightGroup ? rightGroup.groupNumber : null
+                });
+            });
+            return rows;
+        }
+
+        // ---- Push "Set Train Group" data (AutoCAD split type + Group
+        // Nr Left/Right per split segment) to Input!A11:C30 ----
+        async function pushSetTrainGroupToExcel() {
+            if (!isOfficeInitialized) return;
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    const lastRow = SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1;
+
+                    trailerGenTrains.slice(0, SETGROUP_MAX_TRAINS).forEach((train, idx) => {
+                        const startCol = SETGROUP_FIRST_TRAIN_COL + idx * SETGROUP_BLOCK_WIDTH;
+                        const c0 = colLetter(startCol);
+                        const c2 = colLetter(startCol + 2);
+
+                        // Clear this train's whole fixed block first so a
+                        // shorter re-push doesn't leave stale rows behind.
+                        sheet.getRange(`${c0}${SETGROUP_START_ROW}:${c2}${lastRow}`).clear(Excel.ClearApplyTo.contents);
+
+                        const rows = computeSetTrainGroupRows(train).slice(0, SETGROUP_MAX_ROWS);
+                        if (rows.length === 0) return;
+                        const values = rows.map(r => [r.label, r.left, r.right]);
+                        const endRow = SETGROUP_START_ROW + rows.length - 1;
+                        sheet.getRange(`${c0}${SETGROUP_START_ROW}:${c2}${endRow}`).values = values;
+                    });
+
+                    await context.sync();
+                });
+                logMsg(`📤 Wrote Set Train Group data for ${Math.min(trailerGenTrains.length, SETGROUP_MAX_TRAINS)} train(s) to ${INPUT_SHEET_NAME}!A${SETGROUP_START_ROW}:C${SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1} (and onward per train).`);
+            } catch (e) {
+                console.warn('Set Train Group push error', e);
+                logMsg(`⚠ Could not write Set Train Group data to ${INPUT_SHEET_NAME}!A${SETGROUP_START_ROW}:C${SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1}. See console for details.`);
+            }
         }
 
         function computeAutoCadSplit(axleCount) {
@@ -1014,9 +1112,14 @@
         // folding the difference into axle1OffsetX/axle1OffsetY), so
         // nothing about the actual axle geometry moves — only which
         // number is displayed/stored as "X offset (mm)" / "Y offset (mm)".
-        async function pullWheelDataFromExcel() {
+        // opts.silent = true suppresses the "not connected" / "no data
+        // found" / error alert() popups — used when this runs
+        // automatically on panel open/refresh instead of from the
+        // button, so a blank Adjust_Wheels sheet doesn't nag the user.
+        async function pullWheelDataFromExcel(opts) {
+            opts = opts || {};
             if (!isOfficeInitialized) {
-                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull wheel data.');
+                if (!opts.silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull wheel data.');
                 return;
             }
             try {
@@ -1066,7 +1169,7 @@
                     lineCount++;
                 }
                 if (lineCount === 0) {
-                    alert(`No wheel data found in ${ADJUST_SHEET_NAME}!A${ADJUST_START_ROW}:G${ADJUST_START_ROW + ADJUST_MAX_LINES - 1}.`);
+                    if (!opts.silent) alert(`No wheel data found in ${ADJUST_SHEET_NAME}!A${ADJUST_START_ROW}:G${ADJUST_START_ROW + ADJUST_MAX_LINES - 1}.`);
                     return;
                 }
 
@@ -1114,6 +1217,20 @@
                     const trainY = rightYVals[0];
                     const axlePairOffsetY = leftYVals[0] - rightYVals[0];
 
+                    // ---- Trailer type auto-detection ----
+                    // The distance between consecutive axle lines (the
+                    // same "spacing" value above) tells us the
+                    // manufacturer: exactly 1500mm -> Goldhofer, exactly
+                    // 1400mm -> SPMT (TRAILER_PRESETS' lineSpacingX for
+                    // each). Axle-line count always follows however many
+                    // Line N rows this train's block actually has in
+                    // Adjust_Wheels (trainLineCount) — anything without a
+                    // matching preset for that exact count falls back to
+                    // Custom / Manual, same as before.
+                    const detectedMfr = Math.round(Math.abs(spacing)) === 1500 ? 'goldhofer'
+                        : (Math.round(Math.abs(spacing)) === 1400 ? 'spmt' : null);
+                    const detectedPreset = detectedMfr ? TRAILER_PRESETS[detectedMfr][trainLineCount] : null;
+
                     const leftRanges = buildSideGroupRanges(leftGroupNums);
                     const rightRanges = buildSideGroupRanges(rightGroupNums);
                     const merged = mergeSideGroupRanges(leftRanges, rightRanges);
@@ -1140,47 +1257,56 @@
                         };
                     });
 
+                    // When a preset matches, axle #1 sits inset from the
+                    // deck's top-left corner by preset.axle1X/axle1Y (same
+                    // convention as applyTrailerPreset()), so x/y below
+                    // store the deck corner, not the raw axle-1 position —
+                    // baseX/y = train.x/y + axle1OffsetX/Y always recovers
+                    // the exact axle-1 world position (trainX/trainY)
+                    // either way, which is what the re-anchor step just
+                    // below (and computeTrailerGenRows/computeAdjustWheelsTrains
+                    // elsewhere) relies on.
                     rebuiltTrains.push({
                         id: trailerGenNextId++,
                         name: rawName || `Train ${rebuiltTrains.length + 1}`,
                         spacing: spacing,
-                        x: trainX,
-                        y: trainY,
+                        x: detectedPreset ? (trainX - detectedPreset.axle1X) : trainX,
+                        y: detectedPreset ? (trainY - detectedPreset.axle1Y) : trainY,
                         vcg: oldTrain ? oldTrain.vcg : 4200,
                         groups: groups.length ? groups : [defaultAxleGroup(1, 1, 25, 1, 'both')],
                         cadSplit: oldTrain ? oldTrain.cadSplit : '',
-                        // Pulled-back data is always treated as custom/
-                        // manual (axle #1 == X/Y offset exactly, and any
-                        // left/right split comes from the raw Y values,
-                        // not a re-applied manufacturer preset) — re-apply
-                        // a trailer preset above if it should snap back to
-                        // a fixed Goldhofer/SPMT footprint.
-                        trailerType: 'custom',
-                        axleLineCount: null,
-                        deckLength: null,
-                        deckWidth: null,
-                        axle1OffsetX: null,
-                        axle1OffsetY: null,
+                        trailerType: detectedPreset ? detectedMfr : 'custom',
+                        axleLineCount: detectedPreset ? trainLineCount : null,
+                        deckLength: detectedPreset ? detectedPreset.deckLength : null,
+                        deckWidth: detectedPreset ? detectedPreset.deckWidth : null,
+                        axle1OffsetX: detectedPreset ? detectedPreset.axle1X : null,
+                        axle1OffsetY: detectedPreset ? detectedPreset.axle1Y : null,
                         axlePairOffsetY: axlePairOffsetY
                     });
                 }
 
                 if (rebuiltTrains.length === 0) {
-                    alert(`No wheel data found in ${ADJUST_SHEET_NAME}!B1:G${ADJUST_START_ROW + ADJUST_MAX_LINES - 1}.`);
+                    if (!opts.silent) alert(`No wheel data found in ${ADJUST_SHEET_NAME}!B1:G${ADJUST_START_ROW + ADJUST_MAX_LINES - 1}.`);
                     return;
                 }
 
                 // Re-anchor the first (primary) train's X offset / Y
                 // offset to Input!B5/B6, keeping its axle-1 world
                 // position exactly as read from Adjust_Wheels by moving
-                // the difference into axle1OffsetX/axle1OffsetY. Other
-                // trains have no matching Input-sheet cell, so their X
-                // offset / Y offset stay exactly as read (axle-1 world
-                // position, inset = 0) as before.
+                // the difference into axle1OffsetX/axle1OffsetY. The raw
+                // axle-1 world position is recovered as x/y + existing
+                // offset (works whether that offset just came from a
+                // detected trailer preset above, or is still 0/null for
+                // a custom train) — not read directly off t0.x/t0.y,
+                // since those may already hold the deck-corner position
+                // rather than axle-1 itself. Other trains have no
+                // matching Input-sheet cell, so their X offset / Y
+                // offset stay exactly as computed above.
                 let offsetLinkMsg = '';
                 if (!isNaN(inputXOffset) && !isNaN(inputYOffset)) {
                     const t0 = rebuiltTrains[0];
-                    const axle1WorldX = t0.x, axle1WorldY = t0.y;
+                    const axle1WorldX = (parseFloat(t0.x) || 0) + (parseFloat(t0.axle1OffsetX) || 0);
+                    const axle1WorldY = (parseFloat(t0.y) || 0) + (parseFloat(t0.axle1OffsetY) || 0);
                     t0.x = inputXOffset;
                     t0.y = inputYOffset;
                     t0.axle1OffsetX = axle1WorldX - inputXOffset;
@@ -1195,7 +1321,7 @@
                 logMsg(`📥 Pulled ${rebuiltTrains.length} train(s) / ${lineCount} axle line(s) from ${ADJUST_SHEET_NAME} for editing.${offsetLinkMsg}`);
             } catch (e) {
                 console.warn('Adjust_Wheels pull error', e);
-                alert(`Could not pull wheel data from Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
+                if (!opts.silent) alert(`Could not pull wheel data from Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
             }
         }
 
@@ -2529,7 +2655,13 @@
             } catch (e) {
                 console.warn("Trailer generator Excel write error", e);
                 alert('Could not write trailer data to Excel. See console for details.');
+                return;
             }
+            // Also write each train's AutoCAD split type + Group Nr
+            // Left/Right to Input!A11:C30. Kept as its own try/catch (see
+            // pushSetTrainGroupToExcel) so a problem here doesn't make the
+            // Load_Editor write above look like it failed too.
+            await pushSetTrainGroupToExcel();
         }
 
         // ---- Export current trains as an AutoCAD script (.scr) ----
@@ -2632,7 +2764,13 @@
             renderTrailerDashboard();
             const dirSelect = document.getElementById('tgLoadDirectionSelect');
             if (dirSelect) dirSelect.value = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
-            if (isOfficeInitialized) await seedInitialOffsetsFromExcel();
+            if (isOfficeInitialized) {
+                await seedInitialOffsetsFromExcel();
+                // Auto-link with Adjust_Wheels: runs every time the panel
+                // opens or refreshes, and silently does nothing if the
+                // sheet is blank (or missing) instead of alerting.
+                await pullWheelDataFromExcel({ silent: true });
+            }
         }
 
         // office.js (loaded in <head>) expects to run inside an Office
