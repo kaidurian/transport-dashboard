@@ -315,7 +315,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.08)</h1>
+            <h1>🚂 Transport Dashboard (Rev.09)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -366,7 +366,7 @@
                 written to <strong>Load_Editor!B</strong> (name, e.g. <em>Group_1_line_1</em>) and
                 <strong>D:G</strong> starting at row <strong id="tgStartRowLabel">124</strong>
                 (D&nbsp;=&nbsp;Line load t, E&nbsp;=&nbsp;X, F&nbsp;=&nbsp;Y, G&nbsp;=&nbsp;VCG).
-                <strong>"Push to Adjust_Wheels"</strong> writes each axle LINE's X/Y
+                <strong>"📤 Push to Excel"</strong> writes each axle LINE's X/Y
                 position and group number (no load/VCG) to sheet <strong>Adjust_Wheels</strong>,
                 with axle lines as rows (A4&nbsp;=&nbsp;Line&nbsp;1 … A123&nbsp;=&nbsp;Line&nbsp;120)
                 and one 6&#8209;column block per train (Train&nbsp;1&nbsp;=&nbsp;B:G, Train&nbsp;2&nbsp;=&nbsp;H:M,
@@ -449,8 +449,8 @@
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
                 <button type="button" class="tg-btn tg-btn-primary" onclick="generateTrailerAndWriteToExcel()">Generate &amp; Write to Excel</button>
-                <button type="button" class="tg-btn" title="Write each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train)."
-                        onclick="pushWheelDataToExcel()">📤 Push to Adjust_Wheels</button>
+                <button type="button" class="tg-btn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train). Currently only touches Adjust_Wheels — planned to also cover Input and other sheets in future."
+                        onclick="pushDataToExcel()">📤 Push to Excel</button>
             </div>
 
             <div class="tg-log" id="tgLog"></div>
@@ -989,12 +989,18 @@
             });
         }
 
-        // ---- Push current trains' axle positions/groups to Adjust_Wheels ----
-        // NOTE: this only ever touches sheet Adjust_Wheels — it does NOT
-        // write to Input!A11:C30 (Set Train Group). That block is written
-        // separately by pushSetTrainGroupToExcel(), called only from
-        // generateTrailerAndWriteToExcel() ("Generate & Write to Excel").
-        async function pushWheelDataToExcel() {
+        // ---- Push current trains' data to Excel ("📤 Push to Excel" button) ----
+        // As of now this only writes to sheet Adjust_Wheels (axle
+        // positions/groups) — it does NOT write to Input!A11:C30 (Set
+        // Train Group; that block is written separately by
+        // pushSetTrainGroupToExcel(), called only from
+        // generateTrailerAndWriteToExcel() / "Generate & Write to Excel").
+        // The function/button were named generically (not
+        // "...ToAdjustWheels") because this push is expected to grow to
+        // also write to Input and possibly other sheets in future — add
+        // any new sheet writes inside this same function/Excel.run call
+        // so they stay under one button.
+        async function pushDataToExcel() {
             if (!isOfficeInitialized) {
                 alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
                 return;
@@ -1468,7 +1474,7 @@
             if (field === 'x') pushOffsetToExcel('x', train.x);
             if (field === 'y') pushOffsetToExcel('y', train.y);
             // Note: nothing extra to refresh for Adjust_Wheels here —
-            // pushWheelDataToExcel() always calls computeAdjustWheelsTrains()
+            // pushDataToExcel() always calls computeAdjustWheelsTrains()
             // fresh from trailerGenTrains at push time (there's no cached
             // copy of the wheel grid), so an X offset / Y offset edit is
             // automatically reflected the next time "Push to
