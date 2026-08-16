@@ -370,7 +370,13 @@
                 position and group number (no load/VCG) to sheet <strong>Adjust_Wheels</strong>,
                 with axle lines as rows (A4&nbsp;=&nbsp;Line&nbsp;1 … A123&nbsp;=&nbsp;Line&nbsp;120)
                 and one 6&#8209;column block per train (Train&nbsp;1&nbsp;=&nbsp;B:G, Train&nbsp;2&nbsp;=&nbsp;H:M,
-                Train&nbsp;3&nbsp;=&nbsp;N:S, …: left x-pos/y-pos/Group then right x-pos/y-pos/Group).
+                Train&nbsp;3&nbsp;=&nbsp;N:S, …: left x-pos/y-pos/Group then right x-pos/y-pos/Group), and in
+                the same click also writes each train's AutoCAD split segments to
+                <strong>Input!A11:C30</strong> (row 10 = "Set Train Group"): one row per split segment
+                (or one row for the whole train if AutoCAD split is blank), column A/D/G/… = split
+                type (e.g. <em>GHF 4</em>), and the next two columns = that segment's first axle
+                line's Group Nr for the left and right axle respectively — 3 columns per train,
+                Train 1 = A:C, Train 2 = D:F, and so on through Train 10.
                 <strong>Adjust_Wheels stores axle-CENTER positions</strong> (distance from origin
                 0,0 to the center of each axle), which is different from X offset/Y offset (distance
                 from 0,0 to the trailer deck's <strong>top-left corner</strong>) — the preview's
@@ -385,14 +391,11 @@
                 axle lines: exactly <strong>1500&nbsp;mm</strong> &rarr; Goldhofer, exactly
                 <strong>1400&nbsp;mm</strong> &rarr; SPMT (anything else stays Custom / Manual), and
                 its axle-line count is taken directly from how many <em>Line N</em> rows that
-                train's block has in Adjust_Wheels. On <strong>Generate &amp; Write to Excel</strong>,
-                besides the axle rows written to Load_Editor, each train's AutoCAD split segments
-                are also written to <strong>Input!A11:C30</strong> (row 10 = "Set Train Group"): one
-                row per split segment (or one row for the whole train if AutoCAD split is blank),
-                column A/D/G/… = split type (e.g. <em>GHF 4</em>), and the next two columns = that
-                segment's first axle line's Group Nr for the left and right axle respectively — 3
-                columns per train, Train 1 = A:C, Train 2 = D:F, and so on through Train 10.
+                train's block has in Adjust_Wheels. <strong>Generate &amp; Write to Excel</strong> writes
+                the axle rows to Load_Editor and also writes the same Input!A11:C30 "Set Train Group"
+                block described above, so that block stays in sync however you push.
             </p>
+
 
             <div class="tg-modal-body" id="tgModalBody">
                 <div class="tg-modal-col-left">
@@ -449,7 +452,7 @@
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
                 <button type="button" class="tg-btn tg-btn-primary" onclick="generateTrailerAndWriteToExcel()">Generate &amp; Write to Excel</button>
-                <button type="button" class="tg-btn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train). Currently only touches Adjust_Wheels — planned to also cover Input and other sheets in future."
+                <button type="button" class="tg-btn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
                         onclick="pushDataToExcel()">📤 Push to Excel</button>
             </div>
 
@@ -990,16 +993,15 @@
         }
 
         // ---- Push current trains' data to Excel ("📤 Push to Excel" button) ----
-        // As of now this only writes to sheet Adjust_Wheels (axle
-        // positions/groups) — it does NOT write to Input!A11:C30 (Set
-        // Train Group; that block is written separately by
-        // pushSetTrainGroupToExcel(), called only from
-        // generateTrailerAndWriteToExcel() / "Generate & Write to Excel").
-        // The function/button were named generically (not
-        // "...ToAdjustWheels") because this push is expected to grow to
-        // also write to Input and possibly other sheets in future — add
-        // any new sheet writes inside this same function/Excel.run call
-        // so they stay under one button.
+        // Writes to two sheets in one go:
+        //   1. Adjust_Wheels — each axle LINE's X/Y position + group
+        //      number (one 6-column block per train).
+        //   2. Input!A11:C30 (Set Train Group) — each train's AutoCAD
+        //      split type + Group Nr Left/Right per segment, via
+        //      pushSetTrainGroupToExcel().
+        // Kept generically named (not "...ToAdjustWheels") since more
+        // sheets may be added here in future — add any new sheet write
+        // inside this same function so it stays under one button.
         async function pushDataToExcel() {
             if (!isOfficeInitialized) {
                 alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
@@ -1061,7 +1063,13 @@
             } catch (e) {
                 console.warn('Adjust_Wheels push error', e);
                 alert(`Could not push wheel data to Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
+                return;
             }
+            // Also write each train's AutoCAD split type + Group Nr
+            // Left/Right to Input!A11:C30 (kept in its own try/catch —
+            // see pushSetTrainGroupToExcel — so a problem here doesn't
+            // make the Adjust_Wheels write above look like it failed too).
+            await pushSetTrainGroupToExcel();
         }
 
         // Consecutive-run compression: turns a flat array of group
