@@ -315,7 +315,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.09)</h1>
+            <h1>🚂 Transport Dashboard (Rev.08)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -990,6 +990,10 @@
         }
 
         // ---- Push current trains' axle positions/groups to Adjust_Wheels ----
+        // NOTE: this only ever touches sheet Adjust_Wheels — it does NOT
+        // write to Input!A11:C30 (Set Train Group). That block is written
+        // separately by pushSetTrainGroupToExcel(), called only from
+        // generateTrailerAndWriteToExcel() ("Generate & Write to Excel").
         async function pushWheelDataToExcel() {
             if (!isOfficeInitialized) {
                 alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
