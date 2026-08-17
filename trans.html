@@ -317,7 +317,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.10.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.11)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1085,9 +1085,20 @@
                 return;
             }
 
-            // ---- Step 1: clear the fixed block + write axle-line labels ----
+            // ---- Step 1: write to "Input" first ----
+            // Writes each train's AutoCAD split type + Group Nr Left/
+            // Right to Input!A11:C30 (pushSetTrainGroupToExcel) and each
+            // linked train's X offset/Y offset to Input (pushTrainOffsetsToExcel),
+            // BEFORE anything is written to Adjust_Wheels below. Each is
+            // kept in its own try/catch internally so a problem here
+            // doesn't block the Adjust_Wheels write that follows.
+            await pushSetTrainGroupToExcel();
+            await pushTrainOffsetsToExcel();
+
+            // ---- Step 2: clear the fixed Adjust_Wheels block + write
+            // axle-line labels ----
             // Kept as its own Excel.run/sync so a problem with an
-            // individual train's write below (step 2) can never prevent
+            // individual train's write below (step 3) can never prevent
             // the clear/labels from landing.
             try {
                 await Excel.run(async (context) => {
@@ -1112,7 +1123,7 @@
                 return;
             }
 
-            // ---- Step 2: write each train's block in its OWN Excel.run/
+            // ---- Step 3: write each train's block in its OWN Excel.run/
             // sync, so a failure on one train's range (e.g. a merged
             // cell, a protected column, or an invalid value in that
             // train's block) can't silently abort — or partially commit
@@ -1165,15 +1176,6 @@
                 logMsg(`❌ ${writeErrors.length} train(s) failed to write: ${detail}`);
                 alert(`${writeErrors.length} train(s) could not be written to ${ADJUST_SHEET_NAME} (see log/console for which and why) — often caused by a merged cell or sheet protection over that train's columns.`);
             }
-            // Also write each train's AutoCAD split type + Group Nr
-            // Left/Right to Input!A11:C30 (kept in its own try/catch —
-            // see pushSetTrainGroupToExcel — so a problem here doesn't
-            // make the Adjust_Wheels write above look like it failed too).
-            await pushSetTrainGroupToExcel();
-            // Also write X offset/Y offset for Train 1-OFFSET_LINK_MAX_TRAINS
-            // to their linked Input-sheet cells (kept in its own
-            // try/catch — see pushTrainOffsetsToExcel).
-            await pushTrainOffsetsToExcel();
         }
 
         // Consecutive-run compression: turns a flat array of group
