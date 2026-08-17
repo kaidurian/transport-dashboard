@@ -351,7 +351,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.13.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.13.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -694,32 +694,45 @@
 
         let cargoIdCounter = 1;
         function defaultCargoItem(index) {
-            return {
+            const item = {
                 id: cargoIdCounter++,
                 name: `Cargo_${index}`,
                 weight: 0,      // W, metric tonnes
-                x: 0,           // CoG X from origin (0,0), meters
-                y: 0,           // CoG Y from origin (0,0), meters
+                x: 0,           // CoG X from origin (0,0), meters — synced with Excel
+                y: 0,           // CoG Y from origin (0,0), meters — synced with Excel
                 z: 2.5,         // CoG height above deck, meters
                 length: 6,      // preview-only rectangle footprint, meters
                 width: 3,       // preview-only rectangle footprint, meters
-                height: 3       // preview-only cargo height (full box height, used in side/end view), meters
+                height: 3,      // preview-only cargo height (full box height, used in side/end view), meters
+                anchor: 'cog'   // 'cog' or 'topleft' — which position field the Length/Width edits keep fixed
             };
+            syncCargoGeometry(item, 'cog');
+            return item;
         }
         let cargoItems = [];
 
-        // Top-left corner of a cargo item's plan-view footprint, i.e. its
-        // distance from world origin (0,0) — the same "top-left corner"
-        // convention used for the trailer deck's X offset/Y offset — derived
-        // from the cargo's CoG X/Y (Input!BB/BC) minus half its Length/Width.
-        function cargoTopLeftX(cargo) {
-            const x = parseFloat(cargo.x) || 0, len = parseFloat(cargo.length) || 0;
-            return +(x - len / 2).toFixed(3);
+        // Cargo position can be driven from either end: CoG X/Y (the
+        // values actually synced with Excel Input!BB/BC) or top-left X/Y
+        // (distance from world origin to the top-left corner of the
+        // footprint — the same convention used for the trailer deck's X
+        // offset/Y offset). Both pairs are kept as real fields on the
+        // cargo object so they're always in sync; `anchor` records which
+        // one is the "source of truth" so a later Length/Width edit knows
+        // which position to hold fixed and which to re-derive.
+        function round3(v) { return +((parseFloat(v) || 0).toFixed(3)); }
+        function syncCargoGeometry(cargo, from) {
+            const len = parseFloat(cargo.length) || 0, wid = parseFloat(cargo.width) || 0;
+            if (from === 'topleft') {
+                // Top-left is fixed; derive CoG from it.
+                cargo.x = round3((parseFloat(cargo.tlX) || 0) + len / 2);
+                cargo.y = round3((parseFloat(cargo.tlY) || 0) + wid / 2);
+            } else {
+                // CoG is fixed (default); derive top-left from it.
+                cargo.tlX = round3((parseFloat(cargo.x) || 0) - len / 2);
+                cargo.tlY = round3((parseFloat(cargo.y) || 0) - wid / 2);
+            }
         }
-        function cargoTopLeftY(cargo) {
-            const y = parseFloat(cargo.y) || 0, wid = parseFloat(cargo.width) || 0;
-            return +(y - wid / 2).toFixed(3);
-        }
+
 
         // ---- Fixed trailer manufacturer presets (all mm) ----
         // Each preset describes ONE physical trailer's top-deck footprint
@@ -1786,16 +1799,31 @@
                 cargo[field] = parseFloat(rawValue);
                 if (isNaN(cargo[field])) cargo[field] = 0;
             }
+            // X/Y (CoG) and Length/Width both affect the linked top-left
+            // corner. Editing X/Y makes CoG the anchor going forward;
+            // editing Length/Width re-derives whichever side (CoG or
+            // top-left) is NOT the current anchor, so the pair the operator
+            // isn't actively driving stays mathematically consistent.
+            if (field === 'x' || field === 'y') {
+                cargo.anchor = 'cog';
+                syncCargoGeometry(cargo, 'cog');
+            } else if (field === 'length' || field === 'width') {
+                syncCargoGeometry(cargo, cargo.anchor === 'topleft' ? 'topleft' : 'cog');
+            }
             // Lightweight refresh only, same reasoning as updateTrailerGenField.
             renderTrailerGenPreview();
-            // Keep the "top-left corner" fields in sync without a full
+            // Keep the linked position fields in sync without a full
             // re-render (so the field the operator is typing in never loses
             // focus) whenever a field they're derived from changes.
-            if (field === 'x' || field === 'length' || field === 'y' || field === 'width') {
+            if (field === 'x' || field === 'y' || field === 'length' || field === 'width') {
+                const xIn = document.getElementById(`cargoX_${cargo.id}`);
+                const yIn = document.getElementById(`cargoY_${cargo.id}`);
                 const tlX = document.getElementById(`cargoTlX_${cargo.id}`);
                 const tlY = document.getElementById(`cargoTlY_${cargo.id}`);
-                if (tlX) tlX.value = cargoTopLeftX(cargo);
-                if (tlY) tlY.value = cargoTopLeftY(cargo);
+                if (xIn) xIn.value = cargo.x;
+                if (yIn) yIn.value = cargo.y;
+                if (tlX) tlX.value = cargo.tlX;
+                if (tlY) tlY.value = cargo.tlY;
             }
         }
 
@@ -1804,27 +1832,29 @@
         // the operator can type the distance from world origin (0,0) to
         // the top-left corner of the cargo's plan-view footprint (the same
         // "top-left corner" convention used for the trailer deck's X
-        // offset/Y offset). Editing one of these back-computes the
-        // underlying CoG X/Y (what's actually synced to Excel
-        // Input!BB/BC) by adding back half the Length/Width.
+        // offset/Y offset). Editing one of these makes top-left the anchor
+        // going forward and back-computes the underlying CoG X/Y (what's
+        // actually synced to Excel Input!BB/BC) by adding back half the
+        // Length/Width.
         function updateCargoTopLeft(id, axis, rawValue) {
             const cargo = cargoItems.find(c => c.id === id);
             if (!cargo) return;
             let tl = parseFloat(rawValue);
             if (isNaN(tl)) tl = 0;
-            if (axis === 'x') {
-                cargo.x = tl + (parseFloat(cargo.length) || 0) / 2;
-            } else if (axis === 'y') {
-                cargo.y = tl + (parseFloat(cargo.width) || 0) / 2;
-            }
+            cargo.anchor = 'topleft';
+            if (axis === 'x') cargo.tlX = tl; else cargo.tlY = tl;
+            syncCargoGeometry(cargo, 'topleft');
             // Reflect the resulting CoG value back into the X — CoG / Y —
-            // CoG inputs, and re-normalize this top-left input itself
-            // (rounded the same way cargoTopLeftX/Y compute it), without a
+            // CoG inputs, and re-normalize both top-left inputs, without a
             // full re-render.
-            const cogInput = document.getElementById(axis === 'x' ? `cargoX_${cargo.id}` : `cargoY_${cargo.id}`);
-            if (cogInput) cogInput.value = axis === 'x' ? cargo.x : cargo.y;
-            const tlInput = document.getElementById(axis === 'x' ? `cargoTlX_${cargo.id}` : `cargoTlY_${cargo.id}`);
-            if (tlInput) tlInput.value = axis === 'x' ? cargoTopLeftX(cargo) : cargoTopLeftY(cargo);
+            const xIn = document.getElementById(`cargoX_${cargo.id}`);
+            const yIn = document.getElementById(`cargoY_${cargo.id}`);
+            const tlX = document.getElementById(`cargoTlX_${cargo.id}`);
+            const tlY = document.getElementById(`cargoTlY_${cargo.id}`);
+            if (xIn) xIn.value = cargo.x;
+            if (yIn) yIn.value = cargo.y;
+            if (tlX) tlX.value = cargo.tlX;
+            if (tlY) tlY.value = cargo.tlY;
             renderTrailerGenPreview();
         }
 
@@ -1881,13 +1911,13 @@
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>X — top-left (m)</label>
-                            <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargoTopLeftX(cargo)}"
+                            <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargo.tlX}"
                                    title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Editing this backs into CoG X (X − half of Length is what you type here, so X — CoG updates to match) — not part of the Excel range."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'x', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>Y — top-left (m)</label>
-                            <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargoTopLeftY(cargo)}"
+                            <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargo.tlY}"
                                    title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Editing this backs into CoG Y (Y − half of Width is what you type here, so Y — CoG updates to match) — not part of the Excel range."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'y', this.value)">
                         </div>
@@ -1930,8 +1960,8 @@
                     return;
                 }
                 cargoItems = parsed.map((r, i) => {
-                    const existing = cargoItems[i]; // preserve local-only Length/Width if this slot already existed
-                    return {
+                    const existing = cargoItems[i]; // preserve local-only Length/Width/Height if this slot already existed
+                    const item = {
                         id: existing ? existing.id : cargoIdCounter++,
                         name: r.name || (existing ? existing.name : `Cargo_${i + 1}`),
                         weight: Number.isFinite(r.weight) ? r.weight : 0,
@@ -1939,8 +1969,12 @@
                         y: Number.isFinite(r.y) ? r.y : 0,
                         z: Number.isFinite(r.z) ? r.z : 0,
                         length: existing ? existing.length : 6,
-                        width: existing ? existing.width : 3
+                        width: existing ? existing.width : 3,
+                        height: existing ? existing.height : 3,
+                        anchor: 'cog' // Excel's X/Y is always CoG, so top-left is re-derived from it
                     };
+                    syncCargoGeometry(item, 'cog');
+                    return item;
                 });
                 renderTrailerDashboard();
                 logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}.`);
