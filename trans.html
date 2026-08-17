@@ -166,6 +166,37 @@
         .tg-train-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
         .tg-train-name-input { flex: 1 1 auto; font-weight: 700; font-size: 13px; }
 
+        .tg-cargo-card {
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-top: 16px;
+        }
+        .tg-cargo-title { margin: 0; font-size: 13px; font-weight: 700; }
+        .tg-cargo-sub { font-size: 10.5px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5; }
+        .tg-cargo-item-card {
+            border: 1px solid var(--panel-border);
+            border-radius: 7px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            background: var(--panel-bg);
+        }
+        .tg-cargo-item-card:last-child { margin-bottom: 0; }
+        .tg-cargo-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 12px; margin-top: 8px; }
+        .tg-modal-body.tg-side-layout .tg-cargo-field-grid { grid-template-columns: repeat(2, 1fr); }
+        .tg-cargo-field label {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+            color: var(--text-muted); margin-bottom: 3px;
+        }
+        .tg-cargo-field input {
+            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
+            border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
+        }
+        .tg-cargo-field input:focus { outline: none; border-color: var(--accent-blue); }
+        .tg-cargo-field-local input { border-style: dashed; }
+
         .tg-preview-wrap {
             border: 1px solid var(--panel-border);
             border-radius: 8px;
@@ -179,19 +210,6 @@
         .tg-preview-toggles-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
         .tg-preview-external-note { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-muted); font-style: italic; }
 
-        /* Dynamic zoom controls above the preview — buttons scale the
-           preview via CSS zoom (see zoomTgPreviewIn/Out/reset); Ctrl +
-           mouse wheel over the preview does the same (see
-           setupTgPreviewZoomWheel). #tgPreview itself scrolls so a
-           zoomed-in drawing can be panned into view. */
-        .tg-preview-zoom-controls { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-        .tg-preview-zoom-btn {
-            background: none; border: 1px solid var(--panel-border); color: var(--text-main);
-            border-radius: 5px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1;
-            display: flex; align-items: center; justify-content: center; padding: 0;
-        }
-        .tg-preview-zoom-btn:hover { border-color: var(--accent-blue); }
-        .tg-preview-zoom-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); min-width: 34px; text-align: center; user-select: none; }
         #tgPreview { overflow: auto; max-height: 70vh; }
 
         /* Stacked Top / Side / End view sections in the preview panel. */
@@ -332,7 +350,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.12)</h1>
+            <h1>🚂 Transport Dashboard (Rev.13)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -429,17 +447,39 @@
                         <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
                                 onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
                     </div>
+
+                    <div class="tg-cargo-card">
+                        <div class="tg-train-card-header">
+                            <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
+                        </div>
+                        <p class="tg-cargo-sub">
+                            Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
+                            <strong>AZ35:BD39</strong> (Name / W [mTe] / X [m] / Y [m] / Z [m]) — all in
+                            <strong>meters</strong>, unlike the mm trailer fields above. <strong>X</strong> and
+                            <strong>Y</strong> are the cargo's <strong>Center of Gravity (CoG) distance from world
+                            origin (0,0)</strong> — the same origin the trailer's X offset/Y offset use, just in
+                            meters instead of mm — and <strong>Z</strong> is the CoG <strong>height above the
+                            trailer deck</strong>. <strong>Length</strong> and <strong>Width</strong> size the
+                            rectangle drawn in the preview only; they aren't part of the Excel range. Pulled
+                            automatically when this panel opens or refreshes; press <strong>"📤 Push Cargo to
+                            Excel"</strong> to write changes back (row 40's TOTAL stays a live Excel formula and
+                            is never overwritten).
+                        </p>
+                        <div id="tgCargoList"><!-- cargo item cards rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39)"
+                                    onclick="addCargoItem()">+ Add Cargo</button>
+                            <button type="button" class="tg-add-train-btn" title="Pull Name/W/X/Y/Z for every cargo item from Excel Input!AZ35:BD39"
+                                    onclick="pullCargoFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" title="Write every cargo item's Name/W/X/Y/Z to Excel Input!AZ35:BD39"
+                                    onclick="pushCargoToExcel()">📤 Push Cargo to Excel</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
                         <div class="tg-preview-toolbar">
-                            <div class="tg-preview-zoom-controls" title="Zoom the preview drawing (Ctrl + scroll wheel over the preview also works)">
-                                <button type="button" class="tg-preview-zoom-btn" onclick="zoomTgPreviewOut()" title="Zoom out">−</button>
-                                <span class="tg-preview-zoom-label" id="tgZoomLabel">100%</span>
-                                <button type="button" class="tg-preview-zoom-btn" onclick="zoomTgPreviewIn()" title="Zoom in">+</button>
-                                <button type="button" class="tg-preview-zoom-btn" onclick="resetTgPreviewZoom()" title="Reset zoom to 100%">⟳</button>
-                            </div>
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewSideToggle" onchange="toggleTgPreviewSide(this.checked)">
@@ -546,6 +586,20 @@
             return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         }
 
+        // Standard weight-and-balance "Center of Gravity" symbol — a
+        // circle quartered into alternating filled/open quadrants, used
+        // to mark a cargo item's CoG point in the plan/side/end views.
+        function cogSymbolSvg(cx, cy, r, color) {
+            r = r || 7;
+            return `<g>` +
+                `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${color}" opacity="0.85"/>` +
+                `<path d="M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${color}" opacity="0.85"/>` +
+                `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="1.3"/>` +
+                `<line x1="${cx - r}" y1="${cy}" x2="${cx + r}" y2="${cy}" stroke="${color}" stroke-width="1"/>` +
+                `<line x1="${cx}" y1="${cy - r}" x2="${cx}" y2="${cy + r}" stroke="${color}" stroke-width="1"/>` +
+                `</g>`;
+        }
+
         // ---- trailer axle constants ----
         const AXLE_START_ROW = 124;
         const AXLE_MAX_ROWS = 60;
@@ -605,6 +659,46 @@
         const INPUT_DECK_HEIGHT_CELL = "BD26";
         const TG_ELEV_DECK_HEIGHT_DEFAULT = 1500;
         let tgDeckHeightMm = TG_ELEV_DECK_HEIGHT_DEFAULT;
+
+        // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
+        // AZ34 = "LOAD DETAILS" header, BA34:BD34 = column headers
+        // (W [mTe], X [m], Y [m], Z [m]). AZ35:BD39 = up to 5 cargo
+        // items (one row each). AZ40:BD40 = TOTAL row — a live Excel
+        // formula (SUM / SUMPRODUCT weighted-average CoG) that is NEVER
+        // written to from here; it recalculates on its own once the
+        // individual item rows are pushed. All units are METERS, unlike
+        // every other dashboard field above (mm). X/Y are the cargo's
+        // Center of Gravity distance from world origin (0,0) — the same
+        // origin used by the trailer's X offset/Y offset, just in meters
+        // — and Z is the CoG height ABOVE the trailer deck (not above
+        // ground). Length/Width (the rectangle drawn in the preview)
+        // have no Excel column and are local-only, per-item display
+        // values.
+        const CARGO_START_ROW = 35;
+        const CARGO_MAX_ITEMS = 5;                 // rows 35..39
+        const CARGO_TOTAL_ROW = 40;                // read-only formula row — never written
+        const CARGO_NAME_COL = 'AZ';
+        const CARGO_W_COL = 'BA';
+        const CARGO_X_COL = 'BB';
+        const CARGO_Y_COL = 'BC';
+        const CARGO_Z_COL = 'BD';
+        const CARGO_RANGE = `${CARGO_NAME_COL}${CARGO_START_ROW}:${CARGO_Z_COL}${CARGO_START_ROW + CARGO_MAX_ITEMS - 1}`; // AZ35:BD39
+        const TG_CARGO_COLOR = 'var(--accent-orange, #f97316)'; // shared cargo rectangle/CoG-symbol color across plan + side + end views
+
+        let cargoIdCounter = 1;
+        function defaultCargoItem(index) {
+            return {
+                id: cargoIdCounter++,
+                name: `Cargo_${index}`,
+                weight: 0,      // W, metric tonnes
+                x: 0,           // CoG X from origin (0,0), meters
+                y: 0,           // CoG Y from origin (0,0), meters
+                z: 2.5,         // CoG height above deck, meters
+                length: 6,      // preview-only rectangle footprint, meters
+                width: 3        // preview-only rectangle footprint, meters
+            };
+        }
+        let cargoItems = [];
 
         // ---- Fixed trailer manufacturer presets (all mm) ----
         // Each preset describes ONE physical trailer's top-deck footprint
@@ -1644,6 +1738,170 @@
             // Adjust_Wheels" is clicked.
         }
 
+        // ============================================================
+        // GENERATE CARGO — up to 5 items, Excel "Input"!AZ35:BD39
+        // ============================================================
+        function addCargoItem() {
+            if (cargoItems.length >= CARGO_MAX_ITEMS) {
+                alert(`Only ${CARGO_MAX_ITEMS} cargo items are supported (Excel Input!${CARGO_RANGE} has ${CARGO_MAX_ITEMS} rows).`);
+                return;
+            }
+            cargoItems.push(defaultCargoItem(cargoItems.length + 1));
+            renderTrailerDashboard();
+        }
+
+        function removeCargoItem(id) {
+            cargoItems = cargoItems.filter(c => c.id !== id);
+            if (cargoItems.length === 0) cargoItems.push(defaultCargoItem(1));
+            renderTrailerDashboard();
+        }
+
+        function updateCargoField(id, field, rawValue) {
+            const cargo = cargoItems.find(c => c.id === id);
+            if (!cargo) return;
+            if (field === 'name') {
+                cargo.name = rawValue || cargo.name;
+            } else {
+                cargo[field] = parseFloat(rawValue);
+                if (isNaN(cargo[field])) cargo[field] = 0;
+            }
+            // Lightweight refresh only, same reasoning as updateTrailerGenField.
+            renderTrailerGenPreview();
+        }
+
+        function renderCargoList() {
+            const list = document.getElementById('tgCargoList');
+            if (!list) return;
+            list.innerHTML = cargoItems.map((cargo, idx) => {
+                const cell = `${CARGO_START_ROW + idx}`;
+                return `
+                <div class="tg-cargo-item-card">
+                    <div class="tg-train-card-header">
+                        <input type="text" class="tg-train-name-input" value="${escapeHtml(cargo.name)}"
+                               title="Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}"
+                               onchange="updateCargoField(${cargo.id}, 'name', this.value)">
+                        <button type="button" class="tg-remove-train" title="Remove cargo item"
+                                onclick="removeCargoItem(${cargo.id})"
+                                ${cargoItems.length <= 1 ? 'disabled' : ''}>✕</button>
+                    </div>
+                    <div class="tg-cargo-field-grid">
+                        <div class="tg-cargo-field">
+                            <label>W (t)</label>
+                            <input type="number" step="any" value="${cargo.weight}" title="Cargo weight, metric tonnes. Synced with Excel 'Input'!${CARGO_W_COL}${cell}."
+                                   onchange="updateCargoField(${cargo.id}, 'weight', this.value)">
+                        </div>
+                        <div class="tg-cargo-field">
+                            <label>X — CoG (m)</label>
+                            <input type="number" step="any" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}."
+                                   onchange="updateCargoField(${cargo.id}, 'x', this.value)">
+                        </div>
+                        <div class="tg-cargo-field">
+                            <label>Y — CoG (m)</label>
+                            <input type="number" step="any" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}."
+                                   onchange="updateCargoField(${cargo.id}, 'y', this.value)">
+                        </div>
+                        <div class="tg-cargo-field">
+                            <label>Z — deck to CoG (m)</label>
+                            <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}."
+                                   onchange="updateCargoField(${cargo.id}, 'z', this.value)">
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-local">
+                            <label>Length (m)</label>
+                            <input type="number" step="any" value="${cargo.length}" title="Preview-only rectangle footprint length — not part of the Excel range."
+                                   onchange="updateCargoField(${cargo.id}, 'length', this.value)">
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-local">
+                            <label>Width (m)</label>
+                            <input type="number" step="any" value="${cargo.width}" title="Preview-only rectangle footprint width — not part of the Excel range."
+                                   onchange="updateCargoField(${cargo.id}, 'width', this.value)">
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Pulled automatically on panel open/refresh (see initDashboard)
+        // and via the "⇩ Refresh from Excel" button. Silent + a no-op
+        // when every row is blank, matching pullWheelDataFromExcel's
+        // behavior — Length/Width (local-only) are preserved as-is.
+        async function pullCargoFromExcel(opts) {
+            const silent = !!(opts && opts.silent);
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull cargo data.');
+                return;
+            }
+            try {
+                let values = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    const range = sheet.getRange(CARGO_RANGE);
+                    range.load('values');
+                    await context.sync();
+                    values = range.values;
+                });
+                const parsed = values
+                    .map(row => ({
+                        name: (row[0] || '').toString().trim(),
+                        weight: parseFloat(row[1]),
+                        x: parseFloat(row[2]),
+                        y: parseFloat(row[3]),
+                        z: parseFloat(row[4])
+                    }))
+                    .filter(r => r.name || Number.isFinite(r.weight) || Number.isFinite(r.x) || Number.isFinite(r.y) || Number.isFinite(r.z));
+
+                if (parsed.length === 0) {
+                    if (!silent) logMsg(`↺ ${INPUT_SHEET_NAME}!${CARGO_RANGE} is blank — no cargo items pulled.`);
+                    return;
+                }
+                cargoItems = parsed.map((r, i) => {
+                    const existing = cargoItems[i]; // preserve local-only Length/Width if this slot already existed
+                    return {
+                        id: existing ? existing.id : cargoIdCounter++,
+                        name: r.name || (existing ? existing.name : `Cargo_${i + 1}`),
+                        weight: Number.isFinite(r.weight) ? r.weight : 0,
+                        x: Number.isFinite(r.x) ? r.x : 0,
+                        y: Number.isFinite(r.y) ? r.y : 0,
+                        z: Number.isFinite(r.z) ? r.z : 0,
+                        length: existing ? existing.length : 6,
+                        width: existing ? existing.width : 3
+                    };
+                });
+                renderTrailerDashboard();
+                logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}.`);
+            } catch (e) {
+                console.warn('Could not pull cargo data from Input sheet', e);
+                if (!silent) alert('Error pulling cargo data — see console for details.');
+            }
+        }
+
+        // Writes Name/W/X/Y/Z for every cargo item to AZ35:BD39 (padding
+        // unused rows with blanks so a shrunk cargo list doesn't leave
+        // stale rows behind). Row 40 (TOTAL) is a live Excel formula
+        // referencing these rows and is never written to directly — it
+        // recalculates on its own once the sync below completes.
+        async function pushCargoToExcel() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to push cargo data.');
+                return;
+            }
+            try {
+                const rows = [];
+                for (let i = 0; i < CARGO_MAX_ITEMS; i++) {
+                    const c = cargoItems[i];
+                    rows.push(c ? [c.name, c.weight || 0, c.x || 0, c.y || 0, c.z || 0] : ['', '', '', '', '']);
+                }
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    sheet.getRange(CARGO_RANGE).values = rows;
+                    await context.sync();
+                });
+                logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE}.`);
+            } catch (e) {
+                console.error('Error pushing cargo data to Excel', e);
+                alert('Error pushing cargo data to Excel — see console for details.');
+            }
+        }
+
         // ---- Push / pull X offset & Y offset to/from Excel "Input" sheet ----
         async function pushValueToInputCell(cell, value, label) {
             if (!isOfficeInitialized) return;
@@ -2166,6 +2424,7 @@
                 </div>
             `;
             }).join('');
+            renderCargoList();
             renderTrailerGeneratorTotals();
             renderTrailerGenPreview();
         }
@@ -2173,49 +2432,6 @@
         // ---- Optional pop-out window for the live axle preview ----
         let tgPreviewExternal = false;
         let tgPreviewWindow = null;
-
-        // ---- Dynamic zoom for the preview drawing ----
-        // Applies CSS zoom to whichever element currently holds the
-        // preview SVGs — the inline #tgPreview panel, or the pop-out
-        // window's root if the preview is currently external (see
-        // toggleTgPreviewWindow above). #tgPreview scrolls (see CSS)
-        // so a zoomed-in drawing can be panned into view.
-        let tgPreviewZoom = 1;
-        const TG_ZOOM_MIN = 0.4;
-        const TG_ZOOM_MAX = 3;
-        const TG_ZOOM_STEP = 0.1;
-
-        function applyTgPreviewZoom() {
-            const label = document.getElementById('tgZoomLabel');
-            if (label) label.textContent = `${Math.round(tgPreviewZoom * 100)}%`;
-            const inlineWrap = document.getElementById('tgPreview');
-            if (inlineWrap) inlineWrap.style.zoom = tgPreviewZoom;
-            if (tgPreviewExternal && tgPreviewWindow && !tgPreviewWindow.closed) {
-                const extRoot = tgPreviewWindow.document.getElementById('tgPreviewExternalRoot');
-                if (extRoot) extRoot.style.zoom = tgPreviewZoom;
-            }
-        }
-        function setTgPreviewZoom(z) {
-            tgPreviewZoom = Math.min(TG_ZOOM_MAX, Math.max(TG_ZOOM_MIN, z));
-            applyTgPreviewZoom();
-        }
-        function zoomTgPreviewIn() { setTgPreviewZoom(tgPreviewZoom + TG_ZOOM_STEP); }
-        function zoomTgPreviewOut() { setTgPreviewZoom(tgPreviewZoom - TG_ZOOM_STEP); }
-        function resetTgPreviewZoom() { setTgPreviewZoom(1); }
-
-        // Ctrl + mouse wheel over the preview zooms it in/out (plain
-        // wheel still scrolls/pans #tgPreview normally). Bound once —
-        // dataset flag guards against re-binding on every re-render.
-        function setupTgPreviewZoomWheel() {
-            const el = document.getElementById('tgPreview');
-            if (!el || el.dataset.tgZoomBound) return;
-            el.dataset.tgZoomBound = '1';
-            el.addEventListener('wheel', (e) => {
-                if (!e.ctrlKey) return;
-                e.preventDefault();
-                setTgPreviewZoom(tgPreviewZoom + (e.deltaY < 0 ? TG_ZOOM_STEP : -TG_ZOOM_STEP));
-            }, { passive: false });
-        }
 
         // When true (default), each axle group's name/count/load is drawn
         // as an on-canvas label in the preview SVG. When false, on-canvas
@@ -2309,9 +2525,6 @@
             }
             if (!wrap) return;
 
-            setupTgPreviewZoomWheel();
-            applyTgPreviewZoom();
-
             const rows = computeTrailerGenRows();
             if (rows.length === 0) { wrap.innerHTML = ''; const d = document.getElementById('tgPreviewGroupDetails'); if (d) d.innerHTML = ''; return; }
 
@@ -2339,8 +2552,15 @@
         // Returns an SVG markup string (rather than writing to wrap
         // directly) so all three views can be stacked together.
         function renderTrailerGenTopView(rows) {
-            const svgW = 680, svgH = 220;
-            const padL = 55, padR = 50, padT = 34, padB = 30;
+            const svgW = 680;
+            // padT grows with the number of stacked origin→X/Y dimension
+            // tiers (2 base rows + one per train + one per cargo item —
+            // see the tgShowDimensions block below) so those callouts
+            // never get clipped off the top edge of the fixed viewBox.
+            const dimTierCount = 2 + trailerGenTrains.length + cargoItems.length;
+            const padT = Math.max(34, 24 + dimTierCount * 13);
+            const svgH = 220 + Math.max(0, padT - 34);
+            const padL = 55, padR = 50, padB = 30;
             const plotW = svgW - padL - padR, plotH = svgH - padT - padB;
 
             // Bounding box always includes the world origin (0,0) — so
@@ -2354,6 +2574,15 @@
             trailerGenTrains.forEach(t => {
                 if (t.deckLength) { xs.push(parseFloat(t.x) || 0, (parseFloat(t.x) || 0) + t.deckLength); }
                 if (t.deckWidth) { ys.push(parseFloat(t.y) || 0, (parseFloat(t.y) || 0) + t.deckWidth); }
+            });
+            // Cargo footprints (X/Y are meters — convert to mm to match
+            // every other world coordinate) so the plan view auto-scales
+            // to keep every cargo rectangle in view.
+            cargoItems.forEach(c => {
+                const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
+                const halfLMm = ((parseFloat(c.length) || 0) * 1000) / 2, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
+                xs.push(cxMm - halfLMm, cxMm + halfLMm);
+                ys.push(cyMm - halfWMm, cyMm + halfWMm);
             });
             xs.push(0); ys.push(0);
             const rawMinX = Math.min(...xs), rawMaxX = Math.max(...xs);
@@ -2449,9 +2678,30 @@
                 const rx2 = sx(ox + t.deckLength), ry2 = sy(oy + t.deckWidth);
                 const rw = rx2 - rx1, rh = ry2 - ry1;
                 const label = `${t.name} — ${t.trailerType === 'goldhofer' ? 'Goldhofer' : 'SPMT'} ${t.axleLineCount}-line deck`;
+                const deckMidX = (rx1 + rx2) / 2, deckMidY = (ry1 + ry2) / 2;
                 deckSvg += `<g>` +
                     `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>` +
-                    `<text x="${rx1 + 3}" y="${ry1 - 4}" font-size="9" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>` +
+                    `<text x="${deckMidX}" y="${deckMidY}" font-size="9" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>` +
+                    `</g>`;
+            });
+
+            // Cargo rectangles (plan view) — one per cargo item, centered
+            // on its CoG (X, Y), sized by the item's own Length/Width.
+            // X/Y/Length/Width are entered in meters and converted to mm
+            // here to share the same world-space scale as everything
+            // else. Each item also gets a CG symbol at its CoG point.
+            const cargoColor = TG_CARGO_COLOR;
+            let cargoSvg = '';
+            cargoItems.forEach(c => {
+                const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
+                const lMm = (parseFloat(c.length) || 0) * 1000, wMm = (parseFloat(c.width) || 0) * 1000;
+                const rx1 = sx(cxMm - lMm / 2), ry1 = sy(cyMm - wMm / 2);
+                const rx2 = sx(cxMm + lMm / 2), ry2 = sy(cyMm + wMm / 2);
+                const cx = sx(cxMm), cy = sy(cyMm);
+                cargoSvg += `<g>` +
+                    `<rect x="${Math.min(rx1, rx2)}" y="${Math.min(ry1, ry2)}" width="${Math.abs(rx2 - rx1)}" height="${Math.abs(ry2 - ry1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
+                    `<text x="${cx}" y="${Math.min(ry1, ry2) - 5}" font-size="9" text-anchor="middle" fill="${cargoColor}">${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t</text>` +
+                    cogSymbolSvg(cx, cy, 6, cargoColor) +
                     `</g>`;
             });
 
@@ -2534,6 +2784,17 @@
                         const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
                         dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, axle1X, 0, `${Math.round(axlePairOffsetY)}`, dimColorPair, 'right');
                     }
+                });
+
+                // World origin (0,0) → each cargo item's CoG, in X and Y
+                // — mirrors the trailer's own origin→corner dimension
+                // lines above, just in meters (converted to mm) and in
+                // the cargo's own color.
+                cargoItems.forEach((c, cargoIdx) => {
+                    const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
+                    const tier = 2 + trailerGenTrains.length + cargoIdx;
+                    dimensionsSvg += dimH(0, cxMm, 0, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m`, cargoColor);
+                    dimensionsSvg += dimV(0, cyMm, 0, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m`, cargoColor, 'left');
                 });
             }
 
@@ -2677,7 +2938,7 @@
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
+                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
@@ -2723,7 +2984,13 @@
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
             const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
-            const zSpanMm = tgDeckHeightMm + TG_ELEV_DECK_THICK + 260; // ground(0) to just above deck top
+            // Cargo boxes are drawn symmetric around their CoG (deck top
+            // + Z, box spans deck top .. deck top + 2*Z) since only the
+            // CoG height is known — so the vertical span above deck top
+            // needs to grow to fit the tallest cargo item, not just the
+            // fixed 260mm clearance used for wheels/labels alone.
+            const cargoMaxHeightAboveDeckMm = cargoItems.reduce((m, c) => Math.max(m, (parseFloat(c.z) || 0) * 1000 * 2), 0);
+            const zSpanMm = tgDeckHeightMm + TG_ELEV_DECK_THICK + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
             // Reuse the plan (top) view's own X mapping wholesale — same
             // scale, same left offset, same canvas width — so an axle's
             // horizontal position in the side view lands at the exact
@@ -2744,6 +3011,10 @@
             // to align horizontally with it. ----
             const ys = rows.map(r => r.y);
             trailerGenTrains.forEach(t => { if (t.deckWidth) ys.push((parseFloat(t.y) || 0), (parseFloat(t.y) || 0) + t.deckWidth); });
+            cargoItems.forEach(c => {
+                const cyMm = (parseFloat(c.y) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
+                ys.push(cyMm - halfWMm, cyMm + halfWMm);
+            });
             ys.push(0);
             const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
             const marginY = Math.max((rawMaxY - rawMinY) * 0.10, 350);
@@ -2809,7 +3080,7 @@
                 const deckX2 = train.deckLength ? deckX1 + train.deckLength : Math.max(...uniqueX) + 300;
                 const dx1 = sx(deckX1), dx2 = sx(deckX2);
                 sideDecksSvg += `<rect x="${dx1}" y="${deckTopY}" width="${dx2 - dx1}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
-                sideDecksSvg += `<text x="${dx1 + 4}" y="${deckTopY - 5}" font-size="${fLabel}" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
+                sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${deckTopY - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
             });
 
             // ---- End view: one tire block per unique (train, Y) ----
@@ -2828,7 +3099,37 @@
                 const oy = parseFloat(t.y) || 0;
                 const dx1 = sy(oy), dx2 = sy(oy + t.deckWidth);
                 endDecksSvg += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
-                endDecksSvg += `<text x="${Math.min(dx1, dx2) + 4}" y="${deckTopYEnd - 5}" font-size="${fLabel}" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
+                endDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${deckTopYEnd - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
+            });
+
+            // ---- Cargo boxes (side + end view) ----
+            // Only the CoG height above deck (Z) is known, not the
+            // cargo's own overall height, so each box is drawn
+            // symmetric around its CoG — from the deck top up to
+            // deck-top + 2×Z — putting the true CoG at box mid-height.
+            // A CG symbol marks the exact CoG point in both panels.
+            let cargoElevSvg = '';
+            cargoItems.forEach(c => {
+                const cxMm = (parseFloat(c.x) || 0) * 1000;
+                const cyMm = (parseFloat(c.y) || 0) * 1000;
+                const lMm = (parseFloat(c.length) || 0) * 1000;
+                const wMm = (parseFloat(c.width) || 0) * 1000;
+                const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above deck
+                const deckTopWorldZ = tgDeckHeightMm + TG_ELEV_DECK_THICK;
+                const cogWorldZ = deckTopWorldZ + zMm;
+                const boxTopWorldZ = deckTopWorldZ + zMm * 2;
+
+                // Side view.
+                const ssx1 = sx(cxMm - lMm / 2), ssx2 = sx(cxMm + lMm / 2);
+                const ssy1 = sz(boxTopWorldZ), ssy2 = sz(deckTopWorldZ);
+                cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${TG_CARGO_COLOR}" fill-opacity="0.15" stroke="${TG_CARGO_COLOR}" stroke-width="1.5"/>`;
+                cargoElevSvg += cogSymbolSvg(sx(cxMm), sz(cogWorldZ), 6, TG_CARGO_COLOR);
+
+                // End view.
+                const esx1 = sy(cyMm - wMm / 2), esx2 = sy(cyMm + wMm / 2);
+                const esy1 = szEnd(boxTopWorldZ), esy2 = szEnd(deckTopWorldZ);
+                cargoElevSvg += `<rect x="${Math.min(esx1, esx2)}" y="${Math.min(esy1, esy2)}" width="${Math.abs(esx2 - esx1)}" height="${Math.abs(esy2 - esy1)}" fill="${TG_CARGO_COLOR}" fill-opacity="0.15" stroke="${TG_CARGO_COLOR}" stroke-width="1.5"/>`;
+                cargoElevSvg += cogSymbolSvg(sy(cyMm), szEnd(cogWorldZ), 6, TG_CARGO_COLOR);
             });
 
             // ---- Dimensions ----
@@ -2866,12 +3167,32 @@
                         `<text x="${(dx1 + dx2) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${Math.round(t.deckWidth)}</text>` +
                         `</g>`;
                 });
+
+                // Cargo CoG height (Z) — vertical dimension from deck top
+                // to the CoG point, drawn just left of each item's side-
+                // view box, in the cargo's own color.
+                cargoItems.forEach(c => {
+                    const cxMm = (parseFloat(c.x) || 0) * 1000;
+                    const lMm = (parseFloat(c.length) || 0) * 1000;
+                    const zMm = (parseFloat(c.z) || 0) * 1000;
+                    const deckTopWorldZ = tgDeckHeightMm + TG_ELEV_DECK_THICK;
+                    const cogWorldZ = deckTopWorldZ + zMm;
+                    const dimX = sx(cxMm - lMm / 2) - 10;
+                    const dimYTop = sz(cogWorldZ), dimYBot = sz(deckTopWorldZ);
+                    const midY = (dimYTop + dimYBot) / 2;
+                    dimSvg += `<g opacity="0.9">` +
+                        `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${TG_CARGO_COLOR}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${TG_CARGO_COLOR}" stroke-width="1"/>` +
+                        `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${TG_CARGO_COLOR}" stroke-width="1"/>` +
+                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${TG_CARGO_COLOR}" transform="rotate(-90 ${dimX - 4} ${midY})">Z ${(parseFloat(c.z) || 0).toFixed(3)} m</text>` +
+                        `</g>`;
+                });
             }
 
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${dimSvg}
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${dimSvg}
             </svg>`;
         }
 
@@ -3039,6 +3360,9 @@
             if (trailerGenTrains.length === 0) {
                 trailerGenTrains.push(defaultTrailerGenTrain(1));
             }
+            if (cargoItems.length === 0) {
+                cargoItems.push(defaultCargoItem(1));
+            }
             renderTrailerDashboard();
             const dirSelect = document.getElementById('tgLoadDirectionSelect');
             if (dirSelect) dirSelect.value = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
@@ -3048,6 +3372,10 @@
                 // opens or refreshes, and silently does nothing if the
                 // sheet is blank (or missing) instead of alerting.
                 await pullWheelDataFromExcel({ silent: true });
+                // Cargo: pulled the same way — silent no-op if AZ35:BD39
+                // is blank, per "Pull data when first load of side panel
+                // or refresh."
+                await pullCargoFromExcel({ silent: true });
             }
         }
 
