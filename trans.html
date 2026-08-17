@@ -196,6 +196,7 @@
         }
         .tg-cargo-field input:focus { outline: none; border-color: var(--accent-blue); }
         .tg-cargo-field-local input { border-style: dashed; }
+        .tg-cargo-field-readonly input { background: var(--panel-bg-alt, rgba(128,128,128,0.08)); color: var(--text-muted); cursor: default; }
 
         .tg-preview-wrap {
             border: 1px solid var(--panel-border);
@@ -459,8 +460,13 @@
                             <strong>Y</strong> are the cargo's <strong>Center of Gravity (CoG) distance from world
                             origin (0,0)</strong> — the same origin the trailer's X offset/Y offset use, just in
                             meters instead of mm — and <strong>Z</strong> is the CoG <strong>height above the
-                            trailer deck</strong>. <strong>Length</strong> and <strong>Width</strong> size the
-                            rectangle drawn in the preview only; they aren't part of the Excel range. Pulled
+                            trailer deck</strong>. <strong>Length</strong>, <strong>Width</strong>, and
+                            <strong>Height</strong> size the box drawn in the preview only, and
+                            <strong>X — top-left</strong>/<strong>Y — top-left</strong> are a read-only readout
+                            of the cargo's plan-view footprint's top-left corner distance from world origin
+                            (0,0) — mirroring how the trailer's X offset/Y offset describe the deck's
+                            top-left corner — computed from CoG X/Y minus half of Length/Width; none of these
+                            four are part of the Excel range. Pulled
                             automatically when this panel opens or refreshes; press <strong>"📤 Push Cargo to
                             Excel"</strong> to write changes back (row 40's TOTAL stays a live Excel formula and
                             is never overwritten).
@@ -695,10 +701,24 @@
                 y: 0,           // CoG Y from origin (0,0), meters
                 z: 2.5,         // CoG height above deck, meters
                 length: 6,      // preview-only rectangle footprint, meters
-                width: 3        // preview-only rectangle footprint, meters
+                width: 3,       // preview-only rectangle footprint, meters
+                height: 3       // preview-only cargo height (full box height, used in side/end view), meters
             };
         }
         let cargoItems = [];
+
+        // Top-left corner of a cargo item's plan-view footprint, i.e. its
+        // distance from world origin (0,0) — the same "top-left corner"
+        // convention used for the trailer deck's X offset/Y offset — derived
+        // from the cargo's CoG X/Y (Input!BB/BC) minus half its Length/Width.
+        function cargoTopLeftX(cargo) {
+            const x = parseFloat(cargo.x) || 0, len = parseFloat(cargo.length) || 0;
+            return +(x - len / 2).toFixed(3);
+        }
+        function cargoTopLeftY(cargo) {
+            const y = parseFloat(cargo.y) || 0, wid = parseFloat(cargo.width) || 0;
+            return +(y - wid / 2).toFixed(3);
+        }
 
         // ---- Fixed trailer manufacturer presets (all mm) ----
         // Each preset describes ONE physical trailer's top-deck footprint
@@ -1767,6 +1787,15 @@
             }
             // Lightweight refresh only, same reasoning as updateTrailerGenField.
             renderTrailerGenPreview();
+            // Keep the read-only "top-left corner" readout in sync without a
+            // full re-render (so the field the operator is typing in never
+            // loses focus) whenever a field it depends on changes.
+            if (field === 'x' || field === 'length' || field === 'y' || field === 'width') {
+                const tlX = document.getElementById(`cargoTlX_${cargo.id}`);
+                const tlY = document.getElementById(`cargoTlY_${cargo.id}`);
+                if (tlX) tlX.value = cargoTopLeftX(cargo);
+                if (tlY) tlY.value = cargoTopLeftY(cargo);
+            }
         }
 
         function renderCargoList() {
@@ -1814,6 +1843,21 @@
                             <label>Width (m)</label>
                             <input type="number" step="any" value="${cargo.width}" title="Preview-only rectangle footprint width — not part of the Excel range."
                                    onchange="updateCargoField(${cargo.id}, 'width', this.value)">
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-local">
+                            <label>Height (m)</label>
+                            <input type="number" step="any" value="${cargo.height}" title="Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range."
+                                   onchange="updateCargoField(${cargo.id}, 'height', this.value)">
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-readonly">
+                            <label>X — top-left (m)</label>
+                            <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargoTopLeftX(cargo)}" readonly disabled
+                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Computed from CoG X minus half of Length — not part of the Excel range.">
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-readonly">
+                            <label>Y — top-left (m)</label>
+                            <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargoTopLeftY(cargo)}" readonly disabled
+                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Computed from CoG Y minus half of Width — not part of the Excel range.">
                         </div>
                     </div>
                 </div>`;
