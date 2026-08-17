@@ -179,6 +179,21 @@
         .tg-preview-toggles-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
         .tg-preview-external-note { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-muted); font-style: italic; }
 
+        /* Dynamic zoom controls above the preview — buttons scale the
+           preview via CSS zoom (see zoomTgPreviewIn/Out/reset); Ctrl +
+           mouse wheel over the preview does the same (see
+           setupTgPreviewZoomWheel). #tgPreview itself scrolls so a
+           zoomed-in drawing can be panned into view. */
+        .tg-preview-zoom-controls { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+        .tg-preview-zoom-btn {
+            background: none; border: 1px solid var(--panel-border); color: var(--text-main);
+            border-radius: 5px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1;
+            display: flex; align-items: center; justify-content: center; padding: 0;
+        }
+        .tg-preview-zoom-btn:hover { border-color: var(--accent-blue); }
+        .tg-preview-zoom-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); min-width: 34px; text-align: center; user-select: none; }
+        #tgPreview { overflow: auto; max-height: 70vh; }
+
         /* Stacked Top / Side / End view sections in the preview panel. */
         .tg-view-section { margin-bottom: 18px; }
         .tg-view-section:last-child { margin-bottom: 0; }
@@ -317,7 +332,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.11.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.12)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -399,9 +414,7 @@
                 axle lines: exactly <strong>1500&nbsp;mm</strong> &rarr; Goldhofer, exactly
                 <strong>1400&nbsp;mm</strong> &rarr; SPMT (anything else stays Custom / Manual), and
                 its axle-line count is taken directly from how many <em>Line N</em> rows that
-                train's block has in Adjust_Wheels. <strong>Generate &amp; Write to Excel</strong> writes
-                the axle rows to Load_Editor and also writes the same Input!A11:C30 "Set Train Group"
-                block described above, so that block stays in sync however you push.
+                train's block has in Adjust_Wheels.
             </p>
 
 
@@ -421,6 +434,12 @@
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
                         <div class="tg-preview-toolbar">
+                            <div class="tg-preview-zoom-controls" title="Zoom the preview drawing (Ctrl + scroll wheel over the preview also works)">
+                                <button type="button" class="tg-preview-zoom-btn" onclick="zoomTgPreviewOut()" title="Zoom out">−</button>
+                                <span class="tg-preview-zoom-label" id="tgZoomLabel">100%</span>
+                                <button type="button" class="tg-preview-zoom-btn" onclick="zoomTgPreviewIn()" title="Zoom in">+</button>
+                                <button type="button" class="tg-preview-zoom-btn" onclick="resetTgPreviewZoom()" title="Reset zoom to 100%">⟳</button>
+                            </div>
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewSideToggle" onchange="toggleTgPreviewSide(this.checked)">
@@ -459,7 +478,6 @@
                 </label>
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
-                <button type="button" class="tg-btn tg-btn-primary" onclick="generateTrailerAndWriteToExcel()">Generate &amp; Write to Excel</button>
                 <button type="button" class="tg-btn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
                         onclick="pushDataToExcel()">📤 Push to Excel</button>
             </div>
@@ -578,6 +596,15 @@
         const SETGROUP_FIRST_TRAIN_COL = 1; // column A
         const SETGROUP_BLOCK_WIDTH = 3;     // columns per train
         const SETGROUP_MAX_TRAINS = 10;     // Input sheet only has 10 train blocks (Train 1..10)
+
+        // ---- Trailer deck height (used only by the Side + end
+        // elevation preview) — read from Excel "Input"!BD26, pulled
+        // automatically whenever the panel opens/refreshes (see
+        // seedInitialOffsetsFromExcel). Falls back to the default below
+        // if the cell is blank or not a valid positive number. ----
+        const INPUT_DECK_HEIGHT_CELL = "BD26";
+        const TG_ELEV_DECK_HEIGHT_DEFAULT = 1500;
+        let tgDeckHeightMm = TG_ELEV_DECK_HEIGHT_DEFAULT;
 
         // ---- Fixed trailer manufacturer presets (all mm) ----
         // Each preset describes ONE physical trailer's top-deck footprint
@@ -917,6 +944,7 @@
             // 300mm below the previous train's footprint.
             trailerGenTrains.push(buildTrainCopiedFromTrain1());
             renderTrailerDashboard();
+            pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
         }
 
         // Adds/removes trains at the end so trailerGenTrains.length
@@ -1582,6 +1610,7 @@
             trailerGenTrains = trailerGenTrains.filter(t => t.id !== id);
             if (trailerGenTrains.length === 0) trailerGenTrains.push(defaultTrailerGenTrain(1));
             renderTrailerDashboard();
+            pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
         }
 
         // Train-level fields: name, line spacing, X offset/Y offset/VCG
@@ -1708,14 +1737,16 @@
         async function seedInitialOffsetsFromExcel() {
             if (!isOfficeInitialized || trailerGenTrains.length === 0) return;
             try {
-                let numTrainsRaw = null, numGroupsRaw = null;
+                let numTrainsRaw = null, numGroupsRaw = null, deckHeightRaw = null;
                 const offsetRanges = [];
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const numTrainsRange = sheet.getRange(INPUT_NUM_TRAINS_CELL);
                     const numGroupsRange = sheet.getRange(INPUT_NUM_GROUPS_CELL);
+                    const deckHeightRange = sheet.getRange(INPUT_DECK_HEIGHT_CELL);
                     numTrainsRange.load("values");
                     numGroupsRange.load("values");
+                    deckHeightRange.load("values");
                     for (let i = 1; i <= OFFSET_LINK_MAX_TRAINS; i++) {
                         const xR = sheet.getRange(offsetCellForTrainIndex(i, 'x'));
                         const yR = sheet.getRange(offsetCellForTrainIndex(i, 'y'));
@@ -1726,6 +1757,7 @@
                     await context.sync();
                     numTrainsRaw = numTrainsRange.values[0][0];
                     numGroupsRaw = numGroupsRange.values[0][0];
+                    deckHeightRaw = deckHeightRange.values[0][0];
                 });
 
                 const numTrains = parseInt(numTrainsRaw, 10);
@@ -1733,6 +1765,9 @@
 
                 const numGroups = parseInt(numGroupsRaw, 10);
                 if (Number.isFinite(numGroups) && numGroups >= 1) setNumberOfHydraulicGroups(numGroups, { skipPush: true });
+
+                const deckHeight = parseFloat(deckHeightRaw);
+                tgDeckHeightMm = (Number.isFinite(deckHeight) && deckHeight > 0) ? deckHeight : TG_ELEV_DECK_HEIGHT_DEFAULT;
 
                 let linkedCount = 0;
                 const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
@@ -1744,7 +1779,7 @@
                     if (!isNaN(yNum)) { train.y = yNum; }
                 }
                 renderTrailerDashboard();
-                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
+                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${INPUT_DECK_HEIGHT_CELL} (deck height = ${tgDeckHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
                 console.warn('Could not seed initial values from Input sheet', e);
             }
@@ -1840,6 +1875,10 @@
             const nextGroupNumber = (train.groups.length % TRAILER_GROUP_DEFS.length) + 1;
             train.groups.push(defaultAxleGroup(from, to, 25, nextGroupNumber, 'both'));
             renderTrailerDashboard();
+            // "Number of Hydraulic Groups" (Input!B2) always reflects
+            // Train 1's group count (see renderTrailerDashboard) — keep
+            // Excel in sync whenever it changes, on any train.
+            if (trailerGenTrains[0]) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, trailerGenTrains[0].groups.length, 'Number of Hydraulic Groups');
         }
 
         function removeAxleGroup(trainId, groupId) {
@@ -1848,6 +1887,7 @@
             train.groups = train.groups.filter(g => g.id !== groupId);
             if (train.groups.length === 0) train.groups.push(defaultAxleGroup(1, 5, 25, 1, 'both'));
             renderTrailerDashboard();
+            if (trailerGenTrains[0]) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, trailerGenTrains[0].groups.length, 'Number of Hydraulic Groups');
         }
 
         // field: 'groupNumber' | 'from' | 'to' | 'load' | 'loadMode' ('load' or 'none') | 'row' ('both'/'right'/'left')
@@ -2134,6 +2174,49 @@
         let tgPreviewExternal = false;
         let tgPreviewWindow = null;
 
+        // ---- Dynamic zoom for the preview drawing ----
+        // Applies CSS zoom to whichever element currently holds the
+        // preview SVGs — the inline #tgPreview panel, or the pop-out
+        // window's root if the preview is currently external (see
+        // toggleTgPreviewWindow above). #tgPreview scrolls (see CSS)
+        // so a zoomed-in drawing can be panned into view.
+        let tgPreviewZoom = 1;
+        const TG_ZOOM_MIN = 0.4;
+        const TG_ZOOM_MAX = 3;
+        const TG_ZOOM_STEP = 0.1;
+
+        function applyTgPreviewZoom() {
+            const label = document.getElementById('tgZoomLabel');
+            if (label) label.textContent = `${Math.round(tgPreviewZoom * 100)}%`;
+            const inlineWrap = document.getElementById('tgPreview');
+            if (inlineWrap) inlineWrap.style.zoom = tgPreviewZoom;
+            if (tgPreviewExternal && tgPreviewWindow && !tgPreviewWindow.closed) {
+                const extRoot = tgPreviewWindow.document.getElementById('tgPreviewExternalRoot');
+                if (extRoot) extRoot.style.zoom = tgPreviewZoom;
+            }
+        }
+        function setTgPreviewZoom(z) {
+            tgPreviewZoom = Math.min(TG_ZOOM_MAX, Math.max(TG_ZOOM_MIN, z));
+            applyTgPreviewZoom();
+        }
+        function zoomTgPreviewIn() { setTgPreviewZoom(tgPreviewZoom + TG_ZOOM_STEP); }
+        function zoomTgPreviewOut() { setTgPreviewZoom(tgPreviewZoom - TG_ZOOM_STEP); }
+        function resetTgPreviewZoom() { setTgPreviewZoom(1); }
+
+        // Ctrl + mouse wheel over the preview zooms it in/out (plain
+        // wheel still scrolls/pans #tgPreview normally). Bound once —
+        // dataset flag guards against re-binding on every re-render.
+        function setupTgPreviewZoomWheel() {
+            const el = document.getElementById('tgPreview');
+            if (!el || el.dataset.tgZoomBound) return;
+            el.dataset.tgZoomBound = '1';
+            el.addEventListener('wheel', (e) => {
+                if (!e.ctrlKey) return;
+                e.preventDefault();
+                setTgPreviewZoom(tgPreviewZoom + (e.deltaY < 0 ? TG_ZOOM_STEP : -TG_ZOOM_STEP));
+            }, { passive: false });
+        }
+
         // When true (default), each axle group's name/count/load is drawn
         // as an on-canvas label in the preview SVG. When false, on-canvas
         // labels are omitted and the same info is instead listed as a
@@ -2226,6 +2309,9 @@
             }
             if (!wrap) return;
 
+            setupTgPreviewZoomWheel();
+            applyTgPreviewZoom();
+
             const rows = computeTrailerGenRows();
             if (rows.length === 0) { wrap.innerHTML = ''; const d = document.getElementById('tgPreviewGroupDetails'); if (d) d.innerHTML = ''; return; }
 
@@ -2244,8 +2330,8 @@
             // own independent horizontal layout.
             const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
             wrap.innerHTML = `
-                <div class="tg-view-section"><div class="tg-view-section-label">Top view (plan)</div>${topHtml}</div>
-                <div class="tg-view-section"><div class="tg-view-section-label">Side + end view (combined, true scale)</div>${elevationHtml}</div>
+                <div class="tg-view-section"><div class="tg-view-section-label">Plan view (Unit: mm.)</div>${topHtml}</div>
+                <div class="tg-view-section"><div class="tg-view-section-label">Side + end view (Unit: mm.)</div>${elevationHtml}</div>
             `;
         }
 
@@ -2424,8 +2510,8 @@
                     // custom/manual), since this offset always applies —
                     // unlike the corner→axle1 inset below, which only
                     // exists for preset trailers.
-                    dimensionsSvg += dimH(0, ox, 0, 2 + trainIdx, `${t.name} X offset: ${Math.round(ox)}mm`, dimColorOffset);
-                    dimensionsSvg += dimV(0, oy, 0, 2 + trainIdx, `${t.name} Y offset: ${Math.round(oy)}mm`, dimColorOffset, 'left');
+                    dimensionsSvg += dimH(0, ox, 0, 2 + trainIdx, `${Math.round(ox)}`, dimColorOffset);
+                    dimensionsSvg += dimV(0, oy, 0, 2 + trainIdx, `${Math.round(oy)}`, dimColorOffset, 'left');
 
                     if (t.axle1OffsetX == null || t.axle1OffsetY == null) return; // custom/manual trailer — no deck reference corner
                     const axle1OffsetX = parseFloat(t.axle1OffsetX) || 0;
@@ -2435,18 +2521,18 @@
                     const maxAxleForTrain = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
 
                     // Corner → axle line 1, X.
-                    dimensionsSvg += dimH(ox, axle1X, oy, 0, `${Math.round(axle1OffsetX)}mm`, dimColorCorner);
+                    dimensionsSvg += dimH(ox, axle1X, oy, 0, `${Math.round(axle1OffsetX)}`, dimColorCorner);
                     // Corner → axle line 1, Y.
-                    dimensionsSvg += dimV(oy, axle1Y, ox, 0, `${Math.round(axle1OffsetY)}mm`, dimColorCorner, 'left');
+                    dimensionsSvg += dimV(oy, axle1Y, ox, 0, `${Math.round(axle1OffsetY)}`, dimColorCorner, 'left');
                     // Axle line 1 → axle line 2, X (line spacing).
                     if (maxAxleForTrain >= 2 && spacing) {
                         const axle2X = axle1X - spacing;
-                        dimensionsSvg += dimH(axle1X, axle2X, oy, 1, `${Math.abs(Math.round(spacing))}mm`, dimColorSpacing);
+                        dimensionsSvg += dimH(axle1X, axle2X, oy, 1, `${Math.abs(Math.round(spacing))}`, dimColorSpacing);
                     }
                     // Right axle → left axle, Y (axle pair offset).
                     if (t.axlePairOffsetY) {
                         const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
-                        dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, axle1X, 0, `${Math.round(axlePairOffsetY)}mm`, dimColorPair, 'right');
+                        dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, axle1X, 0, `${Math.round(axlePairOffsetY)}`, dimColorPair, 'right');
                     }
                 });
             }
@@ -2615,10 +2701,11 @@
 
         // Generic visualization-only constants for the Side/End elevation
         // views below. The dashboard doesn't track a per-axle vertical
-        // (Z) position anywhere, so these are representative SPMT figures
-        // (deck height ~1.5m above ground, ~0.7m tire diameter) used only
-        // to draw a believable elevation — not read from any data field.
-        const TG_ELEV_DECK_HEIGHT = 1500;
+        // (Z) position anywhere, so deck thickness/wheel diameter here
+        // are representative SPMT figures used only to draw a believable
+        // elevation — not read from any data field. Deck height itself
+        // (tgDeckHeightMm, declared above) DOES come from a data field —
+        // Excel "Input"!BD26.
         const TG_ELEV_DECK_THICK = 300;
         const TG_ELEV_WHEEL_DIAM = 700;
         const TG_ELEV_TIRE_WIDTH = 400;
@@ -2636,7 +2723,7 @@
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
             const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
-            const zSpanMm = TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK + 260; // ground(0) to just above deck top
+            const zSpanMm = tgDeckHeightMm + TG_ELEV_DECK_THICK + 260; // ground(0) to just above deck top
             // Reuse the plan (top) view's own X mapping wholesale — same
             // scale, same left offset, same canvas width — so an axle's
             // horizontal position in the side view lands at the exact
@@ -2693,8 +2780,8 @@
             const fDim = (8 * fontScale).toFixed(2);     // matches plan view's dimension-text size
 
             const wheelR = Math.max(3, TG_ELEV_WHEEL_DIAM * scale / 2);
-            const deckTopY = sz(TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK);
-            const deckTopYEnd = szEnd(TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK);
+            const deckTopY = sz(tgDeckHeightMm + TG_ELEV_DECK_THICK);
+            const deckTopYEnd = szEnd(tgDeckHeightMm + TG_ELEV_DECK_THICK);
             const deckThickPx = TG_ELEV_DECK_THICK * scale;
 
             // Ground lines — one per panel (no side-by-side projection
@@ -2755,7 +2842,7 @@
                     `<line x1="${lo}" y1="${dimY}" x2="${hi}" y2="${dimY}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
                     `<line x1="${lo}" y1="${dimY - 3}" x2="${lo}" y2="${dimY + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
                     `<line x1="${hi}" y1="${dimY - 3}" x2="${hi}" y2="${dimY + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                    `<text x="${(lo + hi) / 2}" y="${dimY - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${overallLenMm}mm axle span</text>` +
+                    `<text x="${(lo + hi) / 2}" y="${dimY - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${overallLenMm}</text>` +
                     `</g>`;
                 // Deck-height dimension — drawn on the side view panel;
                 // labeled "(typ.)" since the same shared Z scale/height
@@ -2765,7 +2852,7 @@
                     `<line x1="${sideOffsetX - 12}" y1="${sideGroundY}" x2="${sideOffsetX - 12}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1" stroke-dasharray="2 2"/>` +
                     `<line x1="${sideOffsetX - 16}" y1="${sideGroundY}" x2="${sideOffsetX - 8}" y2="${sideGroundY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
                     `<line x1="${sideOffsetX - 16}" y1="${deckTopY}" x2="${sideOffsetX - 8}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
-                    `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${TG_ELEV_DECK_HEIGHT + TG_ELEV_DECK_THICK}mm ht (typ.)</text>` +
+                    `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgDeckHeightMm + TG_ELEV_DECK_THICK}</text>` +
                     `</g>`;
                 trailerGenTrains.forEach(t => {
                     if (!t.deckWidth) return;
@@ -2776,7 +2863,7 @@
                         `<line x1="${dx1}" y1="${y}" x2="${dx2}" y2="${y}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${dx1}" y1="${y - 3}" x2="${dx1}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
                         `<line x1="${dx2}" y1="${y - 3}" x2="${dx2}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                        `<text x="${(dx1 + dx2) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${Math.round(t.deckWidth)}mm width</text>` +
+                        `<text x="${(dx1 + dx2) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${Math.round(t.deckWidth)}</text>` +
                         `</g>`;
                 });
             }
@@ -2793,7 +2880,6 @@
             if (!totalsEl) return;
             const rows = computeTrailerGenRows();
             const totalLoad = rows.reduce((s, r) => s + r.load, 0);
-            const lastRow = AXLE_START_ROW + rows.length - 1;
             const overflow = rows.length > AXLE_MAX_ROWS;
             totalsEl.classList.toggle('tg-totals-error', overflow);
             if (overflow) {
@@ -2802,8 +2888,7 @@
             } else {
                 totalsEl.innerHTML = `<strong>${trailerGenTrains.length}</strong> train(s) · ` +
                     `<strong>${rows.length}</strong> total axle(s) · ` +
-                    `<strong>${totalLoad.toFixed(2)} t</strong> total load &rarr; ` +
-                    `will write Load_Editor!B${AXLE_START_ROW}:B${lastRow} and D${AXLE_START_ROW}:G${lastRow}`;
+                    `<strong>${totalLoad.toFixed(2)} t</strong> total load`;
             }
         }
 
