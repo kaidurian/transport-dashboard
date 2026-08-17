@@ -216,9 +216,11 @@
         .tg-field input:focus { outline: none; border-color: var(--accent-blue); }
 
         /* Small pull-from-Excel button shown next to the X offset / Y
-           offset labels — writes happen automatically on change (see
-           updateTrailerGenField -> pushOffsetToExcel), this button is
-           only needed for the PULL direction. */
+           offset labels (Train 1-10 only — see offsetCellForTrainIndex).
+           Pushes happen only via the "📤 Push to Excel" button (see
+           pushTrainOffsetsToExcel); this button is for the PULL
+           direction, or the auto-pull on panel open/refresh (see
+           seedInitialOffsetsFromExcel). */
         .tg-xy-sync-btn {
             margin-left: auto;
             padding: 1px 5px;
@@ -315,7 +317,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.09)</h1>
+            <h1>🚂 Transport Dashboard (Rev.10)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -376,15 +378,21 @@
                 (or one row for the whole train if AutoCAD split is blank), column A/D/G/… = split
                 type (e.g. <em>GHF 4</em>), and the next two columns = that segment's first axle
                 line's Group Nr for the left and right axle respectively — 3 columns per train,
-                Train 1 = A:C, Train 2 = D:F, and so on through Train 10.
+                Train 1 = A:C, Train 2 = D:F, and so on through Train 10. The same click also
+                writes each linked train's X offset/Y offset to <strong>Input</strong> (Train&nbsp;1
+                = B5/B6, Train&nbsp;2 = E5/E6, Train&nbsp;3 = H5/H6, … through Train 10) — this is
+                the only time those cells are pushed to (they're only ever pulled automatically on
+                panel open/refresh, never on every edit).
                 <strong>Adjust_Wheels stores axle-CENTER positions</strong> (distance from origin
                 0,0 to the center of each axle), which is different from X offset/Y offset (distance
                 from 0,0 to the trailer deck's <strong>top-left corner</strong>) — the preview's
                 dimension callouts show both. "⇩ Refresh from Adjust_Wheels" reads the axle grid
-                back the other way; the first train's X offset/Y offset is then re-linked to
-                <strong>Input!B5/B6</strong> rather than left as a raw axle position, so it stays
-                the deck-corner value everywhere. Editing X offset/Y offset on the dashboard is
-                always picked up automatically the next time you push, since nothing is cached.
+                back the other way; every linked train's (Train 1-10) X offset/Y offset is then
+                re-linked to its own <strong>Input</strong> cell pair (Train&nbsp;1&nbsp;=&nbsp;B5/B6,
+                Train&nbsp;2&nbsp;=&nbsp;E5/E6, Train&nbsp;3&nbsp;=&nbsp;H5/H6, … 3 columns apart)
+                rather than left as a raw axle position, so it stays the deck-corner value
+                everywhere. Editing X offset/Y offset on the dashboard is always picked up
+                automatically the next time you push, since nothing is cached.
                 This same read also runs automatically the first time the panel opens (and on every
                 refresh) whenever <strong>Adjust_Wheels</strong> isn't blank. While reading, each
                 train's <strong>Trailer type</strong> is auto-detected from the spacing between its
@@ -545,6 +553,15 @@
         const INPUT_NUM_GROUPS_CELL = "B2";
         const INPUT_X_OFFSET_CELL = "B5";
         const INPUT_Y_OFFSET_CELL = "B6";
+        // Train 1..10 X/Y offset auto-link to Excel sheet "Input": each
+        // train gets its own 2-cell block (X offset row 5, Y offset row
+        // 6), 3 columns apart, starting at column B for Train 1 — Train 1
+        // = B5/B6 (INPUT_X/Y_OFFSET_CELL above), Train 2 = E5/E6, Train 3
+        // = H5/H6, ... Train 10 = column 2+(10-1)*3 = 29 = "AC" -> AC5/AC6.
+        // Trains beyond #10 have no linked cell (offsetCellForTrainIndex
+        // returns null). See offsetCellForTrainIndex() below (defined
+        // near colLetter()).
+        const OFFSET_LINK_MAX_TRAINS = 10;
 
         // ---- "Set Train Group" block — Input!A11:C30 (row 10 is the
         // "Set Train Group" header) ----
@@ -843,28 +860,69 @@
             renderTrailerDashboard();
         }
 
-        function addTrailerGenTrain() {
-            // New trains start from the same "line spacing" and "X
-            // offset" values as the PREVIOUS trailer, since in practice
-            // consecutive trailers on the same job usually share the
-            // same axle spacing and starting X offset. Y offset/VCG keep
-            // their own sensible defaults (alternating sides).
-            const prevTrain = trailerGenTrains[trailerGenTrains.length - 1];
-            const newTrain = defaultTrailerGenTrain(trailerGenTrains.length + 1);
-            if (prevTrain) {
-                newTrain.spacing = prevTrain.spacing;
-                newTrain.x = prevTrain.x;
+        // A train's footprint in the Y direction — used to space newly
+        // added trains apart so their decks don't overlap. Preset
+        // trailers carry an explicit deckWidth; custom/manual trains
+        // have no deck rectangle (all axles share the same Y), so they
+        // have zero width here.
+        function trainWidthY(train) {
+            if (!train) return 0;
+            if (train.deckWidth) return parseFloat(train.deckWidth) || 0;
+            return 0;
+        }
+
+        // Builds a new train that copies ALL data from Train 1 (the
+        // first train in trailerGenTrains) — trailer type/preset, deck
+        // dimensions, line spacing, X offset, VCG, axle groups, AutoCAD
+        // split — except:
+        //   - id / name, which are always fresh, and
+        //   - Y offset, which stacks below the CURRENT last train:
+        //     newTrain.y = lastTrain.y + trainWidthY(lastTrain) + 300.
+        //     (Train 2's Y offset = Train 1's Y offset + Train 1's width
+        //     + 300mm; Train 3's = Train 2's + Train 2's width + 300mm;
+        //     and so on.)
+        function buildTrainCopiedFromTrain1() {
+            const index = trailerGenTrains.length + 1;
+            const newTrain = defaultTrailerGenTrain(index);
+            const train1 = trailerGenTrains[0];
+            if (train1) {
+                newTrain.spacing = train1.spacing;
+                newTrain.x = train1.x;
+                newTrain.vcg = train1.vcg;
+                newTrain.groups = train1.groups.map(g => ({ ...g, id: trailerGenNextGroupId++ }));
+                newTrain.cadSplit = train1.cadSplit;
+                newTrain.trailerType = train1.trailerType;
+                newTrain.axleLineCount = train1.axleLineCount;
+                newTrain.deckLength = train1.deckLength;
+                newTrain.deckWidth = train1.deckWidth;
+                newTrain.axle1OffsetX = train1.axle1OffsetX;
+                newTrain.axle1OffsetY = train1.axle1OffsetY;
+                newTrain.axlePairOffsetY = train1.axlePairOffsetY;
             }
-            trailerGenTrains.push(newTrain);
+            const lastTrain = trailerGenTrains[trailerGenTrains.length - 1];
+            if (lastTrain) {
+                newTrain.y = (parseFloat(lastTrain.y) || 0) + trainWidthY(lastTrain) + 300;
+            } else if (train1) {
+                newTrain.y = train1.y;
+            }
+            return newTrain;
+        }
+
+        function addTrailerGenTrain() {
+            // New trains copy all data from Train 1 (see
+            // buildTrainCopiedFromTrain1) except Y offset, which stacks
+            // 300mm below the previous train's footprint.
+            trailerGenTrains.push(buildTrainCopiedFromTrain1());
             renderTrailerDashboard();
         }
 
         // Adds/removes trains at the end so trailerGenTrains.length
         // matches n exactly (n=1 -> 1 train, n=2 -> 2 trains, ...). New
-        // trains reuse the previous train's spacing/X offset, same as
-        // "+ Add Train". By default also pushes the new count to Excel
-        // Input!B1 — pass {skipPush:true} when the value just came FROM
-        // Excel (pull / startup seed) to avoid writing it straight back.
+        // trains copy all data from Train 1, same as "+ Add Train" (see
+        // buildTrainCopiedFromTrain1). By default also pushes the new
+        // count to Excel Input!B1 — pass {skipPush:true} when the value
+        // just came FROM Excel (pull / startup seed) to avoid writing it
+        // straight back.
         function setNumberOfTrains(rawValue, opts) {
             opts = opts || {};
             let n = parseInt(rawValue, 10);
@@ -873,13 +931,7 @@
             const current = trailerGenTrains.length;
             if (n > current) {
                 for (let i = current; i < n; i++) {
-                    const prevTrain = trailerGenTrains[trailerGenTrains.length - 1];
-                    const newTrain = defaultTrailerGenTrain(trailerGenTrains.length + 1);
-                    if (prevTrain) {
-                        newTrain.spacing = prevTrain.spacing;
-                        newTrain.x = prevTrain.x;
-                    }
-                    trailerGenTrains.push(newTrain);
+                    trailerGenTrains.push(buildTrainCopiedFromTrain1());
                 }
             } else if (n < current) {
                 trailerGenTrains.length = Math.max(n, 1);
@@ -950,6 +1002,17 @@
                 n = Math.floor((n - 1) / 26);
             }
             return s;
+        }
+
+        // Excel "Input" sheet cell for a given 1-indexed train position's
+        // X/Y offset (Train 1 = B5/B6, Train 2 = E5/E6, Train 3 = H5/H6,
+        // ... 3 columns apart, up to Train OFFSET_LINK_MAX_TRAINS). Returns
+        // null for train positions beyond the linked range (no cell).
+        function offsetCellForTrainIndex(index1based, field) {
+            if (!Number.isFinite(index1based) || index1based < 1 || index1based > OFFSET_LINK_MAX_TRAINS) return null;
+            const col = 2 + (index1based - 1) * 3; // Train1->B(2), Train2->E(5), Train3->H(8), ...
+            const colL = colLetter(col);
+            return field === 'x' ? `${colL}5` : `${colL}6`;
         }
 
         // Expands every train into its per-axle-LINE (not per-physical-
@@ -1070,6 +1133,10 @@
             // see pushSetTrainGroupToExcel — so a problem here doesn't
             // make the Adjust_Wheels write above look like it failed too).
             await pushSetTrainGroupToExcel();
+            // Also write X offset/Y offset for Train 1-OFFSET_LINK_MAX_TRAINS
+            // to their linked Input-sheet cells (kept in its own
+            // try/catch — see pushTrainOffsetsToExcel).
+            await pushTrainOffsetsToExcel();
         }
 
         // Consecutive-run compression: turns a flat array of group
@@ -1142,7 +1209,7 @@
             }
             try {
                 let lineLabels = [], blockValues = [], trainNameRow = [];
-                let inputXOffset = NaN, inputYOffset = NaN;
+                const inputOffsets = []; // {x, y} per linked train position (1..OFFSET_LINK_MAX_TRAINS)
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
                     const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
@@ -1155,27 +1222,35 @@
                     dataRange.load("values");
                     nameRange.load("values");
 
-                    // Also grab the Input-sheet X/Y offset in the same
-                    // batch, so the primary train's offset can be
-                    // re-linked to it below instead of the raw axle-1
-                    // position read back from Adjust_Wheels.
-                    let inputXRange = null, inputYRange = null;
+                    // Also grab every linked train's Input-sheet X/Y
+                    // offset in the same batch, so each train's offset
+                    // can be re-linked to it below instead of the raw
+                    // axle-1 position read back from Adjust_Wheels.
+                    let inputRanges = null;
                     try {
                         const inputSheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
-                        inputXRange = inputSheet.getRange(INPUT_X_OFFSET_CELL);
-                        inputYRange = inputSheet.getRange(INPUT_Y_OFFSET_CELL);
-                        inputXRange.load("values");
-                        inputYRange.load("values");
+                        inputRanges = [];
+                        for (let i = 1; i <= OFFSET_LINK_MAX_TRAINS; i++) {
+                            const xR = inputSheet.getRange(offsetCellForTrainIndex(i, 'x'));
+                            const yR = inputSheet.getRange(offsetCellForTrainIndex(i, 'y'));
+                            xR.load("values");
+                            yR.load("values");
+                            inputRanges.push({ xR, yR });
+                        }
                     } catch (inputErr) {
-                        inputXRange = null; inputYRange = null;
+                        inputRanges = null;
                     }
 
                     await context.sync();
                     lineLabels = labelRange.values;
                     blockValues = dataRange.values;
                     trainNameRow = nameRange.values[0];
-                    if (inputXRange) inputXOffset = parseFloat(inputXRange.values[0][0]);
-                    if (inputYRange) inputYOffset = parseFloat(inputYRange.values[0][0]);
+                    if (inputRanges) {
+                        inputRanges.forEach(r => inputOffsets.push({
+                            x: parseFloat(r.xR.values[0][0]),
+                            y: parseFloat(r.yR.values[0][0])
+                        }));
+                    }
                 });
 
                 // How many axle-line rows actually hold data.
@@ -1308,30 +1383,38 @@
                     return;
                 }
 
-                // Re-anchor the first (primary) train's X offset / Y
-                // offset to Input!B5/B6, keeping its axle-1 world
-                // position exactly as read from Adjust_Wheels by moving
-                // the difference into axle1OffsetX/axle1OffsetY. The raw
+                // Re-anchor every linked train's (Train 1-
+                // OFFSET_LINK_MAX_TRAINS) X offset / Y offset to its
+                // Input-sheet cell, keeping its axle-1 world position
+                // exactly as read from Adjust_Wheels by moving the
+                // difference into axle1OffsetX/axle1OffsetY. The raw
                 // axle-1 world position is recovered as x/y + existing
                 // offset (works whether that offset just came from a
                 // detected trailer preset above, or is still 0/null for
-                // a custom train) — not read directly off t0.x/t0.y,
-                // since those may already hold the deck-corner position
-                // rather than axle-1 itself. Other trains have no
-                // matching Input-sheet cell, so their X offset / Y
+                // a custom train) — not read directly off t.x/t.y, since
+                // those may already hold the deck-corner position rather
+                // than axle-1 itself. Trains beyond the linked range have
+                // no matching Input-sheet cell, so their X offset / Y
                 // offset stay exactly as computed above.
-                let offsetLinkMsg = '';
-                if (!isNaN(inputXOffset) && !isNaN(inputYOffset)) {
-                    const t0 = rebuiltTrains[0];
-                    const axle1WorldX = (parseFloat(t0.x) || 0) + (parseFloat(t0.axle1OffsetX) || 0);
-                    const axle1WorldY = (parseFloat(t0.y) || 0) + (parseFloat(t0.axle1OffsetY) || 0);
-                    t0.x = inputXOffset;
-                    t0.y = inputYOffset;
-                    t0.axle1OffsetX = axle1WorldX - inputXOffset;
-                    t0.axle1OffsetY = axle1WorldY - inputYOffset;
-                    offsetLinkMsg = ` "${t0.name}"'s X/Y offset re-linked to ${INPUT_SHEET_NAME}!${INPUT_X_OFFSET_CELL}/${INPUT_Y_OFFSET_CELL}.`;
-                } else {
-                    console.warn(`Could not read ${INPUT_SHEET_NAME}!${INPUT_X_OFFSET_CELL}/${INPUT_Y_OFFSET_CELL} — first train's X/Y offset left as its raw axle-1 position from ${ADJUST_SHEET_NAME}.`);
+                let relinkedCount = 0;
+                const linkN = Math.min(rebuiltTrains.length, OFFSET_LINK_MAX_TRAINS);
+                for (let i = 0; i < linkN; i++) {
+                    const off = inputOffsets[i];
+                    if (!off || isNaN(off.x) || isNaN(off.y)) continue;
+                    const t = rebuiltTrains[i];
+                    const axle1WorldX = (parseFloat(t.x) || 0) + (parseFloat(t.axle1OffsetX) || 0);
+                    const axle1WorldY = (parseFloat(t.y) || 0) + (parseFloat(t.axle1OffsetY) || 0);
+                    t.x = off.x;
+                    t.y = off.y;
+                    t.axle1OffsetX = axle1WorldX - off.x;
+                    t.axle1OffsetY = axle1WorldY - off.y;
+                    relinkedCount++;
+                }
+                const offsetLinkMsg = relinkedCount
+                    ? ` X/Y offset re-linked to ${INPUT_SHEET_NAME} for ${relinkedCount} train(s).`
+                    : '';
+                if (!relinkedCount) {
+                    console.warn(`Could not read linked ${INPUT_SHEET_NAME} X/Y offset cells — trains' X/Y offset left as their raw axle-1 position from ${ADJUST_SHEET_NAME}.`);
                 }
 
                 trailerGenTrains = rebuiltTrains;
@@ -1460,9 +1543,12 @@
         }
 
         // Train-level fields: name, line spacing, X offset/Y offset/VCG
-        // of axle #1. Changing 'x' or 'y' also pushes the new value to
-        // Excel sheet "Input"!B5 (X offset) / B6 (Y offset) — the last
-        // train edited is the one mirrored to those two cells.
+        // of axle #1. X offset/Y offset are auto-linked to the Excel
+        // "Input" sheet for Train 1-OFFSET_LINK_MAX_TRAINS (see
+        // offsetCellForTrainIndex()), but that link is pull-on-open/
+        // refresh and push-on-button only (pushTrainOffsetsToExcel(),
+        // called from the "📤 Push to Excel" button) — editing the field
+        // here does NOT write to Excel immediately.
         function updateTrailerGenField(id, field, rawValue) {
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
@@ -1479,8 +1565,6 @@
             renderTrailerGeneratorTotals();
             renderTrailerGenPreview();
             if (field === 'cadSplit') updateCadSplitStatus(train.id);
-            if (field === 'x') pushOffsetToExcel('x', train.x);
-            if (field === 'y') pushOffsetToExcel('y', train.y);
             // Note: nothing extra to refresh for Adjust_Wheels here —
             // pushDataToExcel() always calls computeAdjustWheelsTrains()
             // fresh from trailerGenTrains at push time (there's no cached
@@ -1503,9 +1587,32 @@
             }
         }
 
-        async function pushOffsetToExcel(field, value) {
-            const cell = (field === 'x') ? INPUT_X_OFFSET_CELL : INPUT_Y_OFFSET_CELL;
-            await pushValueToInputCell(cell, value, field === 'x' ? 'X offset' : 'Y offset');
+        // Writes X offset/Y offset for every train in the linked range
+        // (Train 1-OFFSET_LINK_MAX_TRAINS) to their respective Excel
+        // "Input" sheet cells (see offsetCellForTrainIndex()). Called
+        // from pushDataToExcel() — the "📤 Push to Excel" button — so
+        // offsets are only ever pushed on demand, not on every edit.
+        async function pushTrainOffsetsToExcel() {
+            if (!isOfficeInitialized) return;
+            const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
+            if (n === 0) return;
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    for (let i = 0; i < n; i++) {
+                        const train = trailerGenTrains[i];
+                        const xCell = offsetCellForTrainIndex(i + 1, 'x');
+                        const yCell = offsetCellForTrainIndex(i + 1, 'y');
+                        sheet.getRange(xCell).values = [[parseFloat(train.x) || 0]];
+                        sheet.getRange(yCell).values = [[parseFloat(train.y) || 0]];
+                    }
+                    await context.sync();
+                });
+                logMsg(`📤 Pushed X/Y offset for ${n} train(s) to ${INPUT_SHEET_NAME}!B5:${offsetCellForTrainIndex(n, 'y')}.`);
+            } catch (e) {
+                console.warn('Train X/Y offset push error', e);
+                logMsg(`⚠ Could not write train X/Y offsets to ${INPUT_SHEET_NAME}. See console for details.`);
+            }
         }
 
         async function pullOffsetField(trainId, field) {
@@ -1513,9 +1620,14 @@
                 alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the offset value.');
                 return;
             }
-            const train = trailerGenTrains.find(t => t.id === trainId);
+            const idx = trailerGenTrains.findIndex(t => t.id === trainId);
+            const train = trailerGenTrains[idx];
             if (!train) return;
-            const cell = (field === 'x') ? INPUT_X_OFFSET_CELL : INPUT_Y_OFFSET_CELL;
+            const cell = offsetCellForTrainIndex(idx + 1, field);
+            if (!cell) {
+                alert(`"${train.name}" isn't linked to Excel — the X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}.`);
+                return;
+            }
             try {
                 let raw = null;
                 await Excel.run(async (context) => {
@@ -1535,30 +1647,37 @@
             }
         }
 
-        // Seeds the very first train's X offset / Y offset from Excel on
-        // startup, if a workbook is connected and the cells hold values.
+        // Seeds trains' X offset / Y offset from Excel every time the
+        // side panel opens or refreshes (called from initDashboard()),
+        // if a workbook is connected and the cells hold values ("auto
+        // link ... if don't blank" — a blank/empty linked cell for a
+        // given train leaves that train's current value untouched).
         // Also seeds Number of trains (B1) and Number of Hydraulic
-        // Groups (B2) BEFORE the X/Y offset, so the offset ends up on
-        // whichever train is actually "train 1" once the count is applied.
+        // Groups (B2) BEFORE the X/Y offsets, so the offsets land on the
+        // correct trains once the train count is applied. Covers every
+        // train in the linked range (Train 1-OFFSET_LINK_MAX_TRAINS);
+        // see offsetCellForTrainIndex().
         async function seedInitialOffsetsFromExcel() {
             if (!isOfficeInitialized || trailerGenTrains.length === 0) return;
             try {
-                let numTrainsRaw = null, numGroupsRaw = null, xRaw = null, yRaw = null;
+                let numTrainsRaw = null, numGroupsRaw = null;
+                const offsetRanges = [];
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const numTrainsRange = sheet.getRange(INPUT_NUM_TRAINS_CELL);
                     const numGroupsRange = sheet.getRange(INPUT_NUM_GROUPS_CELL);
-                    const xRange = sheet.getRange(INPUT_X_OFFSET_CELL);
-                    const yRange = sheet.getRange(INPUT_Y_OFFSET_CELL);
                     numTrainsRange.load("values");
                     numGroupsRange.load("values");
-                    xRange.load("values");
-                    yRange.load("values");
+                    for (let i = 1; i <= OFFSET_LINK_MAX_TRAINS; i++) {
+                        const xR = sheet.getRange(offsetCellForTrainIndex(i, 'x'));
+                        const yR = sheet.getRange(offsetCellForTrainIndex(i, 'y'));
+                        xR.load("values");
+                        yR.load("values");
+                        offsetRanges.push({ xR, yR });
+                    }
                     await context.sync();
                     numTrainsRaw = numTrainsRange.values[0][0];
                     numGroupsRaw = numGroupsRange.values[0][0];
-                    xRaw = xRange.values[0][0];
-                    yRaw = yRange.values[0][0];
                 });
 
                 const numTrains = parseInt(numTrainsRaw, 10);
@@ -1567,12 +1686,17 @@
                 const numGroups = parseInt(numGroupsRaw, 10);
                 if (Number.isFinite(numGroups) && numGroups >= 1) setNumberOfHydraulicGroups(numGroups, { skipPush: true });
 
-                const train = trailerGenTrains[0];
-                const xNum = parseFloat(xRaw), yNum = parseFloat(yRaw);
-                if (!isNaN(xNum)) train.x = xNum;
-                if (!isNaN(yNum)) train.y = yNum;
+                let linkedCount = 0;
+                const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
+                for (let i = 0; i < n; i++) {
+                    const train = trailerGenTrains[i];
+                    const xNum = parseFloat(offsetRanges[i].xR.values[0][0]);
+                    const yNum = parseFloat(offsetRanges[i].yR.values[0][0]);
+                    if (!isNaN(xNum)) { train.x = xNum; linkedCount++; }
+                    if (!isNaN(yNum)) { train.y = yNum; }
+                }
                 renderTrailerDashboard();
-                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${INPUT_X_OFFSET_CELL}/${INPUT_Y_OFFSET_CELL} (X/Y offset).`);
+                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
                 console.warn('Could not seed initial values from Input sheet', e);
             }
@@ -1814,7 +1938,10 @@
 
             const list = document.getElementById('tgTrainList');
             if (!list) return;
-            list.innerHTML = trailerGenTrains.map(train => {
+            list.innerHTML = trailerGenTrains.map((train, tgIdx) => {
+                const tgOffsetPos = tgIdx + 1;
+                const tgXCell = offsetCellForTrainIndex(tgOffsetPos, 'x');
+                const tgYCell = offsetCellForTrainIndex(tgOffsetPos, 'y');
                 const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const trainAxleCount = train.groups.reduce((s, g) => s + axleCountForGroup(train, g), 0);
                 const totalLoad = train.groups.reduce((s, g) => {
@@ -1846,13 +1973,13 @@
                                    onchange="updateTrailerGenField(${train.id}, 'spacing', this.value)">
                         </div>
                         <div class="tg-field">
-                            <label>X offset (mm) <button type="button" class="tg-xy-sync-btn" title="Pull X offset from Excel Input!${INPUT_X_OFFSET_CELL}" onclick="pullOffsetField(${train.id}, 'x')">⇩</button></label>
-                            <input type="number" step="any" value="${train.x}" title="Distance from origin (0,0) to the top-left corner of the trailer deck (axle #1 sits inset from this corner when a trailer preset is selected). Synced with Excel sheet 'Input'!${INPUT_X_OFFSET_CELL}."
+                            <label>X offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgXCell ? `Pull X offset from Excel Input!${tgXCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'x')" ${tgXCell ? '' : 'disabled'}>⇩</button></label>
+                            <input type="number" step="any" value="${train.x}" title="Distance from origin (0,0) to the top-left corner of the trailer deck (axle #1 sits inset from this corner when a trailer preset is selected).${tgXCell ? ` Synced with Excel sheet 'Input'!${tgXCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'x', this.value)">
                         </div>
                         <div class="tg-field">
-                            <label>Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="Pull Y offset from Excel Input!${INPUT_Y_OFFSET_CELL}" onclick="pullOffsetField(${train.id}, 'y')">⇩</button></label>
-                            <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train. Synced with Excel sheet 'Input'!${INPUT_Y_OFFSET_CELL}."
+                            <label>Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgYCell ? `Pull Y offset from Excel Input!${tgYCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'y')" ${tgYCell ? '' : 'disabled'}>⇩</button></label>
+                            <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train.${tgYCell ? ` Synced with Excel sheet 'Input'!${tgYCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
                         </div>
                         <div class="tg-field">
