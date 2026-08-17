@@ -351,7 +351,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.13)</h1>
+            <h1>🚂 Transport Dashboard (Rev.13.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -462,11 +462,12 @@
                             meters instead of mm — and <strong>Z</strong> is the CoG <strong>height above the
                             trailer deck</strong>. <strong>Length</strong>, <strong>Width</strong>, and
                             <strong>Height</strong> size the box drawn in the preview only, and
-                            <strong>X — top-left</strong>/<strong>Y — top-left</strong> are a read-only readout
-                            of the cargo's plan-view footprint's top-left corner distance from world origin
-                            (0,0) — mirroring how the trailer's X offset/Y offset describe the deck's
-                            top-left corner — computed from CoG X/Y minus half of Length/Width; none of these
-                            four are part of the Excel range. Pulled
+                            <strong>X — top-left</strong>/<strong>Y — top-left</strong> are an alternate,
+                            editable way to position the cargo — the plan-view footprint's top-left corner
+                            distance from world origin (0,0), mirroring how the trailer's X offset/Y offset
+                            describe the deck's top-left corner. Editing top-left backs into CoG X/Y (adding
+                            back half of Length/Width) so <strong>X — CoG</strong>/<strong>Y — CoG</strong>
+                            stay in sync either way; none of these four are part of the Excel range. Pulled
                             automatically when this panel opens or refreshes; press <strong>"📤 Push Cargo to
                             Excel"</strong> to write changes back (row 40's TOTAL stays a live Excel formula and
                             is never overwritten).
@@ -1787,15 +1788,44 @@
             }
             // Lightweight refresh only, same reasoning as updateTrailerGenField.
             renderTrailerGenPreview();
-            // Keep the read-only "top-left corner" readout in sync without a
-            // full re-render (so the field the operator is typing in never
-            // loses focus) whenever a field it depends on changes.
+            // Keep the "top-left corner" fields in sync without a full
+            // re-render (so the field the operator is typing in never loses
+            // focus) whenever a field they're derived from changes.
             if (field === 'x' || field === 'length' || field === 'y' || field === 'width') {
                 const tlX = document.getElementById(`cargoTlX_${cargo.id}`);
                 const tlY = document.getElementById(`cargoTlY_${cargo.id}`);
                 if (tlX) tlX.value = cargoTopLeftX(cargo);
                 if (tlY) tlY.value = cargoTopLeftY(cargo);
             }
+        }
+
+        // X — top-left / Y — top-left are an alternate, editable way to
+        // position a cargo item: instead of typing the CoG X/Y directly,
+        // the operator can type the distance from world origin (0,0) to
+        // the top-left corner of the cargo's plan-view footprint (the same
+        // "top-left corner" convention used for the trailer deck's X
+        // offset/Y offset). Editing one of these back-computes the
+        // underlying CoG X/Y (what's actually synced to Excel
+        // Input!BB/BC) by adding back half the Length/Width.
+        function updateCargoTopLeft(id, axis, rawValue) {
+            const cargo = cargoItems.find(c => c.id === id);
+            if (!cargo) return;
+            let tl = parseFloat(rawValue);
+            if (isNaN(tl)) tl = 0;
+            if (axis === 'x') {
+                cargo.x = tl + (parseFloat(cargo.length) || 0) / 2;
+            } else if (axis === 'y') {
+                cargo.y = tl + (parseFloat(cargo.width) || 0) / 2;
+            }
+            // Reflect the resulting CoG value back into the X — CoG / Y —
+            // CoG inputs, and re-normalize this top-left input itself
+            // (rounded the same way cargoTopLeftX/Y compute it), without a
+            // full re-render.
+            const cogInput = document.getElementById(axis === 'x' ? `cargoX_${cargo.id}` : `cargoY_${cargo.id}`);
+            if (cogInput) cogInput.value = axis === 'x' ? cargo.x : cargo.y;
+            const tlInput = document.getElementById(axis === 'x' ? `cargoTlX_${cargo.id}` : `cargoTlY_${cargo.id}`);
+            if (tlInput) tlInput.value = axis === 'x' ? cargoTopLeftX(cargo) : cargoTopLeftY(cargo);
+            renderTrailerGenPreview();
         }
 
         function renderCargoList() {
@@ -1819,14 +1849,14 @@
                             <input type="number" step="any" value="${cargo.weight}" title="Cargo weight, metric tonnes. Synced with Excel 'Input'!${CARGO_W_COL}${cell}."
                                    onchange="updateCargoField(${cargo.id}, 'weight', this.value)">
                         </div>
-                        <div class="tg-cargo-field">
+                        <div class="tg-cargo-field" id="cargoFieldX_${cargo.id}">
                             <label>X — CoG (m)</label>
-                            <input type="number" step="any" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}."
+                            <input type="number" step="any" id="cargoX_${cargo.id}" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}."
                                    onchange="updateCargoField(${cargo.id}, 'x', this.value)">
                         </div>
-                        <div class="tg-cargo-field">
+                        <div class="tg-cargo-field" id="cargoFieldY_${cargo.id}">
                             <label>Y — CoG (m)</label>
-                            <input type="number" step="any" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}."
+                            <input type="number" step="any" id="cargoY_${cargo.id}" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}."
                                    onchange="updateCargoField(${cargo.id}, 'y', this.value)">
                         </div>
                         <div class="tg-cargo-field">
@@ -1849,15 +1879,17 @@
                             <input type="number" step="any" value="${cargo.height}" title="Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range."
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-readonly">
+                        <div class="tg-cargo-field tg-cargo-field-local">
                             <label>X — top-left (m)</label>
-                            <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargoTopLeftX(cargo)}" readonly disabled
-                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Computed from CoG X minus half of Length — not part of the Excel range.">
+                            <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargoTopLeftX(cargo)}"
+                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Editing this backs into CoG X (X − half of Length is what you type here, so X — CoG updates to match) — not part of the Excel range."
+                                   onchange="updateCargoTopLeft(${cargo.id}, 'x', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-readonly">
+                        <div class="tg-cargo-field tg-cargo-field-local">
                             <label>Y — top-left (m)</label>
-                            <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargoTopLeftY(cargo)}" readonly disabled
-                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Computed from CoG Y minus half of Width — not part of the Excel range.">
+                            <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargoTopLeftY(cargo)}"
+                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Editing this backs into CoG Y (Y − half of Width is what you type here, so Y — CoG updates to match) — not part of the Excel range."
+                                   onchange="updateCargoTopLeft(${cargo.id}, 'y', this.value)">
                         </div>
                     </div>
                 </div>`;
