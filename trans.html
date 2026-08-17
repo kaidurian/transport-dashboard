@@ -317,7 +317,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.11)</h1>
+            <h1>🚂 Transport Dashboard (Rev.11.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -813,21 +813,24 @@
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const lastRow = SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1;
 
-                    trailerGenTrains.slice(0, SETGROUP_MAX_TRAINS).forEach((train, idx) => {
+                    for (let idx = 0; idx < SETGROUP_MAX_TRAINS; idx++) {
+                        const train = trailerGenTrains[idx]; // undefined once past the current train count — that slot just gets cleared below
                         const startCol = SETGROUP_FIRST_TRAIN_COL + idx * SETGROUP_BLOCK_WIDTH;
                         const c0 = colLetter(startCol);
                         const c2 = colLetter(startCol + 2);
 
                         // Clear this train's whole fixed block first so a
-                        // shorter re-push doesn't leave stale rows behind.
+                        // shorter re-push — or a deleted train — doesn't
+                        // leave stale rows behind.
                         sheet.getRange(`${c0}${SETGROUP_START_ROW}:${c2}${lastRow}`).clear(Excel.ClearApplyTo.contents);
 
+                        if (!train) continue;
                         const rows = computeSetTrainGroupRows(train).slice(0, SETGROUP_MAX_ROWS);
-                        if (rows.length === 0) return;
+                        if (rows.length === 0) continue;
                         const values = rows.map(r => [r.label, r.left, r.right]);
                         const endRow = SETGROUP_START_ROW + rows.length - 1;
                         sheet.getRange(`${c0}${SETGROUP_START_ROW}:${c2}${endRow}`).values = values;
-                    });
+                    }
 
                     await context.sync();
                 });
@@ -1634,20 +1637,26 @@
         async function pushTrainOffsetsToExcel() {
             if (!isOfficeInitialized) return;
             const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
-            if (n === 0) return;
             try {
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
-                    for (let i = 0; i < n; i++) {
-                        const train = trailerGenTrains[i];
+                    for (let i = 0; i < OFFSET_LINK_MAX_TRAINS; i++) {
                         const xCell = offsetCellForTrainIndex(i + 1, 'x');
                         const yCell = offsetCellForTrainIndex(i + 1, 'y');
-                        sheet.getRange(xCell).values = [[parseFloat(train.x) || 0]];
-                        sheet.getRange(yCell).values = [[parseFloat(train.y) || 0]];
+                        const train = trailerGenTrains[i];
+                        if (train) {
+                            sheet.getRange(xCell).values = [[parseFloat(train.x) || 0]];
+                            sheet.getRange(yCell).values = [[parseFloat(train.y) || 0]];
+                        } else {
+                            // No train at this slot anymore (deleted) —
+                            // clear its cells so stale offsets don't linger.
+                            sheet.getRange(xCell).clear(Excel.ClearApplyTo.contents);
+                            sheet.getRange(yCell).clear(Excel.ClearApplyTo.contents);
+                        }
                     }
                     await context.sync();
                 });
-                logMsg(`📤 Pushed X/Y offset for ${n} train(s) to ${INPUT_SHEET_NAME}!B5:${offsetCellForTrainIndex(n, 'y')}.`);
+                logMsg(`📤 Pushed X/Y offset for ${n} train(s) to ${INPUT_SHEET_NAME}!B5:${offsetCellForTrainIndex(OFFSET_LINK_MAX_TRAINS, 'y')} (unused slots cleared).`);
             } catch (e) {
                 console.warn('Train X/Y offset push error', e);
                 logMsg(`⚠ Could not write train X/Y offsets to ${INPUT_SHEET_NAME}. See console for details.`);
