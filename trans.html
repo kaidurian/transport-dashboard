@@ -190,12 +190,12 @@
             font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
             color: var(--text-muted); margin-bottom: 3px;
         }
-        .tg-cargo-field input {
+        .tg-cargo-field input, .tg-cargo-field select {
             width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
             border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
         }
-        .tg-cargo-field input:focus { outline: none; border-color: var(--accent-blue); }
-        .tg-cargo-field-local input { border-style: dashed; }
+        .tg-cargo-field input:focus, .tg-cargo-field select:focus { outline: none; border-color: var(--accent-blue); }
+        .tg-cargo-field-local input, .tg-cargo-field-local select { border-style: dashed; }
         .tg-cargo-field-readonly input { background: var(--panel-bg-alt, rgba(128,128,128,0.08)); color: var(--text-muted); cursor: default; }
 
         .tg-preview-wrap {
@@ -214,7 +214,7 @@
         #tgPreview { overflow: auto; max-height: 70vh; }
 
         /* Stacked Top / Side / End view sections in the preview panel. */
-        .tg-view-section { margin-bottom: 18px; }
+        .tg-view-section { margin-bottom: 4px; }
         .tg-view-section:last-child { margin-bottom: 0; }
         .tg-view-section-label {
             font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
@@ -351,7 +351,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.13.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.15)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -690,7 +690,30 @@
         const CARGO_Y_COL = 'BC';
         const CARGO_Z_COL = 'BD';
         const CARGO_RANGE = `${CARGO_NAME_COL}${CARGO_START_ROW}:${CARGO_Z_COL}${CARGO_START_ROW + CARGO_MAX_ITEMS - 1}`; // AZ35:BD39
+        // TOTAL row — AZ40:BD40. Read-only: a live Excel formula
+        // (weighted-average CoG across every cargo item row above) that
+        // this dashboard only ever READS, never writes. Drives the
+        // combined "Total CoG" sign drawn in the plan/side/end views
+        // below (see cargoTotal / pullCargoFromExcel).
+        const CARGO_TOTAL_RANGE = `${CARGO_W_COL}${CARGO_TOTAL_ROW}:${CARGO_Z_COL}${CARGO_TOTAL_ROW}`; // BA40:BD40
         const TG_CARGO_COLOR = 'var(--accent-orange, #f97316)'; // shared cargo rectangle/CoG-symbol color across plan + side + end views
+        const TG_CARGO_TOTAL_COLOR = 'var(--accent-red, #ef4444)'; // combined/Total CoG sign — distinct from per-item cargo color
+
+        // ---- Cargo dimension (Length/Width/Height) — Excel "Input
+        // horizontal loads" sheet, H11:H13, meters. A separate sheet
+        // from "Input" (see INPUT_SHEET_NAME above). Only 3 cells are
+        // available (one column, one value each), so this link applies
+        // to cargo item #1 only — Length -> H11, Width -> H12,
+        // Height -> H13. Pulled/pushed together with the rest of the
+        // cargo data via the existing "⇩ Refresh from Excel" /
+        // "📤 Push Cargo to Excel" buttons (pullCargoFromExcel /
+        // pushCargoToExcel), in its own try/catch so a missing sheet
+        // doesn't block the main AZ35:BD40 cargo sync.
+        const HORIZONTAL_LOADS_SHEET_NAME = "Input horizontal loads";
+        const CARGO_DIM_LENGTH_CELL = "H11";
+        const CARGO_DIM_WIDTH_CELL = "H12";
+        const CARGO_DIM_HEIGHT_CELL = "H13";
+        const CARGO_DIM_RANGE = `${CARGO_DIM_LENGTH_CELL}:${CARGO_DIM_HEIGHT_CELL}`; // H11:H13
 
         let cargoIdCounter = 1;
         function defaultCargoItem(index) {
@@ -704,12 +727,20 @@
                 length: 6,      // preview-only rectangle footprint, meters
                 width: 3,       // preview-only rectangle footprint, meters
                 height: 3,      // preview-only cargo height (full box height, used in side/end view), meters
-                anchor: 'cog'   // 'cog' or 'topleft' — which position field the Length/Width edits keep fixed
+                anchor: 'cog',  // 'cog' or 'topleft' — which position field the Length/Width edits keep fixed
+                heightStart: 'trailer', // 'trailer' (deck top) or 'previous' (top of the previous cargo item's box) — local-only, not part of the Excel range
+                heightGap: 0    // extra clearance (m) between this box's bottom and its Height-start reference — local-only, not part of the Excel range
             };
             syncCargoGeometry(item, 'cog');
             return item;
         }
         let cargoItems = [];
+        // Combined "Total CoG" — read-only, pulled from Excel
+        // "Input"!AZ40:BD40 (see CARGO_TOTAL_RANGE) alongside the
+        // per-item cargo rows. x/y/z are in meters, same convention as
+        // each cargo item's own CoG fields; z is height above the
+        // trailer deck. Never written back to Excel.
+        let cargoTotal = { name: 'TOTAL', weight: 0, x: 0, y: 0, z: 0 };
 
         // Cargo position can be driven from either end: CoG X/Y (the
         // values actually synced with Excel Input!BB/BC) or top-left X/Y
@@ -1795,6 +1826,10 @@
             if (!cargo) return;
             if (field === 'name') {
                 cargo.name = rawValue || cargo.name;
+            } else if (field === 'heightStart') {
+                cargo.heightStart = (rawValue === 'previous') ? 'previous' : 'trailer';
+                renderTrailerGenPreview();
+                return;
             } else {
                 cargo[field] = parseFloat(rawValue);
                 if (isNaN(cargo[field])) cargo[field] = 0;
@@ -1894,31 +1929,44 @@
                             <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}."
                                    onchange="updateCargoField(${cargo.id}, 'z', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local">
+                        <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
                             <label>Length (m)</label>
-                            <input type="number" step="any" value="${cargo.length}" title="Preview-only rectangle footprint length — not part of the Excel range."
+                            <input type="number" step="any" value="${cargo.length}" title="${idx === 0 ? `Cargo rectangle footprint length. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint length — not part of the Excel range.'}"
                                    onchange="updateCargoField(${cargo.id}, 'length', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local">
+                        <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
                             <label>Width (m)</label>
-                            <input type="number" step="any" value="${cargo.width}" title="Preview-only rectangle footprint width — not part of the Excel range."
+                            <input type="number" step="any" value="${cargo.width}" title="${idx === 0 ? `Cargo rectangle footprint width. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint width — not part of the Excel range.'}"
                                    onchange="updateCargoField(${cargo.id}, 'width', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local">
+                        <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
                             <label>Height (m)</label>
-                            <input type="number" step="any" value="${cargo.height}" title="Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range."
+                            <input type="number" step="any" value="${cargo.height}" title="${idx === 0 ? `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (item #1 only).` : 'Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range.'}"
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
-                            <label>X — top-left (m)</label>
+                            <label>Height start</label>
+                            <select title="Where this cargo's box (and Z / CoG height) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range."
+                                    onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
+                                <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
+                                <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
+                            </select>
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-local">
+                            <label>Gap (m)</label>
+                            <input type="number" step="any" value="${cargo.heightGap}" title="Extra vertical clearance between this cargo's box bottom and its Height-start reference (the trailer top deck, or the previous cargo item's top) — not part of the Excel range."
+                                   onchange="updateCargoField(${cargo.id}, 'heightGap', this.value)">
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-local">
+                            <label>X — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargo.tlX}"
-                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Editing this backs into CoG X (X − half of Length is what you type here, so X — CoG updates to match) — not part of the Excel range."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Editing this backs into CoG X (X − half of Length is what you type here, so X — CoG updates to match) — not part of the Excel range."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'x', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
-                            <label>Y — top-left (m)</label>
+                            <label>Y — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargo.tlY}"
-                                   title="Distance from world origin (0,0) to the top-left corner of this cargo's footprint in the plan view, in meters. Editing this backs into CoG Y (Y − half of Width is what you type here, so Y — CoG updates to match) — not part of the Excel range."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Editing this backs into CoG Y (Y − half of Width is what you type here, so Y — CoG updates to match) — not part of the Excel range."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'y', this.value)">
                         </div>
                     </div>
@@ -1937,14 +1985,42 @@
                 return;
             }
             try {
-                let values = null;
+                let values = null, totalValues = null, dimValues = null;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const range = sheet.getRange(CARGO_RANGE);
+                    const totalRange = sheet.getRange(CARGO_TOTAL_RANGE);
                     range.load('values');
+                    totalRange.load('values');
                     await context.sync();
                     values = range.values;
+                    totalValues = totalRange.values;
                 });
+                // Cargo dimension (Length/Width/Height, item #1 only) —
+                // separate sheet, so read in its own Excel.run/try so a
+                // missing "Input horizontal loads" sheet doesn't block
+                // the main cargo pull above.
+                try {
+                    await Excel.run(async (context) => {
+                        const dimSheet = context.workbook.worksheets.getItem(HORIZONTAL_LOADS_SHEET_NAME);
+                        const dimRange = dimSheet.getRange(CARGO_DIM_RANGE);
+                        dimRange.load('values');
+                        await context.sync();
+                        dimValues = dimRange.values;
+                    });
+                } catch (dimErr) {
+                    console.warn(`Could not pull cargo dimensions from '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}`, dimErr);
+                }
+                if (totalValues && totalValues[0]) {
+                    const [tw, tx, ty, tz] = totalValues[0].map(v => parseFloat(v));
+                    cargoTotal = {
+                        name: 'TOTAL',
+                        weight: Number.isFinite(tw) ? tw : 0,
+                        x: Number.isFinite(tx) ? tx : 0,
+                        y: Number.isFinite(ty) ? ty : 0,
+                        z: Number.isFinite(tz) ? tz : 0
+                    };
+                }
                 const parsed = values
                     .map(row => ({
                         name: (row[0] || '').toString().trim(),
@@ -1961,6 +2037,19 @@
                 }
                 cargoItems = parsed.map((r, i) => {
                     const existing = cargoItems[i]; // preserve local-only Length/Width/Height if this slot already existed
+                    // Item #1's Length/Width/Height are linked to Excel
+                    // "Input horizontal loads"!H11:H13 (meters) — use the
+                    // pulled value when present/valid, otherwise fall
+                    // back to whatever was already set (or the default).
+                    let dimLength = existing ? existing.length : 6;
+                    let dimWidth = existing ? existing.width : 3;
+                    let dimHeight = existing ? existing.height : 3;
+                    if (i === 0 && dimValues) {
+                        const [dL, dW, dH] = dimValues.map(row => parseFloat(row[0]));
+                        if (Number.isFinite(dL)) dimLength = dL;
+                        if (Number.isFinite(dW)) dimWidth = dW;
+                        if (Number.isFinite(dH)) dimHeight = dH;
+                    }
                     const item = {
                         id: existing ? existing.id : cargoIdCounter++,
                         name: r.name || (existing ? existing.name : `Cargo_${i + 1}`),
@@ -1968,16 +2057,18 @@
                         x: Number.isFinite(r.x) ? r.x : 0,
                         y: Number.isFinite(r.y) ? r.y : 0,
                         z: Number.isFinite(r.z) ? r.z : 0,
-                        length: existing ? existing.length : 6,
-                        width: existing ? existing.width : 3,
-                        height: existing ? existing.height : 3,
-                        anchor: 'cog' // Excel's X/Y is always CoG, so top-left is re-derived from it
+                        length: dimLength,
+                        width: dimWidth,
+                        height: dimHeight,
+                        anchor: 'cog', // Excel's X/Y is always CoG, so top-left is re-derived from it
+                        heightStart: existing ? existing.heightStart : 'trailer',
+                        heightGap: existing ? existing.heightGap : 0
                     };
                     syncCargoGeometry(item, 'cog');
                     return item;
                 });
                 renderTrailerDashboard();
-                logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}.`);
+                logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimValues ? ` (+ item #1 dimensions from '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
             } catch (e) {
                 console.warn('Could not pull cargo data from Input sheet', e);
                 if (!silent) alert('Error pulling cargo data — see console for details.');
@@ -2005,7 +2096,24 @@
                     sheet.getRange(CARGO_RANGE).values = rows;
                     await context.sync();
                 });
-                logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE}.`);
+                // Cargo dimension (Length/Width/Height, item #1 only) —
+                // separate sheet/try, so a missing "Input horizontal
+                // loads" sheet doesn't block the main cargo push above.
+                let dimPushed = false;
+                const first = cargoItems[0];
+                if (first) {
+                    try {
+                        await Excel.run(async (context) => {
+                            const dimSheet = context.workbook.worksheets.getItem(HORIZONTAL_LOADS_SHEET_NAME);
+                            dimSheet.getRange(CARGO_DIM_RANGE).values = [[first.length || 0], [first.width || 0], [first.height || 0]];
+                            await context.sync();
+                        });
+                        dimPushed = true;
+                    } catch (dimErr) {
+                        console.warn(`Could not push cargo dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}`, dimErr);
+                    }
+                }
+                logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimPushed ? ` (+ item #1 dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
             } catch (e) {
                 console.error('Error pushing cargo data to Excel', e);
                 alert('Error pushing cargo data to Excel — see console for details.');
@@ -2653,8 +2761,8 @@
             // own independent horizontal layout.
             const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
             wrap.innerHTML = `
-                <div class="tg-view-section"><div class="tg-view-section-label">Plan view (Unit: mm.)</div>${topHtml}</div>
-                <div class="tg-view-section"><div class="tg-view-section-label">Side + end view (Unit: mm.)</div>${elevationHtml}</div>
+                <div class="tg-view-section"><div class="tg-view-section-label">Unit: mm.</div>${topHtml}</div>
+                <div class="tg-view-section">${elevationHtml}</div>
             `;
         }
 
@@ -2814,6 +2922,23 @@
                     cogSymbolSvg(cx, cy, 6, cargoColor) +
                     `</g>`;
             });
+
+            // Combined "Total CoG" sign — the single weighted-average CoG
+            // across every cargo item, read live from Excel
+            // "Input"!AZ40:BD40 (a formula cell, never computed locally
+            // here) via cargoTotal. Drawn only once total weight is
+            // actually present (i.e. cargo has been pushed/pulled and the
+            // TOTAL row has resolved), in a distinct color/size from the
+            // per-item CoG symbols above so it reads as the combined
+            // reference point rather than another cargo item.
+            if (cargoTotal.weight > 0) {
+                const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000, totCyMm = (parseFloat(cargoTotal.y) || 0) * 1000;
+                const totCx = sx(totCxMm), totCy = sy(totCyMm);
+                cargoSvg += `<g>` +
+                    `<text x="${totCx}" y="${totCy - 12}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}">TOTAL CoG · ${cargoTotal.weight.toFixed(1)} t</text>` +
+                    cogSymbolSvg(totCx, totCy, 9, TG_CARGO_TOTAL_COLOR) +
+                    `</g>`;
+            }
 
             // Dimension call-outs for preset (Goldhofer/SPMT) trailers —
             // real mm distances, drawn to scale now that sx/sy share a
@@ -3094,12 +3219,35 @@
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
             const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
+            // Cargo boxes are drawn symmetric around their CoG (base + Z,
+            // box spans base .. base + 2*Z) since only the CoG height is
+            // known — where "base" is each item's own Height-start
+            // reference (the trailer's own top deck, or the top of the
+            // PREVIOUS cargo item's box, for stacked cargo) plus that
+            // item's own Gap (m) — extra clearance above the reference,
+            // e.g. dunnage/packing between stacked crates.
+            // Computed once, in list order, so a 'previous'-referenced
+            // item always stacks on the item immediately above it in the
+            // Cargo list — reused below for both the vertical-span sizing
+            // and the actual box drawing so the two never disagree.
+            const deckTopWorldZ = tgDeckHeightMm + TG_ELEV_DECK_THICK;
+            let prevTopWorldZ = deckTopWorldZ;
+            const cargoBoxZ = cargoItems.map((c, i) => {
+                const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above the base
+                const gapMm = (parseFloat(c.heightGap) || 0) * 1000;
+                const referenceWorldZ = (c.heightStart === 'previous' && i > 0) ? prevTopWorldZ : deckTopWorldZ;
+                const baseWorldZ = referenceWorldZ + gapMm;
+                const cogWorldZ = baseWorldZ + zMm;
+                const topWorldZ = baseWorldZ + zMm * 2;
+                prevTopWorldZ = topWorldZ;
+                return { baseWorldZ, cogWorldZ, topWorldZ };
+            });
             // Cargo boxes are drawn symmetric around their CoG (deck top
             // + Z, box spans deck top .. deck top + 2*Z) since only the
             // CoG height is known — so the vertical span above deck top
             // needs to grow to fit the tallest cargo item, not just the
             // fixed 260mm clearance used for wheels/labels alone.
-            const cargoMaxHeightAboveDeckMm = cargoItems.reduce((m, c) => Math.max(m, (parseFloat(c.z) || 0) * 1000 * 2), 0);
+            const cargoMaxHeightAboveDeckMm = cargoBoxZ.reduce((m, bz) => Math.max(m, bz.topWorldZ - deckTopWorldZ), 0);
             const zSpanMm = tgDeckHeightMm + TG_ELEV_DECK_THICK + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
             // Reuse the plan (top) view's own X mapping wholesale — same
             // scale, same left offset, same canvas width — so an axle's
@@ -3213,34 +3361,47 @@
             });
 
             // ---- Cargo boxes (side + end view) ----
-            // Only the CoG height above deck (Z) is known, not the
-            // cargo's own overall height, so each box is drawn
-            // symmetric around its CoG — from the deck top up to
-            // deck-top + 2×Z — putting the true CoG at box mid-height.
+            // Only the CoG height above its base (Z) is known, not the
+            // cargo's own overall height, so each box is drawn symmetric
+            // around its CoG — from its base up to base + 2×Z — putting
+            // the true CoG at box mid-height. The base is either the
+            // trailer's own top deck, or the top of the previous cargo
+            // item's box (see cargoBoxZ / Height start, above), per item.
             // A CG symbol marks the exact CoG point in both panels.
             let cargoElevSvg = '';
-            cargoItems.forEach(c => {
+            cargoItems.forEach((c, cargoElevIdx) => {
                 const cxMm = (parseFloat(c.x) || 0) * 1000;
                 const cyMm = (parseFloat(c.y) || 0) * 1000;
                 const lMm = (parseFloat(c.length) || 0) * 1000;
                 const wMm = (parseFloat(c.width) || 0) * 1000;
-                const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above deck
-                const deckTopWorldZ = tgDeckHeightMm + TG_ELEV_DECK_THICK;
-                const cogWorldZ = deckTopWorldZ + zMm;
-                const boxTopWorldZ = deckTopWorldZ + zMm * 2;
+                const { baseWorldZ, cogWorldZ, topWorldZ: boxTopWorldZ } = cargoBoxZ[cargoElevIdx];
 
                 // Side view.
                 const ssx1 = sx(cxMm - lMm / 2), ssx2 = sx(cxMm + lMm / 2);
-                const ssy1 = sz(boxTopWorldZ), ssy2 = sz(deckTopWorldZ);
+                const ssy1 = sz(boxTopWorldZ), ssy2 = sz(baseWorldZ);
                 cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${TG_CARGO_COLOR}" fill-opacity="0.15" stroke="${TG_CARGO_COLOR}" stroke-width="1.5"/>`;
                 cargoElevSvg += cogSymbolSvg(sx(cxMm), sz(cogWorldZ), 6, TG_CARGO_COLOR);
 
                 // End view.
                 const esx1 = sy(cyMm - wMm / 2), esx2 = sy(cyMm + wMm / 2);
-                const esy1 = szEnd(boxTopWorldZ), esy2 = szEnd(deckTopWorldZ);
+                const esy1 = szEnd(boxTopWorldZ), esy2 = szEnd(baseWorldZ);
                 cargoElevSvg += `<rect x="${Math.min(esx1, esx2)}" y="${Math.min(esy1, esy2)}" width="${Math.abs(esx2 - esx1)}" height="${Math.abs(esy2 - esy1)}" fill="${TG_CARGO_COLOR}" fill-opacity="0.15" stroke="${TG_CARGO_COLOR}" stroke-width="1.5"/>`;
                 cargoElevSvg += cogSymbolSvg(sy(cyMm), szEnd(cogWorldZ), 6, TG_CARGO_COLOR);
             });
+
+            // Combined "Total CoG" sign (side + end view) — same
+            // Excel-sourced cargoTotal used in the plan view. Its Z is
+            // always height-above-the-trailer-deck (the Excel formula
+            // has no notion of the local "Height start" stacking option),
+            // so it's drawn from deckTopWorldZ regardless of any
+            // individual item's stacking choice.
+            if (cargoTotal.weight > 0) {
+                const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000;
+                const totCyMm = (parseFloat(cargoTotal.y) || 0) * 1000;
+                const totCogWorldZ = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
+                cargoElevSvg += cogSymbolSvg(sx(totCxMm), sz(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy(totCyMm), szEnd(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
+            }
 
             // ---- Dimensions ----
             let dimSvg = '';
@@ -3278,17 +3439,16 @@
                         `</g>`;
                 });
 
-                // Cargo CoG height (Z) — vertical dimension from deck top
-                // to the CoG point, drawn just left of each item's side-
-                // view box, in the cargo's own color.
-                cargoItems.forEach(c => {
+                // Cargo CoG height (Z) — vertical dimension from its
+                // Height-start base (trailer top deck, or the previous
+                // cargo item's top) to the CoG point, drawn just left of
+                // each item's side-view box, in the cargo's own color.
+                cargoItems.forEach((c, dimCargoIdx) => {
                     const cxMm = (parseFloat(c.x) || 0) * 1000;
                     const lMm = (parseFloat(c.length) || 0) * 1000;
-                    const zMm = (parseFloat(c.z) || 0) * 1000;
-                    const deckTopWorldZ = tgDeckHeightMm + TG_ELEV_DECK_THICK;
-                    const cogWorldZ = deckTopWorldZ + zMm;
+                    const { baseWorldZ, cogWorldZ } = cargoBoxZ[dimCargoIdx];
                     const dimX = sx(cxMm - lMm / 2) - 10;
-                    const dimYTop = sz(cogWorldZ), dimYBot = sz(deckTopWorldZ);
+                    const dimYTop = sz(cogWorldZ), dimYBot = sz(baseWorldZ);
                     const midY = (dimYTop + dimYBot) / 2;
                     dimSvg += `<g opacity="0.9">` +
                         `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${TG_CARGO_COLOR}" stroke-width="1" stroke-dasharray="2 2"/>` +
