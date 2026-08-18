@@ -371,7 +371,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.19)</h1>
+            <h1>🚂 Transport Dashboard (Rev.19.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1885,27 +1885,34 @@
             }
             // X — CoG/Y — CoG and X — Middle/Y — Middle are two fully
             // independent pairs of fields — editing one never touches the
-            // other. Only X — CoG/Y — CoG (this function) drive the
-            // cargo's actual drawn position and the Excel-synced value;
-            // X — Middle/Y — Middle are informational-only inputs (see
-            // updateCargoTopLeft below).
+            // other. X — CoG/Y — CoG/Z (this function, plus 'z' above)
+            // drive only the CoG sign and its dimension line in the
+            // preview, and are the values synced with Excel; X — Middle/
+            // Y — Middle (see updateCargoTopLeft below) together with
+            // Length/Width/Height/Height-start drive the drawn cargo box
+            // — the two never move each other.
             // Lightweight refresh only, same reasoning as updateTrailerGenField.
             renderTrailerGenPreview();
         }
 
         // X — Middle / Y — Middle are an independent pair of fields —
         // distance from world origin (0,0) to the middle of the cargo's
-        // plan-view footprint, in meters. They're intentionally NOT linked
-        // to X — CoG/Y — CoG (or to Length/Width): editing one pair never
-        // changes the other, and neither drives the drawn cargo position
-        // (which always follows X — CoG/Y — CoG). Not part of the Excel
-        // range.
+        // footprint, in meters. They're intentionally NOT linked to
+        // X — CoG/Y — CoG: editing one pair never changes the other.
+        // Together with Length/Width/Height/Height-start, this pair
+        // drives the drawn cargo box's position in the preview (plan,
+        // side, and end views) — the CoG sign always follows X — CoG/
+        // Y — CoG/Z — CoG instead, and is never moved by this. Not part
+        // of the Excel range.
         function updateCargoTopLeft(id, axis, rawValue) {
             const cargo = cargoItems.find(c => c.id === id);
             if (!cargo) return;
             let tl = parseFloat(rawValue);
             if (isNaN(tl)) tl = 0;
             if (axis === 'x') cargo.tlX = tl; else cargo.tlY = tl;
+            // Middle now drives the drawn box position, so it needs the
+            // same lightweight refresh as every other geometry field.
+            renderTrailerGenPreview();
         }
 
         function renderCargoList() {
@@ -1932,37 +1939,37 @@
                         </div>
                         <div class="tg-cargo-field" id="cargoFieldX_${cargo.id}">
                             <label>X — CoG (m)</label>
-                            <input type="number" step="any" id="cargoX_${cargo.id}" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}."
+                            <input type="number" step="any" id="cargoX_${cargo.id}" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}. Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'x', this.value)">
                         </div>
                         <div class="tg-cargo-field" id="cargoFieldY_${cargo.id}">
                             <label>Y — CoG (m)</label>
-                            <input type="number" step="any" id="cargoY_${cargo.id}" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}."
+                            <input type="number" step="any" id="cargoY_${cargo.id}" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}. Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'y', this.value)">
                         </div>
                         <div class="tg-cargo-field">
                             <label>Z — deck to CoG (m)</label>
-                            <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}."
+                            <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}. Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'z', this.value)">
                         </div>
                         <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
                             <label>Length (m)</label>
-                            <input type="number" step="any" value="${cargo.length}" title="${idx === 0 ? `Cargo rectangle footprint length. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint length — not part of the Excel range.'}"
+                            <input type="number" step="any" value="${cargo.length}" title="${idx === 0 ? `Cargo rectangle footprint length. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint length — not part of the Excel range.'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'length', this.value)">
                         </div>
                         <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
                             <label>Width (m)</label>
-                            <input type="number" step="any" value="${cargo.width}" title="${idx === 0 ? `Cargo rectangle footprint width. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint width — not part of the Excel range.'}"
+                            <input type="number" step="any" value="${cargo.width}" title="${idx === 0 ? `Cargo rectangle footprint width. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint width — not part of the Excel range.'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'width', this.value)">
                         </div>
                         <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
                             <label>Height (m)</label>
-                            <input type="number" step="any" value="${cargo.height}" title="${idx === 0 ? `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (item #1 only).` : 'Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range.'}"
+                            <input type="number" step="any" value="${cargo.height}" title="${idx === 0 ? `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (item #1 only).` : 'Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range.'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>Height start</label>
-                            <select title="Where this cargo's box (and Z / CoG height) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. The Z dimension line in the drawing always shows total height above the trailer deck, either way."
+                            <select title="Where this cargo's BOX (Length/Width/Height rectangle) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. Only moves/resizes the box; the CoG sign and Z dimension line always measure from the trailer deck using X/Y/Z — CoG, unaffected by this setting."
                                     onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
                                 <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
                                 <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
@@ -1971,13 +1978,13 @@
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>X — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargo.tlX}"
-                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Independent of X — CoG — editing either one never changes the other. Not part of the Excel range and does not affect the drawn cargo position (which always follows X — CoG)."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint, in meters. Independent of X — CoG — editing either one never changes the other. Not part of the Excel range. This is what positions the drawn cargo box in the preview (plan/side/end views) — the CoG sign is unaffected."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'x', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>Y — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargo.tlY}"
-                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Independent of Y — CoG — editing either one never changes the other. Not part of the Excel range and does not affect the drawn cargo position (which always follows Y — CoG)."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint, in meters. Independent of Y — CoG — editing either one never changes the other. Not part of the Excel range. This is what positions the drawn cargo box in the preview (plan/side/end views) — the CoG sign is unaffected."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'y', this.value)">
                         </div>
                     </div>
@@ -2873,12 +2880,18 @@
             });
             // Cargo footprints (X/Y are meters — convert to mm to match
             // every other world coordinate) so the plan view auto-scales
-            // to keep every cargo rectangle in view.
+            // to keep every cargo rectangle in view. The box itself is
+            // positioned by X — Middle/Y — Middle (its own footprint
+            // center), NOT by X — CoG/Y — CoG — see the cargo rect/CoG
+            // symbol split below. The CoG point is pushed separately so
+            // it stays in view even when it falls outside the box.
             cargoItems.forEach(c => {
-                const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
+                const tlXMm = (parseFloat(c.tlX) || 0) * 1000, tlYMm = (parseFloat(c.tlY) || 0) * 1000;
                 const halfLMm = ((parseFloat(c.length) || 0) * 1000) / 2, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
-                xs.push(cxMm - halfLMm, cxMm + halfLMm);
-                ys.push(cyMm - halfWMm, cyMm + halfWMm);
+                xs.push(tlXMm - halfLMm, tlXMm + halfLMm);
+                ys.push(tlYMm - halfWMm, tlYMm + halfWMm);
+                xs.push((parseFloat(c.x) || 0) * 1000);
+                ys.push((parseFloat(c.y) || 0) * 1000);
             });
             xs.push(0); ys.push(0);
             const rawMinX = Math.min(...xs), rawMaxX = Math.max(...xs);
@@ -2982,22 +2995,29 @@
             });
 
             // Cargo rectangles (plan view) — one per cargo item, centered
-            // on its CoG (X, Y), sized by the item's own Length/Width.
-            // X/Y/Length/Width are entered in meters and converted to mm
-            // here to share the same world-space scale as everything
-            // else. Each item also gets a CG symbol at its CoG point.
+            // on its own footprint Middle (X — Middle, Y — Middle), sized
+            // by the item's own Length/Width. The CoG symbol is drawn at
+            // the item's independent CoG point (X — CoG, Y — CoG)
+            // instead — the box and the CoG sign are two fully separate
+            // things in this drawing: editing Length/Width/X — Middle/
+            // Y — Middle only ever moves/resizes the box, and editing
+            // X — CoG/Y — CoG only ever moves the CoG sign. X/Y/Length/
+            // Width are entered in meters and converted to mm here to
+            // share the same world-space scale as everything else.
             let cargoSvg = '';
             cargoItems.forEach((c, cargoIdx) => {
                 const cargoColor = cargoColorFor(cargoIdx);
-                const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
+                const tlXMm = (parseFloat(c.tlX) || 0) * 1000, tlYMm = (parseFloat(c.tlY) || 0) * 1000;
                 const lMm = (parseFloat(c.length) || 0) * 1000, wMm = (parseFloat(c.width) || 0) * 1000;
-                const rx1 = sx(cxMm - lMm / 2), ry1 = sy(cyMm - wMm / 2);
-                const rx2 = sx(cxMm + lMm / 2), ry2 = sy(cyMm + wMm / 2);
-                const cx = sx(cxMm), cy = sy(cyMm);
+                const rx1 = sx(tlXMm - lMm / 2), ry1 = sy(tlYMm - wMm / 2);
+                const rx2 = sx(tlXMm + lMm / 2), ry2 = sy(tlYMm + wMm / 2);
+                const boxCx = sx(tlXMm);
+                const cogXMm = (parseFloat(c.x) || 0) * 1000, cogYMm = (parseFloat(c.y) || 0) * 1000;
+                const cogCx = sx(cogXMm), cogCy = sy(cogYMm);
                 cargoSvg += `<g>` +
                     `<rect x="${Math.min(rx1, rx2)}" y="${Math.min(ry1, ry2)}" width="${Math.abs(rx2 - rx1)}" height="${Math.abs(ry2 - ry1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
-                    `<text x="${cx}" y="${Math.min(ry1, ry2) - 5}" font-size="9" text-anchor="middle" fill="${cargoColor}">${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t</text>` +
-                    cogSymbolSvg(cx, cy, 6, cargoColor) +
+                    `<text x="${boxCx}" y="${Math.min(ry1, ry2) - 5}" font-size="9" text-anchor="middle" fill="${cargoColor}">${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t</text>` +
+                    cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
                     `</g>`;
             });
 
@@ -3308,15 +3328,21 @@
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
             const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
-            // Cargo boxes are drawn symmetric around their CoG (base + Z,
-            // box spans base .. base + 2*Z) since only the CoG height is
-            // known — where "base" is each item's own Height-start
-            // reference: the trailer's own top deck, or the top of the
-            // PREVIOUS cargo item's box, for stacked cargo. Computed
-            // once, in list order, so a 'previous'-referenced item always
-            // stacks on the item immediately above it in the Cargo list
-            // — reused below for both the vertical-span sizing and the
-            // actual box drawing so the two never disagree.
+            // Cargo boxes span base .. base + Height, where "base" is
+            // each item's own Height-start reference: the trailer's own
+            // top deck, or the top of the PREVIOUS cargo item's box, for
+            // stacked cargo. This is entirely driven by the item's own
+            // Height field + Height-start choice — it never depends on
+            // Z — CoG. Computed once, in list order, so a
+            // 'previous'-referenced item always stacks on the item
+            // immediately above it in the Cargo list — reused below for
+            // both the vertical-span sizing and the actual box drawing
+            // so the two never disagree.
+            // The CoG sign's world Z, by contrast, is always measured
+            // straight up from the trailer's own top deck (deckTopWorldZ
+            // + Z), regardless of this item's Height-start/stacking
+            // reference — so moving/stacking the box (Height-start) never
+            // moves the CoG sign, and vice versa.
             // NOTE: tgDeckHeightMm (Excel "Input"!BD26) is already the
             // full ground → top-of-deck height, so it's used directly
             // here (NOT + TG_ELEV_DECK_THICK — that constant is only the
@@ -3325,20 +3351,20 @@
             const deckTopWorldZ = tgDeckHeightMm;
             let prevTopWorldZ = deckTopWorldZ;
             const cargoBoxZ = cargoItems.map((c, i) => {
-                const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above the base
-                const referenceWorldZ = (c.heightStart === 'previous' && i > 0) ? prevTopWorldZ : deckTopWorldZ;
-                const baseWorldZ = referenceWorldZ;
-                const cogWorldZ = referenceWorldZ + zMm;
-                const topWorldZ = cogWorldZ + (cogWorldZ - baseWorldZ);
+                const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above the trailer deck — always, independent of Height-start
+                const heightMm = (parseFloat(c.height) || 0) * 1000; // full box height, drawn from this item's own base
+                const baseWorldZ = (c.heightStart === 'previous' && i > 0) ? prevTopWorldZ : deckTopWorldZ;
+                const cogWorldZ = deckTopWorldZ + zMm;
+                const topWorldZ = baseWorldZ + heightMm;
                 prevTopWorldZ = topWorldZ;
                 return { baseWorldZ, cogWorldZ, topWorldZ };
             });
-            // Cargo boxes are drawn symmetric around their CoG (deck top
-            // + Z, box spans deck top .. deck top + 2*Z) since only the
-            // CoG height is known — so the vertical span above deck top
-            // needs to grow to fit the tallest cargo item, not just the
-            // fixed 260mm clearance used for wheels/labels alone.
-            const cargoMaxHeightAboveDeckMm = cargoBoxZ.reduce((m, bz) => Math.max(m, bz.topWorldZ - deckTopWorldZ), 0);
+            // The vertical span above deck top needs to grow to fit
+            // whichever sits higher — the tallest cargo box top or the
+            // highest CoG sign (the two are independent and don't
+            // necessarily line up) — not just the fixed 260mm clearance
+            // used for wheels/labels alone.
+            const cargoMaxHeightAboveDeckMm = cargoBoxZ.reduce((m, bz) => Math.max(m, bz.topWorldZ - deckTopWorldZ, bz.cogWorldZ - deckTopWorldZ), 0);
             const zSpanMm = tgDeckHeightMm + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
             // Reuse the plan (top) view's own X mapping wholesale — same
             // scale, same left offset, same canvas width — so an axle's
@@ -3361,8 +3387,9 @@
             const ys = rows.map(r => r.y);
             trailerGenTrains.forEach(t => { if (t.deckWidth) ys.push((parseFloat(t.y) || 0), (parseFloat(t.y) || 0) + t.deckWidth); });
             cargoItems.forEach(c => {
-                const cyMm = (parseFloat(c.y) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
-                ys.push(cyMm - halfWMm, cyMm + halfWMm);
+                const tlYMm = (parseFloat(c.tlY) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
+                ys.push(tlYMm - halfWMm, tlYMm + halfWMm);
+                ys.push((parseFloat(c.y) || 0) * 1000);
             });
             ys.push(0);
             const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
@@ -3528,31 +3555,34 @@
             const endDecksSvg = endPanel1.decks + endPanel2.decks;
 
             // ---- Cargo boxes (side + end view) ----
-            // Only the CoG height above its base (Z) is known, not the
-            // cargo's own overall height, so each box is drawn symmetric
-            // around its CoG — from its base up to base + 2×Z — putting
-            // the true CoG at box mid-height. The base is either the
-            // trailer's own top deck, or the top of the previous cargo
-            // item's box (see cargoBoxZ / Height start, above), per item.
-            // A CG symbol marks the exact CoG point in both panels.
+            // The box spans its own base (per Height-start) up to
+            // base + Height, positioned horizontally at X — Middle /
+            // Y — Middle — driven entirely by Length/Width/Height/
+            // X — Middle/Y — Middle/Height-start. The CoG symbol is
+            // drawn separately, at the independent CoG point (X — CoG,
+            // Y — CoG, Z — CoG measured from the trailer deck) — it does
+            // not need to land inside the box, and box edits never move
+            // it (see cargoBoxZ above for the same base/CoG split).
             let cargoElevSvg = '';
             cargoItems.forEach((c, cargoElevIdx) => {
                 const cargoColor = cargoColorFor(cargoElevIdx);
-                const cxMm = (parseFloat(c.x) || 0) * 1000;
-                const cyMm = (parseFloat(c.y) || 0) * 1000;
+                const tlXMm = (parseFloat(c.tlX) || 0) * 1000;
+                const tlYMm = (parseFloat(c.tlY) || 0) * 1000;
+                const cxMm = (parseFloat(c.x) || 0) * 1000; // CoG X — independent of the box
+                const cyMm = (parseFloat(c.y) || 0) * 1000; // CoG Y — independent of the box
                 const lMm = (parseFloat(c.length) || 0) * 1000;
                 const wMm = (parseFloat(c.width) || 0) * 1000;
                 const { baseWorldZ, cogWorldZ, topWorldZ: boxTopWorldZ } = cargoBoxZ[cargoElevIdx];
 
                 // Side view.
-                const ssx1 = sx(cxMm - lMm / 2), ssx2 = sx(cxMm + lMm / 2);
+                const ssx1 = sx(tlXMm - lMm / 2), ssx2 = sx(tlXMm + lMm / 2);
                 const ssy1 = sz(boxTopWorldZ), ssy2 = sz(baseWorldZ);
                 cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
                 cargoElevSvg += cogSymbolSvg(sx(cxMm), sz(cogWorldZ), 6, cargoColor);
 
                 // End views (left panel via sy1, right panel mirrored via sy2).
                 [sy1, sy2].forEach(syFn => {
-                    const esx1 = syFn(cyMm - wMm / 2), esx2 = syFn(cyMm + wMm / 2);
+                    const esx1 = syFn(tlYMm - wMm / 2), esx2 = syFn(tlYMm + wMm / 2);
                     const esy1 = szEnd(boxTopWorldZ), esy2 = szEnd(baseWorldZ);
                     cargoElevSvg += `<rect x="${Math.min(esx1, esx2)}" y="${Math.min(esy1, esy2)}" width="${Math.abs(esx2 - esx1)}" height="${Math.abs(esy2 - esy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
                     cargoElevSvg += cogSymbolSvg(syFn(cyMm), szEnd(cogWorldZ), 6, cargoColor);
@@ -3611,16 +3641,16 @@
                 });
 
                 // Cargo CoG height (Z) — vertical dimension from the
-                // trailer's own top deck (always — regardless of this
-                // item's Height-start reference) up to the CoG point,
-                // drawn just left of each item's side-view box, in the
-                // cargo's own color.
+                // trailer's own top deck up to the CoG point, drawn just
+                // left of each item's own CoG sign (X — CoG), in the
+                // cargo's own color. Anchored to the CoG X point itself
+                // (not the box) so Length/Width/box position never move
+                // this line — only X — CoG/Z — CoG do.
                 cargoItems.forEach((c, dimCargoIdx) => {
                     const cargoColor = cargoColorFor(dimCargoIdx);
                     const cxMm = (parseFloat(c.x) || 0) * 1000;
-                    const lMm = (parseFloat(c.length) || 0) * 1000;
                     const { cogWorldZ } = cargoBoxZ[dimCargoIdx];
-                    const dimX = sx(cxMm - lMm / 2) - 10;
+                    const dimX = sx(cxMm) - 16;
                     const dimYTop = sz(cogWorldZ), dimYBot = sz(deckTopWorldZ);
                     const midY = (dimYTop + dimYBot) / 2;
                     // Labeled with the CoG's actual total height above the
