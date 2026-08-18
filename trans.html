@@ -211,7 +211,26 @@
         .tg-preview-toggles-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
         .tg-preview-external-note { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-muted); font-style: italic; }
 
-        #tgPreview { overflow: auto; max-height: 70vh; }
+        #tgPreview { overflow: auto; max-height: 70vh; position: relative; cursor: default; }
+        #tgPreview.tg-magnifier-active { cursor: crosshair; }
+
+        /* 🔍 Magnifier — a floating circular lens that follows the cursor
+           over #tgPreview, showing a zoomed-in clone of the preview
+           content. Positioned with fixed coords (page-level z-index) so
+           it isn't clipped by #tgPreview's own overflow:auto. */
+        .tg-magnifier-lens {
+            display: none;
+            position: fixed;
+            width: 220px; height: 220px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-blue, #38bdf8);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+            overflow: hidden;
+            pointer-events: none;
+            background: var(--bg-dark, #0b1220);
+            z-index: 2000;
+        }
+        .tg-magnifier-lens > div { position: absolute; top: 0; left: 0; }
 
         /* Stacked Top / Side / End view sections in the preview panel. */
         .tg-view-section { margin-bottom: 4px; }
@@ -351,7 +370,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.16)</h1>
+            <h1>🚂 Transport Dashboard (Rev.17)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -452,8 +471,9 @@
                     <div class="tg-cargo-card">
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
+                            <button type="button" class="tg-help-btn" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓ Help</button>
                         </div>
-                        <p class="tg-cargo-sub">
+                        <p class="tg-modal-sub" id="tgCargoHelpPanel">
                             Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
                             <strong>AZ35:BD39</strong> (Name / W [mTe] / X [m] / Y [m] / Z [m]) — all in
                             <strong>meters</strong>, unlike the mm trailer fields above. <strong>X</strong> and
@@ -505,10 +525,15 @@
 
                                     📏 Show dimensions
                                 </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tgMagnifierToggle" onchange="toggleTgMagnifier(this.checked)">
+                                    🔍 Magnifier
+                                </label>
                             </div>
                         </div>
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
                         <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
+                        <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
                     </div>
 
                     <div class="tg-totals" id="tgTotals"></div>
@@ -541,6 +566,16 @@
         function toggleTgHelp() {
             const panel = document.getElementById('tgHelpPanel');
             const btn = document.getElementById('tgHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+        }
+
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the Generate Cargo card.
+        function toggleTgCargoHelp() {
+            const panel = document.getElementById('tgCargoHelpPanel');
+            const btn = document.getElementById('tgCargoHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
             if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
@@ -1848,63 +1883,29 @@
                 cargo[field] = parseFloat(rawValue);
                 if (isNaN(cargo[field])) cargo[field] = 0;
             }
-            // X/Y (CoG) and Length/Width both affect the linked top-left
-            // corner. Editing X/Y makes CoG the anchor going forward;
-            // editing Length/Width re-derives whichever side (CoG or
-            // top-left) is NOT the current anchor, so the pair the operator
-            // isn't actively driving stays mathematically consistent.
-            if (field === 'x' || field === 'y') {
-                cargo.anchor = 'cog';
-                syncCargoGeometry(cargo, 'cog');
-            } else if (field === 'length' || field === 'width') {
-                syncCargoGeometry(cargo, cargo.anchor === 'topleft' ? 'topleft' : 'cog');
-            }
+            // X — CoG/Y — CoG and X — Middle/Y — Middle are two fully
+            // independent pairs of fields — editing one never touches the
+            // other. Only X — CoG/Y — CoG (this function) drive the
+            // cargo's actual drawn position and the Excel-synced value;
+            // X — Middle/Y — Middle are informational-only inputs (see
+            // updateCargoTopLeft below).
             // Lightweight refresh only, same reasoning as updateTrailerGenField.
             renderTrailerGenPreview();
-            // Keep the linked position fields in sync without a full
-            // re-render (so the field the operator is typing in never loses
-            // focus) whenever a field they're derived from changes.
-            if (field === 'x' || field === 'y' || field === 'length' || field === 'width') {
-                const xIn = document.getElementById(`cargoX_${cargo.id}`);
-                const yIn = document.getElementById(`cargoY_${cargo.id}`);
-                const tlX = document.getElementById(`cargoTlX_${cargo.id}`);
-                const tlY = document.getElementById(`cargoTlY_${cargo.id}`);
-                if (xIn) xIn.value = cargo.x;
-                if (yIn) yIn.value = cargo.y;
-                if (tlX) tlX.value = cargo.tlX;
-                if (tlY) tlY.value = cargo.tlY;
-            }
         }
 
-        // X — top-left / Y — top-left are an alternate, editable way to
-        // position a cargo item: instead of typing the CoG X/Y directly,
-        // the operator can type the distance from world origin (0,0) to
-        // the top-left corner of the cargo's plan-view footprint (the same
-        // "top-left corner" convention used for the trailer deck's X
-        // offset/Y offset). Editing one of these makes top-left the anchor
-        // going forward and back-computes the underlying CoG X/Y (what's
-        // actually synced to Excel Input!BB/BC) by adding back half the
-        // Length/Width.
+        // X — Middle / Y — Middle are an independent pair of fields —
+        // distance from world origin (0,0) to the middle of the cargo's
+        // plan-view footprint, in meters. They're intentionally NOT linked
+        // to X — CoG/Y — CoG (or to Length/Width): editing one pair never
+        // changes the other, and neither drives the drawn cargo position
+        // (which always follows X — CoG/Y — CoG). Not part of the Excel
+        // range.
         function updateCargoTopLeft(id, axis, rawValue) {
             const cargo = cargoItems.find(c => c.id === id);
             if (!cargo) return;
             let tl = parseFloat(rawValue);
             if (isNaN(tl)) tl = 0;
-            cargo.anchor = 'topleft';
             if (axis === 'x') cargo.tlX = tl; else cargo.tlY = tl;
-            syncCargoGeometry(cargo, 'topleft');
-            // Reflect the resulting CoG value back into the X — CoG / Y —
-            // CoG inputs, and re-normalize both top-left inputs, without a
-            // full re-render.
-            const xIn = document.getElementById(`cargoX_${cargo.id}`);
-            const yIn = document.getElementById(`cargoY_${cargo.id}`);
-            const tlX = document.getElementById(`cargoTlX_${cargo.id}`);
-            const tlY = document.getElementById(`cargoTlY_${cargo.id}`);
-            if (xIn) xIn.value = cargo.x;
-            if (yIn) yIn.value = cargo.y;
-            if (tlX) tlX.value = cargo.tlX;
-            if (tlY) tlY.value = cargo.tlY;
-            renderTrailerGenPreview();
         }
 
         function renderCargoList() {
@@ -1975,13 +1976,13 @@
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>X — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargo.tlX}"
-                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Editing this backs into CoG X (X − half of Length is what you type here, so X — CoG updates to match) — not part of the Excel range."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Independent of X — CoG — editing either one never changes the other. Not part of the Excel range and does not affect the drawn cargo position (which always follows X — CoG)."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'x', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>Y — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargo.tlY}"
-                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Editing this backs into CoG Y (Y − half of Width is what you type here, so Y — CoG updates to match) — not part of the Excel range."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint in the plan view, in meters. Independent of Y — CoG — editing either one never changes the other. Not part of the Excel range and does not affect the drawn cargo position (which always follows Y — CoG)."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'y', this.value)">
                         </div>
                     </div>
@@ -2691,6 +2692,74 @@
             renderTrailerGenPreview();
         }
 
+        // ============================================================
+        // 🔍 MAGNIFIER — hover the preview to see a zoomed lens follow
+        // the cursor. The lens content is a scaled clone of #tgPreview's
+        // current DOM, re-cloned each time the mouse enters (so it always
+        // starts fresh) and simply panned/scaled via CSS transform on
+        // every mousemove (cheap — no DOM rebuild per frame).
+        // ============================================================
+        const TG_MAGNIFIER_ZOOM = 2.5;
+        const TG_MAGNIFIER_SIZE = 220;
+
+        function toggleTgMagnifier(checked) {
+            const preview = document.getElementById('tgPreview');
+            if (!preview) return;
+            preview.classList.toggle('tg-magnifier-active', checked);
+            if (checked) {
+                preview.addEventListener('mouseenter', tgMagnifierEnter);
+                preview.addEventListener('mousemove', tgMagnifierMove);
+                preview.addEventListener('mouseleave', tgMagnifierLeave);
+            } else {
+                preview.removeEventListener('mouseenter', tgMagnifierEnter);
+                preview.removeEventListener('mousemove', tgMagnifierMove);
+                preview.removeEventListener('mouseleave', tgMagnifierLeave);
+                tgMagnifierLeave();
+            }
+        }
+
+        function tgMagnifierEnter(e) {
+            const preview = document.getElementById('tgPreview');
+            const lens = document.getElementById('tgMagnifierLens');
+            if (!preview || !lens) return;
+            // Fresh clone of whatever's currently rendered (plan + side/
+            // end SVGs), full natural size, so it can be scaled up cleanly
+            // inside the lens without inheriting #tgPreview's own
+            // overflow/max-height clipping.
+            lens.innerHTML = '';
+            const clone = preview.cloneNode(true);
+            clone.removeAttribute('id');
+            clone.style.overflow = 'visible';
+            clone.style.maxHeight = 'none';
+            clone.style.width = preview.getBoundingClientRect().width + 'px';
+            clone.style.transformOrigin = '0 0';
+            lens.appendChild(clone);
+            lens.style.display = 'block';
+            tgMagnifierMove(e);
+        }
+
+        function tgMagnifierMove(e) {
+            const preview = document.getElementById('tgPreview');
+            const lens = document.getElementById('tgMagnifierLens');
+            if (!preview || !lens || !lens.firstChild) return;
+            const rect = preview.getBoundingClientRect();
+            // Cursor position relative to the (unscrolled) preview content.
+            const relX = (e.clientX - rect.left) + preview.scrollLeft;
+            const relY = (e.clientY - rect.top) + preview.scrollTop;
+            const clone = lens.firstChild;
+            const half = TG_MAGNIFIER_SIZE / (2 * TG_MAGNIFIER_ZOOM);
+            clone.style.transform = `scale(${TG_MAGNIFIER_ZOOM}) translate(${half - relX}px, ${half - relY}px)`;
+            // Lens follows the cursor, offset up-and-right a little so the
+            // pointer itself isn't hidden underneath it.
+            lens.style.left = (e.clientX - TG_MAGNIFIER_SIZE / 2 + 24) + 'px';
+            lens.style.top = (e.clientY - TG_MAGNIFIER_SIZE - 16) + 'px';
+        }
+
+        function tgMagnifierLeave() {
+            const lens = document.getElementById('tgMagnifierLens');
+            if (lens) { lens.style.display = 'none'; lens.innerHTML = ''; }
+        }
+
         function syncExternalThemeVars() {
             if (!tgPreviewWindow || tgPreviewWindow.closed) return;
             const mainCs = getComputedStyle(document.body);
@@ -3047,6 +3116,16 @@
                     dimensionsSvg += dimH(0, cxMm, 0, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m`, cargoColor);
                     dimensionsSvg += dimV(0, cyMm, 0, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m`, cargoColor, 'left');
                 });
+
+                // World origin (0,0) → combined "TOTAL CoG", same style as
+                // the per-item cargo dimension lines above, one tier
+                // further out so it doesn't overlap them.
+                if (cargoTotal.weight > 0) {
+                    const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000, totCyMm = (parseFloat(cargoTotal.y) || 0) * 1000;
+                    const totTier = 2 + trailerGenTrains.length + cargoItems.length;
+                    dimensionsSvg += dimH(0, totCxMm, 0, totTier, `${(parseFloat(cargoTotal.x) || 0).toFixed(3)} m`, TG_CARGO_TOTAL_COLOR);
+                    dimensionsSvg += dimV(0, totCyMm, 0, totTier, `${(parseFloat(cargoTotal.y) || 0).toFixed(3)} m`, TG_CARGO_TOTAL_COLOR, 'left');
+                }
             }
 
             // Origin sign at world (0,0): X-axis arrow pointing right
@@ -3246,15 +3325,24 @@
             // item always stacks on the item immediately above it in the
             // Cargo list — reused below for both the vertical-span sizing
             // and the actual box drawing so the two never disagree.
-            const deckTopWorldZ = tgDeckHeightMm + TG_ELEV_DECK_THICK;
+            // NOTE: tgDeckHeightMm (Excel "Input"!BD26) is already the
+            // full ground → top-of-deck height, so it's used directly
+            // here (NOT + TG_ELEV_DECK_THICK — that constant is only the
+            // cosmetic thickness of the deck rectangle drawn hanging
+            // below this top line, see deckTopY/deckTopYEnd below).
+            const deckTopWorldZ = tgDeckHeightMm;
             let prevTopWorldZ = deckTopWorldZ;
             const cargoBoxZ = cargoItems.map((c, i) => {
                 const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above the base
                 const gapMm = (parseFloat(c.heightGap) || 0) * 1000;
                 const referenceWorldZ = (c.heightStart === 'previous' && i > 0) ? prevTopWorldZ : deckTopWorldZ;
                 const baseWorldZ = referenceWorldZ + gapMm;
-                const cogWorldZ = baseWorldZ + zMm;
-                const topWorldZ = baseWorldZ + zMm * 2;
+                // CoG height stays anchored to the reference (deck top, or
+                // previous item's top) regardless of Gap — Gap only shifts
+                // where the box's own bottom edge is drawn, not the CoG
+                // sign's position, so the sign never moves when Gap changes.
+                const cogWorldZ = referenceWorldZ + zMm;
+                const topWorldZ = cogWorldZ + (cogWorldZ - baseWorldZ);
                 prevTopWorldZ = topWorldZ;
                 return { baseWorldZ, cogWorldZ, topWorldZ };
             });
@@ -3264,7 +3352,7 @@
             // needs to grow to fit the tallest cargo item, not just the
             // fixed 260mm clearance used for wheels/labels alone.
             const cargoMaxHeightAboveDeckMm = cargoBoxZ.reduce((m, bz) => Math.max(m, bz.topWorldZ - deckTopWorldZ), 0);
-            const zSpanMm = tgDeckHeightMm + TG_ELEV_DECK_THICK + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
+            const zSpanMm = tgDeckHeightMm + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
             // Reuse the plan (top) view's own X mapping wholesale — same
             // scale, same left offset, same canvas width — so an axle's
             // horizontal position in the side view lands at the exact
@@ -3341,8 +3429,8 @@
             const fDim = (8 * fontScale).toFixed(2);     // matches plan view's dimension-text size
 
             const wheelR = Math.max(3, TG_ELEV_WHEEL_DIAM * scale / 2);
-            const deckTopY = sz(tgDeckHeightMm + TG_ELEV_DECK_THICK);
-            const deckTopYEnd = szEnd(tgDeckHeightMm + TG_ELEV_DECK_THICK);
+            const deckTopY = sz(tgDeckHeightMm);
+            const deckTopYEnd = szEnd(tgDeckHeightMm);
             const deckThickPx = TG_ELEV_DECK_THICK * scale;
 
             // Ground lines — one per panel (no side-by-side projection
@@ -3377,19 +3465,39 @@
                 sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${deckTopY - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
             });
 
-            // ---- End views: one tire block per unique (train, Y), drawn
-            // once per panel (left, using sy1; right, mirrored, using
-            // sy2) so both end-view panels share this same logic. ----
+            // ---- End views: one tire block per unique (train, Y, group),
+            // drawn once per panel (left, using sy1; right, mirrored,
+            // using sy2) so both end-view panels share this same logic.
+            // Deduping on group as well as train+Y (not just train+Y)
+            // matters because different axle lines on the SAME side of a
+            // preset trailer (same Y) can belong to different axle
+            // groups — e.g. front axle lines in Group 1, rear axle lines
+            // in Group 2 — so every group actually present at that Y
+            // needs its own wheel drawn in its own group color, not just
+            // whichever group's row happened to come first. When more
+            // than one group shares a Y, their wheels are nudged
+            // side-by-side so every color stays visible instead of fully
+            // overlapping.
             const tireW = Math.max(6, TG_ELEV_TIRE_WIDTH * scale);
             function buildEndViewPanel(syFn) {
                 let wheels = '', decks = '';
                 const seen = new Set();
+                const groupsAtY = {};
                 rows.forEach(r => {
-                    const key = r.trainName + ':' + r.y;
+                    const yKey = r.trainName + ':' + r.y;
+                    (groupsAtY[yKey] = groupsAtY[yKey] || new Set()).add(r.groupNumber);
+                });
+                rows.forEach(r => {
+                    const yKey = r.trainName + ':' + r.y;
+                    const key = yKey + ':' + r.groupNumber;
                     if (seen.has(key)) return;
                     seen.add(key);
-                    const cx = syFn(r.y);
-                    wheels += `<rect x="${cx - tireW / 2}" y="${szEnd(TG_ELEV_WHEEL_DIAM)}" width="${tireW}" height="${TG_ELEV_WHEEL_DIAM * scale}" rx="3" fill="${r.color}" opacity="0.85" stroke="${r.color}" stroke-width="1"/>`;
+                    const groupCount = groupsAtY[yKey].size;
+                    const groupIdx = [...groupsAtY[yKey]].indexOf(r.groupNumber);
+                    const nudge = groupCount > 1 ? (groupIdx - (groupCount - 1) / 2) * (tireW * 0.6) : 0;
+                    const cx = syFn(r.y) + nudge;
+                    const w = groupCount > 1 ? tireW * 0.55 : tireW;
+                    wheels += `<rect x="${cx - w / 2}" y="${szEnd(TG_ELEV_WHEEL_DIAM)}" width="${w}" height="${TG_ELEV_WHEEL_DIAM * scale}" rx="3" fill="${r.color}" opacity="0.85" stroke="${r.color}" stroke-width="1"/>`;
                 });
                 trailerGenTrains.forEach(t => {
                     if (!t.deckWidth) return;
@@ -3473,7 +3581,7 @@
                     `<line x1="${sideOffsetX - 12}" y1="${sideGroundY}" x2="${sideOffsetX - 12}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1" stroke-dasharray="2 2"/>` +
                     `<line x1="${sideOffsetX - 16}" y1="${sideGroundY}" x2="${sideOffsetX - 8}" y2="${sideGroundY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
                     `<line x1="${sideOffsetX - 16}" y1="${deckTopY}" x2="${sideOffsetX - 8}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
-                    `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgDeckHeightMm + TG_ELEV_DECK_THICK}</text>` +
+                    `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgDeckHeightMm}</text>` +
                     `</g>`;
                 [sy1, sy2].forEach(syFn => {
                     trailerGenTrains.forEach(t => {
@@ -3509,6 +3617,23 @@
                         `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${dimX - 4} ${midY})">Z ${(parseFloat(c.z) || 0).toFixed(3)} m</text>` +
                         `</g>`;
                 });
+
+                // Combined "TOTAL CoG" height (Z) — deck top up to the
+                // combined CoG point, same style as the per-item Z
+                // dimensions above, drawn in the TOTAL sign's own color.
+                if (cargoTotal.weight > 0) {
+                    const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000;
+                    const totCogWorldZ = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
+                    const totDimX = sx(totCxMm) - 10 - (cargoItems.length ? 12 : 0);
+                    const totDimYTop = sz(totCogWorldZ), totDimYBot = sz(deckTopWorldZ);
+                    const totMidY = (totDimYTop + totDimYBot) / 2;
+                    dimSvg += `<g opacity="0.9">` +
+                        `<line x1="${totDimX}" y1="${totDimYBot}" x2="${totDimX}" y2="${totDimYTop}" stroke="${TG_CARGO_TOTAL_COLOR}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${totDimX - 3}" y1="${totDimYBot}" x2="${totDimX + 3}" y2="${totDimYBot}" stroke="${TG_CARGO_TOTAL_COLOR}" stroke-width="1"/>` +
+                        `<line x1="${totDimX - 3}" y1="${totDimYTop}" x2="${totDimX + 3}" y2="${totDimYTop}" stroke="${TG_CARGO_TOTAL_COLOR}" stroke-width="1"/>` +
+                        `<text x="${totDimX - 4}" y="${totMidY}" font-size="${fDim}" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}" transform="rotate(-90 ${totDimX - 4} ${totMidY})">TOTAL Z ${(parseFloat(cargoTotal.z) || 0).toFixed(3)} m</text>` +
+                        `</g>`;
+                }
             }
 
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
