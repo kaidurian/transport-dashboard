@@ -3041,6 +3041,7 @@
                 // lines above, just in meters (converted to mm) and in
                 // the cargo's own color.
                 cargoItems.forEach((c, cargoIdx) => {
+                    const cargoColor = cargoColorFor(cargoIdx);
                     const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
                     const tier = 2 + trailerGenTrains.length + cargoIdx;
                     dimensionsSvg += dimH(0, cxMm, 0, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m`, cargoColor);
