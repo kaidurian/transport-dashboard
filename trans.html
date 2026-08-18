@@ -379,7 +379,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.21)</h1>
+            <h1>🚂 Transport Dashboard (Rev.22)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -787,6 +787,7 @@
                 height: 3,      // cargo height (full box height, used in side/end view), meters — synced with Excel only when linkExcelDim is true
                 anchor: 'cog',  // 'cog' or 'topleft' — which position field the Length/Width edits keep fixed
                 heightStart: 'trailer', // 'trailer' (deck top) or 'previous' (top of the previous cargo item's box) — local-only, not part of the Excel range
+                gap: 0,         // vertical gap, meters, inserted between the box's base and its Height-start reference (trailer top deck, or previous cargo's top deck) — local-only, not part of the Excel range
                 linkExcelDim: false // whether THIS item's Length/Width/Height are linked to Excel "Input horizontal loads"!H11:H13 — at most one cargo item may be linked at a time (see toggleCargoExcelLink)
             };
             // Initial fill: X/Y — Middle start out equal to X/Y — CoG
@@ -1922,6 +1923,10 @@
                 cargo.name = rawValue || cargo.name;
             } else if (field === 'heightStart') {
                 cargo.heightStart = (rawValue === 'previous') ? 'previous' : 'trailer';
+                // Re-render the list too (not just the preview) so the
+                // "Gap above ... deck (m)" label's reference text stays
+                // in sync with the newly-selected Height-start option.
+                renderCargoList();
                 renderTrailerGenPreview();
                 return;
             } else {
@@ -2039,6 +2044,11 @@
                             </select>
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
+                            <label>Gap above ${cargo.heightStart === 'previous' ? 'previous cargo' : 'trailer'} deck (m)</label>
+                            <input type="number" step="any" value="${cargo.gap}" title="Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG."
+                                   onchange="updateCargoField(${cargo.id}, 'gap', this.value)">
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-local">
                             <label>X — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargo.tlX}"
                                    title="Distance from world origin (0,0) to the Middle of this cargo's footprint, in meters. Independent of X — CoG — editing either one never changes the other. Not part of the Excel range. This is what positions the drawn cargo box in the preview (plan/side/end views) — the CoG sign is unaffected."
@@ -2154,6 +2164,7 @@
                         height: dimHeight,
                         anchor: 'cog', // Excel's X/Y is always CoG, so top-left is re-derived from it
                         heightStart: existing ? existing.heightStart : 'trailer',
+                        gap: existing ? existing.gap : 0,
                         linkExcelDim: isLinked
                     };
                     syncCargoGeometry(item, 'cog');
@@ -2579,13 +2590,13 @@
                 globalSettings.innerHTML = `
                 <div class="tg-field-grid">
                     <div class="tg-field">
-                        <label>Number of trains <button type="button" class="tg-xy-sync-btn" title="Pull Number of trains from Excel Input!${INPUT_NUM_TRAINS_CELL}" onclick="pullNumTrainsFromExcel()">⇩</button></label>
+                        <label>🔗 Number of trains <button type="button" class="tg-xy-sync-btn" title="Pull Number of trains from Excel Input!${INPUT_NUM_TRAINS_CELL}" onclick="pullNumTrainsFromExcel()">⇩</button></label>
                         <input type="number" step="1" min="1" value="${trailerGenTrains.length}"
                                title="How many trains the dashboard should have. Adds/removes trains to match. Synced with Excel sheet 'Input'!${INPUT_NUM_TRAINS_CELL}."
                                onchange="setNumberOfTrains(this.value)">
                     </div>
                     <div class="tg-field">
-                        <label>Number of Hydraulic Groups <button type="button" class="tg-xy-sync-btn" title="Pull Number of Hydraulic Groups from Excel Input!${INPUT_NUM_GROUPS_CELL}" onclick="pullNumHydraulicGroupsFromExcel()">⇩</button></label>
+                        <label>🔗 Number of Hydraulic Groups <button type="button" class="tg-xy-sync-btn" title="Pull Number of Hydraulic Groups from Excel Input!${INPUT_NUM_GROUPS_CELL}" onclick="pullNumHydraulicGroupsFromExcel()">⇩</button></label>
                         <input type="number" step="1" min="1" max="${TRAILER_GROUP_DEFS.length}" value="${currentNumGroups}"
                                title="How many axle groups (1-${TRAILER_GROUP_DEFS.length}) EVERY train should have. Adds/removes groups per train to match. Synced with Excel sheet 'Input'!${INPUT_NUM_GROUPS_CELL}."
                                onchange="setNumberOfHydraulicGroups(this.value)">
@@ -2630,12 +2641,12 @@
                                    onchange="updateTrailerGenField(${train.id}, 'spacing', this.value)">
                         </div>
                         <div class="tg-field">
-                            <label>X offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgXCell ? `Pull X offset from Excel Input!${tgXCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'x')" ${tgXCell ? '' : 'disabled'}>⇩</button></label>
+                            <label>${tgXCell ? '🔗 ' : ''}X offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgXCell ? `Pull X offset from Excel Input!${tgXCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'x')" ${tgXCell ? '' : 'disabled'}>⇩</button></label>
                             <input type="number" step="any" value="${train.x}" title="Distance from origin (0,0) to the top-left corner of the trailer deck (axle #1 sits inset from this corner when a trailer preset is selected).${tgXCell ? ` Synced with Excel sheet 'Input'!${tgXCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'x', this.value)">
                         </div>
                         <div class="tg-field">
-                            <label>Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgYCell ? `Pull Y offset from Excel Input!${tgYCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'y')" ${tgYCell ? '' : 'disabled'}>⇩</button></label>
+                            <label>${tgYCell ? '🔗 ' : ''}Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgYCell ? `Pull Y offset from Excel Input!${tgYCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'y')" ${tgYCell ? '' : 'disabled'}>⇩</button></label>
                             <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train.${tgYCell ? ` Synced with Excel sheet 'Input'!${tgYCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
                         </div>
@@ -3429,7 +3440,9 @@
             const cargoBoxZ = cargoItems.map((c, i) => {
                 const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above the trailer deck — always, independent of Height-start
                 const heightMm = (parseFloat(c.height) || 0) * 1000; // full box height, drawn from this item's own base
-                const baseWorldZ = (c.heightStart === 'previous' && i > 0) ? prevTopWorldZ : deckTopWorldZ;
+                const gapMm = (parseFloat(c.gap) || 0) * 1000; // extra vertical gap above the Height-start reference, before the box starts
+                const refWorldZ = (c.heightStart === 'previous' && i > 0) ? prevTopWorldZ : deckTopWorldZ;
+                const baseWorldZ = refWorldZ + gapMm;
                 const cogWorldZ = deckTopWorldZ + zMm;
                 const topWorldZ = baseWorldZ + heightMm;
                 prevTopWorldZ = topWorldZ;
