@@ -778,7 +778,7 @@
                 width: 3,       // preview-only rectangle footprint, meters
                 height: 3,      // preview-only cargo height (full box height, used in side/end view), meters
                 anchor: 'cog',  // 'cog' or 'topleft' — which position field the Length/Width edits keep fixed
-                heightStart: 'trailer' // always 'trailer' (deck top) — every cargo box/CoG/Z-dimension is measured from the trailer's own top deck; local-only, not part of the Excel range
+                heightStart: 'trailer' // 'trailer' (deck top) or 'previous' (top of the previous cargo item's box) — local-only, not part of the Excel range
             };
             syncCargoGeometry(item, 'cog');
             return item;
@@ -1875,6 +1875,10 @@
             if (!cargo) return;
             if (field === 'name') {
                 cargo.name = rawValue || cargo.name;
+            } else if (field === 'heightStart') {
+                cargo.heightStart = (rawValue === 'previous') ? 'previous' : 'trailer';
+                renderTrailerGenPreview();
+                return;
             } else {
                 cargo[field] = parseFloat(rawValue);
                 if (isNaN(cargo[field])) cargo[field] = 0;
@@ -1958,8 +1962,10 @@
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
                             <label>Height start</label>
-                            <select disabled title="Every cargo box, its CoG point, and its Z dimension line are always measured from the trailer's own top deck — not part of the Excel range.">
-                                <option value="trailer" selected>Trailer top deck</option>
+                            <select title="Where this cargo's box (and Z / CoG height) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. The Z dimension line in the drawing always shows total height above the trailer deck, either way."
+                                    onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
+                                <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
+                                <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
                             </select>
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
@@ -2066,7 +2072,7 @@
                         width: dimWidth,
                         height: dimHeight,
                         anchor: 'cog', // Excel's X/Y is always CoG, so top-left is re-derived from it
-                        heightStart: 'trailer'
+                        heightStart: existing ? existing.heightStart : 'trailer'
                     };
                     syncCargoGeometry(item, 'cog');
                     return item;
@@ -3302,24 +3308,29 @@
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
             const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
-            // Cargo boxes are drawn symmetric around their CoG (deck top
-            // + Z, box spans deck top .. deck top + 2*Z) since only the
-            // CoG height is known. Every item's base, CoG point, and Z
-            // dimension line are always measured from the trailer's own
-            // top deck (deckTopWorldZ) — no per-item Gap or "stack on
-            // previous item" option, so nothing ever shifts a box or its
-            // CoG sign relative to the deck.
+            // Cargo boxes are drawn symmetric around their CoG (base + Z,
+            // box spans base .. base + 2*Z) since only the CoG height is
+            // known — where "base" is each item's own Height-start
+            // reference: the trailer's own top deck, or the top of the
+            // PREVIOUS cargo item's box, for stacked cargo. Computed
+            // once, in list order, so a 'previous'-referenced item always
+            // stacks on the item immediately above it in the Cargo list
+            // — reused below for both the vertical-span sizing and the
+            // actual box drawing so the two never disagree.
             // NOTE: tgDeckHeightMm (Excel "Input"!BD26) is already the
             // full ground → top-of-deck height, so it's used directly
             // here (NOT + TG_ELEV_DECK_THICK — that constant is only the
             // cosmetic thickness of the deck rectangle drawn hanging
             // below this top line, see deckTopY/deckTopYEnd below).
             const deckTopWorldZ = tgDeckHeightMm;
-            const cargoBoxZ = cargoItems.map((c) => {
-                const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above the trailer top deck
-                const baseWorldZ = deckTopWorldZ;
-                const cogWorldZ = deckTopWorldZ + zMm;
+            let prevTopWorldZ = deckTopWorldZ;
+            const cargoBoxZ = cargoItems.map((c, i) => {
+                const zMm = (parseFloat(c.z) || 0) * 1000; // CoG height above the base
+                const referenceWorldZ = (c.heightStart === 'previous' && i > 0) ? prevTopWorldZ : deckTopWorldZ;
+                const baseWorldZ = referenceWorldZ;
+                const cogWorldZ = referenceWorldZ + zMm;
                 const topWorldZ = cogWorldZ + (cogWorldZ - baseWorldZ);
+                prevTopWorldZ = topWorldZ;
                 return { baseWorldZ, cogWorldZ, topWorldZ };
             });
             // Cargo boxes are drawn symmetric around their CoG (deck top
@@ -3520,9 +3531,10 @@
             // Only the CoG height above its base (Z) is known, not the
             // cargo's own overall height, so each box is drawn symmetric
             // around its CoG — from its base up to base + 2×Z — putting
-            // the true CoG at box mid-height. The base is always the
-            // trailer's own top deck (see cargoBoxZ, above). A CG symbol
-            // marks the exact CoG point in both panels.
+            // the true CoG at box mid-height. The base is either the
+            // trailer's own top deck, or the top of the previous cargo
+            // item's box (see cargoBoxZ / Height start, above), per item.
+            // A CG symbol marks the exact CoG point in both panels.
             let cargoElevSvg = '';
             cargoItems.forEach((c, cargoElevIdx) => {
                 const cargoColor = cargoColorFor(cargoElevIdx);
@@ -3598,23 +3610,30 @@
                     });
                 });
 
-                // Cargo CoG height (Z) — vertical dimension from its
-                // Height-start base (trailer top deck, or the previous
-                // cargo item's top) to the CoG point, drawn just left of
-                // each item's side-view box, in the cargo's own color.
+                // Cargo CoG height (Z) — vertical dimension from the
+                // trailer's own top deck (always — regardless of this
+                // item's Height-start reference) up to the CoG point,
+                // drawn just left of each item's side-view box, in the
+                // cargo's own color.
                 cargoItems.forEach((c, dimCargoIdx) => {
                     const cargoColor = cargoColorFor(dimCargoIdx);
                     const cxMm = (parseFloat(c.x) || 0) * 1000;
                     const lMm = (parseFloat(c.length) || 0) * 1000;
-                    const { baseWorldZ, cogWorldZ } = cargoBoxZ[dimCargoIdx];
+                    const { cogWorldZ } = cargoBoxZ[dimCargoIdx];
                     const dimX = sx(cxMm - lMm / 2) - 10;
-                    const dimYTop = sz(cogWorldZ), dimYBot = sz(baseWorldZ);
+                    const dimYTop = sz(cogWorldZ), dimYBot = sz(deckTopWorldZ);
                     const midY = (dimYTop + dimYBot) / 2;
+                    // Labeled with the CoG's actual total height above the
+                    // trailer top deck (matches the line drawn, which
+                    // always starts at the deck) rather than the item's
+                    // own Z input, which is only relative to its own
+                    // Height-start reference when stacked on a previous item.
+                    const totalZAboveDeckM = ((cogWorldZ - deckTopWorldZ) / 1000).toFixed(3);
                     dimSvg += `<g opacity="0.9">` +
                         `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${cargoColor}" stroke-width="1"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${dimX - 4} ${midY})">Z ${(parseFloat(c.z) || 0).toFixed(3)} m</text>` +
+                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${dimX - 4} ${midY})">Z ${totalZAboveDeckM} m</text>` +
                         `</g>`;
                 });
 
