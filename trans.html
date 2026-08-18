@@ -351,7 +351,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.15)</h1>
+            <h1>🚂 Transport Dashboard (Rev.16)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -696,8 +696,22 @@
         // combined "Total CoG" sign drawn in the plan/side/end views
         // below (see cargoTotal / pullCargoFromExcel).
         const CARGO_TOTAL_RANGE = `${CARGO_W_COL}${CARGO_TOTAL_ROW}:${CARGO_Z_COL}${CARGO_TOTAL_ROW}`; // BA40:BD40
-        const TG_CARGO_COLOR = 'var(--accent-orange, #f97316)'; // shared cargo rectangle/CoG-symbol color across plan + side + end views
-        const TG_CARGO_TOTAL_COLOR = 'var(--accent-red, #ef4444)'; // combined/Total CoG sign — distinct from per-item cargo color
+        const TG_CARGO_COLOR = 'var(--accent-orange, #f97316)'; // fallback/legacy cargo color — kept for anything that still refers to a single shared color
+        // Each of the up to 5 cargo items (Input!AZ35:BD39) gets its own
+        // distinct color, cycled from this palette by list index, so
+        // items are visually distinguishable from one another in the
+        // plan + side + end views and in the "Generate Cargo" list.
+        const TG_CARGO_COLOR_PALETTE = [
+            'var(--accent-orange, #f97316)',
+            'var(--accent-purple, #a855f7)',
+            'var(--accent-teal, #14b8a6)',
+            'var(--accent-pink, #ec4899)',
+            'var(--accent-yellow, #eab308)',
+        ];
+        function cargoColorFor(idx) {
+            return TG_CARGO_COLOR_PALETTE[idx % TG_CARGO_COLOR_PALETTE.length];
+        }
+        const TG_CARGO_TOTAL_COLOR = 'var(--accent-red, #ef4444)'; // combined/Total CoG sign — distinct from per-item cargo colors
 
         // ---- Cargo dimension (Length/Width/Height) — Excel "Input
         // horizontal loads" sheet, H11:H13, meters. A separate sheet
@@ -1901,6 +1915,7 @@
                 return `
                 <div class="tg-cargo-item-card">
                     <div class="tg-train-card-header">
+                        <span title="This cargo item's color in the plan/side/end views" style="display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;flex:0 0 auto;background:${cargoColorFor(idx)};"></span>
                         <input type="text" class="tg-train-name-input" value="${escapeHtml(cargo.name)}"
                                title="Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}"
                                onchange="updateCargoField(${cargo.id}, 'name', this.value)">
@@ -2908,9 +2923,9 @@
             // X/Y/Length/Width are entered in meters and converted to mm
             // here to share the same world-space scale as everything
             // else. Each item also gets a CG symbol at its CoG point.
-            const cargoColor = TG_CARGO_COLOR;
             let cargoSvg = '';
-            cargoItems.forEach(c => {
+            cargoItems.forEach((c, cargoIdx) => {
+                const cargoColor = cargoColorFor(cargoIdx);
                 const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
                 const lMm = (parseFloat(c.length) || 0) * 1000, wMm = (parseFloat(c.width) || 0) * 1000;
                 const rx1 = sx(cxMm - lMm / 2), ry1 = sy(cyMm - wMm / 2);
@@ -3280,12 +3295,27 @@
             const spanY = Math.max(maxY - minY, 1);
             const endW = spanY * scale;
 
+            // Two end views are shown side by side below the side view —
+            // a "Left End View" (looking at the trailer from its left
+            // end, the same single cross-section this drawing has always
+            // shown) and a mirrored "Right End View" (looking from the
+            // opposite end) placed beside it, the way a printed GA
+            // drawing pairs a front view with a rear view. The dashboard
+            // doesn't track separate front/rear axle or cargo footprints
+            // (deck width and cargo Y-position don't vary along a
+            // train's length), so the right end view reuses the exact
+            // same geometry, mirrored left-right, rather than being a
+            // second independent cross-section.
+            const endGap = 40; // gap between the two end-view panels
+            const endsTotalW = endW * 2 + endGap;
+
             // Canvas width matches the plan view's own canvas width
-            // (unless the end view happens to need more room than the
+            // (unless the two end views together need more room than the
             // plan view's plot area, in which case it grows to fit).
-            const contentW = Math.max(sideW, endW);
+            const contentW = Math.max(sideW, endsTotalW);
             const svgW = Math.max(svgWTop, padL + contentW + padR);
-            const endOffsetX = padL + (contentW - endW) / 2;
+            const endOffsetX1 = padL + (contentW - endsTotalW) / 2; // left end-view panel
+            const endOffsetX2 = endOffsetX1 + endW + endGap;        // right end-view panel
 
             const sideGroundY = padT + panelH;
             const endPadT = padT + panelH + padGap;
@@ -3293,7 +3323,8 @@
             const svgH = endGroundY + padB;
 
             const sx = x => sideOffsetX + (x - minX) * scale;          // side view local X — identical formula to the plan view's sx()
-            const sy = y => endOffsetX + (y - minY) * scale;           // end view local X (world Y)
+            const sy1 = y => endOffsetX1 + (y - minY) * scale;         // left end view local X (world Y)
+            const sy2 = y => endOffsetX2 + (maxY - y) * scale;         // right end view local X (world Y, mirrored left-right)
             const sz = z => sideGroundY - z * scale;                   // side view Z
             const szEnd = z => endGroundY - z * scale;                 // end view Z (own ground line, same scale)
 
@@ -3317,7 +3348,11 @@
             // lines needed now that the panels are stacked instead of
             // sitting next to each other).
             let groundSvg = `<line x1="${sideOffsetX - 15}" y1="${sideGroundY}" x2="${sideOffsetX + sideW + 15}" y2="${sideGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
-            groundSvg += `<line x1="${endOffsetX - 15}" y1="${endGroundY}" x2="${endOffsetX + endW + 15}" y2="${endGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
+            groundSvg += `<line x1="${endOffsetX1 - 15}" y1="${endGroundY}" x2="${endOffsetX1 + endW + 15}" y2="${endGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
+            groundSvg += `<line x1="${endOffsetX2 - 15}" y1="${endGroundY}" x2="${endOffsetX2 + endW + 15}" y2="${endGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
+            // Panel labels above each end-view panel.
+            groundSvg += `<text x="${endOffsetX1 + endW / 2}" y="${endPadT - 8}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
+            groundSvg += `<text x="${endOffsetX2 + endW / 2}" y="${endPadT - 8}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
 
             // ---- Side view: one wheel + deck strip per train ----
             let sideWheelsSvg = '', sideDecksSvg = '';
@@ -3341,24 +3376,33 @@
                 sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${deckTopY - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
             });
 
-            // ---- End view: one tire block per unique (train, Y) ----
-            let endWheelsSvg = '', endDecksSvg = '';
+            // ---- End views: one tire block per unique (train, Y), drawn
+            // once per panel (left, using sy1; right, mirrored, using
+            // sy2) so both end-view panels share this same logic. ----
             const tireW = Math.max(6, TG_ELEV_TIRE_WIDTH * scale);
-            const seen = new Set();
-            rows.forEach(r => {
-                const key = r.trainName + ':' + r.y;
-                if (seen.has(key)) return;
-                seen.add(key);
-                const cx = sy(r.y);
-                endWheelsSvg += `<rect x="${cx - tireW / 2}" y="${szEnd(TG_ELEV_WHEEL_DIAM)}" width="${tireW}" height="${TG_ELEV_WHEEL_DIAM * scale}" rx="3" fill="${r.color}" opacity="0.85" stroke="${r.color}" stroke-width="1"/>`;
-            });
-            trailerGenTrains.forEach(t => {
-                if (!t.deckWidth) return;
-                const oy = parseFloat(t.y) || 0;
-                const dx1 = sy(oy), dx2 = sy(oy + t.deckWidth);
-                endDecksSvg += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
-                endDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${deckTopYEnd - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
-            });
+            function buildEndViewPanel(syFn) {
+                let wheels = '', decks = '';
+                const seen = new Set();
+                rows.forEach(r => {
+                    const key = r.trainName + ':' + r.y;
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    const cx = syFn(r.y);
+                    wheels += `<rect x="${cx - tireW / 2}" y="${szEnd(TG_ELEV_WHEEL_DIAM)}" width="${tireW}" height="${TG_ELEV_WHEEL_DIAM * scale}" rx="3" fill="${r.color}" opacity="0.85" stroke="${r.color}" stroke-width="1"/>`;
+                });
+                trailerGenTrains.forEach(t => {
+                    if (!t.deckWidth) return;
+                    const oy = parseFloat(t.y) || 0;
+                    const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
+                    decks += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
+                    decks += `<text x="${(dx1 + dx2) / 2}" y="${deckTopYEnd - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
+                });
+                return { wheels, decks };
+            }
+            const endPanel1 = buildEndViewPanel(sy1);
+            const endPanel2 = buildEndViewPanel(sy2);
+            const endWheelsSvg = endPanel1.wheels + endPanel2.wheels;
+            const endDecksSvg = endPanel1.decks + endPanel2.decks;
 
             // ---- Cargo boxes (side + end view) ----
             // Only the CoG height above its base (Z) is known, not the
@@ -3370,6 +3414,7 @@
             // A CG symbol marks the exact CoG point in both panels.
             let cargoElevSvg = '';
             cargoItems.forEach((c, cargoElevIdx) => {
+                const cargoColor = cargoColorFor(cargoElevIdx);
                 const cxMm = (parseFloat(c.x) || 0) * 1000;
                 const cyMm = (parseFloat(c.y) || 0) * 1000;
                 const lMm = (parseFloat(c.length) || 0) * 1000;
@@ -3379,14 +3424,16 @@
                 // Side view.
                 const ssx1 = sx(cxMm - lMm / 2), ssx2 = sx(cxMm + lMm / 2);
                 const ssy1 = sz(boxTopWorldZ), ssy2 = sz(baseWorldZ);
-                cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${TG_CARGO_COLOR}" fill-opacity="0.15" stroke="${TG_CARGO_COLOR}" stroke-width="1.5"/>`;
-                cargoElevSvg += cogSymbolSvg(sx(cxMm), sz(cogWorldZ), 6, TG_CARGO_COLOR);
+                cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
+                cargoElevSvg += cogSymbolSvg(sx(cxMm), sz(cogWorldZ), 6, cargoColor);
 
-                // End view.
-                const esx1 = sy(cyMm - wMm / 2), esx2 = sy(cyMm + wMm / 2);
-                const esy1 = szEnd(boxTopWorldZ), esy2 = szEnd(baseWorldZ);
-                cargoElevSvg += `<rect x="${Math.min(esx1, esx2)}" y="${Math.min(esy1, esy2)}" width="${Math.abs(esx2 - esx1)}" height="${Math.abs(esy2 - esy1)}" fill="${TG_CARGO_COLOR}" fill-opacity="0.15" stroke="${TG_CARGO_COLOR}" stroke-width="1.5"/>`;
-                cargoElevSvg += cogSymbolSvg(sy(cyMm), szEnd(cogWorldZ), 6, TG_CARGO_COLOR);
+                // End views (left panel via sy1, right panel mirrored via sy2).
+                [sy1, sy2].forEach(syFn => {
+                    const esx1 = syFn(cyMm - wMm / 2), esx2 = syFn(cyMm + wMm / 2);
+                    const esy1 = szEnd(boxTopWorldZ), esy2 = szEnd(baseWorldZ);
+                    cargoElevSvg += `<rect x="${Math.min(esx1, esx2)}" y="${Math.min(esy1, esy2)}" width="${Math.abs(esx2 - esx1)}" height="${Math.abs(esy2 - esy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
+                    cargoElevSvg += cogSymbolSvg(syFn(cyMm), szEnd(cogWorldZ), 6, cargoColor);
+                });
             });
 
             // Combined "Total CoG" sign (side + end view) — same
@@ -3400,7 +3447,8 @@
                 const totCyMm = (parseFloat(cargoTotal.y) || 0) * 1000;
                 const totCogWorldZ = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
                 cargoElevSvg += cogSymbolSvg(sx(totCxMm), sz(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
-                cargoElevSvg += cogSymbolSvg(sy(totCyMm), szEnd(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy1(totCyMm), szEnd(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy2(totCyMm), szEnd(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
             }
 
             // ---- Dimensions ----
@@ -3426,17 +3474,19 @@
                     `<line x1="${sideOffsetX - 16}" y1="${deckTopY}" x2="${sideOffsetX - 8}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
                     `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgDeckHeightMm + TG_ELEV_DECK_THICK}</text>` +
                     `</g>`;
-                trailerGenTrains.forEach(t => {
-                    if (!t.deckWidth) return;
-                    const oy = parseFloat(t.y) || 0;
-                    const dx1 = sy(oy), dx2 = sy(oy + t.deckWidth);
-                    const y = deckTopYEnd - 16;
-                    dimSvg += `<g opacity="0.9">` +
-                        `<line x1="${dx1}" y1="${y}" x2="${dx2}" y2="${y}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
-                        `<line x1="${dx1}" y1="${y - 3}" x2="${dx1}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                        `<line x1="${dx2}" y1="${y - 3}" x2="${dx2}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                        `<text x="${(dx1 + dx2) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${Math.round(t.deckWidth)}</text>` +
-                        `</g>`;
+                [sy1, sy2].forEach(syFn => {
+                    trailerGenTrains.forEach(t => {
+                        if (!t.deckWidth) return;
+                        const oy = parseFloat(t.y) || 0;
+                        const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
+                        const y = deckTopYEnd - 16;
+                        dimSvg += `<g opacity="0.9">` +
+                            `<line x1="${dx1}" y1="${y}" x2="${dx2}" y2="${y}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
+                            `<line x1="${dx1}" y1="${y - 3}" x2="${dx1}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                            `<line x1="${dx2}" y1="${y - 3}" x2="${dx2}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                            `<text x="${(dx1 + dx2) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${Math.round(t.deckWidth)}</text>` +
+                            `</g>`;
+                    });
                 });
 
                 // Cargo CoG height (Z) — vertical dimension from its
@@ -3444,6 +3494,7 @@
                 // cargo item's top) to the CoG point, drawn just left of
                 // each item's side-view box, in the cargo's own color.
                 cargoItems.forEach((c, dimCargoIdx) => {
+                    const cargoColor = cargoColorFor(dimCargoIdx);
                     const cxMm = (parseFloat(c.x) || 0) * 1000;
                     const lMm = (parseFloat(c.length) || 0) * 1000;
                     const { baseWorldZ, cogWorldZ } = cargoBoxZ[dimCargoIdx];
@@ -3451,17 +3502,18 @@
                     const dimYTop = sz(cogWorldZ), dimYBot = sz(baseWorldZ);
                     const midY = (dimYTop + dimYBot) / 2;
                     dimSvg += `<g opacity="0.9">` +
-                        `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${TG_CARGO_COLOR}" stroke-width="1" stroke-dasharray="2 2"/>` +
-                        `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${TG_CARGO_COLOR}" stroke-width="1"/>` +
-                        `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${TG_CARGO_COLOR}" stroke-width="1"/>` +
-                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${TG_CARGO_COLOR}" transform="rotate(-90 ${dimX - 4} ${midY})">Z ${(parseFloat(c.z) || 0).toFixed(3)} m</text>` +
+                        `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${dimX - 4} ${midY})">Z ${(parseFloat(c.z) || 0).toFixed(3)} m</text>` +
                         `</g>`;
                 });
             }
 
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                <rect x="${endOffsetX - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${dimSvg}
             </svg>`;
         }
