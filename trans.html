@@ -197,6 +197,14 @@
         .tg-cargo-field input:focus, .tg-cargo-field select:focus { outline: none; border-color: var(--accent-blue); }
         .tg-cargo-field-local input, .tg-cargo-field-local select { border-style: dashed; }
         .tg-cargo-field-readonly input { background: var(--panel-bg-alt, rgba(128,128,128,0.08)); color: var(--text-muted); cursor: default; }
+        .tg-cargo-link-toggle {
+            display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted);
+            cursor: pointer; user-select: none; flex: 0 0 auto; white-space: nowrap;
+        }
+        .tg-cargo-link-toggle input { cursor: pointer; }
+        .tg-cargo-link-toggle input:disabled { cursor: not-allowed; }
+        .tg-cargo-link-toggle.tg-cargo-link-active { color: var(--accent-green, #10b981); }
 
         .tg-preview-wrap {
             border: 1px solid var(--panel-border);
@@ -371,7 +379,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.19.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.20)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -774,11 +782,12 @@
                 x: 0,           // CoG X from origin (0,0), meters — synced with Excel
                 y: 0,           // CoG Y from origin (0,0), meters — synced with Excel
                 z: 2.5,         // CoG height above deck, meters
-                length: 6,      // preview-only rectangle footprint, meters
-                width: 3,       // preview-only rectangle footprint, meters
-                height: 3,      // preview-only cargo height (full box height, used in side/end view), meters
+                length: 6,      // rectangle footprint, meters — synced with Excel only when linkExcelDim is true
+                width: 3,       // rectangle footprint, meters — synced with Excel only when linkExcelDim is true
+                height: 3,      // cargo height (full box height, used in side/end view), meters — synced with Excel only when linkExcelDim is true
                 anchor: 'cog',  // 'cog' or 'topleft' — which position field the Length/Width edits keep fixed
-                heightStart: 'trailer' // 'trailer' (deck top) or 'previous' (top of the previous cargo item's box) — local-only, not part of the Excel range
+                heightStart: 'trailer', // 'trailer' (deck top) or 'previous' (top of the previous cargo item's box) — local-only, not part of the Excel range
+                linkExcelDim: false // whether THIS item's Length/Width/Height are linked to Excel "Input horizontal loads"!H11:H13 — at most one cargo item may be linked at a time (see toggleCargoExcelLink)
             };
             syncCargoGeometry(item, 'cog');
             return item;
@@ -1855,19 +1864,50 @@
         // ============================================================
         // GENERATE CARGO — up to 5 items, Excel "Input"!AZ35:BD39
         // ============================================================
+        // Creates a fresh cargo item and auto-links it to Excel
+        // "Input horizontal loads"!H11:H13 only if no other cargo item
+        // currently holds that link — so a brand-new dashboard (or one
+        // whose only cargo item was just removed) always has exactly one
+        // linked item, without ever silently stealing the link from an
+        // item the user already has linked.
+        function newCargoItem(index) {
+            const item = defaultCargoItem(index);
+            if (!cargoItems.some(c => c.linkExcelDim)) item.linkExcelDim = true;
+            return item;
+        }
+
         function addCargoItem() {
             if (cargoItems.length >= CARGO_MAX_ITEMS) {
                 alert(`Only ${CARGO_MAX_ITEMS} cargo items are supported (Excel Input!${CARGO_RANGE} has ${CARGO_MAX_ITEMS} rows).`);
                 return;
             }
-            cargoItems.push(defaultCargoItem(cargoItems.length + 1));
+            cargoItems.push(newCargoItem(cargoItems.length + 1));
             renderTrailerDashboard();
         }
 
         function removeCargoItem(id) {
             cargoItems = cargoItems.filter(c => c.id !== id);
-            if (cargoItems.length === 0) cargoItems.push(defaultCargoItem(1));
+            if (cargoItems.length === 0) cargoItems.push(newCargoItem(1));
             renderTrailerDashboard();
+        }
+
+        // Toggles this cargo item's link to Excel "Input horizontal
+        // loads"!H11:H13. At most one cargo item may be linked at a
+        // time (H11:H13 is a single set of cells, not one per item), so
+        // linking this one always unlinks every other item first; the
+        // UI additionally disables every other item's toggle while one
+        // is already linked, so this defensive unlink-all is just a
+        // safety net.
+        function toggleCargoExcelLink(id, checked) {
+            const cargo = cargoItems.find(c => c.id === id);
+            if (!cargo) return;
+            if (checked) {
+                cargoItems.forEach(c => { c.linkExcelDim = false; });
+                cargo.linkExcelDim = true;
+            } else {
+                cargo.linkExcelDim = false;
+            }
+            renderCargoList();
         }
 
         function updateCargoField(id, field, rawValue) {
@@ -1918,8 +1958,16 @@
         function renderCargoList() {
             const list = document.getElementById('tgCargoList');
             if (!list) return;
+            const anyLinked = cargoItems.some(c => c.linkExcelDim);
             list.innerHTML = cargoItems.map((cargo, idx) => {
                 const cell = `${CARGO_START_ROW + idx}`;
+                // Only one cargo item may be linked to Excel "Input
+                // horizontal loads"!H11:H13 at a time (it's a single set
+                // of cells, not one per item) — so every OTHER item's
+                // toggle is disabled while one is already linked. The
+                // linked item's own toggle stays enabled so it can be
+                // unlinked again.
+                const linkDisabled = anyLinked && !cargo.linkExcelDim;
                 return `
                 <div class="tg-cargo-item-card">
                     <div class="tg-train-card-header">
@@ -1927,6 +1975,16 @@
                         <input type="text" class="tg-train-name-input" value="${escapeHtml(cargo.name)}"
                                title="Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}"
                                onchange="updateCargoField(${cargo.id}, 'name', this.value)">
+                        <label class="tg-cargo-link-toggle ${cargo.linkExcelDim ? 'tg-cargo-link-active' : ''}"
+                               title="${cargo.linkExcelDim
+                                   ? `Length/Width/Height for this item are linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Untick to unlink.`
+                                   : (linkDisabled
+                                       ? `Another cargo item is already linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Unlink it first to link this item instead.`
+                                       : `Link this item's Length/Width/Height to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Only one cargo item can be linked at a time.`)}">
+                            <input type="checkbox" ${cargo.linkExcelDim ? 'checked' : ''} ${linkDisabled ? 'disabled' : ''}
+                                   onchange="toggleCargoExcelLink(${cargo.id}, this.checked)">
+                            🔗 H11:H13
+                        </label>
                         <button type="button" class="tg-remove-train" title="Remove cargo item"
                                 onclick="removeCargoItem(${cargo.id})"
                                 ${cargoItems.length <= 1 ? 'disabled' : ''}>✕</button>
@@ -1952,19 +2010,19 @@
                             <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}. Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'z', this.value)">
                         </div>
-                        <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
+                        <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
                             <label>Length (m)</label>
-                            <input type="number" step="any" value="${cargo.length}" title="${idx === 0 ? `Cargo rectangle footprint length. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint length — not part of the Excel range.'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                            <input type="number" step="any" value="${cargo.length}" title="${cargo.linkExcelDim ? `Cargo rectangle footprint length. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only rectangle footprint length — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'length', this.value)">
                         </div>
-                        <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
+                        <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
                             <label>Width (m)</label>
-                            <input type="number" step="any" value="${cargo.width}" title="${idx === 0 ? `Cargo rectangle footprint width. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (item #1 only).` : 'Preview-only rectangle footprint width — not part of the Excel range.'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                            <input type="number" step="any" value="${cargo.width}" title="${cargo.linkExcelDim ? `Cargo rectangle footprint width. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only rectangle footprint width — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'width', this.value)">
                         </div>
-                        <div class="tg-cargo-field ${idx === 0 ? '' : 'tg-cargo-field-local'}">
+                        <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
                             <label>Height (m)</label>
-                            <input type="number" step="any" value="${cargo.height}" title="${idx === 0 ? `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (item #1 only).` : 'Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range.'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                            <input type="number" step="any" value="${cargo.height}" title="${cargo.linkExcelDim ? `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
@@ -2014,10 +2072,10 @@
                     values = range.values;
                     totalValues = totalRange.values;
                 });
-                // Cargo dimension (Length/Width/Height, item #1 only) —
-                // separate sheet, so read in its own Excel.run/try so a
-                // missing "Input horizontal loads" sheet doesn't block
-                // the main cargo pull above.
+                // Cargo dimension (Length/Width/Height, whichever item is
+                // linked via its 🔗 toggle) — separate sheet, so read in
+                // its own Excel.run/try so a missing "Input horizontal
+                // loads" sheet doesn't block the main cargo pull above.
                 try {
                     await Excel.run(async (context) => {
                         const dimSheet = context.workbook.worksheets.getItem(HORIZONTAL_LOADS_SHEET_NAME);
@@ -2053,20 +2111,31 @@
                     if (!silent) logMsg(`↺ ${INPUT_SHEET_NAME}!${CARGO_RANGE} is blank — no cargo items pulled.`);
                     return;
                 }
+                // Which existing cargo item (if any) is currently linked
+                // to Excel H11:H13 — determined before the rebuild below,
+                // since slot i in the rebuilt array corresponds to slot i
+                // in the current cargoItems (same row-order assumption
+                // used for preserving Length/Width/Height generally).
+                const linkedIdx = cargoItems.findIndex(c => c.linkExcelDim);
+                let dimApplied = false;
                 cargoItems = parsed.map((r, i) => {
                     const existing = cargoItems[i]; // preserve local-only Length/Width/Height if this slot already existed
-                    // Item #1's Length/Width/Height are linked to Excel
-                    // "Input horizontal loads"!H11:H13 (meters) — use the
-                    // pulled value when present/valid, otherwise fall
-                    // back to whatever was already set (or the default).
+                    const isLinked = i === linkedIdx;
+                    // The linked item's Length/Width/Height are linked to
+                    // Excel "Input horizontal loads"!H11:H13 (meters) —
+                    // use the pulled value when present/valid, otherwise
+                    // fall back to whatever was already set (or the
+                    // default). Every other item's dimensions are local
+                    // only and are simply carried over unchanged.
                     let dimLength = existing ? existing.length : 6;
                     let dimWidth = existing ? existing.width : 3;
                     let dimHeight = existing ? existing.height : 3;
-                    if (i === 0 && dimValues) {
+                    if (isLinked && dimValues) {
                         const [dL, dW, dH] = dimValues.map(row => parseFloat(row[0]));
                         if (Number.isFinite(dL)) dimLength = dL;
                         if (Number.isFinite(dW)) dimWidth = dW;
                         if (Number.isFinite(dH)) dimHeight = dH;
+                        dimApplied = true;
                     }
                     const item = {
                         id: existing ? existing.id : cargoIdCounter++,
@@ -2079,13 +2148,14 @@
                         width: dimWidth,
                         height: dimHeight,
                         anchor: 'cog', // Excel's X/Y is always CoG, so top-left is re-derived from it
-                        heightStart: existing ? existing.heightStart : 'trailer'
+                        heightStart: existing ? existing.heightStart : 'trailer',
+                        linkExcelDim: isLinked
                     };
                     syncCargoGeometry(item, 'cog');
                     return item;
                 });
                 renderTrailerDashboard();
-                logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimValues ? ` (+ item #1 dimensions from '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
+                logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimApplied ? ` (+ linked item's dimensions from '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
             } catch (e) {
                 console.warn('Could not pull cargo data from Input sheet', e);
                 if (!silent) alert('Error pulling cargo data — see console for details.');
@@ -2113,16 +2183,17 @@
                     sheet.getRange(CARGO_RANGE).values = rows;
                     await context.sync();
                 });
-                // Cargo dimension (Length/Width/Height, item #1 only) —
-                // separate sheet/try, so a missing "Input horizontal
-                // loads" sheet doesn't block the main cargo push above.
+                // Cargo dimension (Length/Width/Height, whichever item is
+                // linked via its 🔗 toggle) — separate sheet/try, so a
+                // missing "Input horizontal loads" sheet doesn't block
+                // the main cargo push above.
                 let dimPushed = false;
-                const first = cargoItems[0];
-                if (first) {
+                const linked = cargoItems.find(c => c.linkExcelDim);
+                if (linked) {
                     try {
                         await Excel.run(async (context) => {
                             const dimSheet = context.workbook.worksheets.getItem(HORIZONTAL_LOADS_SHEET_NAME);
-                            dimSheet.getRange(CARGO_DIM_RANGE).values = [[first.length || 0], [first.width || 0], [first.height || 0]];
+                            dimSheet.getRange(CARGO_DIM_RANGE).values = [[linked.length || 0], [linked.width || 0], [linked.height || 0]];
                             await context.sync();
                         });
                         dimPushed = true;
@@ -2130,7 +2201,7 @@
                         console.warn(`Could not push cargo dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}`, dimErr);
                     }
                 }
-                logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimPushed ? ` (+ item #1 dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
+                logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimPushed ? ` (+ linked item's dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
             } catch (e) {
                 console.error('Error pushing cargo data to Excel', e);
                 alert('Error pushing cargo data to Excel — see console for details.');
@@ -3858,7 +3929,7 @@
                 trailerGenTrains.push(defaultTrailerGenTrain(1));
             }
             if (cargoItems.length === 0) {
-                cargoItems.push(defaultCargoItem(1));
+                cargoItems.push(newCargoItem(1));
             }
             renderTrailerDashboard();
             const dirSelect = document.getElementById('tgLoadDirectionSelect');
