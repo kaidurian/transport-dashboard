@@ -379,7 +379,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.20)</h1>
+            <h1>🚂 Transport Dashboard (Rev.21)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -789,7 +789,12 @@
                 heightStart: 'trailer', // 'trailer' (deck top) or 'previous' (top of the previous cargo item's box) — local-only, not part of the Excel range
                 linkExcelDim: false // whether THIS item's Length/Width/Height are linked to Excel "Input horizontal loads"!H11:H13 — at most one cargo item may be linked at a time (see toggleCargoExcelLink)
             };
-            syncCargoGeometry(item, 'cog');
+            // Initial fill: X/Y — Middle start out equal to X/Y — CoG
+            // (not offset by half Length/Width like syncCargoGeometry
+            // would do) — the two remain fully independent fields after
+            // this, per updateCargoField/updateCargoTopLeft above.
+            item.tlX = item.x;
+            item.tlY = item.y;
             return item;
         }
         let cargoItems = [];
@@ -1991,37 +1996,37 @@
                     </div>
                     <div class="tg-cargo-field-grid">
                         <div class="tg-cargo-field">
-                            <label>W (t)</label>
+                            <label>🔗 W (t)</label>
                             <input type="number" step="any" value="${cargo.weight}" title="Cargo weight, metric tonnes. Synced with Excel 'Input'!${CARGO_W_COL}${cell}."
                                    onchange="updateCargoField(${cargo.id}, 'weight', this.value)">
                         </div>
                         <div class="tg-cargo-field" id="cargoFieldX_${cargo.id}">
-                            <label>X — CoG (m)</label>
+                            <label>🔗 X — CoG (m)</label>
                             <input type="number" step="any" id="cargoX_${cargo.id}" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}. Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'x', this.value)">
                         </div>
                         <div class="tg-cargo-field" id="cargoFieldY_${cargo.id}">
-                            <label>Y — CoG (m)</label>
+                            <label>🔗 Y — CoG (m)</label>
                             <input type="number" step="any" id="cargoY_${cargo.id}" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}. Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'y', this.value)">
                         </div>
                         <div class="tg-cargo-field">
-                            <label>Z — deck to CoG (m)</label>
+                            <label>🔗 Z — deck to CoG (m)</label>
                             <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}. Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'z', this.value)">
                         </div>
                         <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
-                            <label>Length (m)</label>
+                            <label>${cargo.linkExcelDim ? '🔗 ' : ''}Length (m)</label>
                             <input type="number" step="any" value="${cargo.length}" title="${cargo.linkExcelDim ? `Cargo rectangle footprint length. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only rectangle footprint length — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'length', this.value)">
                         </div>
                         <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
-                            <label>Width (m)</label>
+                            <label>${cargo.linkExcelDim ? '🔗 ' : ''}Width (m)</label>
                             <input type="number" step="any" value="${cargo.width}" title="${cargo.linkExcelDim ? `Cargo rectangle footprint width. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only rectangle footprint width — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'width', this.value)">
                         </div>
                         <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
-                            <label>Height (m)</label>
+                            <label>${cargo.linkExcelDim ? '🔗 ' : ''}Height (m)</label>
                             <input type="number" step="any" value="${cargo.height}" title="${cargo.linkExcelDim ? `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
