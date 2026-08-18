@@ -370,7 +370,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.17)</h1>
+            <h1>🚂 Transport Dashboard (Rev.18)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3479,15 +3479,42 @@
             // side-by-side so every color stays visible instead of fully
             // overlapping.
             const tireW = Math.max(6, TG_ELEV_TIRE_WIDTH * scale);
-            function buildEndViewPanel(syFn) {
+
+            // ---- Which axle group belongs in which end-view panel ----
+            // Each end view is a cross-section looking down the train's
+            // length from one end, so a group's wheels should only show
+            // up in the panel for the end it's actually positioned
+            // toward — not duplicated (mirrored) in both, as before. A
+            // group's "side" is decided by its own average world-X
+            // position relative to the midpoint of the full assembly's
+            // X extent: groups sitting toward the low-X end (the same
+            // end the plan/side view renders on the left) are drawn only
+            // in the Left End View; groups toward the high-X end only in
+            // the Right End View. This matches e.g. a front axle group
+            // (Group 1) vs a rear axle group (Group 2/3) on the same
+            // trailer, or separate trailers positioned front/rear.
+            const groupXTotals = {};
+            rows.forEach(r => {
+                const t = (groupXTotals[r.groupNumber] = groupXTotals[r.groupNumber] || { sum: 0, count: 0 });
+                t.sum += r.x; t.count++;
+            });
+            const rowXs = rows.map(r => r.x);
+            const xMid = rowXs.length ? (Math.min(...rowXs) + Math.max(...rowXs)) / 2 : 0;
+            const groupInLeftPanel = {};
+            Object.keys(groupXTotals).forEach(gn => {
+                groupInLeftPanel[gn] = (groupXTotals[gn].sum / groupXTotals[gn].count) <= xMid;
+            });
+
+            function buildEndViewPanel(syFn, isLeftPanel) {
                 let wheels = '', decks = '';
                 const seen = new Set();
                 const groupsAtY = {};
-                rows.forEach(r => {
+                const panelRows = rows.filter(r => groupInLeftPanel[r.groupNumber] === isLeftPanel);
+                panelRows.forEach(r => {
                     const yKey = r.trainName + ':' + r.y;
                     (groupsAtY[yKey] = groupsAtY[yKey] || new Set()).add(r.groupNumber);
                 });
-                rows.forEach(r => {
+                panelRows.forEach(r => {
                     const yKey = r.trainName + ':' + r.y;
                     const key = yKey + ':' + r.groupNumber;
                     if (seen.has(key)) return;
@@ -3508,8 +3535,8 @@
                 });
                 return { wheels, decks };
             }
-            const endPanel1 = buildEndViewPanel(sy1);
-            const endPanel2 = buildEndViewPanel(sy2);
+            const endPanel1 = buildEndViewPanel(sy1, true);
+            const endPanel2 = buildEndViewPanel(sy2, false);
             const endWheelsSvg = endPanel1.wheels + endPanel2.wheels;
             const endDecksSvg = endPanel1.decks + endPanel2.decks;
 
