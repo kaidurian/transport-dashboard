@@ -250,19 +250,38 @@
         }
         /* Orientation cube overlaid in the top-left corner of the whole
            preview (plan + elevation stack), instead of taking up its
-           own stacked section or being scoped to just the plan view. */
+           own stacked section or being scoped to just the plan view.
+           Size follows --tg-orient-scale (set by tgApplyOrientScale(),
+           driven by a ResizeObserver on the preview wrap) so the cube
+           shrinks/grows in step with the plan/elevation SVGs below it
+           — those use width:100% + a fixed viewBox, so they resize with
+           the container, but this overlay does not unless we drive it
+           the same way. Without that, a fixed 0.95 scale only avoided
+           overlapping the drawing at the ~680–760px width it was tuned
+           for; in a narrow side panel, a popped-out standalone window,
+           or after any resize, the cube would stay full-size while the
+           drawing shrank underneath it and end up covering real content.
+           0.95 is kept as the baseline multiplier so the reference width
+           (680px, matching the plan view's own design viewBox) still
+           renders at the original size. */
         .tg-orient-cube-overlay {
             position: absolute; top: 4px; left: 4px;
-            transform: scale(0.95); transform-origin: top left;
+            transform: scale(calc(0.95 * var(--tg-orient-scale, 1)));
+            transform-origin: top left;
             pointer-events: none; z-index: 3;
         }
         /* "Unit: mm." moved out of the top-view section's own label row
            and pinned to the bottom-right corner of the whole preview
-           (plan + elevation stack) instead. */
+           (plan + elevation stack) instead. Scales down with the same
+           --tg-orient-scale as the cube so it doesn't creep further into
+           the elevation view as the container narrows, but floors at 75%
+           so the text stays legible instead of shrinking indefinitely. */
         .tg-unit-label-overlay {
             position: absolute; bottom: 4px; right: 8px;
             font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
             color: var(--text-muted); pointer-events: none; z-index: 3;
+            transform: scale(max(0.75, var(--tg-orient-scale, 1)));
+            transform-origin: bottom right;
         }
 
         /* Group detail legend — shown below the preview instead of the
@@ -2951,7 +2970,14 @@
                 const doc = tgPreviewWindow.document;
                 doc.title = 'Trailer Axle Preview';
                 doc.body.style.margin = '0';
-                doc.body.innerHTML = '<div id="tgPreviewExternalRoot" style="padding:10px;font-family:Segoe UI,Arial,sans-serif;"></div>';
+                // position:relative here is required, not cosmetic: the
+                // orientation-cube/unit-label overlays inside this root
+                // are position:absolute, and without a positioned
+                // ancestor they'd resolve against the popup's viewport
+                // instead of this padded root — landing a few px off
+                // and, once the window is resized/dragged, drifting out
+                // of alignment with the drawing they're meant to sit on.
+                doc.body.innerHTML = '<div id="tgPreviewExternalRoot" style="position:relative;padding:10px;font-family:Segoe UI,Arial,sans-serif;"></div>';
                 syncExternalThemeVars();
             } else {
                 tgPreviewExternal = false;
@@ -2960,6 +2986,36 @@
             }
             renderTrailerGenPreview();
         }
+
+        // ---- Orientation-cube/unit-label responsive scaling ----
+        // The plan and elevation SVGs render at width:100% over a fixed
+        // viewBox, so they naturally shrink/grow with whatever column
+        // they're in (stacked full-width layout, the narrower side-layout
+        // column, or a resized/popped-out standalone window). The cube
+        // and unit-label overlays are plain absolutely-positioned HTML,
+        // not part of that viewBox, so they need to be told the current
+        // width explicitly — this keeps them proportional to the drawing
+        // instead of interfering with it.
+        const TG_ORIENT_REF_WIDTH = 680; // matches the plan view's own design viewBox width (svgW)
+        const TG_ORIENT_MIN_SCALE = 0.45;
+        const TG_ORIENT_MAX_SCALE = 1.15;
+        function tgApplyOrientScale(wrap) {
+            if (!wrap) return;
+            const w = wrap.clientWidth || (wrap.getBoundingClientRect && wrap.getBoundingClientRect().width);
+            if (!w) return;
+            const scale = Math.min(TG_ORIENT_MAX_SCALE, Math.max(TG_ORIENT_MIN_SCALE, w / TG_ORIENT_REF_WIDTH));
+            wrap.style.setProperty('--tg-orient-scale', scale.toFixed(3));
+        }
+        // One shared observer, reused for both the inline #tgPreview wrap
+        // and whichever #tgPreviewExternalRoot the standalone popup
+        // currently has (a fresh element each time it's opened) — each
+        // wrap is only registered once (see the dataset guard where this
+        // is used) so resizing the side panel, the standalone window, or
+        // the main window all keep the overlay in proportion live,
+        // without needing a full preview re-render.
+        const tgOrientResizeObserver = (typeof ResizeObserver !== 'undefined')
+            ? new ResizeObserver(entries => { entries.forEach(entry => tgApplyOrientScale(entry.target)); })
+            : null;
 
         // ---- Orientation cube — small isometric legend showing how the
         // dashboard's world axes map to FRONT/REAR/LEFT/RIGHT/TOP/BOTTOM,
@@ -3096,6 +3152,20 @@
                 <div class="tg-orient-cube-overlay">${buildOrientationCubeSvg()}</div>
                 <div class="tg-unit-label-overlay">Unit: mm.</div>
             `;
+            // Set the initial cube/unit-label scale for this wrap right
+            // away (covers first paint, and the case where the popup's
+            // root just got recreated at a size that differs from last
+            // time), then keep it live on resize. Registered once per
+            // wrap element via the dataset guard — innerHTML above
+            // replaces the overlay nodes on every render, but the wrap
+            // element itself (#tgPreview, or the current
+            // #tgPreviewExternalRoot) stays the same node, so re-observing
+            // it every render would just pile up duplicate observers.
+            tgApplyOrientScale(wrap);
+            if (tgOrientResizeObserver && !wrap.dataset.tgOrientObserved) {
+                wrap.dataset.tgOrientObserved = '1';
+                tgOrientResizeObserver.observe(wrap);
+            }
         }
 
         // ---- Top (plan) view — original live axle-line preview ----
