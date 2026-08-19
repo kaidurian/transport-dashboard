@@ -414,7 +414,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.25)</h1>
+            <h1>🚂 Transport Dashboard (Rev.25.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3837,17 +3837,24 @@
             // (Group 1) vs a rear axle group (Group 2/3) on the same
             // trailer, or separate trailers positioned front/rear.
             // A group's own X *extent* (min..max), not just its average,
-            // decides which panel(s) it belongs in. A group confined to
-            // one half of the train's length (e.g. a front bogie group vs
-            // a separate rear bogie group) is drawn only in that half's
-            // panel, same as before. But a group whose axle lines span the
-            // FULL length — which happens when right-side axles and
-            // left-side axles of the very same axle lines are split into
-            // different groups (row: 'right' / 'left'), rather than being
-            // split front/rear — has both ends of its own extent past the
-            // midpoint, so it now correctly shows in BOTH panels, mirrored,
-            // instead of collapsing onto whichever single panel its
-            // average happened to fall into.
+            // decides which panel(s) it belongs in. A group is shown in
+            // the Left End View if its extent actually reaches the true
+            // low-X edge of the whole assembly, and in the Right End View
+            // if it reaches the true high-X edge — so a group confined to
+            // one end (e.g. a short 4-line transport-beam group sitting
+            // only at one end) shows only in that end's panel, while a
+            // group whose axle lines run the FULL length (e.g. right-side
+            // vs left-side rows split across the same axle lines) touches
+            // both edges and correctly shows in BOTH panels, mirrored.
+            //
+            // Comparing to the row-count-weighted midpoint of ALL rows
+            // (the previous approach) broke as soon as one group's share
+            // of the total axle count was small: a long group covering
+            // most of the length could have its own minimum X sitting on
+            // the "near" side of that weighted midpoint even though it
+            // never actually reaches the true opposite edge, wrongly
+            // pulling it into both panels. Checking against the true
+            // overall min/max avoids that.
             const groupXExtent = {};
             rows.forEach(r => {
                 const e = (groupXExtent[r.groupNumber] = groupXExtent[r.groupNumber] || { min: Infinity, max: -Infinity });
@@ -3855,11 +3862,25 @@
                 if (r.x > e.max) e.max = r.x;
             });
             const rowXs = rows.map(r => r.x);
-            const xMid = rowXs.length ? (Math.min(...rowXs) + Math.max(...rowXs)) / 2 : 0;
+            const overallMinX = rowXs.length ? Math.min(...rowXs) : 0;
+            const overallMaxX = rowXs.length ? Math.max(...rowXs) : 0;
+            const edgeEps = Math.max((overallMaxX - overallMinX) * 1e-6, 1e-6);
             const groupPanelShow = {};
             Object.keys(groupXExtent).forEach(gn => {
                 const e = groupXExtent[gn];
-                groupPanelShow[gn] = { left: e.min <= xMid, right: e.max >= xMid };
+                let left = e.min <= overallMinX + edgeEps;
+                let right = e.max >= overallMaxX - edgeEps;
+                // A group confined strictly between two other groups (so
+                // it touches neither true edge) falls back to whichever
+                // end its own extent sits closer to, so it still shows
+                // somewhere rather than vanishing from both panels.
+                if (!left && !right) {
+                    const groupMid = (e.min + e.max) / 2;
+                    const overallMid = (overallMinX + overallMaxX) / 2;
+                    left = groupMid <= overallMid;
+                    right = !left;
+                }
+                groupPanelShow[gn] = { left, right };
             });
 
             function buildEndViewPanel(syFn, isLeftPanel) {
