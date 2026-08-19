@@ -248,6 +248,22 @@
             font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
             color: var(--text-muted); padding: 0 6px 4px;
         }
+        /* Orientation cube overlaid in the top-left corner of the whole
+           preview (plan + elevation stack), instead of taking up its
+           own stacked section or being scoped to just the plan view. */
+        .tg-orient-cube-overlay {
+            position: absolute; top: 4px; left: 4px;
+            transform: scale(0.95); transform-origin: top left;
+            pointer-events: none; z-index: 3;
+        }
+        /* "Unit: mm." moved out of the top-view section's own label row
+           and pinned to the bottom-right corner of the whole preview
+           (plan + elevation stack) instead. */
+        .tg-unit-label-overlay {
+            position: absolute; bottom: 4px; right: 8px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); pointer-events: none; z-index: 3;
+        }
 
         /* Group detail legend — shown below the preview instead of the
            on-canvas labels when "Show group label in preview" is off.
@@ -379,7 +395,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.23)</h1>
+            <h1>🚂 Transport Dashboard (Rev.24)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2945,6 +2961,96 @@
             renderTrailerGenPreview();
         }
 
+        // ---- Orientation cube — small isometric legend showing how the
+        // dashboard's world axes map to FRONT/REAR/LEFT/RIGHT/TOP/BOTTOM,
+        // matching the exact convention used throughout the plan + side +
+        // end views above:
+        //   • World +X = REAR, world -X = FRONT (the low-X end renders on
+        //     the LEFT of the plan/side view and drives the "Left End
+        //     View" panel — see the Left/Right End View split further
+        //     below; the high-X end drives the "Right End View").
+        //   • Lower world Y = RIGHT, higher world Y = LEFT (a preset
+        //     trailer's 'right' row group sits at the lower Y, 'left' at
+        //     Y + axlePairOffsetY — see computeTrailerGenRows).
+        //   • +Z (height) = TOP, the trailer deck/ground = BOTTOM.
+        // A solid cube can only show 3 faces from one viewpoint, so the
+        // other 3 are drawn as short dashed leader lines out to a label
+        // instead of a full face. It's a fixed legend (not derived from
+        // cargo/train data), so the SVG is built once and cached.
+        // The cube is rotated 90° about the vertical axis from its
+        // original FRONT/RIGHT/TOP-facing pose: the visible faces are
+        // now TOP/FRONT/LEFT, with RIGHT/REAR/BOTTOM as leader labels
+        // (every face shifted one slot: FRONT→RIGHT, RIGHT→REAR,
+        // REAR→LEFT, LEFT→FRONT). It's overlaid top-left over the
+        // whole preview (plan + elevation stack), rather than shown
+        // as its own stacked section.
+        let TG_ORIENT_CUBE_SVG = null;
+        function buildOrientationCubeSvg() {
+            if (TG_ORIENT_CUBE_SVG) return TG_ORIENT_CUBE_SVG;
+            const L = 52; // half-edge length, px — larger cube so labels have more room to fill each face
+            const cos30 = Math.cos(Math.PI / 6), sin30 = Math.sin(Math.PI / 6);
+            // Screen-space direction of one full step along each cube
+            // axis: +u = FRONT (down-left), +v = RIGHT (down-right),
+            // +w = TOP (straight up) — the classic pixel-art isometric
+            // cube basis, picked so the 3 nearest/visible faces from this
+            // viewpoint are exactly TOP, FRONT, and RIGHT.
+            const eFront = { x: -cos30 * L, y: sin30 * L };
+            const eRight = { x: cos30 * L, y: sin30 * L };
+            const eUp = { x: 0, y: -L };
+            const proj = (u, v, w) => ({
+                x: u * eFront.x + v * eRight.x + w * eUp.x,
+                y: u * eFront.y + v * eRight.y + w * eUp.y
+            });
+            const pt = (u, v, w) => { const p = proj(u, v, w); return `${p.x.toFixed(1)},${p.y.toFixed(1)}`; };
+            const centroidOf = corners => {
+                const pts = corners.map(c => proj(c[0], c[1], c[2]));
+                return { x: pts.reduce((a, b) => a + b.x, 0) / pts.length, y: pts.reduce((a, b) => a + b.y, 0) / pts.length };
+            };
+            const topFace = [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]];
+            const frontFace = [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]];
+            const rightFace = [[-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]];
+            const topC = centroidOf(topFace), frontC = centroidOf(frontFace), rightC = centroidOf(rightFace);
+            const edgeStroke = 'var(--text-muted, #94a3b8)';
+            const faceFill = 'var(--panel-border, #242f41)';
+            const labelFill = 'var(--text-main, #e2e8f0)';
+            const hiddenColor = 'var(--text-muted, #94a3b8)';
+            let g = '';
+            g += `<polygon points="${topFace.map(c => pt(c[0], c[1], c[2])).join(' ')}" fill="${faceFill}" fill-opacity="0.5" stroke="${edgeStroke}" stroke-width="1"/>`;
+            g += `<polygon points="${frontFace.map(c => pt(c[0], c[1], c[2])).join(' ')}" fill="${faceFill}" fill-opacity="0.85" stroke="${edgeStroke}" stroke-width="1"/>`;
+            g += `<polygon points="${rightFace.map(c => pt(c[0], c[1], c[2])).join(' ')}" fill="${faceFill}" fill-opacity="0.65" stroke="${edgeStroke}" stroke-width="1"/>`;
+            // Cube rotated 90° about the vertical axis so the face that
+            // used to read FRONT now sits in the RIGHT slot, and every
+            // other face follows the same one-step turn:
+            // FRONT→RIGHT slot, RIGHT→REAR slot, REAR→LEFT slot, LEFT→FRONT slot.
+            // (TOP/BOTTOM are on the vertical axis, so they're unaffected.)
+            // Each visible face's label is rotated to run along that
+            // face's own in-plane edge (standard isometric-lettering
+            // convention) instead of staying flat/horizontal: the TOP
+            // face keeps horizontal text, the down-left face's text
+            // slants along the eRight edge, and the down-right face's
+            // text slants along the (mirrored, upright-reading) eFront
+            // edge.
+            const rightAngle = (Math.atan2(eRight.y, eRight.x) * 180 / Math.PI).toFixed(1);   // ≈ 30°
+            const frontAngle = (Math.atan2(-eFront.y, -eFront.x) * 180 / Math.PI).toFixed(1);  // ≈ -30°
+            g += `<text x="${topC.x.toFixed(1)}" y="${(topC.y + 5).toFixed(1)}" font-size="16" font-weight="700" text-anchor="middle" fill="${labelFill}">TOP</text>`;
+            g += `<text x="${frontC.x.toFixed(1)}" y="${(frontC.y + 5).toFixed(1)}" font-size="16" font-weight="700" text-anchor="middle" fill="${labelFill}" transform="rotate(${rightAngle} ${frontC.x.toFixed(1)} ${frontC.y.toFixed(1)})">LEFT</text>`;
+            g += `<text x="${rightC.x.toFixed(1)}" y="${(rightC.y + 5).toFixed(1)}" font-size="16" font-weight="700" text-anchor="middle" fill="${labelFill}" transform="rotate(${frontAngle} ${rightC.x.toFixed(1)} ${rightC.y.toFixed(1)})">FRONT</text>`;
+            // Hidden faces (BOTTOM/REAR/LEFT) — a short dashed leader
+            // from the cube's own outline out to a label, since the
+            // solid cube can't show all 6 faces from one viewpoint.
+            const leader = (fromU, fromV, fromW, dx, dy, label) => {
+                const p0 = proj(fromU, fromV, fromW);
+                const p1 = { x: p0.x + dx, y: p0.y + dy };
+                return `<line x1="${p0.x.toFixed(1)}" y1="${p0.y.toFixed(1)}" x2="${p1.x.toFixed(1)}" y2="${p1.y.toFixed(1)}" stroke="${hiddenColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                    `<text x="${p1.x.toFixed(1)}" y="${(p1.y + (dy >= 0 ? 13 : -5)).toFixed(1)}" font-size="13" font-weight="600" text-anchor="middle" fill="${hiddenColor}">${label}</text>`;
+            };
+            g += leader(1, 1, -1, 0, 24, 'BOTTOM');    // front-right-bottom corner (lowest point) — straight down
+            g += leader(-1, -1, 1, 0, -24, 'RIGHT');   // rear-left-top corner (farthest point) — straight up — REAR slot now reads RIGHT after the 90° turn
+            g += leader(1, -1, 1, -34, 0, 'REAR');     // front-left-top corner — straight left — LEFT slot now reads REAR after the 90° turn
+            TG_ORIENT_CUBE_SVG = `<svg width="216" height="260" viewBox="-146 -154 292 308" style="display:block;margin:0 auto;">${g}</svg>`;
+            return TG_ORIENT_CUBE_SVG;
+        }
+
         // Live plan-view preview: draws every axle GROUP's axle lines as
         // colored clusters along X at each train's Y offset.
         function renderTrailerGenPreview() {
@@ -2985,8 +3091,10 @@
             // own independent horizontal layout.
             const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
             wrap.innerHTML = `
-                <div class="tg-view-section"><div class="tg-view-section-label">Unit: mm.</div>${topHtml}</div>
+                <div class="tg-view-section">${topHtml}</div>
                 <div class="tg-view-section">${elevationHtml}</div>
+                <div class="tg-orient-cube-overlay">${buildOrientationCubeSvg()}</div>
+                <div class="tg-unit-label-overlay">Unit: mm.</div>
             `;
         }
 
