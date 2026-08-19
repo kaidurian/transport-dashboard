@@ -379,7 +379,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.22)</h1>
+            <h1>🚂 Transport Dashboard (Rev.23)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -484,30 +484,30 @@
                         </div>
                         <p class="tg-modal-sub" id="tgCargoHelpPanel">
                             Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
-                            <strong>AZ35:BD39</strong> (Name / W [mTe] / X [m] / Y [m] / Z [m]) — all in
-                            <strong>meters</strong>, unlike the mm trailer fields above. <strong>X</strong> and
-                            <strong>Y</strong> are the cargo's <strong>Center of Gravity (CoG) distance from world
-                            origin (0,0)</strong> — the same origin the trailer's X offset/Y offset use, just in
-                            meters instead of mm — and <strong>Z</strong> is the CoG <strong>height above the
-                            trailer deck</strong>. <strong>Length</strong>, <strong>Width</strong>, and
-                            <strong>Height</strong> size the box drawn in the preview only, and
-                            <strong>X — top-left</strong>/<strong>Y — top-left</strong> are an alternate,
-                            editable way to position the cargo — the plan-view footprint's top-left corner
+                            <strong>AZ35:BD39</strong> (Name / W [mTe] / X [m] / Y [m] / Z [m]) and
+                            <strong>BE35:BI39</strong> (Length [m] / Width [m] / Height [m] / X — Middle [m] /
+                            Y — Middle [m]) — all in <strong>meters</strong>, unlike the mm trailer fields above.
+                            <strong>X</strong> and <strong>Y</strong> are the cargo's <strong>Center of Gravity
+                            (CoG) distance from world origin (0,0)</strong> — the same origin the trailer's X
+                            offset/Y offset use, just in meters instead of mm — and <strong>Z</strong> is the CoG
+                            <strong>height above the trailer deck</strong>. <strong>Length</strong>,
+                            <strong>Width</strong>, and <strong>Height</strong> size the box drawn in the
+                            preview, and <strong>X — Middle</strong>/<strong>Y — Middle</strong> are an
+                            independent, alternate way to position that box — the plan-view footprint's middle
                             distance from world origin (0,0), mirroring how the trailer's X offset/Y offset
-                            describe the deck's top-left corner. Editing top-left backs into CoG X/Y (adding
-                            back half of Length/Width) so <strong>X — CoG</strong>/<strong>Y — CoG</strong>
-                            stay in sync either way; none of these four are part of the Excel range. Pulled
-                            automatically when this panel opens or refreshes; press <strong>"📤 Push Cargo to
-                            Excel"</strong> to write changes back (row 40's TOTAL stays a live Excel formula and
-                            is never overwritten).
+                            describe the deck's position. Middle is intentionally NOT derived from CoG (and vice
+                            versa) — editing one pair never changes the other; both pairs are pulled/pushed as
+                            written in Excel. Pulled automatically when this panel opens or refreshes; press
+                            <strong>"📤 Push Cargo to Excel"</strong> to write changes back (row 40's TOTAL stays
+                            a live Excel formula and is never overwritten).
                         </p>
                         <div id="tgCargoList"><!-- cargo item cards rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39)"
+                            <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39 + BE35:BI39)"
                                     onclick="addCargoItem()">+ Add Cargo</button>
-                            <button type="button" class="tg-add-train-btn" title="Pull Name/W/X/Y/Z for every cargo item from Excel Input!AZ35:BD39"
+                            <button type="button" class="tg-add-train-btn" title="Pull Name/W/X/Y/Z and Length/Width/Height/X-Middle/Y-Middle for every cargo item from Excel Input!AZ35:BD39 + BE35:BI39"
                                     onclick="pullCargoFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" title="Write every cargo item's Name/W/X/Y/Z to Excel Input!AZ35:BD39"
+                            <button type="button" class="tg-add-train-btn" title="Write every cargo item's Name/W/X/Y/Z and Length/Width/Height/X-Middle/Y-Middle to Excel Input!AZ35:BD39 + BE35:BI39"
                                     onclick="pushCargoToExcel()">📤 Push Cargo to Excel</button>
                         </div>
                     </div>
@@ -772,6 +772,24 @@
         const CARGO_DIM_WIDTH_CELL = "H12";
         const CARGO_DIM_HEIGHT_CELL = "H13";
         const CARGO_DIM_RANGE = `${CARGO_DIM_LENGTH_CELL}:${CARGO_DIM_HEIGHT_CELL}`; // H11:H13
+
+        // ---- Cargo geometry (Length/Width/Height/X — Middle/Y — Middle)
+        // — Excel "Input"!BE35:BI39, meters. Same row layout as
+        // CARGO_RANGE (AZ35:BD39) — row i corresponds to cargo item i
+        // (up to CARGO_MAX_ITEMS). Length -> BE, Width -> BF,
+        // Height -> BG, X — Middle -> BH, Y — Middle -> BI. Pulled/pushed
+        // together with the rest of the cargo data via
+        // pullCargoFromExcel/pushCargoToExcel, in the same Excel.run as
+        // CARGO_RANGE (adjacent columns, one sync). Unlike the legacy
+        // single-item CARGO_DIM_RANGE (H11:H13) link above, this range
+        // covers every cargo item's Length/Width/Height plus its
+        // independent X/Y — Middle fields, not just the CoG.
+        const CARGO_LEN_COL = 'BE';
+        const CARGO_WID_COL = 'BF';
+        const CARGO_HGT_COL = 'BG';
+        const CARGO_MIDX_COL = 'BH';
+        const CARGO_MIDY_COL = 'BI';
+        const CARGO_GEOM_RANGE = `${CARGO_LEN_COL}${CARGO_START_ROW}:${CARGO_MIDY_COL}${CARGO_START_ROW + CARGO_MAX_ITEMS - 1}`; // BE35:BI39
 
         let cargoIdCounter = 1;
         function defaultCargoItem(index) {
@@ -1952,8 +1970,9 @@
         // Together with Length/Width/Height/Height-start, this pair
         // drives the drawn cargo box's position in the preview (plan,
         // side, and end views) — the CoG sign always follows X — CoG/
-        // Y — CoG/Z — CoG instead, and is never moved by this. Not part
-        // of the Excel range.
+        // Y — CoG/Z — CoG instead, and is never moved by this. Synced
+        // with Excel "Input"!BH35:BI39 (CARGO_MIDX_COL/CARGO_MIDY_COL,
+        // part of CARGO_GEOM_RANGE) via pushCargoToExcel/pullCargoFromExcel.
         function updateCargoTopLeft(id, axis, rawValue) {
             const cargo = cargoItems.find(c => c.id === id);
             if (!cargo) return;
@@ -2020,19 +2039,19 @@
                             <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}. Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'z', this.value)">
                         </div>
-                        <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
-                            <label>${cargo.linkExcelDim ? '🔗 ' : ''}Length (m)</label>
-                            <input type="number" step="any" value="${cargo.length}" title="${cargo.linkExcelDim ? `Cargo rectangle footprint length. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only rectangle footprint length — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                        <div class="tg-cargo-field">
+                            <label>🔗 Length (m)</label>
+                            <input type="number" step="any" value="${cargo.length}" title="Cargo rectangle footprint length. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_LEN_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'length', this.value)">
                         </div>
-                        <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
-                            <label>${cargo.linkExcelDim ? '🔗 ' : ''}Width (m)</label>
-                            <input type="number" step="any" value="${cargo.width}" title="${cargo.linkExcelDim ? `Cargo rectangle footprint width. Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only rectangle footprint width — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                        <div class="tg-cargo-field">
+                            <label>🔗 Width (m)</label>
+                            <input type="number" step="any" value="${cargo.width}" title="Cargo rectangle footprint width. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_WID_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'width', this.value)">
                         </div>
-                        <div class="tg-cargo-field ${cargo.linkExcelDim ? '' : 'tg-cargo-field-local'}">
-                            <label>${cargo.linkExcelDim ? '🔗 ' : ''}Height (m)</label>
-                            <input type="number" step="any" value="${cargo.height}" title="${cargo.linkExcelDim ? `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} — this item is linked (see 🔗 toggle above).` : 'Preview-only full cargo box height (used to draw the cargo in the side/end views) — not part of the Excel range (this item is not linked; see 🔗 toggle above).'} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                        <div class="tg-cargo-field">
+                            <label>🔗 Height (m)</label>
+                            <input type="number" step="any" value="${cargo.height}" title="Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_HGT_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected."
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
                         <div class="tg-cargo-field tg-cargo-field-local">
@@ -2048,16 +2067,16 @@
                             <input type="number" step="any" value="${cargo.gap}" title="Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG."
                                    onchange="updateCargoField(${cargo.id}, 'gap', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local">
-                            <label>X — Middle (m)</label>
+                        <div class="tg-cargo-field">
+                            <label>🔗 X — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargo.tlX}"
-                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint, in meters. Independent of X — CoG — editing either one never changes the other. Not part of the Excel range. This is what positions the drawn cargo box in the preview (plan/side/end views) — the CoG sign is unaffected."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint, in meters. Independent of X — CoG — editing either one never changes the other. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_MIDX_COL}${cell}. This is what positions the drawn cargo box in the preview (plan/side/end views) — the CoG sign is unaffected."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'x', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local">
-                            <label>Y — Middle (m)</label>
+                        <div class="tg-cargo-field">
+                            <label>🔗 Y — Middle (m)</label>
                             <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargo.tlY}"
-                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint, in meters. Independent of Y — CoG — editing either one never changes the other. Not part of the Excel range. This is what positions the drawn cargo box in the preview (plan/side/end views) — the CoG sign is unaffected."
+                                   title="Distance from world origin (0,0) to the Middle of this cargo's footprint, in meters. Independent of Y — CoG — editing either one never changes the other. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_MIDY_COL}${cell}. This is what positions the drawn cargo box in the preview (plan/side/end views) — the CoG sign is unaffected."
                                    onchange="updateCargoTopLeft(${cargo.id}, 'y', this.value)">
                         </div>
                     </div>
@@ -2076,16 +2095,19 @@
                 return;
             }
             try {
-                let values = null, totalValues = null, dimValues = null;
+                let values = null, totalValues = null, dimValues = null, geomValues = null;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const range = sheet.getRange(CARGO_RANGE);
                     const totalRange = sheet.getRange(CARGO_TOTAL_RANGE);
+                    const geomRange = sheet.getRange(CARGO_GEOM_RANGE);
                     range.load('values');
                     totalRange.load('values');
+                    geomRange.load('values');
                     await context.sync();
                     values = range.values;
                     totalValues = totalRange.values;
+                    geomValues = geomRange.values;
                 });
                 // Cargo dimension (Length/Width/Height, whichever item is
                 // linked via its 🔗 toggle) — separate sheet, so read in
@@ -2133,18 +2155,35 @@
                 // used for preserving Length/Width/Height generally).
                 const linkedIdx = cargoItems.findIndex(c => c.linkExcelDim);
                 let dimApplied = false;
+                let geomApplied = false;
                 cargoItems = parsed.map((r, i) => {
                     const existing = cargoItems[i]; // preserve local-only Length/Width/Height if this slot already existed
                     const isLinked = i === linkedIdx;
-                    // The linked item's Length/Width/Height are linked to
-                    // Excel "Input horizontal loads"!H11:H13 (meters) —
-                    // use the pulled value when present/valid, otherwise
-                    // fall back to whatever was already set (or the
-                    // default). Every other item's dimensions are local
-                    // only and are simply carried over unchanged.
-                    let dimLength = existing ? existing.length : 6;
-                    let dimWidth = existing ? existing.width : 3;
-                    let dimHeight = existing ? existing.height : 3;
+                    // Base Length/Width/Height/X-Middle/Y-Middle come from
+                    // "Input"!BE35:BI39 (CARGO_GEOM_RANGE) — same row i as
+                    // this cargo item. Falls back to whatever was already
+                    // set (or the defaults) when the geometry row is blank
+                    // or non-numeric.
+                    let geomLength = existing ? existing.length : 6;
+                    let geomWidth = existing ? existing.width : 3;
+                    let geomHeight = existing ? existing.height : 3;
+                    let geomMidX = null, geomMidY = null;
+                    const geomRow = geomValues ? geomValues[i] : null;
+                    if (geomRow) {
+                        const [gL, gW, gH, gMX, gMY] = geomRow.map(v => parseFloat(v));
+                        if (Number.isFinite(gL)) geomLength = gL;
+                        if (Number.isFinite(gW)) geomWidth = gW;
+                        if (Number.isFinite(gH)) geomHeight = gH;
+                        if (Number.isFinite(gMX)) geomMidX = gMX;
+                        if (Number.isFinite(gMY)) geomMidY = gMY;
+                        if (Number.isFinite(gL) || Number.isFinite(gW) || Number.isFinite(gH) || Number.isFinite(gMX) || Number.isFinite(gMY)) geomApplied = true;
+                    }
+                    // The legacy linked item's Length/Width/Height are
+                    // additionally linked to Excel "Input horizontal
+                    // loads"!H11:H13 (meters) — when present, this
+                    // overrides the CARGO_GEOM_RANGE value above for that
+                    // one item only.
+                    let dimLength = geomLength, dimWidth = geomWidth, dimHeight = geomHeight;
                     if (isLinked && dimValues) {
                         const [dL, dW, dH] = dimValues.map(row => parseFloat(row[0]));
                         if (Number.isFinite(dL)) dimLength = dL;
@@ -2162,23 +2201,32 @@
                         length: dimLength,
                         width: dimWidth,
                         height: dimHeight,
-                        anchor: 'cog', // Excel's X/Y is always CoG, so top-left is re-derived from it
+                        anchor: 'cog', // Excel's X/Y is always CoG, so top-left is re-derived from it when Middle isn't pulled directly
                         heightStart: existing ? existing.heightStart : 'trailer',
                         gap: existing ? existing.gap : 0,
                         linkExcelDim: isLinked
                     };
-                    syncCargoGeometry(item, 'cog');
+                    if (geomMidX !== null || geomMidY !== null) {
+                        // X — Middle / Y — Middle pulled directly from
+                        // BH/BI — independent of CoG, so set as-is rather
+                        // than deriving from X/Y — CoG.
+                        item.tlX = geomMidX !== null ? round3(geomMidX) : (existing ? existing.tlX : item.x);
+                        item.tlY = geomMidY !== null ? round3(geomMidY) : (existing ? existing.tlY : item.y);
+                    } else {
+                        syncCargoGeometry(item, 'cog');
+                    }
                     return item;
                 });
                 renderTrailerDashboard();
-                logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimApplied ? ` (+ linked item's dimensions from '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
+                logMsg(`↺ Pulled ${cargoItems.length} cargo item(s) from ${INPUT_SHEET_NAME}!${CARGO_RANGE}${geomApplied ? ` + geometry from ${CARGO_GEOM_RANGE}` : ''}${dimApplied ? ` (+ linked item's dimensions from '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
             } catch (e) {
                 console.warn('Could not pull cargo data from Input sheet', e);
                 if (!silent) alert('Error pulling cargo data — see console for details.');
             }
         }
 
-        // Writes Name/W/X/Y/Z for every cargo item to AZ35:BD39 (padding
+        // Writes Name/W/X/Y/Z for every cargo item to AZ35:BD39, and
+        // Length/Width/Height/X-Middle/Y-Middle to BE35:BI39 (padding
         // unused rows with blanks so a shrunk cargo list doesn't leave
         // stale rows behind). Row 40 (TOTAL) is a live Excel formula
         // referencing these rows and is never written to directly — it
@@ -2190,13 +2238,17 @@
             }
             try {
                 const rows = [];
+                const geomRows = [];
                 for (let i = 0; i < CARGO_MAX_ITEMS; i++) {
                     const c = cargoItems[i];
                     rows.push(c ? [c.name, c.weight || 0, c.x || 0, c.y || 0, c.z || 0] : ['', '', '', '', '']);
+                    // Length/Width/Height/X — Middle/Y — Middle -> BE:BI (same row as above)
+                    geomRows.push(c ? [c.length || 0, c.width || 0, c.height || 0, c.tlX || 0, c.tlY || 0] : ['', '', '', '', '']);
                 }
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     sheet.getRange(CARGO_RANGE).values = rows;
+                    sheet.getRange(CARGO_GEOM_RANGE).values = geomRows;
                     await context.sync();
                 });
                 // Cargo dimension (Length/Width/Height, whichever item is
@@ -2217,7 +2269,7 @@
                         console.warn(`Could not push cargo dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}`, dimErr);
                     }
                 }
-                logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE}${dimPushed ? ` (+ linked item's dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
+                logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE} + geometry to ${CARGO_GEOM_RANGE}${dimPushed ? ` (+ linked item's dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
             } catch (e) {
                 console.error('Error pushing cargo data to Excel', e);
                 alert('Error pushing cargo data to Excel — see console for details.');
