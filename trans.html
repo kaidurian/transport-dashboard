@@ -414,7 +414,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.24)</h1>
+            <h1>🚂 Transport Dashboard (Rev.25)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3786,7 +3786,17 @@
                 const uniqueX = [...new Set(trainRows.map(r => r.x))].sort((a, b) => a - b);
                 uniqueX.forEach(xw => {
                     const cluster = trainRows.filter(r => r.x === xw);
-                    const color = cluster[0].color;
+                    // A single axle line can be split into a right-side row
+                    // and a left-side row belonging to different groups
+                    // (see computeTrailerGenRows). This side (elevation)
+                    // view collapses both into one wheel per X, so it needs
+                    // a consistent, deliberate choice of which side's color
+                    // to show rather than whichever row happened to be
+                    // pushed first (which was always the right row) —
+                    // the left-side row is used when present, matching the
+                    // near-side convention used elsewhere in this drawing.
+                    const preferredRow = cluster.find(r => r.side === 'left') || cluster[0];
+                    const color = preferredRow.color;
                     const cx = sx(xw);
                     sideWheelsSvg += `<circle cx="${cx}" cy="${sz(TG_ELEV_WHEEL_DIAM / 2)}" r="${wheelR}" fill="${color}" opacity="0.85" stroke="${color}" stroke-width="1.5"/>`;
                     sideWheelsSvg += `<line x1="${cx}" y1="${sideGroundY}" x2="${cx}" y2="${deckTopY + deckThickPx}" stroke="${color}" stroke-width="1.5" opacity="0.6"/>`;
@@ -3826,23 +3836,37 @@
             // the Right End View. This matches e.g. a front axle group
             // (Group 1) vs a rear axle group (Group 2/3) on the same
             // trailer, or separate trailers positioned front/rear.
-            const groupXTotals = {};
+            // A group's own X *extent* (min..max), not just its average,
+            // decides which panel(s) it belongs in. A group confined to
+            // one half of the train's length (e.g. a front bogie group vs
+            // a separate rear bogie group) is drawn only in that half's
+            // panel, same as before. But a group whose axle lines span the
+            // FULL length — which happens when right-side axles and
+            // left-side axles of the very same axle lines are split into
+            // different groups (row: 'right' / 'left'), rather than being
+            // split front/rear — has both ends of its own extent past the
+            // midpoint, so it now correctly shows in BOTH panels, mirrored,
+            // instead of collapsing onto whichever single panel its
+            // average happened to fall into.
+            const groupXExtent = {};
             rows.forEach(r => {
-                const t = (groupXTotals[r.groupNumber] = groupXTotals[r.groupNumber] || { sum: 0, count: 0 });
-                t.sum += r.x; t.count++;
+                const e = (groupXExtent[r.groupNumber] = groupXExtent[r.groupNumber] || { min: Infinity, max: -Infinity });
+                if (r.x < e.min) e.min = r.x;
+                if (r.x > e.max) e.max = r.x;
             });
             const rowXs = rows.map(r => r.x);
             const xMid = rowXs.length ? (Math.min(...rowXs) + Math.max(...rowXs)) / 2 : 0;
-            const groupInLeftPanel = {};
-            Object.keys(groupXTotals).forEach(gn => {
-                groupInLeftPanel[gn] = (groupXTotals[gn].sum / groupXTotals[gn].count) <= xMid;
+            const groupPanelShow = {};
+            Object.keys(groupXExtent).forEach(gn => {
+                const e = groupXExtent[gn];
+                groupPanelShow[gn] = { left: e.min <= xMid, right: e.max >= xMid };
             });
 
             function buildEndViewPanel(syFn, isLeftPanel) {
                 let wheels = '', decks = '';
                 const seen = new Set();
                 const groupsAtY = {};
-                const panelRows = rows.filter(r => groupInLeftPanel[r.groupNumber] === isLeftPanel);
+                const panelRows = rows.filter(r => isLeftPanel ? groupPanelShow[r.groupNumber].left : groupPanelShow[r.groupNumber].right);
                 panelRows.forEach(r => {
                     const yKey = r.trainName + ':' + r.y;
                     (groupsAtY[yKey] = groupsAtY[yKey] || new Set()).add(r.groupNumber);
