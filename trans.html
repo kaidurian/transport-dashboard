@@ -265,23 +265,23 @@
            (680px, matching the plan view's own design viewBox) still
            renders at the original size. */
         .tg-orient-cube-overlay {
-            position: absolute; top: 4px; left: 4px;
-            transform: scale(calc(0.95 * var(--tg-orient-scale, 1)));
-            transform-origin: top left;
+            position: absolute; top: 4px; right: 4px;
+            transform: scale(calc(0.475 * var(--tg-orient-scale, 1)));
+            transform-origin: top right;
             pointer-events: none; z-index: 3;
         }
         /* "Unit: mm." moved out of the top-view section's own label row
-           and pinned to the bottom-right corner of the whole preview
+           and pinned to the top-left corner of the whole preview
            (plan + elevation stack) instead. Scales down with the same
            --tg-orient-scale as the cube so it doesn't creep further into
            the elevation view as the container narrows, but floors at 75%
            so the text stays legible instead of shrinking indefinitely. */
         .tg-unit-label-overlay {
-            position: absolute; bottom: 4px; right: 8px;
+            position: absolute; top: 4px; left: 8px;
             font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
             color: var(--text-muted); pointer-events: none; z-index: 3;
             transform: scale(max(0.75, var(--tg-orient-scale, 1)));
-            transform-origin: bottom right;
+            transform-origin: top left;
         }
 
         /* Group detail legend — shown below the preview instead of the
