@@ -173,6 +173,17 @@
             padding: 12px 14px;
             margin-top: 16px;
         }
+        .tg-trailer-card {
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+        .tg-cargo-groupall-card {
+            border: 1px dashed var(--accent-blue);
+            background: var(--panel-bg);
+        }
+        .tg-cargo-groupall-title { font-weight: 700; font-size: 12px; flex: 1 1 auto; }
         .tg-cargo-title { margin: 0; font-size: 13px; font-weight: 700; }
         .tg-cargo-sub { font-size: 10.5px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5; }
         .tg-cargo-item-card {
@@ -415,7 +426,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.26)</h1>
+            <h1>🚂 Transport Dashboard (Rev.27)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -426,11 +437,15 @@
 
     <div class="tg-page">
         <div class="tg-modal">
-            <div class="tg-modal-header">
-                <h2>🚂 Generate Trailer</h2>
-                <button type="button" class="tg-help-btn" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓ Help</button>
-            </div>
-            <p class="tg-modal-sub" id="tgHelpPanel">
+
+            <div class="tg-modal-body" id="tgModalBody">
+                <div class="tg-modal-col-left">
+                    <div class="tg-trailer-card">
+                        <div class="tg-train-card-header">
+                            <h2 class="tg-cargo-title">🚂 Generate Trailer</h2>
+                            <button type="button" class="tg-help-btn" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓ Help</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgHelpPanel">
                 Set <strong>Number of trains</strong> and <strong>Number of Hydraulic Groups</strong>
                 at the top of the train list to size the dashboard: e.g. Number of trains = 2 gives
                 you 2 trains, Number of Hydraulic Groups = 3 gives EVERY train 3 axle groups (max
@@ -498,19 +513,17 @@
                 <strong>1400&nbsp;mm</strong> &rarr; SPMT (anything else stays Custom / Manual), and
                 its axle-line count is taken directly from how many <em>Line N</em> rows that
                 train's block has in Adjust_Wheels.
-            </p>
+                        </p>
 
+                        <div id="tgGlobalSettings"><!-- Number of trains / Number of Hydraulic Groups rendered by JS --></div>
 
-            <div class="tg-modal-body" id="tgModalBody">
-                <div class="tg-modal-col-left">
-                    <div id="tgGlobalSettings"><!-- Number of trains / Number of Hydraulic Groups rendered by JS --></div>
+                        <div id="tgTrainList"><!-- train cards rendered by JS --></div>
 
-                    <div id="tgTrainList"><!-- train cards rendered by JS --></div>
-
-                    <div class="tg-train-list-actions">
-                        <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
-                        <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
-                                onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
+                            <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
+                                    onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
+                        </div>
                     </div>
 
                     <div class="tg-cargo-card">
@@ -533,13 +546,20 @@
                             from this item's own CoG to the box's left/rear/bottom edge. Editing a CoG field
                             (CoGx/CoGy/CoGz) moves only the CoG sign, and editing a CoG-to-edge field moves only
                             the box — unless the item's <strong>🧲 Group</strong> toggle is on, in which case
-                            editing CoGx/CoGy/CoGz drags the box along with it (the offsets stay fixed) and the
-                            three CoG-to-edge fields are disabled. All of these are pulled/pushed as written in
-                            Excel. Pulled automatically when this panel opens or refreshes; press
-                            <strong>"📤 Push Cargo to Excel"</strong> to write changes back (row 40's TOTAL stays
-                            a live Excel formula and is never overwritten).
+                            editing CoGx/CoGy/CoGz drags the box along with it (the offsets stay fixed) and every
+                            other field on that item is disabled, leaving only CoGx/CoGy/CoGz editable. All of
+                            these are pulled/pushed as written in Excel. Pulled automatically when this panel
+                            opens or refreshes; press <strong>"📤 Push Cargo to Excel"</strong> to write changes
+                            back (row 40's TOTAL stays a live Excel formula and is never overwritten). Below the
+                            cargo list, the <strong>🧲 Group All</strong> section lets you nudge every cargo item
+                            at once: tick its toggle, then edit its own CoGx/CoGy/CoGz fields — each edit applies
+                            that same X/Y/Z delta to every cargo item's CoGx/CoGy/CoGz (and, for any item that is
+                            individually grouped, its box moves along too), keeping every item's position
+                            relative to the others unchanged. It resets to 0/0/0 each time it's switched on and is
+                            local-only (not written to Excel).
                         </p>
                         <div id="tgCargoList"><!-- cargo item cards rendered by JS --></div>
+                        <div id="tgCargoGroupAllSection"><!-- "move all cargo together" master card rendered by JS --></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39 + BE35:BJ39)"
                                     onclick="addCargoItem()">+ Add Cargo</button>
@@ -870,6 +890,20 @@
         // each cargo item's own CoG fields; z is height above the
         // trailer deck. Never written back to Excel.
         let cargoTotal = { name: 'TOTAL', weight: 0, x: 0, y: 0, z: 0 };
+
+        // "Move All Cargo Together" master control — local-only, not
+        // part of the Excel range. When enabled, editing the master
+        // CoGx/CoGy/CoGz fields below the cargo list computes a delta
+        // from the last-applied master value and applies that same
+        // delta to EVERY cargo item's own CoGx/CoGy/CoGz (and, for any
+        // item whose own 🧲 Group toggle is on, its box moves with it
+        // too, per updateCargoField's existing per-item grouped-drag
+        // logic) — so the whole cargo set can be nudged together while
+        // keeping every item's position relative to the others fixed.
+        // The three master fields are themselves a running reference
+        // point (they reset to 0/0/0 whenever the toggle is switched
+        // on), not any particular item's coordinate.
+        let cargoGroupAll = { enabled: false, x: 0, y: 0, z: 0 };
 
         // Cargo position can be driven from either end: CoG X/Y (the
         // values actually synced with Excel Input!BB/BC) or top-left X/Y
@@ -2169,22 +2203,25 @@
                     <div class="tg-train-card-header">
                         <span title="This cargo item's color in the plan/side/end views" style="display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;flex:0 0 auto;background:${cargoColorFor(idx)};"></span>
                         <input type="text" class="tg-train-name-input" value="${escapeHtml(cargo.name)}"
-                               title="Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}"
+                               title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}`}"
+                               ${cargo.groupCog ? 'disabled' : ''}
                                onchange="updateCargoField(${cargo.id}, 'name', this.value)">
                         <label class="tg-cargo-link-toggle ${cargo.linkExcelDim ? 'tg-cargo-link-active' : ''}"
-                               title="${cargo.linkExcelDim
-                                   ? `Length/Width/Height for this item are linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Untick to unlink.`
-                                   : (linkDisabled
-                                       ? `Another cargo item is already linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Unlink it first to link this item instead.`
-                                       : `Link this item's Length/Width/Height to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Only one cargo item can be linked at a time.`)}">
-                            <input type="checkbox" ${cargo.linkExcelDim ? 'checked' : ''} ${linkDisabled ? 'disabled' : ''}
+                               title="${cargo.groupCog
+                                   ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.'
+                                   : (cargo.linkExcelDim
+                                       ? `Length/Width/Height for this item are linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Untick to unlink.`
+                                       : (linkDisabled
+                                           ? `Another cargo item is already linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Unlink it first to link this item instead.`
+                                           : `Link this item's Length/Width/Height to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Only one cargo item can be linked at a time.`))}">
+                            <input type="checkbox" ${cargo.linkExcelDim ? 'checked' : ''} ${(linkDisabled || cargo.groupCog) ? 'disabled' : ''}
                                    onchange="toggleCargoExcelLink(${cargo.id}, this.checked)">
                             🔗 H11:H13
                         </label>
                         <label class="tg-cargo-group-toggle ${cargo.groupCog ? 'tg-cargo-group-active' : ''}"
                                title="${cargo.groupCog
-                                   ? `CoGx/CoGy/CoGz are grouped with the cargo box: dragging the CoG sign also drags the box (the CoG→edge offsets stay fixed), and the Top view: CoG to Left/Rear and Side view: CoG to Bottom fields below are disabled. Untick to ungroup.`
-                                   : `Group this item's CoG sign with its cargo box: while grouped, dragging CoGx/CoGy/CoGz drags the box along with it instead of moving only the sign.`}">
+                                   ? `CoGx/CoGy/CoGz are grouped with the cargo box: dragging the CoG sign also drags the box (the CoG→edge offsets stay fixed), and every other field on this item (Name, 🔗 H11:H13, W, Length/Width/Height, Height start, Gap, CoG-to-edge fields) is disabled — only CoGx/CoGy/CoGz stay editable. Untick to ungroup.`
+                                   : `Group this item's CoG sign with its cargo box: while grouped, dragging CoGx/CoGy/CoGz drags the box along with it instead of moving only the sign, and every other field on this item is disabled.`}">
                             <input type="checkbox" ${cargo.groupCog ? 'checked' : ''}
                                    onchange="toggleCargoGroupCog(${cargo.id}, this.checked)">
                             🧲 Group
@@ -2194,9 +2231,10 @@
                                 ${cargoItems.length <= 1 ? 'disabled' : ''}>✕</button>
                     </div>
                     <div class="tg-cargo-field-grid">
-                        <div class="tg-cargo-field">
+                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>🔗 W (t)</label>
-                            <input type="number" step="any" value="${cargo.weight}" title="Cargo weight, metric tonnes. Synced with Excel 'Input'!${CARGO_W_COL}${cell}."
+                            <input type="number" step="any" value="${cargo.weight}" ${cargo.groupCog ? 'disabled' : ''}
+                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo weight, metric tonnes. Synced with Excel 'Input'!${CARGO_W_COL}${cell}.`}"
                                    onchange="updateCargoField(${cargo.id}, 'weight', this.value)">
                         </div>
                         <div class="tg-cargo-field" id="cargoFieldX_${cargo.id}">
@@ -2214,32 +2252,37 @@
                             <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected.'}"
                                    onchange="updateCargoField(${cargo.id}, 'z', this.value)">
                         </div>
-                        <div class="tg-cargo-field">
+                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>🔗 Length (m)</label>
-                            <input type="number" step="any" value="${cargo.length}" title="Cargo rectangle footprint length. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_LEN_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                            <input type="number" step="any" value="${cargo.length}" ${cargo.groupCog ? 'disabled' : ''}
+                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo rectangle footprint length. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_LEN_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
                                    onchange="updateCargoField(${cargo.id}, 'length', this.value)">
                         </div>
-                        <div class="tg-cargo-field">
+                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>🔗 Width (m)</label>
-                            <input type="number" step="any" value="${cargo.width}" title="Cargo rectangle footprint width. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_WID_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                            <input type="number" step="any" value="${cargo.width}" ${cargo.groupCog ? 'disabled' : ''}
+                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo rectangle footprint width. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_WID_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
                                    onchange="updateCargoField(${cargo.id}, 'width', this.value)">
                         </div>
-                        <div class="tg-cargo-field">
+                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>🔗 Height (m)</label>
-                            <input type="number" step="any" value="${cargo.height}" title="Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_HGT_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected."
+                            <input type="number" step="any" value="${cargo.height}" ${cargo.groupCog ? 'disabled' : ''}
+                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_HGT_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local">
+                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>Height start</label>
-                            <select title="Where this cargo's BOX (Length/Width/Height rectangle) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. Only moves/resizes the box; the CoG sign and Z dimension line always measure from the trailer deck using X/Y/Z — CoG, unaffected by this setting."
+                            <select ${cargo.groupCog ? 'disabled' : ''}
+                                    title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Where this cargo's BOX (Length/Width/Height rectangle) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. Only moves/resizes the box; the CoG sign and Z dimension line always measure from the trailer deck using X/Y/Z — CoG, unaffected by this setting.`}"
                                     onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
                                 <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
                                 <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
                             </select>
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local">
+                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>Gap above ${cargo.heightStart === 'previous' ? 'previous cargo' : 'trailer'} deck (m)</label>
-                            <input type="number" step="any" value="${cargo.gap}" title="Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG."
+                            <input type="number" step="any" value="${cargo.gap}" ${cargo.groupCog ? 'disabled' : ''}
+                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG.`}"
                                    onchange="updateCargoField(${cargo.id}, 'gap', this.value)">
                         </div>
                         <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
@@ -2269,6 +2312,96 @@
                     </div>
                 </div>`;
             }).join('');
+            renderCargoGroupAllSection();
+        }
+
+        // "🧲 Group All" master control, rendered just above the
+        // + Add Cargo / ⇩ Refresh from Excel / 📤 Push Cargo to Excel
+        // action row. Ticking its toggle arms the three CoGx/CoGy/CoGz
+        // fields below it; each edit then moves EVERY cargo item by
+        // that same delta (see updateCargoGroupAllField), so the whole
+        // cargo set can be nudged together while every item keeps its
+        // position relative to the others. Local-only — not part of
+        // the Excel range, and not affected by push/pull.
+        function toggleCargoGroupAll(checked) {
+            cargoGroupAll.enabled = !!checked;
+            // Reset the reference point back to 0/0/0 on every flip —
+            // it's a running delta tracker, not any one item's actual
+            // coordinate, so there's nothing meaningful to preserve
+            // across on/off transitions.
+            cargoGroupAll.x = 0;
+            cargoGroupAll.y = 0;
+            cargoGroupAll.z = 0;
+            renderCargoGroupAllSection();
+        }
+
+        function updateCargoGroupAllField(axis, rawValue) {
+            if (!cargoGroupAll.enabled) return;
+            let v = parseFloat(rawValue);
+            if (isNaN(v)) v = 0;
+            const delta = round3(v - (parseFloat(cargoGroupAll[axis]) || 0));
+            cargoGroupAll[axis] = v;
+            if (delta !== 0) {
+                cargoItems.forEach(cargo => {
+                    cargo[axis] = round3((parseFloat(cargo[axis]) || 0) + delta);
+                    // An item that is ALSO individually grouped (🧲
+                    // Group on that item's own card) should have its
+                    // box follow along too, exactly as a direct edit of
+                    // that item's own CoGx/CoGy/CoGz would (see
+                    // updateCargoField above) — otherwise its box would
+                    // silently detach from its CoG sign when moved via
+                    // this master control instead.
+                    if (cargo.groupCog) {
+                        if (axis === 'x') cargo.tlX = round3((parseFloat(cargo.tlX) || 0) + delta);
+                        else if (axis === 'y') cargo.tlY = round3((parseFloat(cargo.tlY) || 0) + delta);
+                        else cargo.gap = round3((parseFloat(cargo.gap) || 0) + delta);
+                    }
+                });
+            }
+            renderCargoList();
+            renderTrailerGenPreview();
+        }
+
+        function renderCargoGroupAllSection() {
+            const el = document.getElementById('tgCargoGroupAllSection');
+            if (!el) return;
+            const enabled = cargoGroupAll.enabled;
+            const fieldTitle = (label) => enabled
+                ? `Moves every cargo item's ${label} by this change, in meters. Resets to 0 whenever Group All is (re)enabled — local-only, not part of the Excel range.`
+                : `Tick 🧲 Group All above to enable — editing this then shifts every cargo item's ${label} together.`;
+            el.innerHTML = `
+            <div class="tg-cargo-item-card tg-cargo-groupall-card">
+                <div class="tg-train-card-header">
+                    <span class="tg-cargo-groupall-title">🧲 Move All Cargo Together</span>
+                    <label class="tg-cargo-group-toggle ${enabled ? 'tg-cargo-group-active' : ''}"
+                           title="${enabled
+                               ? 'Editing CoGx/CoGy/CoGz below moves EVERY cargo item by the same delta, keeping their positions relative to each other. Untick to stop.'
+                               : 'Tick to move every cargo item together: editing CoGx/CoGy/CoGz below will then shift every item by the same delta.'}">
+                        <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleCargoGroupAll(this.checked)">
+                        🧲 Group All
+                    </label>
+                </div>
+                <div class="tg-cargo-field-grid">
+                    <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
+                        <label>🔗 CoGx (m)</label>
+                        <input type="number" step="any" value="${cargoGroupAll.x}" ${enabled ? '' : 'disabled'}
+                               title="${fieldTitle('CoGx')}"
+                               onchange="updateCargoGroupAllField('x', this.value)">
+                    </div>
+                    <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
+                        <label>🔗 CoGy (m)</label>
+                        <input type="number" step="any" value="${cargoGroupAll.y}" ${enabled ? '' : 'disabled'}
+                               title="${fieldTitle('CoGy')}"
+                               onchange="updateCargoGroupAllField('y', this.value)">
+                    </div>
+                    <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
+                        <label>🔗 CoGz (m)</label>
+                        <input type="number" step="any" value="${cargoGroupAll.z}" ${enabled ? '' : 'disabled'}
+                               title="${fieldTitle('CoGz')}"
+                               onchange="updateCargoGroupAllField('z', this.value)">
+                    </div>
+                </div>
+            </div>`;
         }
 
         // Pulled automatically on panel open/refresh (see initDashboard)
