@@ -552,11 +552,12 @@
                             opens or refreshes; press <strong>"📤 Push Cargo to Excel"</strong> to write changes
                             back (row 40's TOTAL stays a live Excel formula and is never overwritten). Below the
                             cargo list, the <strong>🧲 Group All</strong> section lets you nudge every cargo item
-                            at once: tick its toggle, then edit its own CoGx/CoGy/CoGz fields — each edit applies
-                            that same X/Y/Z delta to every cargo item's CoGx/CoGy/CoGz (and, for any item that is
-                            individually grouped, its box moves along too), keeping every item's position
-                            relative to the others unchanged. It resets to 0/0/0 each time it's switched on and is
-                            local-only (not written to Excel).
+                            — CoG sign AND drawn box together — at once: tick its toggle, then edit its own
+                            CoGx/CoGy/CoGz fields — each edit applies that same X/Y/Z delta to EVERY cargo item's
+                            CoG and box alike (regardless of that item's own individual 🧲 Group toggle), so the
+                            whole cargo set — position and shape both — slides together while every item keeps
+                            its size and its offsets from its own CoG unchanged. It resets to 0/0/0 each time it's
+                            switched on and is local-only (not written to Excel).
                         </p>
                         <div id="tgCargoList"><!-- cargo item cards rendered by JS --></div>
                         <div id="tgCargoGroupAllSection"><!-- "move all cargo together" master card rendered by JS --></div>
@@ -2343,19 +2344,18 @@
             cargoGroupAll[axis] = v;
             if (delta !== 0) {
                 cargoItems.forEach(cargo => {
+                    // Group All moves EVERYTHING for every item — the
+                    // CoG sign AND the drawn cargo box (shape/position)
+                    // — by the same delta, regardless of that item's own
+                    // individual 🧲 Group toggle (unlike a normal,
+                    // non-grouped item where CoG and box move
+                    // independently — see updateCargoField above). This
+                    // keeps each item's own CoG-to-edge offsets constant
+                    // and slides the whole item, box included, together.
                     cargo[axis] = round3((parseFloat(cargo[axis]) || 0) + delta);
-                    // An item that is ALSO individually grouped (🧲
-                    // Group on that item's own card) should have its
-                    // box follow along too, exactly as a direct edit of
-                    // that item's own CoGx/CoGy/CoGz would (see
-                    // updateCargoField above) — otherwise its box would
-                    // silently detach from its CoG sign when moved via
-                    // this master control instead.
-                    if (cargo.groupCog) {
-                        if (axis === 'x') cargo.tlX = round3((parseFloat(cargo.tlX) || 0) + delta);
-                        else if (axis === 'y') cargo.tlY = round3((parseFloat(cargo.tlY) || 0) + delta);
-                        else cargo.gap = round3((parseFloat(cargo.gap) || 0) + delta);
-                    }
+                    if (axis === 'x') cargo.tlX = round3((parseFloat(cargo.tlX) || 0) + delta);
+                    else if (axis === 'y') cargo.tlY = round3((parseFloat(cargo.tlY) || 0) + delta);
+                    else cargo.gap = round3((parseFloat(cargo.gap) || 0) + delta);
                 });
             }
             renderCargoList();
@@ -2367,16 +2367,16 @@
             if (!el) return;
             const enabled = cargoGroupAll.enabled;
             const fieldTitle = (label) => enabled
-                ? `Moves every cargo item's ${label} by this change, in meters. Resets to 0 whenever Group All is (re)enabled — local-only, not part of the Excel range.`
-                : `Tick 🧲 Group All above to enable — editing this then shifts every cargo item's ${label} together.`;
+                ? `Moves every cargo item's CoG AND its drawn box (shape/position) together by this ${label} change, in meters — offsets from each item's own CoG stay fixed. Resets to 0 whenever Group All is (re)enabled — local-only, not part of the Excel range.`
+                : `Tick 🧲 Group All above to enable — editing this then shifts every cargo item's CoG and box together along ${label}.`;
             el.innerHTML = `
             <div class="tg-cargo-item-card tg-cargo-groupall-card">
                 <div class="tg-train-card-header">
                     <span class="tg-cargo-groupall-title">🧲 Move All Cargo Together</span>
                     <label class="tg-cargo-group-toggle ${enabled ? 'tg-cargo-group-active' : ''}"
                            title="${enabled
-                               ? 'Editing CoGx/CoGy/CoGz below moves EVERY cargo item by the same delta, keeping their positions relative to each other. Untick to stop.'
-                               : 'Tick to move every cargo item together: editing CoGx/CoGy/CoGz below will then shift every item by the same delta.'}">
+                               ? 'Editing CoGx/CoGy/CoGz below moves EVERY cargo item — CoG sign and drawn box together — by the same delta, keeping each item\u2019s size and its own CoG-to-edge offsets unchanged. Untick to stop.'
+                               : 'Tick to move every cargo item — CoG and box together — as one group: editing CoGx/CoGy/CoGz below will then shift every item by the same delta.'}">
                         <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleCargoGroupAll(this.checked)">
                         🧲 Group All
                     </label>
