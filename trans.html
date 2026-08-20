@@ -373,7 +373,7 @@
             color: var(--accent-blue); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-bottom: 14px;
         }
         .tg-add-train-btn:hover { border-color: var(--accent-blue); }
-        .tg-train-list-actions { display: flex; gap: 10px; margin-bottom: 14px; }
+        .tg-train-list-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
         .tg-train-list-actions .tg-add-train-btn { width: auto; flex: 1 1 50%; margin-bottom: 0; }
 
         .tg-totals {
@@ -426,7 +426,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.27)</h1>
+            <h1>🚂 Transport Dashboard (Rev.27.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -523,6 +523,8 @@
                             <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
                             <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
                                     onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
+                            <button type="button" class="tg-add-train-btn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
+                                    onclick="pushDataToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
 
@@ -618,8 +620,6 @@
                 </label>
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
-                <button type="button" class="tg-btn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
-                        onclick="pushDataToExcel()">📤 Push to Excel</button>
             </div>
 
             <div class="tg-log" id="tgLog"></div>
