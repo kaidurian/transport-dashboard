@@ -70,6 +70,12 @@
             cursor: pointer; white-space: nowrap;
         }
         #themeModeToggle:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        #appExportBtn, #appImportBtn {
+            padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
+            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
+            cursor: pointer; white-space: nowrap;
+        }
+        #appExportBtn:hover, #appImportBtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
 
         .tg-page {
             width: 100%;
@@ -426,11 +432,14 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.27.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.28)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
             <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
+            <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, Z Trailer Height, and other settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
+            <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
+            <input type="file" id="appImportFileInput" accept=".json,application/json" style="display:none" onchange="importAppState(event)">
             <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
         </div>
     </header>
@@ -457,7 +466,7 @@
                 <strong>X offset</strong> — the distance from the barge's origin (0,0) to the
                 top-left corner of the trailer; every following axle = previous axle's X &minus;
                 line spacing, all sharing the same <strong>Y offset</strong> — the distance from
-                origin (0,0) to the top-left corner of the trailer along Y — and VCG. X offset and
+                origin (0,0) to the top-left corner of the trailer along Y. X offset and
                 Y offset are kept in sync with Excel sheet <strong>"Input"</strong>, cells
                 <strong>B5</strong> (X offset) and <strong>B6</strong> (Y offset): editing either
                 field here writes it straight to Excel, and the ⇩ button next to each label pulls
@@ -761,14 +770,22 @@
         const SETGROUP_BLOCK_WIDTH = 3;     // columns per train
         const SETGROUP_MAX_TRAINS = 10;     // Input sheet only has 10 train blocks (Train 1..10)
 
-        // ---- Trailer deck height (used only by the Side + end
-        // elevation preview) — read from Excel "Input"!BD26, pulled
-        // automatically whenever the panel opens/refreshes (see
-        // seedInitialOffsetsFromExcel). Falls back to the default below
+        // ---- Z Trailer Height (ground -> top of deck, mm) — a single
+        // GLOBAL value (shared by every train), used for: (1) the
+        // Side + end elevation preview's deck line, and (2) the VCG
+        // value written into every axle row's Load_Editor!G column
+        // (previously a per-train "VCG from deck" field — merged into
+        // this single value, since every axle of every train shares the
+        // same physical ground-to-deck height). Synced with Excel sheet
+        // "Display"!B11 — pulled automatically whenever the panel opens/
+        // refreshes (see seedInitialOffsetsFromExcel) and on-demand via
+        // the ⇩ button next to its field, and pushed on "📤 Push to
+        // Excel" (see pushDataToExcel). Falls back to the default below
         // if the cell is blank or not a valid positive number. ----
-        const INPUT_DECK_HEIGHT_CELL = "BD26";
-        const TG_ELEV_DECK_HEIGHT_DEFAULT = 1500;
-        let tgDeckHeightMm = TG_ELEV_DECK_HEIGHT_DEFAULT;
+        const DISPLAY_SHEET_NAME = "Display";
+        const DISPLAY_Z_HEIGHT_CELL = "B11";
+        const TG_Z_TRAILER_HEIGHT_DEFAULT = 1500;
+        let tgZTrailerHeightMm = TG_Z_TRAILER_HEIGHT_DEFAULT;
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
         // AZ34 = "LOAD DETAILS" header, BA34:BD34 = column headers
@@ -954,7 +971,7 @@
         // read the exact same base-Z each item will actually be drawn
         // at, including 'previous'-item stacking.
         function computeCargoZSpans() {
-            const deckTopWorldZ = tgDeckHeightMm;
+            const deckTopWorldZ = tgZTrailerHeightMm;
             let prevTopWorldZ = deckTopWorldZ;
             return cargoItems.map((c, i) => {
                 const zMm = (parseFloat(c.z) || 0) * 1000;
@@ -1088,7 +1105,6 @@
                 spacing: 1400,
                 x: 30000 + (index - 1) * 15000,   // X offset (mm) — see INPUT_X_OFFSET_CELL
                 y: (index % 2 === 1) ? 3200 : -3200, // Y offset (mm) — see INPUT_Y_OFFSET_CELL
-                vcg: 4200,
                 groups: [defaultAxleGroup(1, 5, 25, 1, 'both')],
                 // AutoCAD-export-only: how this train's axle lines are
                 // split across physical SPMT units for block insertion.
@@ -1120,6 +1136,12 @@
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
             const m = /^(goldhofer|spmt)(\d+)$/.exec(presetValue || '');
+            // Selecting a trailer type (preset OR Custom/Manual) always
+            // resets AutoCAD split back to blank ("auto" — whole train =
+            // one block), rather than carrying over a split that may no
+            // longer match the new axle-line count. Use the "Auto" button
+            // afterward to fill in the actual computed segments.
+            train.cadSplit = '';
             if (!m) {
                 train.trailerType = 'custom';
                 train.axleLineCount = null;
@@ -1272,7 +1294,7 @@
 
         // Builds a new train that copies ALL data from Train 1 (the
         // first train in trailerGenTrains) — trailer type/preset, deck
-        // dimensions, line spacing, X offset, VCG, axle groups, AutoCAD
+        // dimensions, line spacing, X offset, axle groups, AutoCAD
         // split — except:
         //   - id / name, which are always fresh, and
         //   - Y offset, which stacks below the CURRENT last train:
@@ -1287,7 +1309,6 @@
             if (train1) {
                 newTrain.spacing = train1.spacing;
                 newTrain.x = train1.x;
-                newTrain.vcg = train1.vcg;
                 newTrain.groups = train1.groups.map(g => ({ ...g, id: trailerGenNextGroupId++ }));
                 newTrain.cadSplit = train1.cadSplit;
                 newTrain.trailerType = train1.trailerType;
@@ -1494,6 +1515,7 @@
             // doesn't block the Adjust_Wheels write that follows.
             await pushSetTrainGroupToExcel();
             await pushTrainOffsetsToExcel();
+            await pushValueToSheetCell(DISPLAY_SHEET_NAME, DISPLAY_Z_HEIGHT_CELL, tgZTrailerHeightMm, 'Z Trailer Height');
 
             // ---- Step 2: clear the fixed Adjust_Wheels block + write
             // axle-line labels ----
@@ -1804,7 +1826,6 @@
                         spacing: spacing,
                         x: detectedPreset ? (trainX - detectedPreset.axle1X) : trainX,
                         y: detectedPreset ? (trainY - detectedPreset.axle1Y) : trainY,
-                        vcg: oldTrain ? oldTrain.vcg : 4200,
                         groups: groups.length ? groups : [defaultAxleGroup(1, 1, 25, 1, 'both')],
                         cadSplit: oldTrain ? oldTrain.cadSplit : '',
                         trailerType: detectedPreset ? detectedMfr : 'custom',
@@ -1886,17 +1907,20 @@
                 });
 
                 const parsed = [];
+                let sawZHeight = null; // first valid VCG/G-column value seen — used to seed tgZTrailerHeightMm below, since every row now shares the same global Z Trailer Height
                 for (let i = 0; i < names.length; i++) {
                     const nm = (names[i][0] || '').toString().trim();
                     const [load, x, y, vcg] = values[i];
                     const hasData = nm !== '' || [load, x, y, vcg].some(v => v !== '' && v !== null && v !== undefined);
                     if (!hasData) break;
+                    const vcgNum = parseFloat(vcg) || 0;
+                    if (sawZHeight === null && vcgNum > 0) sawZHeight = vcgNum;
                     parsed.push({
                         name: nm,
                         load: parseFloat(load) || 0,
                         x: parseFloat(x) || 0,
                         y: parseFloat(y) || 0,
-                        vcg: parseFloat(vcg) || 0
+                        vcg: vcgNum
                     });
                 }
 
@@ -1905,11 +1929,18 @@
                     return;
                 }
 
+                // Z Trailer Height is a single global value now (no
+                // longer per-train), so it's no longer part of the
+                // train-clustering key below — only Y offset separates
+                // trains here. Seed the global value from whatever was
+                // read back in column G, if any.
+                if (sawZHeight !== null) tgZTrailerHeightMm = sawZHeight;
+
                 const clusters = [];
                 parsed.forEach(row => {
-                    let cluster = clusters.find(c => Math.abs(c.y - row.y) < 1e-6 && Math.abs(c.vcg - row.vcg) < 1e-6);
+                    let cluster = clusters.find(c => Math.abs(c.y - row.y) < 1e-6);
                     if (!cluster) {
-                        cluster = { y: row.y, vcg: row.vcg, rows: [] };
+                        cluster = { y: row.y, rows: [] };
                         clusters.push(cluster);
                     }
                     cluster.rows.push(row);
@@ -1949,7 +1980,6 @@
                         spacing: spacing,
                         x: rows[0].x,
                         y: cluster.y,
-                        vcg: cluster.vcg,
                         groups: groups.length ? groups : [defaultAxleGroup(1, 1, 0, 1, 'both')],
                         cadSplit: '',
                         // Data pulled back from Excel is always treated as
@@ -1982,7 +2012,7 @@
             pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
         }
 
-        // Train-level fields: name, line spacing, X offset/Y offset/VCG
+        // Train-level fields: name, line spacing, X offset/Y offset
         // of axle #1. X offset/Y offset are auto-linked to the Excel
         // "Input" sheet for Train 1-OFFSET_LINK_MAX_TRAINS (see
         // offsetCellForTrainIndex()), but that link is pull-on-open/
@@ -2105,8 +2135,13 @@
             // Grouped edits also change tlX/tlY/gap under the hood, so
             // the Cargo list needs a re-render too (not just the
             // preview) to keep the CoG-to-Left/Rear/Bottom fields' shown
-            // values in sync.
-            if (isPositionFieldGroupedRerender(cargo, field)) renderCargoList();
+            // values in sync. Also true for a plain (non-grouped) 'z' or
+            // 'gap' edit — CoGz and Gap are the two inputs that
+            // "Side view: CoG to Bottom (m)" is computed from (see
+            // cargoOffsetBottom/computeCargoZSpans), so either one
+            // changing needs to refresh that field's shown value too
+            // (and any 'previous'-stacked item chained below it).
+            if (isPositionFieldGroupedRerender(cargo, field) || field === 'z' || field === 'gap') renderCargoList();
             renderTrailerGenPreview();
         }
         // Small helper so updateCargoField's re-render decision reads
@@ -2476,7 +2511,7 @@
                 const linkedIdx = cargoItems.findIndex(c => c.linkExcelDim);
                 let dimApplied = false;
                 let geomApplied = false;
-                let prevTopWorldZ = tgDeckHeightMm; // running "previous item's box top" for Height-start:'previous' chains — rebuilt in row order, same as computeCargoZSpans
+                let prevTopWorldZ = tgZTrailerHeightMm; // running "previous item's box top" for Height-start:'previous' chains — rebuilt in row order, same as computeCargoZSpans
                 cargoItems = parsed.map((r, i) => {
                     const existing = cargoItems[i]; // preserve local-only Length/Width/Height/Height-start/Gap if this slot already existed
                     const isLinked = i === linkedIdx;
@@ -2552,8 +2587,8 @@
                     // default Gap above when BJ is blank.
                     const zMm = (parseFloat(item.z) || 0) * 1000;
                     const heightMm = (parseFloat(item.height) || 0) * 1000;
-                    const cogWorldZ = tgDeckHeightMm + zMm;
-                    const refWorldZ = (heightStart === 'previous' && i > 0) ? prevTopWorldZ : tgDeckHeightMm;
+                    const cogWorldZ = tgZTrailerHeightMm + zMm;
+                    const refWorldZ = (heightStart === 'previous' && i > 0) ? prevTopWorldZ : tgZTrailerHeightMm;
                     if (geomOffBottom !== null) {
                         const baseWorldZ = cogWorldZ - geomOffBottom * 1000;
                         item.gap = round3((baseWorldZ - refWorldZ) / 1000);
@@ -2628,15 +2663,62 @@
 
         // ---- Push / pull X offset & Y offset to/from Excel "Input" sheet ----
         async function pushValueToInputCell(cell, value, label) {
+            return pushValueToSheetCell(INPUT_SHEET_NAME, cell, value, label);
+        }
+        // Generic single-cell push, used when the target isn't the
+        // "Input" sheet (e.g. Z Trailer Height -> "Display"!B11).
+        async function pushValueToSheetCell(sheetName, cell, value, label) {
             if (!isOfficeInitialized) return;
             try {
                 await Excel.run(async (context) => {
-                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    const sheet = context.workbook.worksheets.getItem(sheetName);
                     sheet.getRange(cell).values = [[value]];
                     await context.sync();
                 });
             } catch (e) {
-                console.warn(`Could not write ${label} to ${INPUT_SHEET_NAME}!${cell}`, e);
+                console.warn(`Could not write ${label} to ${sheetName}!${cell}`, e);
+            }
+        }
+
+        // ---- Z Trailer Height (mm) — single global value, synced with
+        // Excel "Display"!B11. Editing the field updates the value and
+        // re-renders (the elevation preview + every axle row's VCG
+        // column depend on it); pullZTrailerHeightFromExcel() re-reads
+        // it on demand (⇩ button); pushDataToExcel() writes it back out
+        // on "📤 Push to Excel". ----
+        function updateZTrailerHeight(rawValue) {
+            const v = parseFloat(rawValue);
+            tgZTrailerHeightMm = (Number.isFinite(v) && v > 0) ? v : TG_Z_TRAILER_HEIGHT_DEFAULT;
+            renderTrailerGeneratorTotals();
+            renderTrailerGenPreview();
+        }
+        async function pullZTrailerHeightFromExcel() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Z Trailer Height.');
+                return;
+            }
+            try {
+                let raw = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
+                    const range = sheet.getRange(DISPLAY_Z_HEIGHT_CELL);
+                    range.load("values");
+                    await context.sync();
+                    raw = range.values[0][0];
+                });
+                const v = parseFloat(raw);
+                if (!Number.isFinite(v) || v <= 0) {
+                    alert(`${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL} doesn't hold a valid positive number.`);
+                    return;
+                }
+                tgZTrailerHeightMm = v;
+                renderTrailerDashboard();
+                renderTrailerGeneratorTotals();
+                renderTrailerGenPreview();
+                logMsg(`↺ Pulled Z Trailer Height (${v}mm) from ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}.`);
+            } catch (e) {
+                console.warn(`Could not read ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}`, e);
+                alert(`Could not read ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}. Make sure a sheet named "${DISPLAY_SHEET_NAME}" exists with the value in that cell.`);
             }
         }
 
@@ -2719,16 +2801,17 @@
         async function seedInitialOffsetsFromExcel() {
             if (!isOfficeInitialized || trailerGenTrains.length === 0) return;
             try {
-                let numTrainsRaw = null, numGroupsRaw = null, deckHeightRaw = null;
+                let numTrainsRaw = null, numGroupsRaw = null, zHeightRaw = null;
                 const offsetRanges = [];
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    const displaySheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
                     const numTrainsRange = sheet.getRange(INPUT_NUM_TRAINS_CELL);
                     const numGroupsRange = sheet.getRange(INPUT_NUM_GROUPS_CELL);
-                    const deckHeightRange = sheet.getRange(INPUT_DECK_HEIGHT_CELL);
+                    const zHeightRange = displaySheet.getRange(DISPLAY_Z_HEIGHT_CELL);
                     numTrainsRange.load("values");
                     numGroupsRange.load("values");
-                    deckHeightRange.load("values");
+                    zHeightRange.load("values");
                     for (let i = 1; i <= OFFSET_LINK_MAX_TRAINS; i++) {
                         const xR = sheet.getRange(offsetCellForTrainIndex(i, 'x'));
                         const yR = sheet.getRange(offsetCellForTrainIndex(i, 'y'));
@@ -2739,7 +2822,7 @@
                     await context.sync();
                     numTrainsRaw = numTrainsRange.values[0][0];
                     numGroupsRaw = numGroupsRange.values[0][0];
-                    deckHeightRaw = deckHeightRange.values[0][0];
+                    zHeightRaw = zHeightRange.values[0][0];
                 });
 
                 const numTrains = parseInt(numTrainsRaw, 10);
@@ -2748,8 +2831,8 @@
                 const numGroups = parseInt(numGroupsRaw, 10);
                 if (Number.isFinite(numGroups) && numGroups >= 1) setNumberOfHydraulicGroups(numGroups, { skipPush: true });
 
-                const deckHeight = parseFloat(deckHeightRaw);
-                tgDeckHeightMm = (Number.isFinite(deckHeight) && deckHeight > 0) ? deckHeight : TG_ELEV_DECK_HEIGHT_DEFAULT;
+                const zHeight = parseFloat(zHeightRaw);
+                tgZTrailerHeightMm = (Number.isFinite(zHeight) && zHeight > 0) ? zHeight : TG_Z_TRAILER_HEIGHT_DEFAULT;
 
                 let linkedCount = 0;
                 const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
@@ -2761,7 +2844,7 @@
                     if (!isNaN(yNum)) { train.y = yNum; }
                 }
                 renderTrailerDashboard();
-                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${INPUT_DECK_HEIGHT_CELL} (deck height = ${tgDeckHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
+                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
                 console.warn('Could not seed initial values from Input sheet', e);
             }
@@ -2929,7 +3012,7 @@
                 // #1 sits exactly at train.x/train.y as before.
                 const baseX = (parseFloat(train.x) || 0) + (parseFloat(train.axle1OffsetX) || 0);
                 const y = (parseFloat(train.y) || 0) + (parseFloat(train.axle1OffsetY) || 0);
-                const vcg = parseFloat(train.vcg) || 0;
+                const vcg = tgZTrailerHeightMm; // global Z Trailer Height — shared by every axle of every train, see DISPLAY_Z_HEIGHT_CELL above
                 const axlePairOffsetY = parseFloat(train.axlePairOffsetY) || 0;
                 const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
 
@@ -3003,6 +3086,12 @@
                                title="How many axle groups (1-${TRAILER_GROUP_DEFS.length}) EVERY train should have. Adds/removes groups per train to match. Synced with Excel sheet 'Input'!${INPUT_NUM_GROUPS_CELL}."
                                onchange="setNumberOfHydraulicGroups(this.value)">
                     </div>
+                    <div class="tg-field">
+                        <label>🔗 Z TRAILER HEIGHT (MM) <button type="button" class="tg-xy-sync-btn" title="Pull Z Trailer Height from Excel ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}" onclick="pullZTrailerHeightFromExcel()">⇩</button></label>
+                        <input type="number" step="any" min="0" value="${tgZTrailerHeightMm}"
+                               title="Ground -> top of deck height (mm), shared by every train. Drives the Side + end elevation preview's deck line and the VCG value written to every axle row. Synced with Excel sheet '${DISPLAY_SHEET_NAME}'!${DISPLAY_Z_HEIGHT_CELL} — pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel'."
+                               onchange="updateZTrailerHeight(this.value)">
+                    </div>
                 </div>`;
             }
 
@@ -3051,11 +3140,6 @@
                             <label>${tgYCell ? '🔗 ' : ''}Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgYCell ? `Pull Y offset from Excel Input!${tgYCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'y')" ${tgYCell ? '' : 'disabled'}>⇩</button></label>
                             <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train.${tgYCell ? ` Synced with Excel sheet 'Input'!${tgYCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
-                        </div>
-                        <div class="tg-field">
-                            <label>VCG from deck (mm)</label>
-                            <input type="number" step="any" value="${train.vcg}" title="Shared VCG for every axle in this train"
-                                   onchange="updateTrailerGenField(${train.id}, 'vcg', this.value)">
                         </div>
                     </div>
 
@@ -3941,7 +4025,7 @@
         // (Z) position anywhere, so deck thickness/wheel diameter here
         // are representative SPMT figures used only to draw a believable
         // elevation — not read from any data field. Deck height itself
-        // (tgDeckHeightMm, declared above) DOES come from a data field —
+        // (tgZTrailerHeightMm, declared above) DOES come from a data field —
         // Excel "Input"!BD26.
         const TG_ELEV_DECK_THICK = 300;
         const TG_ELEV_WHEEL_DIAM = 700;
@@ -3975,12 +4059,12 @@
             // + Z), regardless of this item's Height-start/stacking
             // reference — so moving/stacking the box (Height-start) never
             // moves the CoG sign, and vice versa.
-            // NOTE: tgDeckHeightMm (Excel "Input"!BD26) is already the
+            // NOTE: tgZTrailerHeightMm (Excel "Display"!B11) is already the
             // full ground → top-of-deck height, so it's used directly
             // here (NOT + TG_ELEV_DECK_THICK — that constant is only the
             // cosmetic thickness of the deck rectangle drawn hanging
             // below this top line, see deckTopY/deckTopYEnd below).
-            const deckTopWorldZ = tgDeckHeightMm;
+            const deckTopWorldZ = tgZTrailerHeightMm;
             const cargoBoxZ = computeCargoZSpans(); // shared with the "Side view: CoG to Bottom (m)" field — see computeCargoZSpans above
             // The vertical span above deck top needs to grow to fit
             // whichever sits higher — the tallest cargo box top or the
@@ -3988,7 +4072,7 @@
             // necessarily line up) — not just the fixed 260mm clearance
             // used for wheels/labels alone.
             const cargoMaxHeightAboveDeckMm = cargoBoxZ.reduce((m, bz) => Math.max(m, bz.topWorldZ - deckTopWorldZ, bz.cogWorldZ - deckTopWorldZ), 0);
-            const zSpanMm = tgDeckHeightMm + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
+            const zSpanMm = tgZTrailerHeightMm + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
             // Reuse the plan (top) view's own X mapping wholesale — same
             // scale, same left offset, same canvas width — so an axle's
             // horizontal position in the side view lands at the exact
@@ -4066,8 +4150,8 @@
             const fDim = (8 * fontScale).toFixed(2);     // matches plan view's dimension-text size
 
             const wheelR = Math.max(3, TG_ELEV_WHEEL_DIAM * scale / 2);
-            const deckTopY = sz(tgDeckHeightMm);
-            const deckTopYEnd = szEnd(tgDeckHeightMm);
+            const deckTopY = sz(tgZTrailerHeightMm);
+            const deckTopYEnd = szEnd(tgZTrailerHeightMm);
             const deckThickPx = TG_ELEV_DECK_THICK * scale;
 
             // Ground lines — one per panel (no side-by-side projection
@@ -4291,7 +4375,7 @@
                     `<line x1="${sideOffsetX - 12}" y1="${sideGroundY}" x2="${sideOffsetX - 12}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1" stroke-dasharray="2 2"/>` +
                     `<line x1="${sideOffsetX - 16}" y1="${sideGroundY}" x2="${sideOffsetX - 8}" y2="${sideGroundY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
                     `<line x1="${sideOffsetX - 16}" y1="${deckTopY}" x2="${sideOffsetX - 8}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
-                    `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgDeckHeightMm}</text>` +
+                    `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgZTrailerHeightMm}</text>` +
                     `</g>`;
                 [sy1, sy2].forEach(syFn => {
                     trailerGenTrains.forEach(t => {
@@ -4515,6 +4599,99 @@
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
             logMsg(msg);
             if (warnings.length) console.warn('Trailer CAD export warnings:\n' + warnings.join('\n'));
+        }
+
+        // ============================================================
+        // IMPORT / EXPORT — full dashboard state to/from a local JSON
+        // file. Works standalone (no Excel/Office.js required), so the
+        // dashboard can be saved/reloaded when used as a plain webpage.
+        // Covers every train, every cargo item, the ID counters (so
+        // newly-added items after an import never collide with restored
+        // ones), and the other global settings below — everything the
+        // dashboard actually holds in memory, EXCEPT Excel connection
+        // state itself (isOfficeInitialized), which always reflects the
+        // live host, not a saved file.
+        // ============================================================
+        const APP_STATE_VERSION = 1;
+
+        function exportAppState() {
+            const state = {
+                appStateVersion: APP_STATE_VERSION,
+                savedAt: new Date().toISOString(),
+                trailerGenTrains: trailerGenTrains,
+                trailerGenNextId: trailerGenNextId,
+                trailerGenNextGroupId: trailerGenNextGroupId,
+                trailerGenLoadDirection: trailerGenLoadDirection,
+                cargoItems: cargoItems,
+                cargoIdCounter: cargoIdCounter,
+                tgZTrailerHeightMm: tgZTrailerHeightMm,
+                tgShowGroupLabels: tgShowGroupLabels,
+                tgShowDimensions: tgShowDimensions
+            };
+            const json = JSON.stringify(state, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `transport-dashboard-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+            logMsg(`💾 Exported dashboard (${trailerGenTrains.length} train(s), ${cargoItems.length} cargo item(s)) to file.`);
+        }
+
+        function importAppState(event) {
+            const input = event.target;
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const state = JSON.parse(reader.result);
+                    if (!state || !Array.isArray(state.trailerGenTrains) || !Array.isArray(state.cargoItems)) {
+                        throw new Error('File is missing trailerGenTrains/cargoItems — not a dashboard export.');
+                    }
+                    trailerGenTrains = state.trailerGenTrains;
+                    cargoItems = state.cargoItems;
+                    trailerGenLoadDirection = (state.trailerGenLoadDirection === 'out') ? 'out' : 'in';
+                    if (typeof state.tgZTrailerHeightMm === 'number' && state.tgZTrailerHeightMm > 0) {
+                        tgZTrailerHeightMm = state.tgZTrailerHeightMm;
+                    }
+                    if (typeof state.tgShowGroupLabels === 'boolean') tgShowGroupLabels = state.tgShowGroupLabels;
+                    if (typeof state.tgShowDimensions === 'boolean') tgShowDimensions = state.tgShowDimensions;
+
+                    // ID counters: trust the saved counters if present and
+                    // high enough, otherwise recompute from the highest id
+                    // actually present in the restored arrays — either way,
+                    // never lower than what's already in the data, so a
+                    // newly-added train/cargo/group can't collide with one
+                    // just restored from the file.
+                    const maxTrainId = trailerGenTrains.reduce((m, t) => Math.max(m, t.id || 0), 0);
+                    const maxGroupId = trailerGenTrains.reduce((m, t) => Math.max(m, (t.groups || []).reduce((gm, g) => Math.max(gm, g.id || 0), 0)), 0);
+                    const maxCargoId = cargoItems.reduce((m, c) => Math.max(m, c.id || 0), 0);
+                    trailerGenNextId = Math.max(parseInt(state.trailerGenNextId, 10) || 0, maxTrainId + 1, 1);
+                    trailerGenNextGroupId = Math.max(parseInt(state.trailerGenNextGroupId, 10) || 0, maxGroupId + 1, 1);
+                    cargoIdCounter = Math.max(parseInt(state.cargoIdCounter, 10) || 0, maxCargoId + 1, 1);
+
+                    if (trailerGenTrains.length === 0) trailerGenTrains.push(defaultTrailerGenTrain(1));
+                    if (cargoItems.length === 0) cargoItems.push(newCargoItem(1));
+
+                    const dirSelect = document.getElementById('tgLoadDirectionSelect');
+                    if (dirSelect) dirSelect.value = trailerGenLoadDirection;
+
+                    renderTrailerDashboard(); // also re-renders cargo list, totals, and the preview
+                    logMsg(`📂 Imported dashboard (${trailerGenTrains.length} train(s), ${cargoItems.length} cargo item(s)) from "${file.name}".`);
+                } catch (e) {
+                    console.warn('Dashboard import error', e);
+                    alert(`Could not import "${file.name}" — it doesn't look like a valid dashboard export. See console for details.`);
+                } finally {
+                    input.value = ''; // allow re-selecting the same file next time
+                }
+            };
+            reader.onerror = () => {
+                alert(`Could not read "${file.name}".`);
+                input.value = '';
+            };
+            reader.readAsText(file);
         }
 
         // ============================================================
