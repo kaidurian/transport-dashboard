@@ -432,7 +432,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.28)</h1>
+            <h1>🚂 Transport Dashboard (Rev.29)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -777,13 +777,14 @@
         // (previously a per-train "VCG from deck" field — merged into
         // this single value, since every axle of every train shares the
         // same physical ground-to-deck height). Synced with Excel sheet
-        // "Display"!B11 — pulled automatically whenever the panel opens/
+        // "Input"!BD26 — pulled automatically whenever the panel opens/
         // refreshes (see seedInitialOffsetsFromExcel) and on-demand via
         // the ⇩ button next to its field, and pushed on "📤 Push to
         // Excel" (see pushDataToExcel). Falls back to the default below
         // if the cell is blank or not a valid positive number. ----
         const DISPLAY_SHEET_NAME = "Display";
-        const DISPLAY_Z_HEIGHT_CELL = "B11";
+        const ZHEIGHT_SHEET_NAME = "Input";
+        const ZHEIGHT_CELL = "BD26";
         const TG_Z_TRAILER_HEIGHT_DEFAULT = 1500;
         let tgZTrailerHeightMm = TG_Z_TRAILER_HEIGHT_DEFAULT;
 
@@ -831,7 +832,30 @@
         function cargoColorFor(idx) {
             return TG_CARGO_COLOR_PALETTE[idx % TG_CARGO_COLOR_PALETTE.length];
         }
-        const TG_CARGO_TOTAL_COLOR = 'var(--accent-red, #ef4444)'; // combined/Total CoG sign — distinct from per-item cargo colors
+        const TG_CARGO_TOTAL_COLOR = 'var(--accent-red, #ef4444)'; // Combined CoG sign — distinct from per-item cargo colors
+
+        // ---- CoG signs sourced from Excel "Display" sheet (read-only —
+        // these are computed/output cells, never written to from here).
+        // Both are world coordinates in MILLIMETERS (unlike the cargo
+        // item CoG fields above, which are meters) and both give Z as
+        // the ABSOLUTE ground -> CoG height, not height-above-deck — so,
+        // unlike cargoTotal/each cargo item's z, these draw directly at
+        // world Z with no deckTopWorldZ offset added.
+        //   • Trailer CoG   — Display!B15:D15 (X, Y, Z) — the trailer's
+        //     own CoG, independent of any cargo.
+        //   • Combined CoG  — Display!B16:D16 (X, Y, Z) — the combined
+        //     trailer + cargo CoG. Replaces the old cargo-only "TOTAL
+        //     CoG" sign, which was sourced from the cargo weighted
+        //     average (Input!AZ40:BD40) instead.
+        const COG_TRAILER_ROW = 15;
+        const COG_COMBINED_ROW = 16;
+        const COG_SIGN_X_COL = 'B';
+        const COG_SIGN_Y_COL = 'C';
+        const COG_SIGN_Z_COL = 'D';
+        const COG_TRAILER_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_SIGN_Z_COL}${COG_TRAILER_ROW}`;   // B15:D15
+        const COG_COMBINED_RANGE = `${COG_SIGN_X_COL}${COG_COMBINED_ROW}:${COG_SIGN_Z_COL}${COG_COMBINED_ROW}`; // B16:D16
+        const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_SIGN_Z_COL}${COG_COMBINED_ROW}`;     // B15:D16 — both rows in one read
+        const TG_COG_TRAILER_COLOR = 'var(--accent-purple, #a855f7)'; // Trailer CoG sign — distinct from Combined CoG (red) and per-item cargo colors
 
         // ---- Cargo dimension (Length/Width/Height) — Excel "Input
         // horizontal loads" sheet, H11:H13, meters. A separate sheet
@@ -908,6 +932,17 @@
         // each cargo item's own CoG fields; z is height above the
         // trailer deck. Never written back to Excel.
         let cargoTotal = { name: 'TOTAL', weight: 0, x: 0, y: 0, z: 0 };
+
+        // Trailer CoG (Display!B15:D15) and Combined CoG (Display!B16:D16)
+        // signs — see the COG_TRAILER_RANGE/COG_COMBINED_RANGE constants
+        // above. mm, absolute world Z. Loaded flags gate drawing so a
+        // sign never appears before it's actually been pulled at least
+        // once (both default to 0/0/0, which is a legitimate world
+        // position, so weight-style ">0" gating doesn't apply here).
+        let cogTrailerSign = { x: 0, y: 0, z: 0 };
+        let cogTrailerSignLoaded = false;
+        let cogCombinedSign = { x: 0, y: 0, z: 0 };
+        let cogCombinedSignLoaded = false;
 
         // "Move All Cargo Together" master control — local-only, not
         // part of the Excel range. When enabled, editing the master
@@ -1136,13 +1171,13 @@
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
             const m = /^(goldhofer|spmt)(\d+)$/.exec(presetValue || '');
-            // Selecting a trailer type (preset OR Custom/Manual) always
-            // resets AutoCAD split back to blank ("auto" — whole train =
-            // one block), rather than carrying over a split that may no
-            // longer match the new axle-line count. Use the "Auto" button
-            // afterward to fill in the actual computed segments.
-            train.cadSplit = '';
             if (!m) {
+                // Custom/Manual has no known axle-line count to split
+                // automatically, so AutoCAD split resets to blank
+                // ("auto" — whole train = one block). Use the
+                // "↻ Recalc Split" button afterward once axle groups are
+                // set manually.
+                train.cadSplit = '';
                 train.trailerType = 'custom';
                 train.axleLineCount = null;
                 train.deckLength = null;
@@ -1157,6 +1192,15 @@
             const axleLineCount = parseInt(m[2], 10);
             const preset = TRAILER_PRESETS[train.trailerType][axleLineCount];
             if (!preset) return;
+            // Selecting a manufacturer preset (which fixes the axle-line
+            // count) automatically (re)computes the AutoCAD split for
+            // that count — e.g. picking a 10-line preset immediately
+            // fills in "4,6" — rather than resetting to blank and
+            // requiring a manual button press. If the axle-line count is
+            // later changed by hand (extra axle groups added/removed),
+            // use the "↻ Recalc Split" button to bring the split back in
+            // sync with the new count.
+            train.cadSplit = computeAutoCadSplit(axleLineCount);
             train.axleLineCount = axleLineCount;
             train.deckLength = preset.deckLength;
             train.deckWidth = preset.deckWidth;
@@ -1515,7 +1559,7 @@
             // doesn't block the Adjust_Wheels write that follows.
             await pushSetTrainGroupToExcel();
             await pushTrainOffsetsToExcel();
-            await pushValueToSheetCell(DISPLAY_SHEET_NAME, DISPLAY_Z_HEIGHT_CELL, tgZTrailerHeightMm, 'Z Trailer Height');
+            await pushValueToSheetCell(ZHEIGHT_SHEET_NAME, ZHEIGHT_CELL, tgZTrailerHeightMm, 'Z Trailer Height');
 
             // ---- Step 2: clear the fixed Adjust_Wheels block + write
             // axle-line labels ----
@@ -2439,6 +2483,37 @@
             </div>`;
         }
 
+        // Trailer CoG (Display!B15:D15) + Combined CoG (Display!B16:D16)
+        // — read-only output cells, never written back. Called on panel
+        // open/refresh (seedInitialOffsetsFromExcel) and alongside the
+        // cargo pull (pullCargoFromExcel), in its own try/catch so a
+        // missing "Display" sheet never blocks either of those.
+        async function pullCogSignsFromExcel() {
+            if (!isOfficeInitialized) return;
+            try {
+                let rows = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
+                    const range = sheet.getRange(COG_SIGNS_RANGE);
+                    range.load('values');
+                    await context.sync();
+                    rows = range.values;
+                });
+                if (rows && rows[0]) {
+                    const [tx, ty, tz] = rows[0].map(v => parseFloat(v));
+                    cogTrailerSign = { x: Number.isFinite(tx) ? tx : 0, y: Number.isFinite(ty) ? ty : 0, z: Number.isFinite(tz) ? tz : 0 };
+                    cogTrailerSignLoaded = true;
+                }
+                if (rows && rows[1]) {
+                    const [cx, cy, cz] = rows[1].map(v => parseFloat(v));
+                    cogCombinedSign = { x: Number.isFinite(cx) ? cx : 0, y: Number.isFinite(cy) ? cy : 0, z: Number.isFinite(cz) ? cz : 0 };
+                    cogCombinedSignLoaded = true;
+                }
+            } catch (e) {
+                console.warn(`Could not pull CoG signs from '${DISPLAY_SHEET_NAME}'!${COG_SIGNS_RANGE}`, e);
+            }
+        }
+
         // Pulled automatically on panel open/refresh (see initDashboard)
         // and via the "⇩ Refresh from Excel" button. Silent + a no-op
         // when every row is blank, matching pullWheelDataFromExcel's
@@ -2449,6 +2524,7 @@
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull cargo data.');
                 return;
             }
+            await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside, never blocks the cargo pull below
             try {
                 let values = null, totalValues = null, dimValues = null, geomValues = null;
                 await Excel.run(async (context) => {
@@ -2665,8 +2741,8 @@
         async function pushValueToInputCell(cell, value, label) {
             return pushValueToSheetCell(INPUT_SHEET_NAME, cell, value, label);
         }
-        // Generic single-cell push, used when the target isn't the
-        // "Input" sheet (e.g. Z Trailer Height -> "Display"!B11).
+        // Generic single-cell push, used for single-cell targets like
+        // Z Trailer Height -> "Input"!BD26.
         async function pushValueToSheetCell(sheetName, cell, value, label) {
             if (!isOfficeInitialized) return;
             try {
@@ -2681,7 +2757,7 @@
         }
 
         // ---- Z Trailer Height (mm) — single global value, synced with
-        // Excel "Display"!B11. Editing the field updates the value and
+        // Excel "Input"!BD26. Editing the field updates the value and
         // re-renders (the elevation preview + every axle row's VCG
         // column depend on it); pullZTrailerHeightFromExcel() re-reads
         // it on demand (⇩ button); pushDataToExcel() writes it back out
@@ -2700,25 +2776,25 @@
             try {
                 let raw = null;
                 await Excel.run(async (context) => {
-                    const sheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
-                    const range = sheet.getRange(DISPLAY_Z_HEIGHT_CELL);
+                    const sheet = context.workbook.worksheets.getItem(ZHEIGHT_SHEET_NAME);
+                    const range = sheet.getRange(ZHEIGHT_CELL);
                     range.load("values");
                     await context.sync();
                     raw = range.values[0][0];
                 });
                 const v = parseFloat(raw);
                 if (!Number.isFinite(v) || v <= 0) {
-                    alert(`${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL} doesn't hold a valid positive number.`);
+                    alert(`${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL} doesn't hold a valid positive number.`);
                     return;
                 }
                 tgZTrailerHeightMm = v;
                 renderTrailerDashboard();
                 renderTrailerGeneratorTotals();
                 renderTrailerGenPreview();
-                logMsg(`↺ Pulled Z Trailer Height (${v}mm) from ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}.`);
+                logMsg(`↺ Pulled Z Trailer Height (${v}mm) from ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}.`);
             } catch (e) {
-                console.warn(`Could not read ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}`, e);
-                alert(`Could not read ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}. Make sure a sheet named "${DISPLAY_SHEET_NAME}" exists with the value in that cell.`);
+                console.warn(`Could not read ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}`, e);
+                alert(`Could not read ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}. Make sure a sheet named "${ZHEIGHT_SHEET_NAME}" exists with the value in that cell.`);
             }
         }
 
@@ -2805,10 +2881,9 @@
                 const offsetRanges = [];
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
-                    const displaySheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
                     const numTrainsRange = sheet.getRange(INPUT_NUM_TRAINS_CELL);
                     const numGroupsRange = sheet.getRange(INPUT_NUM_GROUPS_CELL);
-                    const zHeightRange = displaySheet.getRange(DISPLAY_Z_HEIGHT_CELL);
+                    const zHeightRange = sheet.getRange(ZHEIGHT_CELL);
                     numTrainsRange.load("values");
                     numGroupsRange.load("values");
                     zHeightRange.load("values");
@@ -2843,8 +2918,9 @@
                     if (!isNaN(xNum)) { train.x = xNum; linkedCount++; }
                     if (!isNaN(yNum)) { train.y = yNum; }
                 }
+                await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
                 renderTrailerDashboard();
-                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
+                logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
                 console.warn('Could not seed initial values from Input sheet', e);
             }
@@ -3012,7 +3088,7 @@
                 // #1 sits exactly at train.x/train.y as before.
                 const baseX = (parseFloat(train.x) || 0) + (parseFloat(train.axle1OffsetX) || 0);
                 const y = (parseFloat(train.y) || 0) + (parseFloat(train.axle1OffsetY) || 0);
-                const vcg = tgZTrailerHeightMm; // global Z Trailer Height — shared by every axle of every train, see DISPLAY_Z_HEIGHT_CELL above
+                const vcg = tgZTrailerHeightMm; // global Z Trailer Height — shared by every axle of every train, see ZHEIGHT_CELL above
                 const axlePairOffsetY = parseFloat(train.axlePairOffsetY) || 0;
                 const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
 
@@ -3087,9 +3163,9 @@
                                onchange="setNumberOfHydraulicGroups(this.value)">
                     </div>
                     <div class="tg-field">
-                        <label>🔗 Z TRAILER HEIGHT (MM) <button type="button" class="tg-xy-sync-btn" title="Pull Z Trailer Height from Excel ${DISPLAY_SHEET_NAME}!${DISPLAY_Z_HEIGHT_CELL}" onclick="pullZTrailerHeightFromExcel()">⇩</button></label>
+                        <label>🔗 Z TRAILER HEIGHT (MM) <button type="button" class="tg-xy-sync-btn" title="Pull Z Trailer Height from Excel ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}" onclick="pullZTrailerHeightFromExcel()">⇩</button></label>
                         <input type="number" step="any" min="0" value="${tgZTrailerHeightMm}"
-                               title="Ground -> top of deck height (mm), shared by every train. Drives the Side + end elevation preview's deck line and the VCG value written to every axle row. Synced with Excel sheet '${DISPLAY_SHEET_NAME}'!${DISPLAY_Z_HEIGHT_CELL} — pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel'."
+                               title="Ground -> top of deck height (mm), shared by every train. Drives the Side + end elevation preview's deck line and the VCG value written to every axle row. Synced with Excel sheet '${ZHEIGHT_SHEET_NAME}'!${ZHEIGHT_CELL} — pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel'."
                                onchange="updateZTrailerHeight(this.value)">
                     </div>
                 </div>`;
@@ -3150,8 +3226,8 @@
                                    title="Leave blank for one AutoCAD block covering all axle lines. Enter comma-separated axle-line counts (matching CAD_BLOCK_MAP, e.g. 4,6) to insert one block per physical unit instead."
                                    onchange="updateTrailerGenField(${train.id}, 'cadSplit', this.value)">
                             <button type="button" class="tg-cad-split-auto-btn"
-                                    title="Fill in as many 4-line modules as fit, with the final module (up to 6 lines) taking whatever's left over — e.g. 10 axle lines -> 4,6"
-                                    onclick="applyAutoCadSplit(${train.id})">Auto</button>
+                                    title="Recalculate the AutoCAD split from this train's CURRENT axle line count — fills in as many 4-line modules as fit, with the final module (up to 6 lines) taking whatever's left over (e.g. 10 axle lines -> 4,6). Trailer-type presets already auto-fill this on selection; use this button after manually changing axle groups so a stale split doesn't go stale/mismatched."
+                                    onclick="applyAutoCadSplit(${train.id})">↻ Recalc Split</button>
                         </div>
                         <div class="tg-cad-split-status" id="tgCadSplitStatus_${train.id}">${(() => {
                             const axleCount = maxAxle;
@@ -3737,20 +3813,29 @@
                     `</g>`;
             });
 
-            // Combined "Total CoG" sign — the single weighted-average CoG
-            // across every cargo item, read live from Excel
-            // "Input"!AZ40:BD40 (a formula cell, never computed locally
-            // here) via cargoTotal. Drawn only once total weight is
-            // actually present (i.e. cargo has been pushed/pulled and the
-            // TOTAL row has resolved), in a distinct color/size from the
-            // per-item CoG symbols above so it reads as the combined
-            // reference point rather than another cargo item.
-            if (cargoTotal.weight > 0) {
-                const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000, totCyMm = (parseFloat(cargoTotal.y) || 0) * 1000;
-                const totCx = sx(totCxMm), totCy = sy(totCyMm);
+            // Trailer CoG + Combined CoG signs — read live from Excel
+            // "Display"!B15:D15 / B16:D16 (output cells, never computed
+            // locally here, never written back) via cogTrailerSign /
+            // cogCombinedSign. Already world mm (unlike the per-item
+            // cargo CoG fields above, which are meters), so no *1000
+            // conversion. Drawn once each has actually been pulled at
+            // least once, in distinct colors/sizes from the per-item CoG
+            // symbols above so they read as reference points rather than
+            // another cargo item. Combined CoG is offset slightly above
+            // Trailer CoG's label when both signs land at/near the same
+            // point, so the two labels don't overlap each other.
+            if (cogTrailerSignLoaded) {
+                const tCx = sx(parseFloat(cogTrailerSign.x) || 0), tCy = sy(parseFloat(cogTrailerSign.y) || 0);
                 cargoSvg += `<g>` +
-                    `<text x="${totCx}" y="${totCy - 12}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}">TOTAL CoG · ${cargoTotal.weight.toFixed(1)} t</text>` +
-                    cogSymbolSvg(totCx, totCy, 9, TG_CARGO_TOTAL_COLOR) +
+                    `<text x="${tCx}" y="${tCy - 12}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_COG_TRAILER_COLOR}">Trailer CoG</text>` +
+                    cogSymbolSvg(tCx, tCy, 9, TG_COG_TRAILER_COLOR) +
+                    `</g>`;
+            }
+            if (cogCombinedSignLoaded) {
+                const cCx = sx(parseFloat(cogCombinedSign.x) || 0), cCy = sy(parseFloat(cogCombinedSign.y) || 0);
+                cargoSvg += `<g>` +
+                    `<text x="${cCx}" y="${cCy - 24}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}">Combined CoG</text>` +
+                    cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
                     `</g>`;
             }
 
@@ -3847,14 +3932,25 @@
                     dimensionsSvg += dimV(0, cyMm, 0, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m`, cargoColor, 'left');
                 });
 
-                // World origin (0,0) → combined "TOTAL CoG", same style as
-                // the per-item cargo dimension lines above, one tier
-                // further out so it doesn't overlap them.
-                if (cargoTotal.weight > 0) {
-                    const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000, totCyMm = (parseFloat(cargoTotal.y) || 0) * 1000;
-                    const totTier = 2 + trailerGenTrains.length + cargoItems.length;
-                    dimensionsSvg += dimH(0, totCxMm, 0, totTier, `${(parseFloat(cargoTotal.x) || 0).toFixed(3)} m`, TG_CARGO_TOTAL_COLOR);
-                    dimensionsSvg += dimV(0, totCyMm, 0, totTier, `${(parseFloat(cargoTotal.y) || 0).toFixed(3)} m`, TG_CARGO_TOTAL_COLOR, 'left');
+                // World origin (0,0) → Trailer CoG and → Combined CoG,
+                // same style as the per-item cargo dimension lines above
+                // — each on its OWN tier, one after another past the
+                // last cargo item's tier, so the two new signs' dimension
+                // lines never land on the same tier as each other or as
+                // anything already drawn (this is what keeps them from
+                // blocking/overlapping in the preview).
+                let tgNextDimTier = 2 + trailerGenTrains.length + cargoItems.length;
+                if (cogTrailerSignLoaded) {
+                    const tCxMm = parseFloat(cogTrailerSign.x) || 0, tCyMm = parseFloat(cogTrailerSign.y) || 0;
+                    const tTier = tgNextDimTier++;
+                    dimensionsSvg += dimH(0, tCxMm, 0, tTier, `${Math.round(tCxMm)}`, TG_COG_TRAILER_COLOR);
+                    dimensionsSvg += dimV(0, tCyMm, 0, tTier, `${Math.round(tCyMm)}`, TG_COG_TRAILER_COLOR, 'left');
+                }
+                if (cogCombinedSignLoaded) {
+                    const cCxMm = parseFloat(cogCombinedSign.x) || 0, cCyMm = parseFloat(cogCombinedSign.y) || 0;
+                    const cTier = tgNextDimTier++;
+                    dimensionsSvg += dimH(0, cCxMm, 0, cTier, `${Math.round(cCxMm)}`, TG_CARGO_TOTAL_COLOR);
+                    dimensionsSvg += dimV(0, cCyMm, 0, cTier, `${Math.round(cCyMm)}`, TG_CARGO_TOTAL_COLOR, 'left');
                 }
             }
 
@@ -4059,7 +4155,7 @@
             // + Z), regardless of this item's Height-start/stacking
             // reference — so moving/stacking the box (Height-start) never
             // moves the CoG sign, and vice versa.
-            // NOTE: tgZTrailerHeightMm (Excel "Display"!B11) is already the
+            // NOTE: tgZTrailerHeightMm (Excel "Input"!BD26) is already the
             // full ground → top-of-deck height, so it's used directly
             // here (NOT + TG_ELEV_DECK_THICK — that constant is only the
             // cosmetic thickness of the deck rectangle drawn hanging
@@ -4341,17 +4437,26 @@
                 });
             });
 
-            // Combined "Total CoG" sign (side + end view) — same
-            // Excel-sourced cargoTotal used in the plan view. Its Z is
-            // always height-above-the-trailer-deck, drawn from
-            // deckTopWorldZ, same as every per-item cargo box above.
-            if (cargoTotal.weight > 0) {
-                const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000;
-                const totCyMm = (parseFloat(cargoTotal.y) || 0) * 1000;
-                const totCogWorldZ = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
-                cargoElevSvg += cogSymbolSvg(sx(totCxMm), sz(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
-                cargoElevSvg += cogSymbolSvg(sy1(totCyMm), szEnd(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
-                cargoElevSvg += cogSymbolSvg(sy2(totCyMm), szEnd(totCogWorldZ), 9, TG_CARGO_TOTAL_COLOR);
+            // Trailer CoG + Combined CoG signs (side + end view) — same
+            // Excel-sourced cogTrailerSign/cogCombinedSign used in the
+            // plan view. Unlike every per-item cargo box above, their Z
+            // is already an ABSOLUTE ground height (Display!D15/D16), so
+            // it's used directly here — NOT added to deckTopWorldZ.
+            if (cogTrailerSignLoaded) {
+                const tCxMm = parseFloat(cogTrailerSign.x) || 0;
+                const tCyMm = parseFloat(cogTrailerSign.y) || 0;
+                const tWorldZ = parseFloat(cogTrailerSign.z) || 0;
+                cargoElevSvg += cogSymbolSvg(sx(tCxMm), sz(tWorldZ), 9, TG_COG_TRAILER_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy1(tCyMm), szEnd(tWorldZ), 9, TG_COG_TRAILER_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy2(tCyMm), szEnd(tWorldZ), 9, TG_COG_TRAILER_COLOR);
+            }
+            if (cogCombinedSignLoaded) {
+                const cCxMm = parseFloat(cogCombinedSign.x) || 0;
+                const cCyMm = parseFloat(cogCombinedSign.y) || 0;
+                const cWorldZ = parseFloat(cogCombinedSign.z) || 0;
+                cargoElevSvg += cogSymbolSvg(sx(cCxMm), sz(cWorldZ), 9, TG_CARGO_TOTAL_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy1(cCyMm), szEnd(cWorldZ), 9, TG_CARGO_TOTAL_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy2(cCyMm), szEnd(cWorldZ), 9, TG_CARGO_TOTAL_COLOR);
             }
 
             // ---- Dimensions ----
@@ -4419,22 +4524,30 @@
                         `</g>`;
                 });
 
-                // Combined "TOTAL CoG" height (Z) — deck top up to the
-                // combined CoG point, same style as the per-item Z
-                // dimensions above, drawn in the TOTAL sign's own color.
-                if (cargoTotal.weight > 0) {
-                    const totCxMm = (parseFloat(cargoTotal.x) || 0) * 1000;
-                    const totCogWorldZ = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
-                    const totDimX = sx(totCxMm) - 10 - (cargoItems.length ? 12 : 0);
-                    const totDimYTop = sz(totCogWorldZ), totDimYBot = sz(deckTopWorldZ);
-                    const totMidY = (totDimYTop + totDimYBot) / 2;
+                // Trailer CoG + Combined CoG height (Z) — ground (world
+                // Z = 0) up to each sign's own CoG point, same style as
+                // the per-item Z dimensions above, each drawn in its own
+                // sign's color. Unlike the per-item cargo Z dimensions,
+                // these read straight up from the ground line (not the
+                // trailer deck), since Display!D15/D16 is already the
+                // ground -> CoG height. The two lines sit on their own
+                // horizontal offsets, one further out than the other, so
+                // they never land on top of each other or the per-item
+                // cargo Z dimensions above.
+                const tgCogZDims = [];
+                if (cogTrailerSignLoaded) tgCogZDims.push({ xMm: parseFloat(cogTrailerSign.x) || 0, worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG Z' });
+                if (cogCombinedSignLoaded) tgCogZDims.push({ xMm: parseFloat(cogCombinedSign.x) || 0, worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'Combined CoG Z' });
+                tgCogZDims.forEach((d, dIdx) => {
+                    const dimX = sx(d.xMm) - 10 - (cargoItems.length ? 12 : 0) - dIdx * 14;
+                    const dimYTop = sz(d.worldZ), dimYBot = sz(0);
+                    const midY = (dimYTop + dimYBot) / 2;
                     dimSvg += `<g opacity="0.9">` +
-                        `<line x1="${totDimX}" y1="${totDimYBot}" x2="${totDimX}" y2="${totDimYTop}" stroke="${TG_CARGO_TOTAL_COLOR}" stroke-width="1" stroke-dasharray="2 2"/>` +
-                        `<line x1="${totDimX - 3}" y1="${totDimYBot}" x2="${totDimX + 3}" y2="${totDimYBot}" stroke="${TG_CARGO_TOTAL_COLOR}" stroke-width="1"/>` +
-                        `<line x1="${totDimX - 3}" y1="${totDimYTop}" x2="${totDimX + 3}" y2="${totDimYTop}" stroke="${TG_CARGO_TOTAL_COLOR}" stroke-width="1"/>` +
-                        `<text x="${totDimX - 4}" y="${totMidY}" font-size="${fDim}" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}" transform="rotate(-90 ${totDimX - 4} ${totMidY})">TOTAL Z ${(parseFloat(cargoTotal.z) || 0).toFixed(3)} m</text>` +
+                        `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${d.color}" stroke-width="1"/>` +
+                        `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1"/>` +
+                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${dimX - 4} ${midY})">${d.label} ${(d.worldZ / 1000).toFixed(3)} m</text>` +
                         `</g>`;
-                }
+                });
             }
 
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
