@@ -4254,15 +4254,21 @@
             // of the side view (see "Dimensions" below): per-item cargo
             // CoG Z tiers outward to the left of the left end view,
             // Trailer/Combined CoG Z tiers outward to the right of the
-            // right end view. Sized the same way those tiers are spaced
-            // (12px clearance + 14px per additional item) so the panels
-            // never clip the call-outs, and computed here (rather than
-            // where the dims are actually drawn, further below) since
-            // it has to feed the canvas width/offsets before those are
-            // laid out.
-            const leftDimMargin = cargoItems.length > 0 ? 22 + (cargoItems.length - 1) * 14 : 0;
+            // right end view. TG_COGZ_TIER_STEP has to clear each tier's
+            // OWN rotated text (not just the tick marks) before the next
+            // tier's line starts, or the text visually crosses that next
+            // line — see the "Dimensions" section below for how these
+            // are consumed. Computed here (rather than where the dims
+            // are actually drawn, further below) since it has to feed
+            // the canvas width/offsets before those are laid out.
+            const TG_COGZ_LINE_GAP = 12;   // panel edge -> first tier's dimension line
+            const TG_COGZ_TIER_STEP = 26;  // successive tiers' line spacing (must clear the rotated text below)
+            const TG_COGZ_TEXT_GAP = 10;   // dimension line -> its own rotated label
+            const leftDimMargin = cargoItems.length > 0
+                ? TG_COGZ_LINE_GAP + (cargoItems.length - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
             const cogZDimCount = (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
-            const rightDimMargin = cogZDimCount > 0 ? 22 + (cogZDimCount - 1) * 14 : 0;
+            const rightDimMargin = cogZDimCount > 0
+                ? TG_COGZ_LINE_GAP + (cogZDimCount - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
 
             // Canvas width matches the plan view's own canvas width
             // (unless the two end views together need more room than the
@@ -4561,7 +4567,7 @@
                 cargoItems.forEach((c, dimCargoIdx) => {
                     const cargoColor = cargoColorFor(dimCargoIdx);
                     const { cogWorldZ } = cargoBoxZ[dimCargoIdx];
-                    const dimX = endOffsetX1 - 15 - 12 - dimCargoIdx * 14;
+                    const dimX = endOffsetX1 - 15 - TG_COGZ_LINE_GAP - dimCargoIdx * TG_COGZ_TIER_STEP;
                     const dimYTop = szEnd(cogWorldZ), dimYBot = deckTopYEnd;
                     const midY = (dimYTop + dimYBot) / 2;
                     // Labeled with the CoG's actual total height above the
@@ -4570,11 +4576,12 @@
                     // own Z input, which is only relative to its own
                     // Height-start reference when stacked on a previous item.
                     const totalZAboveDeckM = ((cogWorldZ - deckTopWorldZ) / 1000).toFixed(3);
+                    const textX = dimX - TG_COGZ_TEXT_GAP;
                     dimSvg += `<g opacity="0.9">` +
                         `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${cargoColor}" stroke-width="1"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${dimX - 4} ${midY})">Z ${totalZAboveDeckM} m</text>` +
+                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${textX} ${midY})">Z ${totalZAboveDeckM} m</text>` +
                         `</g>`;
                 });
 
@@ -4594,14 +4601,15 @@
                 if (cogTrailerSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG Z' });
                 if (cogCombinedSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'Combined CoG Z' });
                 tgCogZDims.forEach((d, dIdx) => {
-                    const dimX = endOffsetX2 + endW + 15 + 12 + dIdx * 14;
+                    const dimX = endOffsetX2 + endW + 15 + TG_COGZ_LINE_GAP + dIdx * TG_COGZ_TIER_STEP;
                     const dimYTop = szEnd(d.worldZ), dimYBot = endGroundY;
                     const midY = (dimYTop + dimYBot) / 2;
+                    const textX = dimX + TG_COGZ_TEXT_GAP;
                     dimSvg += `<g opacity="0.9">` +
                         `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${d.color}" stroke-width="1"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1"/>` +
-                        `<text x="${dimX + 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${dimX + 4} ${midY})">${d.label} ${(d.worldZ / 1000).toFixed(3)} m</text>` +
+                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${textX} ${midY})">${d.label} ${(d.worldZ / 1000).toFixed(3)} m</text>` +
                         `</g>`;
                 });
             }
