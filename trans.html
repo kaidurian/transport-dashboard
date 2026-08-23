@@ -432,7 +432,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.29)</h1>
+            <h1>🚂 Transport Dashboard (Rev.30)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1323,6 +1323,32 @@
             const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
             train.cadSplit = computeAutoCadSplit(axleCount);
             renderTrailerDashboard();
+        }
+
+        // Auto-heals a train's AutoCAD split so it never goes stale
+        // without a manual "↻ Recalc Split" click: if the split is blank
+        // OR doesn't sum to the train's CURRENT axle-line count (e.g. an
+        // axle group was added/removed by hand, or Adjust_Wheels pulled
+        // in a different axle count), it's recomputed the same way the
+        // button does. A split that's already valid for the current axle
+        // count — including a hand-typed custom combo that isn't the
+        // standard 4-then-remainder pattern — is left untouched, so this
+        // never fights a manual entry the operator is happy with; the
+        // button remains for forcing a reset back to the standard split
+        // on demand. Called from renderTrailerDashboard() itself (see
+        // below) so it runs on every load/refresh — add/remove train,
+        // add/remove axle group, preset change, Excel pull — without
+        // needing a button press. NOT wired into the lightweight
+        // per-keystroke path in updateTrailerGenField (cadSplit case),
+        // so it never overwrites text while it's actively being typed.
+        function ensureAutoCadSplitFresh(train) {
+            const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+            if (axleCount <= 0) return;
+            const segments = parseCadSplitString(train.cadSplit);
+            const sum = segments ? segments.reduce((s, n) => s + n, 0) : 0;
+            if (!segments || sum !== axleCount) {
+                train.cadSplit = computeAutoCadSplit(axleCount);
+            }
         }
 
         // A train's footprint in the Y direction — used to space newly
@@ -3142,6 +3168,14 @@
         }
 
         function renderTrailerDashboard() {
+            // Auto-refresh each train's AutoCAD split on every dashboard
+            // load/refresh, so a stale split (axle groups changed by
+            // hand, a preset swap, an Excel pull, etc.) never needs a
+            // manual "↻ Recalc Split" click to catch up — see
+            // ensureAutoCadSplitFresh for exactly what does/doesn't get
+            // touched. The button stays available for forcing a reset.
+            trailerGenTrains.forEach(ensureAutoCadSplitFresh);
+
             const startLabel = document.getElementById('tgStartRowLabel');
             if (startLabel) startLabel.textContent = String(AXLE_START_ROW);
 
@@ -4215,12 +4249,27 @@
             const endGap = 40; // gap between the two end-view panels
             const endsTotalW = endW * 2 + endGap;
 
+            // Extra outside-the-panel margin reserved for the CoG Z
+            // dimension call-outs that now live in the end views instead
+            // of the side view (see "Dimensions" below): per-item cargo
+            // CoG Z tiers outward to the left of the left end view,
+            // Trailer/Combined CoG Z tiers outward to the right of the
+            // right end view. Sized the same way those tiers are spaced
+            // (12px clearance + 14px per additional item) so the panels
+            // never clip the call-outs, and computed here (rather than
+            // where the dims are actually drawn, further below) since
+            // it has to feed the canvas width/offsets before those are
+            // laid out.
+            const leftDimMargin = cargoItems.length > 0 ? 22 + (cargoItems.length - 1) * 14 : 0;
+            const cogZDimCount = (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
+            const rightDimMargin = cogZDimCount > 0 ? 22 + (cogZDimCount - 1) * 14 : 0;
+
             // Canvas width matches the plan view's own canvas width
             // (unless the two end views together need more room than the
             // plan view's plot area, in which case it grows to fit).
             const contentW = Math.max(sideW, endsTotalW);
-            const svgW = Math.max(svgWTop, padL + contentW + padR);
-            const endOffsetX1 = padL + (contentW - endsTotalW) / 2; // left end-view panel
+            const svgW = Math.max(svgWTop, padL + leftDimMargin + contentW + rightDimMargin + padR);
+            const endOffsetX1 = padL + leftDimMargin + (contentW - endsTotalW) / 2; // left end-view panel
             const endOffsetX2 = endOffsetX1 + endW + endGap;        // right end-view panel
 
             const sideGroundY = padT + panelH;
@@ -4498,17 +4547,22 @@
                 });
 
                 // Cargo CoG height (Z) — vertical dimension from the
-                // trailer's own top deck up to the CoG point, drawn just
-                // left of each item's own CoG sign (X — CoG), in the
-                // cargo's own color. Anchored to the CoG X point itself
-                // (not the box) so Length/Width/box position never move
-                // this line — only X — CoG/Z — CoG do.
+                // trailer's own top deck up to the CoG point, in the
+                // cargo's own color. Drawn in the LEFT END VIEW, tiered
+                // outward from that panel's own left edge (rather than
+                // near the item's own X inside the side view), so it
+                // never overlaps the cargo box / wheels drawn inside the
+                // panel regardless of where the CoG sign itself sits —
+                // each additional cargo item tiers one step further left
+                // (see leftDimMargin above, which reserves the canvas
+                // space for this). Anchored to the CoG point itself (not
+                // the box) so Length/Width/box position never move this
+                // line — only X — CoG/Y — CoG/Z — CoG do.
                 cargoItems.forEach((c, dimCargoIdx) => {
                     const cargoColor = cargoColorFor(dimCargoIdx);
-                    const cxMm = (parseFloat(c.x) || 0) * 1000;
                     const { cogWorldZ } = cargoBoxZ[dimCargoIdx];
-                    const dimX = sx(cxMm) - 16;
-                    const dimYTop = sz(cogWorldZ), dimYBot = sz(deckTopWorldZ);
+                    const dimX = endOffsetX1 - 15 - 12 - dimCargoIdx * 14;
+                    const dimYTop = szEnd(cogWorldZ), dimYBot = deckTopYEnd;
                     const midY = (dimYTop + dimYBot) / 2;
                     // Labeled with the CoG's actual total height above the
                     // trailer top deck (matches the line drawn, which
@@ -4526,26 +4580,28 @@
 
                 // Trailer CoG + Combined CoG height (Z) — ground (world
                 // Z = 0) up to each sign's own CoG point, same style as
-                // the per-item Z dimensions above, each drawn in its own
-                // sign's color. Unlike the per-item cargo Z dimensions,
-                // these read straight up from the ground line (not the
-                // trailer deck), since Display!D15/D16 is already the
-                // ground -> CoG height. The two lines sit on their own
-                // horizontal offsets, one further out than the other, so
-                // they never land on top of each other or the per-item
-                // cargo Z dimensions above.
+                // the cargo Z dimensions above, each drawn in its own
+                // sign's color. Drawn in the RIGHT END VIEW, tiered
+                // outward from that panel's own right edge — keeps the
+                // side (front) view panel free of stacked Z call-outs
+                // entirely, and keeps these clear of the cargo Z dims
+                // (which live in the LEFT end view instead) as well as
+                // the deck/wheels drawn inside this panel. Unlike the
+                // per-item cargo Z dimensions, these read straight up
+                // from the ground line (not the trailer deck), since
+                // Display!D15/D16 is already the ground -> CoG height.
                 const tgCogZDims = [];
-                if (cogTrailerSignLoaded) tgCogZDims.push({ xMm: parseFloat(cogTrailerSign.x) || 0, worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG Z' });
-                if (cogCombinedSignLoaded) tgCogZDims.push({ xMm: parseFloat(cogCombinedSign.x) || 0, worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'Combined CoG Z' });
+                if (cogTrailerSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG Z' });
+                if (cogCombinedSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'Combined CoG Z' });
                 tgCogZDims.forEach((d, dIdx) => {
-                    const dimX = sx(d.xMm) - 10 - (cargoItems.length ? 12 : 0) - dIdx * 14;
-                    const dimYTop = sz(d.worldZ), dimYBot = sz(0);
+                    const dimX = endOffsetX2 + endW + 15 + 12 + dIdx * 14;
+                    const dimYTop = szEnd(d.worldZ), dimYBot = endGroundY;
                     const midY = (dimYTop + dimYBot) / 2;
                     dimSvg += `<g opacity="0.9">` +
                         `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${d.color}" stroke-width="1"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1"/>` +
-                        `<text x="${dimX - 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${dimX - 4} ${midY})">${d.label} ${(d.worldZ / 1000).toFixed(3)} m</text>` +
+                        `<text x="${dimX + 4}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${dimX + 4} ${midY})">${d.label} ${(d.worldZ / 1000).toFixed(3)} m</text>` +
                         `</g>`;
                 });
             }
