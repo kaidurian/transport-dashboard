@@ -432,7 +432,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.32)</h1>
+            <h1>🚂 Transport Dashboard (Rev.32.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -861,13 +861,14 @@
         // ---- Stability angle triangles (right end view only) — Excel
         // "Display" sheet, "3P SUSPENSION" block, rows 22-30. Two
         // right-triangles are drawn, one per system:
-        //   • single   — Trailer CoG (cogTrailerSign) down to the arm
-        //     point, arm length from Display!B26 ("Min" of the single
-        //     system's Side 1-2/2-3/1-3 distances), angle label from
-        //     Display!B29.
-        //   • combined — Combined CoG (cogCombinedSign) down to the arm
-        //     point, arm length from Display!C26, angle label from
-        //     Display!C30.
+        //   • single   — Cargo CoG (cargoTotal, the cargo-only weighted
+        //     CoG from Input!AZ40:BD40 — see cargoTotal above) down to
+        //     the arm point, arm length from Display!B26 ("Min" of the
+        //     single system's Side 1-2/2-3/1-3 distances), angle label
+        //     from Display!B29.
+        //   • combined — Combined CoG (cogCombinedSign, trailer +
+        //     cargo) down to the arm point, arm length from
+        //     Display!C26, angle label from Display!C30.
         // Both triangles' arm point sits at the SAME ground height,
         // Properties!G2 (mm) — the suspension roll/pivot height — read
         // from a different sheet than the arm/angle values themselves,
@@ -882,8 +883,8 @@
         const STAB_ANGLE_COMBINED_ROW = 30;
         const STAB_ANGLE_RANGE = `${STAB_ANGLE_COL}${STAB_ANGLE_SINGLE_ROW}:${STAB_ANGLE_COL}${STAB_ANGLE_COMBINED_ROW}`; // B29:B30
         const STAB_ARM_HEIGHT_CELL = "G2"; // Properties!G2 — arm-point ground height (mm), shared by both triangles
-        const TG_STAB_SINGLE_COLOR = TG_COG_TRAILER_COLOR;   // single-system triangle — matches Trailer CoG sign color
-        const TG_STAB_COMBINED_COLOR = TG_CARGO_TOTAL_COLOR; // combined-system triangle — matches Combined CoG sign color
+        const TG_STAB_SINGLE_COLOR = TG_CARGO_COLOR;         // single-system triangle (Cargo CoG apex) — cargo orange, distinct from the Trailer CoG sign (purple) already drawn in this same panel
+        const TG_STAB_COMBINED_COLOR = TG_CARGO_TOTAL_COLOR; // combined-system triangle (Combined CoG apex) — matches Combined CoG sign color
 
         // ---- Cargo dimension (Length/Width/Height) — Excel "Input
         // horizontal loads" sheet, H11:H13, meters. A separate sheet
@@ -4627,22 +4628,33 @@
             // label always matches the workbook even if this drawing's
             // scale/rounding differs slightly. Drawn only in the right
             // end view (sy2), same panel as the Trailer/Combined CoG Z
-            // dimensions above, and only once both the CoG sign and the
-            // stability numbers have actually been pulled — a sign
-            // never appears half-configured.
+            // dimensions above.
+            //
+            // Both the angle and arm-distance labels are kept OUTSIDE
+            // the triangle body (per-system radial/vertical offset, see
+            // TG_STAB_LABEL_STEP below) rather than tight against the
+            // apex/base, since the single and combined triangles' apex
+            // points (Cargo CoG, Combined CoG) sit close together
+            // vertically and would otherwise overlap each other's text.
+            const TG_STAB_LABEL_STEP = 16; // extra outward offset per system index, so single/combined labels never collide
             let stabTriSvg = '';
             if (stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) {
                 const armY = szEnd(stabilityArmHeightMm);
                 const stabSystems = [];
-                if (cogTrailerSignLoaded) {
+                // Single system — Cargo CoG (cargo-only weighted CoG,
+                // NOT the trailer's own CoG sign). cargoTotal.x/y are
+                // meters, world position; z is height ABOVE THE DECK
+                // (same convention as each cargo item's own CoG field),
+                // so it's converted to an absolute world Z the same way
+                // the per-item cargo boxes are, via + deckTopWorldZ.
+                if (cargoTotal.weight > 0) {
                     stabSystems.push({
-                        cogYMm: parseFloat(cogTrailerSign.y) || 0,
-                        cogZMm: parseFloat(cogTrailerSign.z) || 0,
+                        cogYMm: (parseFloat(cargoTotal.y) || 0) * 1000,
+                        cogZMm: deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000,
                         armMm: stabilityArmSingleMm,
                         angleDeg: stabilityAngleSingleDeg,
                         color: TG_STAB_SINGLE_COLOR,
                         label: 'Single',
-                        arcR: 22,
                     });
                 }
                 if (cogCombinedSignLoaded) {
@@ -4653,10 +4665,9 @@
                         angleDeg: stabilityAngleCombinedDeg,
                         color: TG_STAB_COMBINED_COLOR,
                         label: 'Combined',
-                        arcR: 32, // nested outside the single-system arc so both labels stay readable
                     });
                 }
-                stabSystems.forEach(s => {
+                stabSystems.forEach((s, sIdx) => {
                     const apexX = sy2(s.cogYMm), apexY = szEnd(s.cogZMm);
                     const armX = sy2(s.cogYMm + s.armMm);
                     // Right triangle: apex -> arm point -> foot (directly below apex, at arm height) -> apex.
@@ -4667,20 +4678,40 @@
                     // solid triangle edge, matching the reference GA
                     // drawing's plain vertical center line).
                     stabTriSvg += `<line x1="${apexX}" y1="${apexY}" x2="${apexX}" y2="${armY}" stroke="${s.color}" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>`;
-                    // Angle arc at the apex, between the vertical leg and the hypotenuse.
-                    const dx = armX - apexX, dz = armY - apexY;
-                    const angleRad = Math.atan2(dx, dz); // 0 = straight down, sweeping toward the arm point
-                    const sweepFlag = angleRad >= 0 ? 1 : 0;
-                    const arcStartX = apexX, arcStartY = apexY + s.arcR;
-                    const arcEndX = apexX + s.arcR * Math.sin(angleRad), arcEndY = apexY + s.arcR * Math.cos(angleRad);
-                    stabTriSvg += `<path d="M ${arcStartX} ${arcStartY} A ${s.arcR} ${s.arcR} 0 0 ${sweepFlag} ${arcEndX} ${arcEndY}" fill="none" stroke="${s.color}" stroke-width="1.2"/>`;
-                    const midAngle = angleRad / 2;
-                    const labelR = s.arcR + 14;
-                    const labelX = apexX + labelR * Math.sin(midAngle), labelY = apexY + labelR * Math.cos(midAngle);
-                    stabTriSvg += `<text x="${labelX}" y="${labelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.angleDeg.toFixed(1)}°</text>`;
-                    // Arm distance label along the horizontal (base) leg.
-                    const armMidX = (apexX + armX) / 2;
-                    stabTriSvg += `<text x="${armMidX}" y="${armY + 14}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.armMm.toFixed(1)}</text>`;
+                    // Small right-angle tick at the foot, between the
+                    // vertical leg and the horizontal arm leg — standard
+                    // technical-drawing convention, replaces the old
+                    // apex-hugging arc (which is what collided between
+                    // the two systems when their apexes sit close
+                    // together).
+                    const footSign = armX >= apexX ? 1 : -1;
+                    const tick = 6;
+                    stabTriSvg += `<path d="M ${apexX} ${armY - tick} L ${apexX + footSign * tick} ${armY - tick} L ${apexX + footSign * tick} ${armY}" fill="none" stroke="${s.color}" stroke-width="1"/>`;
+                    // Angle label — placed OUTSIDE the hypotenuse
+                    // (perpendicular offset away from the triangle's
+                    // interior, at the hypotenuse's own midpoint) rather
+                    // than at the apex, with each system's offset
+                    // stepped out by TG_STAB_LABEL_STEP so the two
+                    // systems' labels never overlap even when their
+                    // hypotenuses run close together.
+                    const midX = (apexX + armX) / 2, midY = (apexY + armY) / 2;
+                    const hx = armX - apexX, hz = armY - apexY;
+                    const hLen = Math.hypot(hx, hz) || 1;
+                    // Perpendicular to the hypotenuse, chosen to point
+                    // away from the vertical reference leg (i.e. away
+                    // from the triangle's interior/fill).
+                    let px = -hz / hLen, py = hx / hLen;
+                    if (px * footSign < 0) { px = -px; py = -py; }
+                    const labelOff = 14 + sIdx * TG_STAB_LABEL_STEP;
+                    const angleLabelX = midX + px * labelOff, angleLabelY = midY + py * labelOff;
+                    stabTriSvg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°</text>`;
+                    // Arm distance label — placed below the arm foot
+                    // point, outside the triangle's base leg, each
+                    // system stacked at its own vertical tier so the
+                    // single/combined arm labels (whose arm points sit
+                    // close together horizontally) never collide.
+                    const armLabelY = armY + 14 + sIdx * TG_STAB_LABEL_STEP;
+                    stabTriSvg += `<text x="${armX}" y="${armLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.armMm.toFixed(1)}</text>`;
                 });
             }
 
@@ -4707,7 +4738,13 @@
                     `<line x1="${sideOffsetX - 16}" y1="${deckTopY}" x2="${sideOffsetX - 8}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
                     `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgZTrailerHeightMm}</text>` +
                     `</g>`;
-                [sy1, sy2].forEach(syFn => {
+                // Deck width dimension — drawn only in the LEFT END
+                // VIEW. Removed from the right end view since that
+                // panel is now reserved for the stability angle
+                // triangles + their arm/angle call-outs below; keeping
+                // the deck-width dimension there as well just added
+                // visual clutter competing with those.
+                [sy1].forEach(syFn => {
                     trailerGenTrains.forEach(t => {
                         if (!t.deckWidth) return;
                         const oy = parseFloat(t.y) || 0;
