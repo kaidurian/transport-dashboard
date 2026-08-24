@@ -421,17 +421,6 @@
         }
         .tg-add-group-btn:hover { border-color: var(--accent-blue); }
 
-        /* ---- Stability envelope panel (independent general-mechanics
-           model — see computeStabilityEnvelope()) ---- */
-        .tg-stability-wrap { margin-top: 10px; border: 1px solid var(--border-color, #333); border-radius: 6px; padding: 8px 10px; }
-        .tg-stability-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
-        .tg-stability-head h4 { margin: 0; font-size: 13px; }
-        .tg-stability-inputs { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; font-size: 12px; }
-        .tg-stability-inputs label { display: flex; flex-direction: column; gap: 2px; }
-        .tg-stability-inputs input { width: 72px; }
-        .tg-stability-note { font-size: 11px; opacity: 0.75; margin: 4px 0 8px; }
-        .tg-stability-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 11px; margin-top: 6px; }
-        .tg-stability-legend span.swatch { display: inline-block; width: 22px; height: 0; border-top-width: 2px; border-top-style: solid; margin-right: 4px; vertical-align: middle; }
         .tg-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px; }
         .tg-footer .tg-btn-primary { background: var(--accent-blue); border-color: var(--accent-blue); color: #06202e; }
 
@@ -443,7 +432,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.31)</h1>
+            <h1>🚂 Transport Dashboard (Rev.32)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -627,51 +616,6 @@
                     </div>
 
                     <div class="tg-totals" id="tgTotals"></div>
-
-                    <div class="tg-stability-wrap">
-                        <div class="tg-stability-head" onclick="toggleStabilityPanel()">
-                            <h4>🧭 Stability Envelope (slope vs. camber)</h4>
-                            <button type="button" class="tg-help-btn" id="tgStabilityToggleBtn">▾ Hide</button>
-                        </div>
-                        <div id="tgStabilityBody">
-                            <p class="tg-stability-note">
-                                Independent general-mechanics estimate (static tip-over ellipse +
-                                friction-circle traction limit), built from this convoy's current
-                                CoG, footprint and axle loads. It is <strong>not</strong> a
-                                reproduction of any manufacturer's proprietary dynamic-stability
-                                tool — it ignores acceleration/braking, wind and suspension-stroke
-                                saturation, so treat it as a rough sanity check only.
-                            </p>
-                            <div class="tg-stability-inputs">
-                                <label>Friction coeff. (μ)
-                                    <input type="number" id="tgStabFriction" step="0.05" min="0.1" max="1"
-                                           value="0.5" onchange="updateStabilityField('friction', this.value)">
-                                </label>
-                                <label>Driven axle fraction
-                                    <input type="number" id="tgStabDrivenFrac" step="0.05" min="0.1" max="1"
-                                           value="1" onchange="updateStabilityField('drivenFraction', this.value)">
-                                </label>
-                                <label>Required slope min [%]
-                                    <input type="number" id="tgStabSlopeMin" step="0.5"
-                                           value="-5" onchange="updateStabilityField('reqSlopeMin', this.value)">
-                                </label>
-                                <label>Required slope max [%]
-                                    <input type="number" id="tgStabSlopeMax" step="0.5"
-                                           value="5" onchange="updateStabilityField('reqSlopeMax', this.value)">
-                                </label>
-                                <label>Required camber min [%]
-                                    <input type="number" id="tgStabCamberMin" step="0.5"
-                                           value="-3" onchange="updateStabilityField('reqCamberMin', this.value)">
-                                </label>
-                                <label>Required camber max [%]
-                                    <input type="number" id="tgStabCamberMax" step="0.5"
-                                           value="3" onchange="updateStabilityField('reqCamberMax', this.value)">
-                                </label>
-                            </div>
-                            <div id="tgStabilityPanel"></div>
-                            <div class="tg-stability-legend" id="tgStabilityLegend"></div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -839,6 +783,7 @@
         // Excel" (see pushDataToExcel). Falls back to the default below
         // if the cell is blank or not a valid positive number. ----
         const DISPLAY_SHEET_NAME = "Display";
+        const PROPERTIES_SHEET_NAME = "Properties"; // stability-arm ground height (G2) lives here — separate sheet from Display
         const ZHEIGHT_SHEET_NAME = "Input";
         const ZHEIGHT_CELL = "BD26";
         const TG_Z_TRAILER_HEIGHT_DEFAULT = 1500;
@@ -912,6 +857,33 @@
         const COG_COMBINED_RANGE = `${COG_SIGN_X_COL}${COG_COMBINED_ROW}:${COG_SIGN_Z_COL}${COG_COMBINED_ROW}`; // B16:D16
         const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_SIGN_Z_COL}${COG_COMBINED_ROW}`;     // B15:D16 — both rows in one read
         const TG_COG_TRAILER_COLOR = 'var(--accent-purple, #a855f7)'; // Trailer CoG sign — distinct from Combined CoG (red) and per-item cargo colors
+
+        // ---- Stability angle triangles (right end view only) — Excel
+        // "Display" sheet, "3P SUSPENSION" block, rows 22-30. Two
+        // right-triangles are drawn, one per system:
+        //   • single   — Trailer CoG (cogTrailerSign) down to the arm
+        //     point, arm length from Display!B26 ("Min" of the single
+        //     system's Side 1-2/2-3/1-3 distances), angle label from
+        //     Display!B29.
+        //   • combined — Combined CoG (cogCombinedSign) down to the arm
+        //     point, arm length from Display!C26, angle label from
+        //     Display!C30.
+        // Both triangles' arm point sits at the SAME ground height,
+        // Properties!G2 (mm) — the suspension roll/pivot height — read
+        // from a different sheet than the arm/angle values themselves,
+        // so it's pulled in its own try/catch (missing "Properties"
+        // sheet shouldn't block the Display-sheet stability numbers).
+        const STAB_ARM_ROW = 26;
+        const STAB_ARM_SINGLE_COL = 'B';
+        const STAB_ARM_COMBINED_COL = 'C';
+        const STAB_ARM_RANGE = `${STAB_ARM_SINGLE_COL}${STAB_ARM_ROW}:${STAB_ARM_COMBINED_COL}${STAB_ARM_ROW}`; // B26:C26
+        const STAB_ANGLE_COL = 'B';
+        const STAB_ANGLE_SINGLE_ROW = 29;
+        const STAB_ANGLE_COMBINED_ROW = 30;
+        const STAB_ANGLE_RANGE = `${STAB_ANGLE_COL}${STAB_ANGLE_SINGLE_ROW}:${STAB_ANGLE_COL}${STAB_ANGLE_COMBINED_ROW}`; // B29:B30
+        const STAB_ARM_HEIGHT_CELL = "G2"; // Properties!G2 — arm-point ground height (mm), shared by both triangles
+        const TG_STAB_SINGLE_COLOR = TG_COG_TRAILER_COLOR;   // single-system triangle — matches Trailer CoG sign color
+        const TG_STAB_COMBINED_COLOR = TG_CARGO_TOTAL_COLOR; // combined-system triangle — matches Combined CoG sign color
 
         // ---- Cargo dimension (Length/Width/Height) — Excel "Input
         // horizontal loads" sheet, H11:H13, meters. A separate sheet
@@ -999,6 +971,23 @@
         let cogTrailerSignLoaded = false;
         let cogCombinedSign = { x: 0, y: 0, z: 0 };
         let cogCombinedSignLoaded = false;
+
+        // Stability angle triangles — see STAB_* constants above.
+        // stabilityArm*Mm: Display!B26 (single) / C26 (combined), mm.
+        // stabilityAngle*Deg: Display!B29 (single) / B30 (combined), deg
+        // — used for the on-drawing label text only (the triangle's
+        // actual drawn angle is geometry, computed from the arm length
+        // and height, so it self-verifies against this label).
+        // stabilityArmHeightMm: Properties!G2, mm, absolute ground Z —
+        // loaded independently (see pullStabilityFromExcel).
+        let stabilityArmSingleMm = 0;
+        let stabilityArmCombinedMm = 0;
+        let stabilityArmLoaded = false;
+        let stabilityAngleSingleDeg = 0;
+        let stabilityAngleCombinedDeg = 0;
+        let stabilityAngleLoaded = false;
+        let stabilityArmHeightMm = 0;
+        let stabilityArmHeightLoaded = false;
 
         // "Move All Cargo Together" master control — local-only, not
         // part of the Excel range. When enabled, editing the master
@@ -2596,6 +2585,61 @@
             }
         }
 
+        // Stability arm/angle (Display!B26:C26, B29:B30) + arm height
+        // (Properties!G2) — read-only output cells, never written back.
+        // Two independent try/catch blocks since the arm/angle values
+        // and the arm height come from different sheets — a missing
+        // "Properties" sheet shouldn't block the Display-sheet numbers,
+        // or vice versa. Called alongside pullCogSignsFromExcel (same
+        // call sites) so the stability triangles refresh whenever the
+        // CoG signs do.
+        async function pullStabilityFromExcel() {
+            if (!isOfficeInitialized) return;
+            try {
+                let armRow = null, angleRows = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
+                    const armRange = sheet.getRange(STAB_ARM_RANGE);
+                    const angleRange = sheet.getRange(STAB_ANGLE_RANGE);
+                    armRange.load('values');
+                    angleRange.load('values');
+                    await context.sync();
+                    armRow = armRange.values[0];
+                    angleRows = angleRange.values;
+                });
+                if (armRow) {
+                    const [s, c] = armRow.map(v => parseFloat(v));
+                    stabilityArmSingleMm = Number.isFinite(s) ? s : 0;
+                    stabilityArmCombinedMm = Number.isFinite(c) ? c : 0;
+                    stabilityArmLoaded = true;
+                }
+                if (angleRows) {
+                    const s = parseFloat(angleRows[0] && angleRows[0][0]);
+                    const c = parseFloat(angleRows[1] && angleRows[1][0]);
+                    stabilityAngleSingleDeg = Number.isFinite(s) ? s : 0;
+                    stabilityAngleCombinedDeg = Number.isFinite(c) ? c : 0;
+                    stabilityAngleLoaded = true;
+                }
+            } catch (e) {
+                console.warn(`Could not pull stability arm/angle from '${DISPLAY_SHEET_NAME}'!${STAB_ARM_RANGE}/${STAB_ANGLE_RANGE}`, e);
+            }
+            try {
+                let hv = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(PROPERTIES_SHEET_NAME);
+                    const hRange = sheet.getRange(STAB_ARM_HEIGHT_CELL);
+                    hRange.load('values');
+                    await context.sync();
+                    hv = hRange.values[0][0];
+                });
+                const h = parseFloat(hv);
+                stabilityArmHeightMm = Number.isFinite(h) ? h : 0;
+                stabilityArmHeightLoaded = true;
+            } catch (e) {
+                console.warn(`Could not pull stability arm height from '${PROPERTIES_SHEET_NAME}'!${STAB_ARM_HEIGHT_CELL}`, e);
+            }
+        }
+
         // Pulled automatically on panel open/refresh (see initDashboard)
         // and via the "⇩ Refresh from Excel" button. Silent + a no-op
         // when every row is blank, matching pullWheelDataFromExcel's
@@ -2607,6 +2651,7 @@
                 return;
             }
             await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside, never blocks the cargo pull below
+            await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside, never blocks the cargo pull below
             try {
                 let values = null, totalValues = null, dimValues = null, geomValues = null;
                 await Excel.run(async (context) => {
@@ -3001,6 +3046,7 @@
                     if (!isNaN(yNum)) { train.y = yNum; }
                 }
                 await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
+                await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside
                 renderTrailerDashboard();
                 logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
@@ -4570,6 +4616,74 @@
                 cargoElevSvg += cogSymbolSvg(sy2(cCyMm), szEnd(cWorldZ), 9, TG_CARGO_TOTAL_COLOR);
             }
 
+            // ---- Stability angle triangles (Right End View only) ----
+            // Right-triangle per system: CoG (apex) -> straight down to
+            // the arm height (Properties!G2) -> across the arm distance
+            // (Display!B26 single / C26 combined) -> back up the
+            // hypotenuse to the CoG. The angle at the apex, between the
+            // vertical leg and the hypotenuse, is labeled with the
+            // Excel-sourced value (Display!B29 single / B30 combined)
+            // rather than a value computed from the drawing, so the
+            // label always matches the workbook even if this drawing's
+            // scale/rounding differs slightly. Drawn only in the right
+            // end view (sy2), same panel as the Trailer/Combined CoG Z
+            // dimensions above, and only once both the CoG sign and the
+            // stability numbers have actually been pulled — a sign
+            // never appears half-configured.
+            let stabTriSvg = '';
+            if (stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) {
+                const armY = szEnd(stabilityArmHeightMm);
+                const stabSystems = [];
+                if (cogTrailerSignLoaded) {
+                    stabSystems.push({
+                        cogYMm: parseFloat(cogTrailerSign.y) || 0,
+                        cogZMm: parseFloat(cogTrailerSign.z) || 0,
+                        armMm: stabilityArmSingleMm,
+                        angleDeg: stabilityAngleSingleDeg,
+                        color: TG_STAB_SINGLE_COLOR,
+                        label: 'Single',
+                        arcR: 22,
+                    });
+                }
+                if (cogCombinedSignLoaded) {
+                    stabSystems.push({
+                        cogYMm: parseFloat(cogCombinedSign.y) || 0,
+                        cogZMm: parseFloat(cogCombinedSign.z) || 0,
+                        armMm: stabilityArmCombinedMm,
+                        angleDeg: stabilityAngleCombinedDeg,
+                        color: TG_STAB_COMBINED_COLOR,
+                        label: 'Combined',
+                        arcR: 32, // nested outside the single-system arc so both labels stay readable
+                    });
+                }
+                stabSystems.forEach(s => {
+                    const apexX = sy2(s.cogYMm), apexY = szEnd(s.cogZMm);
+                    const armX = sy2(s.cogYMm + s.armMm);
+                    // Right triangle: apex -> arm point -> foot (directly below apex, at arm height) -> apex.
+                    stabTriSvg += `<path d="M ${apexX} ${apexY} L ${armX} ${armY} L ${apexX} ${armY} Z" fill="${s.color}" fill-opacity="0.06" stroke="${s.color}" stroke-width="1.3"/>`;
+                    // Vertical reference leg drawn dashed (it's the same
+                    // segment as the triangle's own left edge, restyled
+                    // so it reads as a reference line rather than a
+                    // solid triangle edge, matching the reference GA
+                    // drawing's plain vertical center line).
+                    stabTriSvg += `<line x1="${apexX}" y1="${apexY}" x2="${apexX}" y2="${armY}" stroke="${s.color}" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>`;
+                    // Angle arc at the apex, between the vertical leg and the hypotenuse.
+                    const dx = armX - apexX, dz = armY - apexY;
+                    const angleRad = Math.atan2(dx, dz); // 0 = straight down, sweeping toward the arm point
+                    const sweepFlag = angleRad >= 0 ? 1 : 0;
+                    const arcStartX = apexX, arcStartY = apexY + s.arcR;
+                    const arcEndX = apexX + s.arcR * Math.sin(angleRad), arcEndY = apexY + s.arcR * Math.cos(angleRad);
+                    stabTriSvg += `<path d="M ${arcStartX} ${arcStartY} A ${s.arcR} ${s.arcR} 0 0 ${sweepFlag} ${arcEndX} ${arcEndY}" fill="none" stroke="${s.color}" stroke-width="1.2"/>`;
+                    const midAngle = angleRad / 2;
+                    const labelR = s.arcR + 14;
+                    const labelX = apexX + labelR * Math.sin(midAngle), labelY = apexY + labelR * Math.cos(midAngle);
+                    stabTriSvg += `<text x="${labelX}" y="${labelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.angleDeg.toFixed(1)}°</text>`;
+                    // Arm distance label along the horizontal (base) leg.
+                    const armMidX = (apexX + armX) / 2;
+                    stabTriSvg += `<text x="${armMidX}" y="${armY + 14}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.armMm.toFixed(1)}</text>`;
+                });
+            }
+
             // ---- Dimensions ----
             let dimSvg = '';
             if (tgShowDimensions) {
@@ -4674,7 +4788,7 @@
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${dimSvg}
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}
             </svg>`;
         }
 
@@ -4692,180 +4806,6 @@
                 totalsEl.innerHTML = `<strong>${trailerGenTrains.length}</strong> train(s) · ` +
                     `<strong>${rows.length}</strong> total axle(s) · ` +
                     `<strong>${totalLoad.toFixed(2)} t</strong> total load`;
-            }
-            renderStabilityPanel();
-        }
-
-        // ============================================================
-        // STABILITY ENVELOPE (independent general-mechanics estimate)
-        // ============================================================
-        // NOT a reproduction of Mammoet's proprietary "Dynamic
-        // Stability" tool (verified by DNV) — that tool's exact
-        // formulas/coefficients are not public. This is a from-scratch
-        // static approximation using standard rigid-body tip-over
-        // statics (a "tipping ellipse", using the convoy's own CoG +
-        // footprint + axle loads already in this app) plus a
-        // friction-circle traction check. It intentionally ignores
-        // acceleration/braking/wind and suspension-stroke saturation —
-        // treat it as a rough sanity check, not a certified result.
-        let tgStability = {
-            friction: 0.5,        // tire-ground friction coefficient, μ
-            drivenFraction: 1.0,  // fraction of total weight carried by driven axles
-            reqSlopeMin: -5, reqSlopeMax: 5,     // route survey input, %
-            reqCamberMin: -3, reqCamberMax: 3,   // route survey input, %
-            panelOpen: true
-        };
-
-        function updateStabilityField(field, rawValue) {
-            tgStability[field] = parseFloat(rawValue) || 0;
-            renderStabilityPanel();
-        }
-
-        function toggleStabilityPanel() {
-            tgStability.panelOpen = !tgStability.panelOpen;
-            const body = document.getElementById('tgStabilityBody');
-            const btn = document.getElementById('tgStabilityToggleBtn');
-            if (body) body.style.display = tgStability.panelOpen ? '' : 'none';
-            if (btn) btn.textContent = tgStability.panelOpen ? '▾ Hide' : '▸ Show';
-        }
-
-        // Pulls current CoG (world mm, z = height above ground — see
-        // cogCombinedSign comment above) + footprint bounding box (from
-        // every axle row already computed for the preview) + total
-        // weight (t). Falls back to sane defaults if nothing has been
-        // pulled/entered yet, so the panel never throws on an empty
-        // convoy.
-        function computeStabilityGeometry() {
-            const rows = computeTrailerGenRows();
-            if (!rows.length) return null;
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            let totalLoad = 0;
-            rows.forEach(r => {
-                minX = Math.min(minX, r.x); maxX = Math.max(maxX, r.x);
-                minY = Math.min(minY, r.y); maxY = Math.max(maxY, r.y);
-                totalLoad += r.load;
-            });
-            // CoG: prefer the pulled Combined CoG sign (trailer+cargo,
-            // world mm, z already = height above ground); fall back to
-            // the footprint's own center + a nominal deck height.
-            const cogX = cogCombinedSignLoaded ? cogCombinedSign.x : (minX + maxX) / 2;
-            const cogY = cogCombinedSignLoaded ? cogCombinedSign.y : (minY + maxY) / 2;
-            const h = cogCombinedSignLoaded && cogCombinedSign.z > 0 ? cogCombinedSign.z : 2500; // mm
-            return { minX, maxX, minY, maxY, cogX, cogY, h, totalLoad };
-        }
-
-        // Returns { smax, cmaxRight, cmaxLeft, tractionR } in percent
-        // grade (100*tan(angle)) — the pure (0-camber / 0-slope /
-        // 0-tilt) capacities that the ellipse/circle curves are built
-        // from, at the 100% (theoretical tip/slip point) threshold.
-        function computeStabilityCapacities(geom) {
-            const marginXmax = Math.max(1, geom.maxX - geom.cogX);
-            const marginXmin = Math.max(1, geom.cogX - geom.minX);
-            const marginYmax = Math.max(1, geom.maxY - geom.cogY); // "Right" edge margin
-            const marginYmin = Math.max(1, geom.cogY - geom.minY); // "Left" edge margin
-            const smax = 100 * Math.min(marginXmax, marginXmin) / geom.h;
-            const cmaxRight = 100 * marginYmax / geom.h;
-            const cmaxLeft = 100 * marginYmin / geom.h;
-            const mu = Math.max(0.05, tgStability.friction) * Math.max(0.05, Math.min(1, tgStability.drivenFraction));
-            const tractionAngle = Math.atan(mu); // asin(mu*driven) ~= atan for the small-angle friction-circle approx
-            const tractionR = 100 * Math.tan(tractionAngle);
-            return { smax, cmaxRight, cmaxLeft, tractionR };
-        }
-
-        // Builds a closed polygon (array of [slope%, camber%] points)
-        // for the tip-over ellipse at a given threshold (1.0 = 100%
-        // theoretical limit, 0.6 = 60% derated), asymmetric top/bottom
-        // (uses cmaxLeft for negative camber, cmaxRight for positive).
-        function buildTipEllipse(caps, threshold, steps) {
-            const smax = caps.smax * threshold;
-            const cR = caps.cmaxRight * threshold;
-            const cL = caps.cmaxLeft * threshold;
-            if (smax <= 0 || (cR <= 0 && cL <= 0)) return [];
-            const upper = [], lower = [];
-            for (let i = 0; i <= steps; i++) {
-                const s = -smax + (2 * smax) * (i / steps);
-                const inner = Math.max(0, 1 - (s / smax) * (s / smax));
-                const root = Math.sqrt(inner);
-                upper.push([s, cR * root]);   // positive-camber (Right) boundary
-                lower.push([s, -cL * root]);  // negative-camber (Left) boundary
-            }
-            return upper.concat(lower.reverse());
-        }
-
-        function buildTractionCircle(r, steps) {
-            if (r <= 0) return [];
-            const pts = [];
-            for (let i = 0; i <= steps; i++) {
-                const a = (i / steps) * 2 * Math.PI;
-                pts.push([r * Math.cos(a), r * Math.sin(a)]);
-            }
-            return pts;
-        }
-
-        function computeStabilityEnvelope() {
-            const geom = computeStabilityGeometry();
-            if (!geom) return null;
-            const caps = computeStabilityCapacities(geom);
-            return {
-                geom, caps,
-                available100: buildTipEllipse(caps, 1.0, 48),
-                available60: buildTipEllipse(caps, 0.6, 48),
-                traction: buildTractionCircle(caps.tractionR, 64)
-            };
-        }
-
-        // ---- SVG rendering, styled to match the reference chart: axes
-        // -20..+20% both directions, camber increasing DOWNWARD (matches
-        // native SVG y-direction, so no flip needed), grid every 5%. ----
-        function renderStabilityPanel() {
-            const host = document.getElementById('tgStabilityPanel');
-            const legendHost = document.getElementById('tgStabilityLegend');
-            if (!host) return;
-            const env = computeStabilityEnvelope();
-            if (!env) { host.innerHTML = '<p class="tg-stability-note">Add at least one train/axle to compute a stability envelope.</p>'; if (legendHost) legendHost.innerHTML = ''; return; }
-
-            const range = 20; // axis extent, % both directions
-            const W = 620, H = 460, padL = 56, padR = 16, padT = 16, padB = 40;
-            const plotW = W - padL - padR, plotH = H - padT - padB;
-            const sx = v => padL + ((v + range) / (2 * range)) * plotW;
-            const sy = v => padT + ((v + range) / (2 * range)) * plotH; // + camber goes down, matches reference chart
-
-            const toPath = pts => pts.length ? ('M ' + pts.map(p => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(' L ') + ' Z') : '';
-
-            let grid = '';
-            for (let g = -range; g <= range; g += 5) {
-                grid += `<line x1="${sx(g)}" y1="${padT}" x2="${sx(g)}" y2="${padT + plotH}" stroke="var(--border-color,#444)" stroke-width="0.5" opacity="0.5"/>`;
-                grid += `<line x1="${padL}" y1="${sy(g)}" x2="${padL + plotW}" y2="${sy(g)}" stroke="var(--border-color,#444)" stroke-width="0.5" opacity="0.5"/>`;
-                grid += `<text x="${sx(g)}" y="${padT + plotH + 16}" font-size="10" text-anchor="middle" fill="currentColor">${g > 0 ? '+' + g : g}</text>`;
-                grid += `<text x="${padL - 8}" y="${sy(g) + 3}" font-size="10" text-anchor="end" fill="currentColor">${g > 0 ? '+' + g : g}</text>`;
-            }
-
-            const reqRect = `<rect x="${sx(Math.max(-range, tgStability.reqSlopeMin))}" y="${sy(Math.min(range, tgStability.reqCamberMax))}" ` +
-                `width="${Math.max(0, sx(Math.min(range, tgStability.reqSlopeMax)) - sx(Math.max(-range, tgStability.reqSlopeMin)))}" ` +
-                `height="${Math.max(0, sy(Math.max(-range, tgStability.reqCamberMin)) - sy(Math.min(range, tgStability.reqCamberMax)))}" ` +
-                `fill="none" stroke="#3b82f6" stroke-width="2"/>`;
-
-            const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:640px;color:var(--text-color,#ccc);">
-                <defs><clipPath id="tgStabClip"><rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}"/></clipPath></defs>
-                <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="none" stroke="currentColor" stroke-width="1"/>
-                ${grid}
-                <g clip-path="url(#tgStabClip)">
-                    <path d="${toPath(env.available100)}" fill="none" stroke="#f97316" stroke-width="2.5"/>
-                    <path d="${toPath(env.available60)}" fill="none" stroke="#f97316" stroke-width="2" stroke-dasharray="6,4"/>
-                    <path d="${toPath(env.traction)}" fill="none" stroke="#3b82f6" stroke-width="2"/>
-                </g>
-                ${reqRect}
-                <text x="${padL + plotW / 2}" y="${H - 4}" font-size="12" text-anchor="middle" fill="currentColor">Slope [%]</text>
-                <text x="14" y="${padT + plotH / 2}" font-size="12" text-anchor="middle" fill="currentColor" transform="rotate(-90 14 ${padT + plotH / 2})">Camber [%]</text>
-            </svg>`;
-            host.innerHTML = svg;
-
-            if (legendHost) {
-                legendHost.innerHTML = `
-                    <span><span class="swatch" style="border-color:#3b82f6;"></span>Traction limit (μ=${tgStability.friction})</span>
-                    <span><span class="swatch" style="border-color:#f97316;"></span>Available stability (100% tip limit)</span>
-                    <span><span class="swatch" style="border-color:#f97316;border-top-style:dashed;"></span>Available stability (60% derated)</span>
-                    <span><span class="swatch" style="border-color:#3b82f6;"></span>Required stability (route input, rectangle)</span>`;
             }
         }
 
