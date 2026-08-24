@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transport Dashboard</title>
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root {
             --bg-dark: #0f141c;
@@ -302,6 +303,44 @@
             transform-origin: top left;
         }
 
+        /* ============================================================
+           3D MODEL PANEL — Three.js viewer showing the same trailer /
+           axle / cargo geometry as the 2D preview above, plus the
+           stability triangle(s) (see TG_STAB_* in the JS) rendered as
+           translucent vertical planes in 3D instead of only in the
+           flat "Right End View" 2D panel. Layout/toolbar styling
+           deliberately mirrors .tg-preview-wrap / .tg-preview-toolbar
+           above so the two panels read as one family.
+           ============================================================ */
+        .tg-3d-wrap {
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 8px 4px 4px;
+            margin-bottom: 14px;
+            background: var(--tank-box-bg);
+        }
+        .tg-3d-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 0 6px 8px; }
+        .tg-3d-cam-btns { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        .tg-3d-btn {
+            padding: 4px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+            border-radius: 5px; border: 1px solid var(--panel-border); background: var(--panel-bg); color: var(--text-muted);
+            cursor: pointer; white-space: nowrap;
+        }
+        .tg-3d-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        .tg-3d-btn.tg-3d-btn-active { border-color: var(--accent-blue); color: var(--accent-blue); }
+        .tg-3d-lock-btn { background: rgba(16,185,129,0.12); border-color: #10b981; color: #10b981; }
+        .tg-3d-lock-btn.tg-3d-locked { background: rgba(239,68,68,0.12); border-color: #ef4444; color: #ef4444; }
+        #tgViewer3dWrap { position: relative; width: 100%; height: 420px; border-radius: 8px; overflow: hidden; background: #0f1115; }
+        #tgViewer3d { width: 100%; height: 100%; }
+        #tgLabels3d { position: absolute; inset: 0; pointer-events: none; }
+        .tg-3d-label {
+            position: absolute; transform: translate(-50%, -50%);
+            font-size: 10.5px; font-weight: 700; white-space: nowrap;
+            padding: 1px 5px; border-radius: 4px; background: rgba(15,17,21,0.72);
+            text-shadow: none;
+        }
+        .tg-3d-hint { font-size: 10px; color: var(--text-muted); padding: 4px 8px 0; opacity: 0.75; }
+
         /* Group detail legend — shown below the preview instead of the
            on-canvas labels when "Show group label in preview" is off.
            Each row is tinted in its own group's color to keep the same
@@ -432,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.32.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.33)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -613,6 +652,34 @@
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
                         <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
                         <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
+                    </div>
+
+                    <div class="tg-3d-wrap">
+                        <div class="tg-3d-toolbar">
+                            <div class="tg-3d-cam-btns">
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-iso" onclick="set3DCameraTG('iso')">Iso</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-top" onclick="set3DCameraTG('top')">Top</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-side" onclick="set3DCameraTG('side')">Side</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-front" onclick="set3DCameraTG('front')">Front</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-rear" onclick="set3DCameraTG('rear')">Rear</button>
+                                <button type="button" class="tg-3d-btn tg-3d-lock-btn" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔓 Unlocked</button>
+                            </div>
+                            <div class="tg-preview-toggles-right">
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
+                                    ⚠ Show stability triangle
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dCogToggle" checked onchange="renderTrailerGen3D()">
+                                    ⊕ Show CoG markers
+                                </label>
+                            </div>
+                        </div>
+                        <div id="tgViewer3dWrap">
+                            <div id="tgViewer3d"></div>
+                            <div id="tgLabels3d"></div>
+                        </div>
+                        <div class="tg-3d-hint">Drag = orbit · middle-drag / two-finger drag = pan · scroll / pinch = zoom</div>
                     </div>
 
                     <div class="tg-totals" id="tgTotals"></div>
@@ -3778,6 +3845,7 @@
                 wrap.dataset.tgOrientObserved = '1';
                 tgOrientResizeObserver.observe(wrap);
             }
+            if (typeof renderTrailerGen3D === 'function') renderTrailerGen3D();
         }
 
         // ---- Top (plan) view — original live axle-line preview ----
@@ -4829,6 +4897,538 @@
             </svg>`;
         }
 
+        // ============================================================
+        // 3D MODEL (Three.js) — mirrors the 2D plan/side/end preview's
+        // own data model (computeTrailerGenRows / trailerGenTrains /
+        // cargoItems / computeCargoZSpans / CoG signs / stability arm+
+        // angle values) as a real 3D scene, so the trailer decks, axle
+        // wheels, cargo boxes, CoG markers and the stability triangle(s)
+        // can all be inspected from any angle instead of only from the
+        // fixed plan/side/end projections above.
+        //
+        // Coordinate mapping (world mm -> Three.js meters):
+        //   three.x =  worldX(mm) / 1000   (world +X = Rear, -X = Front)
+        //   three.z =  worldY(mm) / 1000   (world +Y = Left, -Y = Right)
+        //   three.y =  worldZ(mm) / 1000   (height, ground = 0, up = +Y)
+        // i.e. the same right-handed XY-ground-plane convention as the
+        // 2D drawing, just with height promoted to Three's own "up"
+        // axis. Every world-mm figure already used by the 2D preview
+        // (rows[].x/y, train.x/y/deckLength/deckWidth, tgZTrailerHeightMm,
+        // cogTrailerSign/cogCombinedSign, stabilityArm*/stabilityAngle*)
+        // is reused as-is here — nothing is recomputed, so the 3D model
+        // can never drift out of sync with the 2D drawing's own numbers.
+        // ============================================================
+        const TG3D_SCALE = 1 / 1000; // mm -> m
+
+        let scene3dTG = null, camera3dTG = null, renderer3dTG = null;
+        let world3dGroupTG = null;   // everything EXCEPT the ground grid — rebuilt every renderTrailerGen3D() call
+        let gridHelper3dTG = null;
+        let tg3dInitialized = false;
+
+        // Manual orbit/pan/zoom camera state — same scheme as the Barge
+        // Ballast dashboard's own 3D viewer (index.html), reimplemented
+        // here standalone (no OrbitControls dependency) so this file
+        // stays a single self-contained script.
+        let theta3dTG = -Math.PI / 4, phi3dTG = Math.PI / 2.6, radius3dTG = 40;
+        let lookAt3dTG = { x: 0, y: 0, z: 0 };
+        let panOffset3dTG = { x: 0, y: 0, z: 0 };
+        let isDragging3dTG = false, isPanning3dTG = false;
+        let lastX3dTG = 0, lastY3dTG = 0, lastPanX3dTG = 0, lastPanY3dTG = 0;
+        let is3DViewLockedTG = false;
+        let current3DCameraTG = 'iso';
+
+        const TG3D_CAM_PRESETS = {
+            iso:   { az: -40, el: 26 },
+            top:   { az: 0,   el: 89 },
+            side:  { az: 0,   el: 10 },   // viewed from world +Y (Left side)
+            front: { az: -90, el: 10 },   // viewed from world -X (Front)
+            rear:  { az: 90,  el: 10 },   // viewed from world +X (Rear)
+        };
+
+        // Floating (HTML-overlay) labels — used for the stability
+        // triangle's angle/arm callouts, projected from a 3D anchor
+        // point onto the 2D canvas every animation frame (see
+        // renderLabels3DTG below), same technique as the Barge Ballast
+        // dashboard's own labels3d overlay.
+        let labelAnchors3dTG = [];
+
+        // Extracts the literal fallback hex out of a `var(--x, #hex)`
+        // CSS string (these CSS custom properties are mostly undefined
+        // at :root, so the SVG preview always renders the fallback hex
+        // anyway) — Three.js materials need a real color, not a CSS
+        // var() string.
+        function tg3dResolveColor(cssColorStr, fallback) {
+            if (!cssColorStr) return fallback || '#94a3b8';
+            const m = /#([0-9a-fA-F]{3,8})/.exec(cssColorStr);
+            return m ? ('#' + m[1]) : (fallback || '#94a3b8');
+        }
+
+        function tg3dDisposeObject(obj) {
+            obj.traverse((node) => {
+                if (node.geometry) node.geometry.dispose();
+                if (node.material) {
+                    if (Array.isArray(node.material)) node.material.forEach(m => m.dispose());
+                    else node.material.dispose();
+                }
+            });
+        }
+
+        function azElToThetaPhi3DTG(az, el) {
+            return { theta: (az * Math.PI) / 180, phi: ((90 - el) * Math.PI) / 180 };
+        }
+
+        function updateCamera3DPositionTG() {
+            if (!camera3dTG) return;
+            const bx = lookAt3dTG.x + radius3dTG * Math.sin(phi3dTG) * Math.sin(theta3dTG);
+            const bz = lookAt3dTG.z + radius3dTG * Math.sin(phi3dTG) * Math.cos(theta3dTG);
+            const by = lookAt3dTG.y + radius3dTG * Math.cos(phi3dTG);
+            camera3dTG.position.set(bx + panOffset3dTG.x, by + panOffset3dTG.y, bz + panOffset3dTG.z);
+            camera3dTG.lookAt(
+                lookAt3dTG.x + panOffset3dTG.x,
+                lookAt3dTG.y + panOffset3dTG.y,
+                lookAt3dTG.z + panOffset3dTG.z
+            );
+        }
+
+        function applyPan3DTG(dxPixels, dyPixels) {
+            if (!camera3dTG) return;
+            const panSpeed = radius3dTG * 0.0016;
+            const forward = new THREE.Vector3();
+            camera3dTG.getWorldDirection(forward);
+            const worldUp = new THREE.Vector3(0, 1, 0);
+            const right = new THREE.Vector3().crossVectors(forward, worldUp).normalize();
+            const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+            const moveX = right.clone().multiplyScalar(-dxPixels * panSpeed);
+            const moveY = up.clone().multiplyScalar(dyPixels * panSpeed);
+            panOffset3dTG.x += moveX.x + moveY.x;
+            panOffset3dTG.y += moveX.y + moveY.y;
+            panOffset3dTG.z += moveX.z + moveY.z;
+            updateCamera3DPositionTG();
+        }
+
+        function set3DCameraTG(name) {
+            const p = TG3D_CAM_PRESETS[name];
+            if (!p) return;
+            current3DCameraTG = name;
+            const tp = azElToThetaPhi3DTG(p.az, p.el);
+            theta3dTG = tp.theta; phi3dTG = tp.phi;
+            panOffset3dTG = { x: 0, y: 0, z: 0 };
+            updateCamera3DPositionTG();
+            Object.keys(TG3D_CAM_PRESETS).forEach((k) => {
+                const b = document.getElementById('tg3dcam-' + k);
+                if (b) b.classList.toggle('tg-3d-btn-active', k === name);
+            });
+        }
+
+        function toggle3DViewLockTG() {
+            is3DViewLockedTG = !is3DViewLockedTG;
+            const btn = document.getElementById('tg3dLockBtn');
+            if (!btn) return;
+            btn.classList.toggle('tg-3d-locked', is3DViewLockedTG);
+            btn.textContent = is3DViewLockedTG ? '🔒 Locked' : '🔓 Unlocked';
+        }
+
+        function resize3DViewerTG() {
+            const container = document.getElementById('tgViewer3d');
+            if (!container || !container.clientWidth || !camera3dTG || !renderer3dTG) return;
+            camera3dTG.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+            camera3dTG.updateProjectionMatrix();
+            renderer3dTG.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function renderLabels3DTG() {
+            const layer = document.getElementById('tgLabels3d');
+            const container = document.getElementById('tgViewer3d');
+            if (!layer || !container || !camera3dTG) return;
+            if (!labelAnchors3dTG.length) { layer.innerHTML = ''; return; }
+            const w = container.clientWidth, h = container.clientHeight;
+            const v = new THREE.Vector3();
+            let html = '';
+            labelAnchors3dTG.forEach((a) => {
+                v.copy(a.pos);
+                v.project(camera3dTG);
+                if (v.z > 1) return; // behind camera
+                const sx = (v.x * 0.5 + 0.5) * w;
+                const sy = (-v.y * 0.5 + 0.5) * h;
+                html += `<div class="tg-3d-label" style="left:${sx.toFixed(1)}px; top:${sy.toFixed(1)}px; color:${a.color};">${a.text}</div>`;
+            });
+            layer.innerHTML = html;
+        }
+
+        function init3DSceneTG() {
+            const container = document.getElementById('tgViewer3d');
+            if (!container || tg3dInitialized) return;
+            if (typeof THREE === 'undefined') { console.warn('three.js failed to load — 3D model panel disabled.'); return; }
+            tg3dInitialized = true;
+
+            scene3dTG = new THREE.Scene();
+            scene3dTG.background = new THREE.Color(0x0f1115);
+            camera3dTG = new THREE.PerspectiveCamera(45, container.clientWidth / Math.max(container.clientHeight, 1), 0.05, 5000);
+            renderer3dTG = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer3dTG.setSize(container.clientWidth, container.clientHeight);
+            renderer3dTG.setPixelRatio(window.devicePixelRatio || 1);
+            container.appendChild(renderer3dTG.domElement);
+
+            scene3dTG.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dir = new THREE.DirectionalLight(0xffffff, 0.75);
+            dir.position.set(30, 50, 20);
+            scene3dTG.add(dir);
+            const dir2 = new THREE.DirectionalLight(0xffffff, 0.35);
+            dir2.position.set(-20, 25, -30);
+            scene3dTG.add(dir2);
+
+            gridHelper3dTG = new THREE.GridHelper(200, 40, 0x2a3446, 0x1c2432);
+            scene3dTG.add(gridHelper3dTG);
+
+            world3dGroupTG = new THREE.Group();
+            scene3dTG.add(world3dGroupTG);
+
+            updateCamera3DPositionTG();
+
+            // ---- Mouse interaction: left-drag = orbit, middle-drag = pan ----
+            container.addEventListener('mousedown', (e) => {
+                if (is3DViewLockedTG) return;
+                if (e.button === 1) {
+                    isPanning3dTG = true; lastPanX3dTG = e.clientX; lastPanY3dTG = e.clientY; e.preventDefault();
+                } else if (e.button === 0) {
+                    isDragging3dTG = true; lastX3dTG = e.clientX; lastY3dTG = e.clientY;
+                }
+            });
+            container.addEventListener('contextmenu', (e) => e.preventDefault());
+            window.addEventListener('mouseup', () => { isDragging3dTG = false; isPanning3dTG = false; });
+            window.addEventListener('mousemove', (e) => {
+                if (is3DViewLockedTG) return;
+                if (isPanning3dTG) {
+                    applyPan3DTG(e.clientX - lastPanX3dTG, e.clientY - lastPanY3dTG);
+                    lastPanX3dTG = e.clientX; lastPanY3dTG = e.clientY;
+                    return;
+                }
+                if (!isDragging3dTG) return;
+                const dx = e.clientX - lastX3dTG, dy = e.clientY - lastY3dTG;
+                theta3dTG -= dx * 0.006;
+                phi3dTG = Math.max(0.05, Math.min(1.55, phi3dTG - dy * 0.006));
+                lastX3dTG = e.clientX; lastY3dTG = e.clientY;
+                updateCamera3DPositionTG();
+            });
+            container.addEventListener('wheel', (e) => {
+                if (is3DViewLockedTG) return;
+                e.preventDefault();
+                radius3dTG = Math.max(3, Math.min(400, radius3dTG + e.deltaY * 0.02 * Math.max(1, radius3dTG * 0.05)));
+                updateCamera3DPositionTG();
+            }, { passive: false });
+
+            // ---- Touch interaction: one-finger orbit, two-finger pan/pinch ----
+            let lastTouchDist = null;
+            container.addEventListener('touchstart', (e) => {
+                if (is3DViewLockedTG) return;
+                if (e.touches.length === 1) {
+                    isDragging3dTG = true; isPanning3dTG = false;
+                    lastX3dTG = e.touches[0].clientX; lastY3dTG = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    isDragging3dTG = false; isPanning3dTG = true;
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    lastTouchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    lastPanX3dTG = (t0.clientX + t1.clientX) / 2; lastPanY3dTG = (t0.clientY + t1.clientY) / 2;
+                }
+                e.preventDefault();
+            }, { passive: false });
+            container.addEventListener('touchmove', (e) => {
+                if (is3DViewLockedTG) return;
+                if (e.touches.length === 1 && isDragging3dTG) {
+                    const dx = e.touches[0].clientX - lastX3dTG, dy = e.touches[0].clientY - lastY3dTG;
+                    theta3dTG -= dx * 0.006;
+                    phi3dTG = Math.max(0.05, Math.min(1.55, phi3dTG - dy * 0.006));
+                    lastX3dTG = e.touches[0].clientX; lastY3dTG = e.touches[0].clientY;
+                    updateCamera3DPositionTG();
+                } else if (e.touches.length === 2) {
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    const midX = (t0.clientX + t1.clientX) / 2, midY = (t0.clientY + t1.clientY) / 2;
+                    if (lastTouchDist !== null) {
+                        radius3dTG = Math.max(3, Math.min(400, radius3dTG - (dist - lastTouchDist) * 0.05 * Math.max(1, radius3dTG * 0.05)));
+                    }
+                    if (isPanning3dTG) applyPan3DTG(midX - lastPanX3dTG, midY - lastPanY3dTG);
+                    lastTouchDist = dist;
+                    lastPanX3dTG = midX; lastPanY3dTG = midY;
+                    updateCamera3DPositionTG();
+                }
+                e.preventDefault();
+            }, { passive: false });
+            container.addEventListener('touchend', (e) => {
+                if (e.touches.length === 0) { isDragging3dTG = false; isPanning3dTG = false; lastTouchDist = null; }
+                else if (e.touches.length === 1) { isPanning3dTG = false; lastTouchDist = null; }
+            });
+
+            window.addEventListener('resize', resize3DViewerTG);
+
+            set3DCameraTG('iso');
+
+            function animate3dTG() {
+                requestAnimationFrame(animate3dTG);
+                if (renderer3dTG && scene3dTG && camera3dTG) renderer3dTG.render(scene3dTG, camera3dTG);
+                renderLabels3DTG();
+            }
+            animate3dTG();
+        }
+
+        // Rebuilds the entire 3D model from the SAME data the 2D
+        // preview reads (computeTrailerGenRows / trailerGenTrains /
+        // cargoItems / computeCargoZSpans / cogTrailerSign /
+        // cogCombinedSign / stabilityArm*/stabilityAngle*). Called at
+        // the end of renderTrailerGenPreview(), so it stays in lock-step
+        // with every 2D redraw.
+        function renderTrailerGen3D() {
+            if (!tg3dInitialized) init3DSceneTG();
+            if (!tg3dInitialized || !world3dGroupTG) return; // three.js unavailable
+
+            while (world3dGroupTG.children.length) {
+                const child = world3dGroupTG.children.pop();
+                tg3dDisposeObject(child);
+            }
+            labelAnchors3dTG = [];
+
+            const rows = computeTrailerGenRows();
+            const deckTopWorldZ = tgZTrailerHeightMm;
+            const S = TG3D_SCALE;
+            const toV = (xMm, zMmHeight, yMm) => new THREE.Vector3(xMm * S, zMmHeight * S, yMm * S);
+
+            // ---- bounding box (world mm) — drives camera framing + grid size ----
+            let bMinX = 0, bMaxX = 0, bMinY = 0, bMaxY = 0, bMaxZ = deckTopWorldZ + 1000;
+            const extend = (x, y, z) => {
+                bMinX = Math.min(bMinX, x); bMaxX = Math.max(bMaxX, x);
+                bMinY = Math.min(bMinY, y); bMaxY = Math.max(bMaxY, y);
+                if (z !== undefined) bMaxZ = Math.max(bMaxZ, z);
+            };
+            rows.forEach(r => extend(r.x, r.y));
+
+            // ---- Trailer decks (one box per train — falls back to the
+            // axle extent ±300mm when the train has no fixed deck
+            // footprint, exactly like the 2D side/end views do) ----
+            trailerGenTrains.forEach(train => {
+                const trainRows = rows.filter(r => r.trainName === train.name);
+                const rowXs = trainRows.map(r => r.x);
+                const rowYs = trainRows.map(r => r.y);
+                const deckX1 = train.deckLength ? (parseFloat(train.x) || 0) : (rowXs.length ? Math.min(...rowXs) - 300 : (parseFloat(train.x) || 0));
+                const deckX2 = train.deckLength ? deckX1 + train.deckLength : (rowXs.length ? Math.max(...rowXs) + 300 : deckX1 + 1000);
+                const deckY1 = train.deckWidth ? (parseFloat(train.y) || 0) : (rowYs.length ? Math.min(...rowYs) - 300 : (parseFloat(train.y) || 0));
+                const deckY2 = train.deckWidth ? deckY1 + train.deckWidth : (rowYs.length ? Math.max(...rowYs) + 300 : deckY1 + 1000);
+                extend(deckX1, deckY1); extend(deckX2, deckY2);
+
+                const lenM = Math.max(0.05, (deckX2 - deckX1) * S);
+                const widM = Math.max(0.05, (deckY2 - deckY1) * S);
+                const thickM = Math.max(0.02, TG_ELEV_DECK_THICK * S);
+                const geo = new THREE.BoxGeometry(lenM, thickM, widM);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x1c2532, metalness: 0.15, roughness: 0.85 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(
+                    (deckX1 + deckX2) / 2 * S,
+                    deckTopWorldZ * S - thickM / 2,
+                    (deckY1 + deckY2) / 2 * S
+                );
+                world3dGroupTG.add(mesh);
+                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x475569 }));
+                edges.position.copy(mesh.position);
+                world3dGroupTG.add(edges);
+            });
+
+            // ---- Axle wheels — one cylinder per axle row, colored by
+            // its own axle-group color (same rows/colors as the 2D
+            // preview's wheel boxes). ----
+            const wheelRM = Math.max(0.01, (TG_ELEV_WHEEL_DIAM / 2) * S);
+            const tireWM = Math.max(0.01, TG_ELEV_TIRE_WIDTH * S);
+            rows.forEach(r => {
+                const hex = tg3dResolveColor(r.color, '#38bdf8');
+                const geo = new THREE.CylinderGeometry(wheelRM, wheelRM, tireWM, 20);
+                const mat = new THREE.MeshStandardMaterial({ color: hex, metalness: 0.1, roughness: 0.6 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.rotation.x = Math.PI / 2; // cylinder axis (local Y) -> world Y (axle rolls along world X, spins about world Y)
+                mesh.position.set(r.x * S, wheelRM, r.y * S);
+                world3dGroupTG.add(mesh);
+            });
+
+            // ---- Cargo boxes + per-item CoG markers ----
+            const showCog = document.getElementById('tg3dCogToggle')?.checked !== false;
+            const cargoBoxZ = computeCargoZSpans();
+            cargoItems.forEach((c, idx) => {
+                const hex = tg3dResolveColor(cargoColorFor(idx), '#f97316');
+                const tlXMm = (parseFloat(c.tlX) || 0) * 1000, tlYMm = (parseFloat(c.tlY) || 0) * 1000;
+                const lenMm = (parseFloat(c.length) || 0) * 1000, widMm = (parseFloat(c.width) || 0) * 1000;
+                const { baseWorldZ, topWorldZ, cogWorldZ } = cargoBoxZ[idx];
+                extend(tlXMm - lenMm / 2, tlYMm - widMm / 2, topWorldZ);
+                extend(tlXMm + lenMm / 2, tlYMm + widMm / 2, topWorldZ);
+
+                if (lenMm > 0 && widMm > 0 && topWorldZ > baseWorldZ) {
+                    const geo = new THREE.BoxGeometry(lenMm * S, (topWorldZ - baseWorldZ) * S, widMm * S);
+                    const mat = new THREE.MeshStandardMaterial({ color: hex, transparent: true, opacity: 0.32, metalness: 0.05, roughness: 0.7 });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(tlXMm * S, (baseWorldZ + topWorldZ) / 2 * S, tlYMm * S);
+                    world3dGroupTG.add(mesh);
+                    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: hex }));
+                    edges.position.copy(mesh.position);
+                    world3dGroupTG.add(edges);
+                }
+
+                if (showCog) {
+                    const cogXMm = (parseFloat(c.x) || 0) * 1000, cogYMm = (parseFloat(c.y) || 0) * 1000;
+                    addCogMarkerTG(cogXMm, cogWorldZ, cogYMm, hex, (c.name || `Cargo ${idx + 1}`));
+                    extend(cogXMm, cogYMm, cogWorldZ);
+                }
+            });
+
+            if (showCog) {
+                if (cargoTotal && cargoTotal.weight > 0) {
+                    const x = (parseFloat(cargoTotal.x) || 0) * 1000, y = (parseFloat(cargoTotal.y) || 0) * 1000;
+                    const z = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
+                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_CARGO_COLOR, '#f97316'), 'Cargo CoG');
+                    extend(x, y, z);
+                }
+                if (cogTrailerSignLoaded) {
+                    const x = parseFloat(cogTrailerSign.x) || 0, y = parseFloat(cogTrailerSign.y) || 0, z = parseFloat(cogTrailerSign.z) || 0;
+                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_COG_TRAILER_COLOR, '#a855f7'), 'Trailer CoG');
+                    extend(x, y, z);
+                }
+                if (cogCombinedSignLoaded) {
+                    const x = parseFloat(cogCombinedSign.x) || 0, y = parseFloat(cogCombinedSign.y) || 0, z = parseFloat(cogCombinedSign.z) || 0;
+                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_CARGO_TOTAL_COLOR, '#ef4444'), 'Combined CoG');
+                    extend(x, y, z);
+                }
+            }
+
+            // ---- Stability triangle(s) — same right-triangle geometry
+            // (CoG apex -> straight down to the suspension arm height ->
+            // across the arm distance -> back up the hypotenuse) as the
+            // 2D "Right End View" panel, drawn here as an actual
+            // vertical plane in 3D space at the system's own world-X
+            // position (the 2D end view collapses X, so this is the
+            // only place the triangle's true X location is visible).
+            const showStability = document.getElementById('tg3dStabilityToggle')?.checked !== false;
+            if (showStability && stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) {
+                const stabSystems = [];
+                if (cargoTotal && cargoTotal.weight > 0) {
+                    stabSystems.push({
+                        cogXMm: (parseFloat(cargoTotal.x) || 0) * 1000,
+                        cogYMm: (parseFloat(cargoTotal.y) || 0) * 1000,
+                        cogZMm: deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000,
+                        armMm: stabilityArmSingleMm,
+                        angleDeg: stabilityAngleSingleDeg,
+                        color: tg3dResolveColor(TG_STAB_SINGLE_COLOR, '#f97316'),
+                        label: 'Single',
+                    });
+                }
+                if (cogCombinedSignLoaded) {
+                    stabSystems.push({
+                        cogXMm: parseFloat(cogCombinedSign.x) || 0,
+                        cogYMm: parseFloat(cogCombinedSign.y) || 0,
+                        cogZMm: parseFloat(cogCombinedSign.z) || 0,
+                        armMm: stabilityArmCombinedMm,
+                        angleDeg: stabilityAngleCombinedDeg,
+                        color: tg3dResolveColor(TG_STAB_COMBINED_COLOR, '#ef4444'),
+                        label: 'Combined',
+                    });
+                }
+                stabSystems.forEach(s => {
+                    // Arm swings toward whichever side (+Y/-Y) the CoG
+                    // already leans, same "tips toward the CoG" sense as
+                    // the 2D triangle (which always draws the arm point
+                    // further out from center in the CoG's own offset
+                    // direction — approximated here as the sign of the
+                    // CoG's own Y, falling back to +Y when centered).
+                    const armSign = s.cogYMm < 0 ? -1 : 1;
+                    const apex = toV(s.cogXMm, s.cogZMm, s.cogYMm);
+                    const armPt = toV(s.cogXMm, stabilityArmHeightMm, s.cogYMm + armSign * s.armMm);
+                    const footPt = toV(s.cogXMm, stabilityArmHeightMm, s.cogYMm);
+                    extend(s.cogXMm, s.cogYMm + armSign * s.armMm, Math.max(s.cogZMm, stabilityArmHeightMm));
+
+                    const shape = new THREE.BufferGeometry().setFromPoints([apex, armPt, footPt]);
+                    shape.setIndex([0, 1, 2]);
+                    shape.computeVertexNormals();
+                    const mat = new THREE.MeshBasicMaterial({ color: s.color, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+                    const mesh = new THREE.Mesh(shape, mat);
+                    world3dGroupTG.add(mesh);
+
+                    const outline = new THREE.LineLoop(
+                        new THREE.BufferGeometry().setFromPoints([apex, armPt, footPt]),
+                        new THREE.LineBasicMaterial({ color: s.color, linewidth: 1.5 })
+                    );
+                    world3dGroupTG.add(outline);
+
+                    // Dashed vertical reference leg (apex -> foot), same
+                    // "reference line, not a solid edge" convention as
+                    // the 2D triangle's dashed left edge.
+                    const dashMat = new THREE.LineDashedMaterial({ color: s.color, dashSize: 0.15, gapSize: 0.1, transparent: true, opacity: 0.7 });
+                    const dashGeo = new THREE.BufferGeometry().setFromPoints([apex, footPt]);
+                    const dashLine = new THREE.Line(dashGeo, dashMat);
+                    dashLine.computeLineDistances();
+                    world3dGroupTG.add(dashLine);
+
+                    labelAnchors3dTG.push({
+                        pos: apex.clone().lerp(armPt, 0.5).add(new THREE.Vector3(0, 0.3, 0)),
+                        text: `${s.label} ${s.angleDeg.toFixed(1)}°`,
+                        color: s.color,
+                    });
+                    labelAnchors3dTG.push({
+                        pos: armPt.clone(),
+                        text: `${(s.armMm / 1000).toFixed(2)} m`,
+                        color: s.color,
+                    });
+                });
+            }
+
+            // ---- Frame camera + resize grid to fit the current model ----
+            const spanMm = Math.max(bMaxX - bMinX, bMaxY - bMinY, 4000);
+            const centerXMm = (bMinX + bMaxX) / 2, centerYMm = (bMinY + bMaxY) / 2;
+            lookAt3dTG = { x: centerXMm * S, y: (bMaxZ * 0.35) * S, z: centerYMm * S };
+            if (gridHelper3dTG) {
+                const gridSizeM = Math.max(20, spanMm * S * 2.4);
+                scene3dTG.remove(gridHelper3dTG);
+                tg3dDisposeObject(gridHelper3dTG);
+                gridHelper3dTG = new THREE.GridHelper(gridSizeM, Math.round(gridSizeM / 2), 0x2a3446, 0x1c2432);
+                gridHelper3dTG.position.y = 0;
+                scene3dTG.add(gridHelper3dTG);
+            }
+            // Only auto-set the orbit radius the FIRST time (or if it's
+            // still at the tiny init default) — once the user has
+            // zoomed/orbited, further field edits shouldn't yank the
+            // camera back out.
+            if (radius3dTG <= 40.01 && !tg3dUserAdjustedCamera) {
+                radius3dTG = Math.max(8, spanMm * S * 1.6);
+            }
+            updateCamera3DPositionTG();
+        }
+
+        // Set the first time the user manually orbits/pans/zooms the 3D
+        // view, so renderTrailerGen3D()'s auto-framing (above) backs off
+        // and stops fighting the user's own camera position on every
+        // field edit.
+        let tg3dUserAdjustedCamera = false;
+        ['wheel', 'mousedown', 'touchstart'].forEach(evt => {
+            document.addEventListener(evt, (e) => {
+                if (e.target && e.target.closest && e.target.closest('#tgViewer3dWrap')) tg3dUserAdjustedCamera = true;
+            }, { passive: true });
+        });
+
+        function addCogMarkerTG(xMm, zMmHeight, yMm, hex, label) {
+            const S = TG3D_SCALE;
+            const geo = new THREE.SphereGeometry(0.09, 16, 16);
+            const mat = new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.35 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(xMm * S, zMmHeight * S, yMm * S);
+            world3dGroupTG.add(mesh);
+            // Small crosshair (3 short axes) through the CoG point —
+            // the same "+" glyph convention as the 2D CoG sign — so it
+            // reads as a CoG marker rather than a generic dot.
+            const axLen = 0.22;
+            const lineMat = new THREE.LineBasicMaterial({ color: hex });
+            [[axLen,0,0],[0,axLen,0],[0,0,axLen]].forEach(([dx, dy, dz]) => {
+                const g = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(mesh.position.x - dx, mesh.position.y - dy, mesh.position.z - dz),
+                    new THREE.Vector3(mesh.position.x + dx, mesh.position.y + dy, mesh.position.z + dz),
+                ]);
+                world3dGroupTG.add(new THREE.Line(g, lineMat));
+            });
+            labelAnchors3dTG.push({ pos: mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), text: label, color: hex });
+        }
+
         function renderTrailerGeneratorTotals() {
             const totalsEl = document.getElementById('tgTotals');
             if (!totalsEl) return;
@@ -5090,6 +5690,8 @@
                 cargoItems.push(newCargoItem(1));
             }
             renderTrailerDashboard();
+            init3DSceneTG();
+            setTimeout(resize3DViewerTG, 50); // container may report 0 width on first paint
             const dirSelect = document.getElementById('tgLoadDirectionSelect');
             if (dirSelect) dirSelect.value = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
             if (isOfficeInitialized) {
