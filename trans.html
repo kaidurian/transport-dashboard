@@ -1000,6 +1000,21 @@
             const armMm = Math.abs(dy * cogXMm - dx * cogYMm + p4.x * p3.y - p4.y * p3.x) / Math.sqrt(lenSq);
             return { armMm, p3, p4 };
         }
+        // Foot of the perpendicular from world point (px, py) onto the
+        // infinite line through p1/p2 — companion to
+        // computeGroup34ArmMm() above (which returns only the
+        // magnitude): used by the plan view's own stability-arm line,
+        // where the actual foot POINT (not just the distance) is
+        // needed to draw the arm as true, non-collapsed perpendicular
+        // geometry — unlike the Right End View triangle, which only
+        // ever needs the magnitude.
+        function footPointOnLine(px, py, p1, p2) {
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const lenSq = dx * dx + dy * dy;
+            if (lenSq < 1) return { x: p1.x, y: p1.y };
+            const t = ((px - p1.x) * dx + (py - p1.y) * dy) / lenSq;
+            return { x: p1.x + t * dx, y: p1.y + t * dy };
+        }
         // Resolves the final {armMm, angleDeg, fromGroups} for one
         // stability system (single or combined), preferring the
         // Group 3/4 geometric arm (+ locally re-derived angle) over the
@@ -3951,29 +3966,6 @@
                 xs.push((parseFloat(c.x) || 0) * 1000);
                 ys.push((parseFloat(c.y) || 0) * 1000);
             });
-            // Group 3/4 axle centers and the Single/Combined CoG points
-            // feed into the auto-scale bounding box too, so the
-            // stability-arm overlay below (support line + perpendicular
-            // foot + CoG points) never gets clipped even when those
-            // points fall outside every axle row / cargo box already
-            // considered above.
-            const tgStabGroupCenters = computeAxleGroupCenters(rows);
-            [3, 4].forEach(gn => {
-                const c = tgStabGroupCenters[gn];
-                if (c) { xs.push(c.x); ys.push(c.y); }
-            });
-            if (cargoTotal && cargoTotal.weight > 0) {
-                xs.push((parseFloat(cargoTotal.x) || 0) * 1000);
-                ys.push((parseFloat(cargoTotal.y) || 0) * 1000);
-            }
-            if (cogCombinedSignLoaded) {
-                xs.push(parseFloat(cogCombinedSign.x) || 0);
-                ys.push(parseFloat(cogCombinedSign.y) || 0);
-            }
-            if (cogTrailerSignLoaded) {
-                xs.push(parseFloat(cogTrailerSign.x) || 0);
-                ys.push(parseFloat(cogTrailerSign.y) || 0);
-            }
             xs.push(0); ys.push(0);
             const rawMinX = Math.min(...xs), rawMaxX = Math.max(...xs);
             const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
@@ -4126,6 +4118,72 @@
                     `<text x="${cCx}" y="${cCy - 24}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}">Combined CoG</text>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
                     `</g>`;
+            }
+
+            // ---- Stability arm(s) — plan view ----
+            // Same arm computed by resolveStabilityArm() for the Right
+            // End View triangle (see its own comment near that block),
+            // drawn here instead as a line in TRUE plan-view geometry —
+            // the plan view is the only panel where the arm isn't
+            // collapsed onto a single (Y-only) axis. Whenever Group 3
+            // AND Group 4 are both present in the current axle-group
+            // setup, this is the actual perpendicular from the CoG to
+            // the straight edge connecting those two groups' own axle
+            // centers (the real tipping line, drawn dashed for
+            // reference); the arm line itself runs from the CoG to the
+            // foot of that perpendicular (footPointOnLine, see above).
+            // Falls back to a plain +Y offset line of the Excel-sourced
+            // arm length whenever Group 3/4 aren't both present,
+            // matching the End View's own magnitude-only fallback
+            // treatment for that same case (no G3/G4 line exists to
+            // project onto).
+            let stabArmSvg = '';
+            const stabGroupCentersPlan = computeAxleGroupCenters(rows);
+            const planStabSystems = [];
+            if (cargoTotal.weight > 0) {
+                planStabSystems.push({
+                    cogXMm: (parseFloat(cargoTotal.x) || 0) * 1000,
+                    cogYMm: (parseFloat(cargoTotal.y) || 0) * 1000,
+                    excelArmMm: stabilityArmSingleMm,
+                    color: TG_STAB_SINGLE_COLOR,
+                    label: 'Single',
+                });
+            }
+            if (cogCombinedSignLoaded) {
+                planStabSystems.push({
+                    cogXMm: parseFloat(cogCombinedSign.x) || 0,
+                    cogYMm: parseFloat(cogCombinedSign.y) || 0,
+                    excelArmMm: stabilityArmCombinedMm,
+                    color: TG_STAB_COMBINED_COLOR,
+                    label: 'Combined',
+                });
+            }
+            const g3Plan = stabGroupCentersPlan[3], g4Plan = stabGroupCentersPlan[4];
+            const planFromGroups = !!(g3Plan && g4Plan);
+            if (planStabSystems.length && (stabilityArmLoaded || planFromGroups)) {
+                if (planFromGroups) {
+                    stabArmSvg += `<line x1="${sx(g3Plan.x)}" y1="${sy(g3Plan.y)}" x2="${sx(g4Plan.x)}" y2="${sy(g4Plan.y)}" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="5 3" opacity="0.6"/>`;
+                }
+                planStabSystems.forEach((s, sIdx) => {
+                    let footXMm, footYMm, armMm;
+                    if (planFromGroups) {
+                        const foot = footPointOnLine(s.cogXMm, s.cogYMm, g3Plan, g4Plan);
+                        footXMm = foot.x; footYMm = foot.y;
+                        armMm = Math.hypot(s.cogXMm - footXMm, s.cogYMm - footYMm);
+                    } else {
+                        footXMm = s.cogXMm; footYMm = s.cogYMm + s.excelArmMm;
+                        armMm = s.excelArmMm;
+                    }
+                    const apexX = sx(s.cogXMm), apexY = sy(s.cogYMm);
+                    const footX = sx(footXMm), footY = sy(footYMm);
+                    stabArmSvg += `<g>` +
+                        `<line x1="${apexX}" y1="${apexY}" x2="${footX}" y2="${footY}" stroke="${s.color}" stroke-width="1.5" stroke-dasharray="3 2"/>` +
+                        `<circle cx="${footX}" cy="${footY}" r="3" fill="${s.color}"/>` +
+                        `</g>`;
+                    const midX = (apexX + footX) / 2, midY = (apexY + footY) / 2;
+                    const labelOff = 10 + sIdx * 12;
+                    stabArmSvg += `<text x="${midX}" y="${midY - labelOff}" font-size="9" text-anchor="middle" fill="${s.color}">${s.label} arm ${armMm.toFixed(0)}${planFromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
+                });
             }
 
             // Dimension call-outs for preset (Goldhofer/SPMT) trailers —
@@ -4373,84 +4431,6 @@
                 });
             });
 
-            // ---- Stability arm (plan view) ----
-            // Draws the Group 3–4 support/tipping-edge line plus, for
-            // each stability system (Single/Combined) whose arm is
-            // actually resolved from that line (resolveStabilityArm's
-            // fromGroups === true — see computeAxleGroupCenters/
-            // computeGroup34ArmMm above), the true perpendicular from
-            // that system's own CoG down to its foot point on the line,
-            // with a right-angle tick at the foot — the same
-            // perpendicularity proof already drawn as a pseudo-3D
-            // ground overlay in renderTrailerGen3D, now shown directly
-            // on this real 2D plan view instead. The Excel-sourced
-            // fallback arm (no Group 3/4 line present) has nothing real
-            // to project here, so it's simply not drawn — same
-            // condition the 3D view's own proof uses.
-            let stabArmSvg = '';
-            if (tgStabGroupCenters[3] && tgStabGroupCenters[4] && stabilityArmHeightLoaded) {
-                const p3 = tgStabGroupCenters[3], p4 = tgStabGroupCenters[4];
-                const dx = p4.x - p3.x, dy = p4.y - p3.y;
-                const dirLen = Math.hypot(dx, dy) || 1;
-                const ux = dx / dirLen, uy = dy / dirLen;
-                // Support line, extended a little past each group
-                // center — the perpendicular foot can legitimately fall
-                // outside the raw G3–G4 segment (see computeGroup34ArmMm,
-                // which is deliberately unclamped), so the extension
-                // keeps the foot visibly on the drawn line.
-                const ext = 800; // mm, cosmetic only
-                const lx1 = p3.x - ux * ext, ly1 = p3.y - uy * ext;
-                const lx2 = p4.x + ux * ext, ly2 = p4.y + uy * ext;
-                stabArmSvg += `<line x1="${sx(lx1)}" y1="${sy(ly1)}" x2="${sx(lx2)}" y2="${sy(ly2)}" stroke="var(--text-muted, #94a3b8)" stroke-width="1.25" stroke-dasharray="5 3" opacity="0.7"/>`;
-
-                const tgStabDeckTopWorldZ = tgZTrailerHeightMm;
-                const tgStabSystems = [];
-                if (cargoTotal && cargoTotal.weight > 0) {
-                    const cX = (parseFloat(cargoTotal.x) || 0) * 1000;
-                    const cY = (parseFloat(cargoTotal.y) || 0) * 1000;
-                    const cZ = tgStabDeckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
-                    const resolved = resolveStabilityArm(cX, cY, cZ, stabilityArmSingleMm, stabilityAngleSingleDeg, tgStabGroupCenters, stabilityArmHeightMm);
-                    if (resolved.fromGroups) tgStabSystems.push({ cogX: cX, cogY: cY, armMm: resolved.armMm, color: TG_STAB_SINGLE_COLOR, label: 'Single' });
-                }
-                if (cogCombinedSignLoaded) {
-                    const cX = parseFloat(cogCombinedSign.x) || 0;
-                    const cY = parseFloat(cogCombinedSign.y) || 0;
-                    const cZ = parseFloat(cogCombinedSign.z) || 0;
-                    const resolved = resolveStabilityArm(cX, cY, cZ, stabilityArmCombinedMm, stabilityAngleCombinedDeg, tgStabGroupCenters, stabilityArmHeightMm);
-                    if (resolved.fromGroups) tgStabSystems.push({ cogX: cX, cogY: cY, armMm: resolved.armMm, color: TG_STAB_COMBINED_COLOR, label: 'Combined' });
-                }
-
-                tgStabSystems.forEach((s, sIdx) => {
-                    const t = ((s.cogX - p3.x) * dx + (s.cogY - p3.y) * dy) / (dirLen * dirLen);
-                    const footX = p3.x + t * dx, footY = p3.y + t * dy;
-                    const cogPx = sx(s.cogX), cogPy = sy(s.cogY);
-                    const footPx = sx(footX), footPy = sy(footY);
-                    stabArmSvg += `<line x1="${cogPx}" y1="${cogPy}" x2="${footPx}" y2="${footPy}" stroke="${s.color}" stroke-width="1.5" stroke-dasharray="4 2"/>`;
-                    stabArmSvg += `<circle cx="${footPx}" cy="${footPy}" r="3" fill="${s.color}"/>`;
-
-                    // Right-angle tick at the foot: one leg back along
-                    // the support line's own direction (screen-space
-                    // ux/uy — safe since sx/sy share a single uniform
-                    // scale, so world directions carry straight through
-                    // unrotated/unskewed), one leg toward the CoG — by
-                    // construction exactly perpendicular to each other.
-                    const towardLen = Math.hypot(cogPx - footPx, cogPy - footPy) || 1;
-                    const tux = (cogPx - footPx) / towardLen, tuy = (cogPy - footPy) / towardLen;
-                    const tick = 7;
-                    const cornerPx = footPx + ux * tick, cornerPy = footPy + uy * tick;
-                    const corner2Px = cornerPx + tux * tick, corner2Py = cornerPy + tuy * tick;
-                    stabArmSvg += `<path d="M ${cornerPx} ${cornerPy} L ${corner2Px} ${corner2Py} L ${footPx + tux * tick} ${footPy + tuy * tick}" fill="none" stroke="${s.color}" stroke-width="1"/>`;
-
-                    // Arm-length label, offset perpendicular to the
-                    // CoG→foot line and stepped per system index so the
-                    // Single/Combined labels never collide.
-                    const midX = (cogPx + footPx) / 2, midY = (cogPy + footPy) / 2;
-                    const px2 = -tuy, py2 = tux;
-                    const labelOff = 12 + sIdx * 14;
-                    stabArmSvg += `<text x="${midX + px2 * labelOff}" y="${midY + py2 * labelOff}" font-size="9" text-anchor="middle" fill="${s.color}">${s.label} arm ${(s.armMm / 1000).toFixed(2)} m</text>`;
-                });
-            }
-
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -4461,7 +4441,7 @@
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${dimensionsSvg}${splitMarkersSvg}${stabArmSvg}${originSvg}
+                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
