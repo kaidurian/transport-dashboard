@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.34.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.34)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -999,29 +999,6 @@
             if (lenSq < 1) return null;
             const armMm = Math.abs(dy * cogXMm - dx * cogYMm + p4.x * p3.y - p4.y * p3.x) / Math.sqrt(lenSq);
             return { armMm, p3, p4 };
-        }
-        // Determines which two axle-group numbers form the plan-view
-        // "support side" reference line for the stability triangle's
-        // flat sign/link — Group 3 & Group 4 when both are present
-        // (matches computeGroup34ArmMm's own pair), otherwise the
-        // LOWEST and HIGHEST group numbers actually in use once 3+
-        // groups exist (e.g. a 3-group trailer links Group 1 <-> Group
-        // 3, since there's no Group 4 to pair with Group 3). Returns
-        // null for simple 1-2 group trailers, where there's no
-        // meaningful outer support line to draw. This only decides
-        // which two groups to draw the flat plan-view link/signs
-        // between (renderTrailerGenTopView) — it does NOT change the
-        // Excel-fallback arm/angle math in computeGroup34ArmMm/
-        // resolveStabilityArm, which still only engages for the
-        // Group 3-and-4 case.
-        function getStabilitySupportGroupPair(groupCenters) {
-            if (!groupCenters) return null;
-            if (groupCenters[3] && groupCenters[4]) return [3, 4];
-            const nums = Object.keys(groupCenters).map(Number).filter(n => groupCenters[n]);
-            if (nums.length < 3) return null;
-            const lo = Math.min(...nums), hi = Math.max(...nums);
-            if (lo === hi) return null;
-            return [lo, hi];
         }
         // Resolves the final {armMm, angleDeg, fromGroups} for one
         // stability system (single or combined), preferring the
@@ -4373,37 +4350,6 @@
                 });
             });
 
-            // ---- Support-group "triangle" signs (flat, plan-view) ----
-            // Small flat triangle markers at the two outer support
-            // groups that define the stability arm's reference line
-            // (see getStabilitySupportGroupPair — Group 3<->4 when both
-            // present, else lowest<->highest present group, e.g. Group
-            // 1<->3 for a 3-group trailer), joined by a dashed link
-            // line. This mirrors the pole+flag markers already drawn in
-            // the 3D view (addGroupSignTG) but drawn FLAT here, since
-            // the plan/top view already looks straight down — i.e. it's
-            // inherently "parallel to the ground", the same ground
-            // plane the 3D poles are planted in. Purely a location
-            // sign, independent of the stability-triangle toggle/data.
-            let supportSignSvg = '';
-            const planSupportGroupCenters = computeAxleGroupCenters(rows);
-            const supportGroupPair = getStabilitySupportGroupPair(planSupportGroupCenters);
-            if (supportGroupPair) {
-                const [gA, gB] = supportGroupPair;
-                const pA = planSupportGroupCenters[gA], pB = planSupportGroupCenters[gB];
-                const ax = sx(pA.x), ay = sy(pA.y);
-                const bx = sx(pB.x), by = sy(pB.y);
-                const triR = 7; // flat triangle "radius" (center to tip), px
-                const triMarkerSvg = (cx, cy, color, label) =>
-                    `<g>` +
-                    `<path d="M ${cx} ${cy - triR} L ${(cx + triR * 0.87).toFixed(2)} ${(cy + triR * 0.5).toFixed(2)} L ${(cx - triR * 0.87).toFixed(2)} ${(cy + triR * 0.5).toFixed(2)} Z" fill="${color}" fill-opacity="0.85" stroke="var(--tank-box-bg, #0b1220)" stroke-width="1"/>` +
-                    `<text x="${cx}" y="${cy - triR - 4}" font-size="9" text-anchor="middle" fill="${color}">${escapeHtml(label)}</text>` +
-                    `</g>`;
-                supportSignSvg += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.75"/>`;
-                supportSignSvg += triMarkerSvg(ax, ay, getGroupColor(gA), getGroupLabel(gA));
-                supportSignSvg += triMarkerSvg(bx, by, getGroupColor(gB), getGroupLabel(gB));
-            }
-
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -4414,7 +4360,7 @@
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${dimensionsSvg}${splitMarkersSvg}${supportSignSvg}${originSvg}
+                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
