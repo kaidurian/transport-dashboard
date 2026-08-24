@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.33)</h1>
+            <h1>🚂 Transport Dashboard (Rev.34)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -736,6 +736,7 @@
             const btn = document.getElementById('themeModeToggle');
             if (btn) btn.textContent = isLight ? '☀️ Day' : '🌙 Night';
             syncExternalThemeVars();
+            if (typeof update3DDayNightTG === 'function') update3DDayNightTG();
         }
 
         function toggleThemeMode() {
@@ -952,6 +953,66 @@
         const STAB_ARM_HEIGHT_CELL = "G2"; // Properties!G2 — arm-point ground height (mm), shared by both triangles
         const TG_STAB_SINGLE_COLOR = TG_CARGO_COLOR;         // single-system triangle (Cargo CoG apex) — cargo orange, distinct from the Trailer CoG sign (purple) already drawn in this same panel
         const TG_STAB_COMBINED_COLOR = TG_CARGO_TOTAL_COLOR; // combined-system triangle (Combined CoG apex) — matches Combined CoG sign color
+
+        // ---- Stability arm — perpendicular distance from CoG to the
+        // Group 3 / Group 4 support side ----
+        // The Excel-sourced arm (Display!B26/C26, "Min" of the 3-point
+        // Side 1-2/2-3/1-3 distances) is a fixed single-suspension
+        // support triangle. When the trailer configuration actually
+        // uses a 4th support group (Group 3 AND Group 4 both present
+        // among the current axle groups), the tipping edge that matters
+        // is the straight line connecting those two groups' own axle
+        // positions — so the arm is instead computed locally, as the
+        // true perpendicular distance from the CoG (in plan view) to
+        // that line, and the angle is re-derived from THIS arm and the
+        // CoG's own height above the arm-height reference (rather than
+        // reusing the Excel-sourced angle, which would no longer match
+        // a locally-recomputed arm). Falls back to the Excel-sourced
+        // arm/angle whenever Group 3 or Group 4 isn't present in the
+        // current axle-group setup (e.g. simple 1-2 group trailers),
+        // so existing single/dual-group setups are unaffected.
+        // Shared by both the 2D "Right End View" triangle
+        // (renderTrailerGenElevationCombined) and the 3D stability
+        // plane (renderTrailerGen3D) so the two never disagree.
+        function computeAxleGroupCenters(rows) {
+            const sums = {};
+            (rows || []).forEach(r => {
+                const g = sums[r.groupNumber] = sums[r.groupNumber] || { sx: 0, sy: 0, n: 0 };
+                g.sx += r.x; g.sy += r.y; g.n++;
+            });
+            const centers = {};
+            Object.keys(sums).forEach(gn => {
+                const g = sums[gn];
+                centers[gn] = { x: g.sx / g.n, y: g.sy / g.n };
+            });
+            return centers;
+        }
+        // Perpendicular distance (mm) from world point (cogXMm, cogYMm)
+        // to the infinite line through Group 3's and Group 4's own axle
+        // centers — null when either group is absent, or the two
+        // groups' centers coincide (degenerate line).
+        function computeGroup34ArmMm(cogXMm, cogYMm, groupCenters) {
+            const p3 = groupCenters && groupCenters[3], p4 = groupCenters && groupCenters[4];
+            if (!p3 || !p4) return null;
+            const dx = p4.x - p3.x, dy = p4.y - p3.y;
+            const lenSq = dx * dx + dy * dy;
+            if (lenSq < 1) return null;
+            const armMm = Math.abs(dy * cogXMm - dx * cogYMm + p4.x * p3.y - p4.y * p3.x) / Math.sqrt(lenSq);
+            return { armMm, p3, p4 };
+        }
+        // Resolves the final {armMm, angleDeg, fromGroups} for one
+        // stability system (single or combined), preferring the
+        // Group 3/4 geometric arm (+ locally re-derived angle) over the
+        // Excel-sourced arm/angle whenever Group 3/4 are both present.
+        function resolveStabilityArm(cogXMm, cogYMm, cogZMm, excelArmMm, excelAngleDeg, groupCenters, armHeightMm) {
+            const fromGroups = computeGroup34ArmMm(cogXMm, cogYMm, groupCenters);
+            if (fromGroups) {
+                const vertMm = Math.max(1, cogZMm - armHeightMm);
+                const angleDeg = Math.atan2(fromGroups.armMm, vertMm) * 180 / Math.PI;
+                return { armMm: fromGroups.armMm, angleDeg, fromGroups: true, p3: fromGroups.p3, p4: fromGroups.p4 };
+            }
+            return { armMm: excelArmMm, angleDeg: excelAngleDeg, fromGroups: false, p3: null, p4: null };
+        }
 
         // ---- Cargo dimension (Length/Width/Height) — Excel "Input
         // horizontal loads" sheet, H11:H13, meters. A separate sheet
@@ -4688,15 +4749,21 @@
             // ---- Stability angle triangles (Right End View only) ----
             // Right-triangle per system: CoG (apex) -> straight down to
             // the arm height (Properties!G2) -> across the arm distance
-            // (Display!B26 single / C26 combined) -> back up the
-            // hypotenuse to the CoG. The angle at the apex, between the
-            // vertical leg and the hypotenuse, is labeled with the
-            // Excel-sourced value (Display!B29 single / B30 combined)
-            // rather than a value computed from the drawing, so the
-            // label always matches the workbook even if this drawing's
-            // scale/rounding differs slightly. Drawn only in the right
-            // end view (sy2), same panel as the Trailer/Combined CoG Z
-            // dimensions above.
+            // -> back up the hypotenuse to the CoG. The arm/angle
+            // themselves come from resolveStabilityArm() (see its own
+            // comment above, near computeAxleGroupCenters): whenever
+            // Group 3 AND Group 4 both exist in the current axle-group
+            // setup, the arm is the TRUE perpendicular distance from
+            // the CoG (in plan view) to the line connecting those two
+            // groups' own axle positions, and the angle is re-derived
+            // from that arm; otherwise it falls back to the
+            // Excel-sourced value (Display!B26/C26 arm, B29/B30 angle)
+            // as before. Drawn only in the right end view (sy2), same
+            // panel as the Trailer/Combined CoG Z dimensions above —
+            // this view always collapses X, so a Group-3/4 arm that
+            // isn't purely transverse is still drawn as a magnitude-only
+            // horizontal offset here (see the 3D model for the true,
+            // non-collapsed triangle geometry).
             //
             // Both the angle and arm-distance labels are kept OUTSIDE
             // the triangle body (per-system radial/vertical offset, see
@@ -4706,7 +4773,8 @@
             // vertically and would otherwise overlap each other's text.
             const TG_STAB_LABEL_STEP = 16; // extra outward offset per system index, so single/combined labels never collide
             let stabTriSvg = '';
-            if (stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) {
+            const stabGroupCenters = computeAxleGroupCenters(rows);
+            if ((stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) || (stabGroupCenters[3] && stabGroupCenters[4] && stabilityArmHeightLoaded)) {
                 const armY = szEnd(stabilityArmHeightMm);
                 const stabSystems = [];
                 // Single system — Cargo CoG (cargo-only weighted CoG,
@@ -4716,21 +4784,31 @@
                 // so it's converted to an absolute world Z the same way
                 // the per-item cargo boxes are, via + deckTopWorldZ.
                 if (cargoTotal.weight > 0) {
+                    const cX = (parseFloat(cargoTotal.x) || 0) * 1000;
+                    const cY = (parseFloat(cargoTotal.y) || 0) * 1000;
+                    const cZ = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
+                    const resolved = resolveStabilityArm(cX, cY, cZ, stabilityArmSingleMm, stabilityAngleSingleDeg, stabGroupCenters, stabilityArmHeightMm);
                     stabSystems.push({
-                        cogYMm: (parseFloat(cargoTotal.y) || 0) * 1000,
-                        cogZMm: deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000,
-                        armMm: stabilityArmSingleMm,
-                        angleDeg: stabilityAngleSingleDeg,
+                        cogYMm: cY,
+                        cogZMm: cZ,
+                        armMm: resolved.armMm,
+                        angleDeg: resolved.angleDeg,
+                        fromGroups: resolved.fromGroups,
                         color: TG_STAB_SINGLE_COLOR,
                         label: 'Single',
                     });
                 }
                 if (cogCombinedSignLoaded) {
+                    const cX = parseFloat(cogCombinedSign.x) || 0;
+                    const cY = parseFloat(cogCombinedSign.y) || 0;
+                    const cZ = parseFloat(cogCombinedSign.z) || 0;
+                    const resolved = resolveStabilityArm(cX, cY, cZ, stabilityArmCombinedMm, stabilityAngleCombinedDeg, stabGroupCenters, stabilityArmHeightMm);
                     stabSystems.push({
-                        cogYMm: parseFloat(cogCombinedSign.y) || 0,
-                        cogZMm: parseFloat(cogCombinedSign.z) || 0,
-                        armMm: stabilityArmCombinedMm,
-                        angleDeg: stabilityAngleCombinedDeg,
+                        cogYMm: cY,
+                        cogZMm: cZ,
+                        armMm: resolved.armMm,
+                        angleDeg: resolved.angleDeg,
+                        fromGroups: resolved.fromGroups,
                         color: TG_STAB_COMBINED_COLOR,
                         label: 'Combined',
                     });
@@ -4772,7 +4850,7 @@
                     if (px * footSign < 0) { px = -px; py = -py; }
                     const labelOff = 14 + sIdx * TG_STAB_LABEL_STEP;
                     const angleLabelX = midX + px * labelOff, angleLabelY = midY + py * labelOff;
-                    stabTriSvg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°</text>`;
+                    stabTriSvg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
                     // Arm distance label — placed below the arm foot
                     // point, outside the triangle's base leg, each
                     // system stacked at its own vertical tier so the
@@ -4924,6 +5002,24 @@
         let world3dGroupTG = null;   // everything EXCEPT the ground grid — rebuilt every renderTrailerGen3D() call
         let gridHelper3dTG = null;
         let tg3dInitialized = false;
+        let ambientLight3dTG = null, dirLight3dTG = null, dirLight3dTG2 = null;
+
+        // ---- Day/night — follows the SAME #themeModeToggle (day/night)
+        // switch the rest of the dashboard uses (see applyThemeMode()
+        // below, which calls update3DDayNightTG() on every toggle), so
+        // there's no separate 3D-only control. Only the sky background
+        // + light intensity swap; geometry/material colors are
+        // unaffected. ----
+        const TG3D_SKY_DAY = 0xbfdcf0;
+        const TG3D_SKY_NIGHT = 0x0f1115;
+        function update3DDayNightTG() {
+            if (!scene3dTG) return;
+            const isLight = document.body.classList.contains('tg-light-theme');
+            scene3dTG.background = new THREE.Color(isLight ? TG3D_SKY_DAY : TG3D_SKY_NIGHT);
+            if (ambientLight3dTG) ambientLight3dTG.intensity = isLight ? 0.85 : 0.55;
+            if (dirLight3dTG) dirLight3dTG.intensity = isLight ? 0.95 : 0.55;
+            if (dirLight3dTG2) dirLight3dTG2.intensity = isLight ? 0.4 : 0.25;
+        }
 
         // Manual orbit/pan/zoom camera state — same scheme as the Barge
         // Ballast dashboard's own 3D viewer (index.html), reimplemented
@@ -5069,13 +5165,17 @@
             renderer3dTG.setPixelRatio(window.devicePixelRatio || 1);
             container.appendChild(renderer3dTG.domElement);
 
-            scene3dTG.add(new THREE.AmbientLight(0xffffff, 0.7));
+            ambientLight3dTG = new THREE.AmbientLight(0xffffff, 0.7);
+            scene3dTG.add(ambientLight3dTG);
             const dir = new THREE.DirectionalLight(0xffffff, 0.75);
             dir.position.set(30, 50, 20);
             scene3dTG.add(dir);
             const dir2 = new THREE.DirectionalLight(0xffffff, 0.35);
             dir2.position.set(-20, 25, -30);
             scene3dTG.add(dir2);
+            dirLight3dTG = dir;
+            dirLight3dTG2 = dir2;
+            update3DDayNightTG(); // apply the current day/night theme right away, instead of defaulting to the fixed dark colors above
 
             gridHelper3dTG = new THREE.GridHelper(200, 40, 0x2a3446, 0x1c2432);
             scene3dTG.add(gridHelper3dTG);
@@ -5294,50 +5394,101 @@
                 }
             }
 
+            // ---- Group 3 / Group 4 support signs — small flag markers
+            // (+ a connecting line between them, when both are present)
+            // at each group's own axle centroid, in that group's own
+            // color (see TRAILER_GROUP_DEFS). Drawn independently of
+            // the stability-triangle toggle/data, since these are just
+            // location markers for the two groups the stability arm's
+            // perpendicular is measured against (see
+            // computeAxleGroupCenters/computeGroup34ArmMm above) —
+            // useful for sanity-checking that math even when the
+            // triangle itself isn't shown.
+            const stabGroupCentersTG = computeAxleGroupCenters(rows);
+            [3, 4].forEach(gn => {
+                const c = stabGroupCentersTG[gn];
+                if (!c) return;
+                addGroupSignTG(c.x, c.y, tg3dResolveColor(getGroupColor(gn), '#94a3b8'), getGroupLabel(gn));
+                extend(c.x, c.y);
+            });
+            if (stabGroupCentersTG[3] && stabGroupCentersTG[4]) {
+                const p3 = stabGroupCentersTG[3], p4 = stabGroupCentersTG[4];
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                    toV(p3.x, 30, p3.y), toV(p4.x, 30, p4.y)
+                ]);
+                const lineMat = new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.3, gapSize: 0.18, transparent: true, opacity: 0.8 });
+                const line = new THREE.Line(lineGeo, lineMat);
+                line.computeLineDistances();
+                world3dGroupTG.add(line);
+            }
+
             // ---- Stability triangle(s) — same right-triangle geometry
             // (CoG apex -> straight down to the suspension arm height ->
             // across the arm distance -> back up the hypotenuse) as the
             // 2D "Right End View" panel, drawn here as an actual
-            // vertical plane in 3D space at the system's own world-X
-            // position (the 2D end view collapses X, so this is the
-            // only place the triangle's true X location is visible).
+            // vertical plane in 3D space at the system's own world
+            // position. When Group 3 AND Group 4 are both present, the
+            // arm is the TRUE perpendicular from the CoG to the line
+            // connecting those two groups (see resolveStabilityArm /
+            // computeGroup34ArmMm above) and the triangle's "across" leg
+            // runs to that line's real perpendicular foot point — not
+            // just a same-X lateral offset — so (unlike the 2D end
+            // view, which always collapses X) this plane can run at an
+            // angle across X as well as Y when the Group 3/4 line isn't
+            // purely transverse. Falls back to the old CoG-own-X,
+            // Y-offset-only triangle when Group 3/4 aren't both present
+            // (Excel-sourced arm/angle, same as the 2D end view's own
+            // fallback).
             const showStability = document.getElementById('tg3dStabilityToggle')?.checked !== false;
-            if (showStability && stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) {
+            const stabHasData = (stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) || (stabGroupCentersTG[3] && stabGroupCentersTG[4] && stabilityArmHeightLoaded);
+            if (showStability && stabHasData) {
                 const stabSystems = [];
                 if (cargoTotal && cargoTotal.weight > 0) {
+                    const cX = (parseFloat(cargoTotal.x) || 0) * 1000;
+                    const cY = (parseFloat(cargoTotal.y) || 0) * 1000;
+                    const cZ = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
+                    const resolved = resolveStabilityArm(cX, cY, cZ, stabilityArmSingleMm, stabilityAngleSingleDeg, stabGroupCentersTG, stabilityArmHeightMm);
                     stabSystems.push({
-                        cogXMm: (parseFloat(cargoTotal.x) || 0) * 1000,
-                        cogYMm: (parseFloat(cargoTotal.y) || 0) * 1000,
-                        cogZMm: deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000,
-                        armMm: stabilityArmSingleMm,
-                        angleDeg: stabilityAngleSingleDeg,
+                        cogXMm: cX, cogYMm: cY, cogZMm: cZ,
+                        armMm: resolved.armMm, angleDeg: resolved.angleDeg, fromGroups: resolved.fromGroups,
                         color: tg3dResolveColor(TG_STAB_SINGLE_COLOR, '#f97316'),
                         label: 'Single',
                     });
                 }
                 if (cogCombinedSignLoaded) {
+                    const cX = parseFloat(cogCombinedSign.x) || 0;
+                    const cY = parseFloat(cogCombinedSign.y) || 0;
+                    const cZ = parseFloat(cogCombinedSign.z) || 0;
+                    const resolved = resolveStabilityArm(cX, cY, cZ, stabilityArmCombinedMm, stabilityAngleCombinedDeg, stabGroupCentersTG, stabilityArmHeightMm);
                     stabSystems.push({
-                        cogXMm: parseFloat(cogCombinedSign.x) || 0,
-                        cogYMm: parseFloat(cogCombinedSign.y) || 0,
-                        cogZMm: parseFloat(cogCombinedSign.z) || 0,
-                        armMm: stabilityArmCombinedMm,
-                        angleDeg: stabilityAngleCombinedDeg,
+                        cogXMm: cX, cogYMm: cY, cogZMm: cZ,
+                        armMm: resolved.armMm, angleDeg: resolved.angleDeg, fromGroups: resolved.fromGroups,
                         color: tg3dResolveColor(TG_STAB_COMBINED_COLOR, '#ef4444'),
                         label: 'Combined',
                     });
                 }
                 stabSystems.forEach(s => {
-                    // Arm swings toward whichever side (+Y/-Y) the CoG
-                    // already leans, same "tips toward the CoG" sense as
-                    // the 2D triangle (which always draws the arm point
-                    // further out from center in the CoG's own offset
-                    // direction — approximated here as the sign of the
-                    // CoG's own Y, falling back to +Y when centered).
-                    const armSign = s.cogYMm < 0 ? -1 : 1;
                     const apex = toV(s.cogXMm, s.cogZMm, s.cogYMm);
-                    const armPt = toV(s.cogXMm, stabilityArmHeightMm, s.cogYMm + armSign * s.armMm);
-                    const footPt = toV(s.cogXMm, stabilityArmHeightMm, s.cogYMm);
-                    extend(s.cogXMm, s.cogYMm + armSign * s.armMm, Math.max(s.cogZMm, stabilityArmHeightMm));
+                    const footPt = toV(s.cogXMm, stabilityArmHeightMm, s.cogYMm); // directly below apex
+                    let armPt;
+                    if (s.fromGroups) {
+                        // True perpendicular foot on the Group 3/4 line —
+                        // its X,Y generally differ from the CoG's own
+                        // X,Y (unlike the fallback below).
+                        const p3 = stabGroupCentersTG[3], p4 = stabGroupCentersTG[4];
+                        const dx = p4.x - p3.x, dy = p4.y - p3.y;
+                        const lenSq = dx * dx + dy * dy;
+                        const t = Math.max(0, Math.min(1, ((s.cogXMm - p3.x) * dx + (s.cogYMm - p3.y) * dy) / lenSq));
+                        armPt = toV(p3.x + t * dx, stabilityArmHeightMm, p3.y + t * dy);
+                    } else {
+                        // Fallback (no Group 3/4 line available): same
+                        // lateral-offset approximation as before — arm
+                        // swings toward whichever side (+Y/-Y) the CoG
+                        // already leans.
+                        const armSign = s.cogYMm < 0 ? -1 : 1;
+                        armPt = toV(s.cogXMm, stabilityArmHeightMm, s.cogYMm + armSign * s.armMm);
+                    }
+                    extend(armPt.x / S, armPt.z / S, Math.max(s.cogZMm, stabilityArmHeightMm));
 
                     const shape = new THREE.BufferGeometry().setFromPoints([apex, armPt, footPt]);
                     shape.setIndex([0, 1, 2]);
@@ -5363,7 +5514,7 @@
 
                     labelAnchors3dTG.push({
                         pos: apex.clone().lerp(armPt, 0.5).add(new THREE.Vector3(0, 0.3, 0)),
-                        text: `${s.label} ${s.angleDeg.toFixed(1)}°`,
+                        text: `${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}`,
                         color: s.color,
                     });
                     labelAnchors3dTG.push({
@@ -5427,6 +5578,34 @@
                 world3dGroupTG.add(new THREE.Line(g, lineMat));
             });
             labelAnchors3dTG.push({ pos: mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), text: label, color: hex });
+        }
+
+        // Group support "sign" — a thin pole + small flag-like cone
+        // planted at an axle group's own centroid (ground level), in
+        // that group's own color (TRAILER_GROUP_DEFS), labeled with the
+        // group's name. Used to mark Group 3 / Group 4's own location
+        // in 3D, since those are the two support points the stability
+        // arm's perpendicular distance is measured against (see
+        // computeAxleGroupCenters/computeGroup34ArmMm) — visually
+        // distinct from the wheel cylinders (which are colored by
+        // group too, but read as wheels, not as a labeled reference
+        // point) and from the CoG crosshair markers above.
+        function addGroupSignTG(xMm, yMm, hex, label) {
+            const S = TG3D_SCALE;
+            const poleHeightM = 0.9;
+            const poleGeo = new THREE.CylinderGeometry(0.012, 0.012, poleHeightM, 8);
+            const poleMat = new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.25 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.set(xMm * S, poleHeightM / 2, yMm * S);
+            world3dGroupTG.add(pole);
+
+            const flagGeo = new THREE.ConeGeometry(0.09, 0.16, 3);
+            const flag = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.35 }));
+            flag.position.set(xMm * S, poleHeightM, yMm * S);
+            flag.rotation.y = Math.PI / 4;
+            world3dGroupTG.add(flag);
+
+            labelAnchors3dTG.push({ pos: new THREE.Vector3(xMm * S, poleHeightM + 0.16, yMm * S), text: label, color: hex });
         }
 
         function renderTrailerGeneratorTotals() {
