@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.35)</h1>
+            <h1>🚂 Transport Dashboard (Rev.36)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -4183,6 +4183,46 @@
                     const midX = (apexX + footX) / 2, midY = (apexY + footY) / 2;
                     const labelOff = 10 + sIdx * 12;
                     stabArmSvg += `<text x="${midX}" y="${midY - labelOff}" font-size="9" text-anchor="middle" fill="${s.color}">${s.label} arm ${armMm.toFixed(0)}${planFromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
+
+                    // ---- Perpendicularity proof (CAD-style right-angle
+                    // callout) ----
+                    // Explicit visual confirmation, at the foot point,
+                    // that the arm (foot -> CoG apex) truly meets the
+                    // Group 3-4 side at 90°: a small arc between the two
+                    // rays (along the G3-4 side, and along the arm
+                    // toward the CoG), each capped with an outward
+                    // arrowhead, plus a "90°" label on the arc's
+                    // bisector — the standard CAD perpendicularity
+                    // symbol. sx/sy share one uniform scale (see
+                    // `scale` above), so a true 3D right angle here is
+                    // guaranteed to render as a true right angle on
+                    // screen, unlike a 3D perspective view.
+                    if (planFromGroups) {
+                        const sideRawX = sx(g4Plan.x) - sx(g3Plan.x), sideRawY = sy(g4Plan.y) - sy(g3Plan.y);
+                        const sideLen = Math.hypot(sideRawX, sideRawY) || 1;
+                        const dirSideX = sideRawX / sideLen, dirSideY = sideRawY / sideLen;
+                        const armRawX = apexX - footX, armRawY = apexY - footY;
+                        const armLen = Math.hypot(armRawX, armRawY) || 1;
+                        const dirArmX = armRawX / armLen, dirArmY = armRawY / armLen;
+                        const R1 = 12, R2 = 20; // arc radius, arrow-leader outer radius
+                        const p1x = footX + dirSideX * R1, p1y = footY + dirSideY * R1;
+                        const p2x = footX + dirArmX * R1, p2y = footY + dirArmY * R1;
+                        let diff = Math.atan2(dirArmY, dirArmX) - Math.atan2(dirSideY, dirSideX);
+                        while (diff <= -Math.PI) diff += 2 * Math.PI;
+                        while (diff > Math.PI) diff -= 2 * Math.PI;
+                        const sweepFlag = diff > 0 ? 1 : 0;
+                        const bisX = dirSideX + dirArmX, bisY = dirSideY + dirArmY;
+                        const bisLen = Math.hypot(bisX, bisY) || 1;
+                        const labelX = footX + (bisX / bisLen) * (R1 + 15);
+                        const labelY = footY + (bisY / bisLen) * (R1 + 15);
+                        const AC = '#eab308'; // amber — matches the 3D perpendicularity proof's tick/label color
+                        stabArmSvg += `<g opacity="0.95">` +
+                            `<path d="M ${p1x.toFixed(1)} ${p1y.toFixed(1)} A ${R1} ${R1} 0 0 ${sweepFlag} ${p2x.toFixed(1)} ${p2y.toFixed(1)}" fill="none" stroke="${AC}" stroke-width="1.3"/>` +
+                            `<line x1="${(footX + dirSideX * R1).toFixed(1)}" y1="${(footY + dirSideY * R1).toFixed(1)}" x2="${(footX + dirSideX * R2).toFixed(1)}" y2="${(footY + dirSideY * R2).toFixed(1)}" stroke="${AC}" stroke-width="1.3" marker-end="url(#tgArrowAngle)"/>` +
+                            `<line x1="${(footX + dirArmX * R1).toFixed(1)}" y1="${(footY + dirArmY * R1).toFixed(1)}" x2="${(footX + dirArmX * R2).toFixed(1)}" y2="${(footY + dirArmY * R2).toFixed(1)}" stroke="${AC}" stroke-width="1.3" marker-end="url(#tgArrowAngle)"/>` +
+                            `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="${AC}">90°</text>` +
+                            `</g>`;
+                    }
                 });
             }
 
@@ -4438,6 +4478,9 @@
                     </marker>
                     <marker id="tgArrowY" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-green, #10b981)"/>
+                    </marker>
+                    <marker id="tgArrowAngle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,0 L10,5 L0,10 z" fill="#eab308"/>
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
@@ -5638,20 +5681,49 @@
                         const perpMat = new THREE.LineBasicMaterial({ color: 0x22c55e }); // green — CoG -> foot perpendicular
                         world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([cogGroundPt, footGroundPt]), perpMat));
 
-                        // Right-angle tick at the foot: one short leg
-                        // back along the Group 3–4 side direction, one
-                        // short leg toward the CoG (perpendicular to
-                        // it) — the two legs are, by construction,
-                        // exactly perpendicular to each other.
-                        const tickLenM = Math.min(0.4, Math.max(0.12, (s.armMm * S) * 0.25));
+                        // Right-angle callout at the foot — same CAD
+                        // perpendicularity convention as the 2D plan
+                        // view's own arc (see stabArmSvg above, "arc +
+                        // outward arrowheads + 90° label"): a quarter-
+                        // circle arc swept between the Group 3–4 side
+                        // direction and the CoG direction (towardCog),
+                        // capped with a short outward leader on each
+                        // ray. towardCog and alongSide are, by
+                        // construction, exactly perpendicular (foot is
+                        // the true perpendicular projection of the CoG
+                        // onto the Group 3–4 line), so the arc always
+                        // sweeps a genuine 90°, not an approximation.
+                        const radiusM = Math.min(0.4, Math.max(0.12, (s.armMm * S) * 0.25));
                         const towardCog = new THREE.Vector3().subVectors(cogGroundPt, footGroundPt).normalize();
                         const alongSide = new THREE.Vector3(ux, 0, uy);
-                        const corner = footGroundPt.clone().addScaledVector(alongSide, tickLenM);
-                        const corner2 = corner.clone().addScaledVector(towardCog, tickLenM);
-                        const tickMat = new THREE.LineBasicMaterial({ color: 0xeab308 }); // amber — right-angle tick + side reference
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([corner, corner2, footGroundPt.clone().addScaledVector(towardCog, tickLenM)]), tickMat));
+                        const ARC_SEGMENTS = 12;
+                        const arcPts = [];
+                        for (let i = 0; i <= ARC_SEGMENTS; i++) {
+                            const t = (i / ARC_SEGMENTS) * (Math.PI / 2);
+                            arcPts.push(footGroundPt.clone()
+                                .addScaledVector(alongSide, Math.cos(t) * radiusM)
+                                .addScaledVector(towardCog, Math.sin(t) * radiusM));
+                        }
+                        const arcMat = new THREE.LineBasicMaterial({ color: 0xeab308 }); // amber — right-angle arc + side reference
+                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts), arcMat));
+                        // Short outward leaders past each end of the arc,
+                        // along the same two ray directions — visually
+                        // matches the 2D view's arrow leaders (arrowheads
+                        // aren't drawn in 3D since THREE.Line has no
+                        // marker support, but the leader + arc together
+                        // still read clearly as a right-angle callout).
+                        const leaderOuterM = radiusM * 1.6;
+                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                            footGroundPt.clone().addScaledVector(alongSide, radiusM),
+                            footGroundPt.clone().addScaledVector(alongSide, leaderOuterM),
+                        ]), arcMat));
+                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                            footGroundPt.clone().addScaledVector(towardCog, radiusM),
+                            footGroundPt.clone().addScaledVector(towardCog, leaderOuterM),
+                        ]), arcMat));
 
-                        labelAnchors3dTG.push({ pos: corner2.clone().add(new THREE.Vector3(0, 0.05, 0)), text: '90°', color: '#eab308' });
+                        const bisector = new THREE.Vector3().addVectors(alongSide, towardCog).normalize();
+                        labelAnchors3dTG.push({ pos: footGroundPt.clone().addScaledVector(bisector, radiusM + 0.18), text: '90°', color: '#eab308' });
                     }
                 });
             }
