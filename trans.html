@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.41)</h1>
+            <h1>🚂 Transport Dashboard (Rev.41.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1495,10 +1495,18 @@
         // deck footprint, axle #1 inset, line spacing/direction, and
         // resets its axle groups to a single group spanning all axle
         // lines (keeping the previous load value as the new default).
-        // presetValue is 'custom', or a combined manufacturer+axle-line-count
+        // presetValue is 'custom', a combined manufacturer+axle-line-count
         // token like 'goldhofer4' / 'goldhofer6' / 'spmt4' / 'spmt6' (the
-        // trailer-type dropdown folds axle-line count into the same option
-        // so there's no separate "4 axle line / 6 axle line" dropdown).
+        // Trailer type dropdown folds axle-line count into the same option
+        // so there's no separate "4 axle line / 6 axle line" dropdown), a
+        // header/dolly-bar block key from HEADER_DBAR_BLOCK_PRESETS (called
+        // from that train's own separate "Header/Dolly-bar block" dropdown
+        // — see the train card render — NOT the Trailer type dropdown,
+        // which no longer lists these), or 'none' (also from the
+        // Header/Dolly-bar block dropdown, to turn a block train back into
+        // a normal Custom/Manual one — 'none' doesn't match the
+        // manufacturer regex below so it falls into that same reset
+        // branch).
         function applyTrailerPreset(id, presetValue) {
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
@@ -3749,6 +3757,7 @@
                                 ${trailerGenTrains.length <= 1 ? 'disabled' : ''}>✕</button>
                     </div>
                     <div class="tg-field-grid">
+                        ${isHeaderDbarBlockTrain(train) ? '' : `
                         <div class="tg-field">
                             <label>Trailer type</label>
                             <select title="Pick a fixed manufacturer preset (including its axle-line count) to auto-fill the deck footprint and axle-line layout below, or Custom / Manual to enter your own."
@@ -3756,11 +3765,8 @@
                                 <option value="custom" ${train.trailerType === 'custom' || !train.trailerType ? 'selected' : ''}>Custom / Manual</option>
                                 ${['goldhofer', 'spmt'].map(mfr => Object.keys(TRAILER_PRESETS[mfr]).map(Number).sort((a, b) => a - b).map(n => `
                                 <option value="${mfr}${n}" ${train.trailerType === mfr && train.axleLineCount === n ? 'selected' : ''}>${mfr === 'goldhofer' ? 'Goldhofer' : 'SPMT'} (${n} axle line)</option>`).join('')).join('')}
-                                ${Object.keys(HEADER_DBAR_BLOCK_PRESETS).map(key => `
-                                <option value="${key}" ${train.trailerType === key ? 'selected' : ''}>${HEADER_DBAR_BLOCK_PRESETS[key].label}</option>`).join('')}
                             </select>
                         </div>
-                        ${isHeaderDbarBlockTrain(train) ? '' : `
                         <div class="tg-field">
                             <label>Line spacing (mm)</label>
                             <input type="number" step="any" value="${train.spacing}" title="Distance along X between adjacent axles: axle N = axle (N-1) X minus this spacing. Auto-filled (and may be negative) when a trailer preset is selected above."
@@ -3776,11 +3782,20 @@
                             <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train.${tgYCell ? ` Synced with Excel sheet 'Input'!${tgYCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
                         </div>`}
+                        <div class="tg-field">
+                            <label>Header/Dolly-bar block</label>
+                            <select title="Attach a fixed header/dolly-bar block (no axles, no deck — see the two presets below) to THIS train, independent of its own Trailer type. Selecting one converts this train's whole card into that block (clearing any axle groups); pick 'None' to turn it back into a normal axle-based train (Custom / Manual)."
+                                    onchange="applyTrailerPreset(${train.id}, this.value)">
+                                <option value="none" ${isHeaderDbarBlockTrain(train) ? '' : 'selected'}>None</option>
+                                ${Object.keys(HEADER_DBAR_BLOCK_PRESETS).map(key => `
+                                <option value="${key}" ${train.trailerType === key ? 'selected' : ''}>${HEADER_DBAR_BLOCK_PRESETS[key].label}</option>`).join('')}
+                            </select>
+                        </div>
                         ${isHeaderDbarBlockTrain(train) ? `
                         <div class="tg-field">
                             <label>LOAD (T)</label>
                             <input type="number" step="any" min="0" value="${train.blockLoad != null ? train.blockLoad : HEADER_DBAR_BLOCK_PRESETS[train.trailerType].defaultLoad}"
-                                   title="Total weight of this header/dolly-bar block (t). All other geometry is fixed by the selected Trailer type."
+                                   title="Total weight of this header/dolly-bar block (t). All other geometry is fixed by the selected block preset."
                                    onchange="updateTrailerGenBlockLoad(${train.id}, this.value)">
                         </div>
                         <div class="tg-field">
