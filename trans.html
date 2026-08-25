@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.40)</h1>
+            <h1>🚂 Transport Dashboard (Rev.41)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1737,20 +1737,31 @@
             return 0;
         }
 
-        // Builds a new train that copies ALL data from Train 1 (the
-        // first train in trailerGenTrains) — trailer type/preset, deck
-        // dimensions, line spacing, X offset, axle groups, AutoCAD
-        // split — except:
+        // Builds a new REAL (non-block) train that copies ALL data from
+        // the first REAL train currently in trailerGenTrains — trailer
+        // type/preset, deck dimensions, line spacing, X offset, axle
+        // groups, AutoCAD split — except:
         //   - id / name, which are always fresh, and
-        //   - Y offset, which stacks below the CURRENT last train:
-        //     newTrain.y = lastTrain.y + trainWidthY(lastTrain) + 300.
+        //   - Y offset, which stacks below the CURRENT last REAL train:
+        //     newTrain.y = lastRealTrain.y + trainWidthY(lastRealTrain) + 300.
         //     (Train 2's Y offset = Train 1's Y offset + Train 1's width
         //     + 300mm; Train 3's = Train 2's + Train 2's width + 300mm;
         //     and so on.)
+        // Template/anchor are deliberately the first/last REAL train —
+        // NOT simply trailerGenTrains[0]/[length-1] — because
+        // enforceHeaderDbarBlockOrder() can place a header/dolly-bar
+        // block train (GHF 2F Header&Dbar 3m / &PPU — see
+        // HEADER_DBAR_BLOCK_PRESETS) at either end of that array. Those
+        // block trains have no axle groups and no real deck, so
+        // "+ Add Train" / bumping "Number of trains" must never copy
+        // one — a block train is only ever created by explicitly
+        // picking it from a train's own Trailer type dropdown
+        // (applyTrailerPreset), never duplicated this way.
         function buildTrainCopiedFromTrain1() {
             const index = trailerGenTrains.length + 1;
             const newTrain = defaultTrailerGenTrain(index);
-            const train1 = trailerGenTrains[0];
+            const realTrains = trailerGenTrains.filter(t => !isHeaderDbarBlockTrain(t));
+            const train1 = realTrains[0];
             if (train1) {
                 newTrain.spacing = train1.spacing;
                 newTrain.x = train1.x;
@@ -1766,7 +1777,7 @@
                 newTrain.blockLoad = train1.blockLoad;
                 newTrain.blockPosition = train1.blockPosition;
             }
-            const lastTrain = trailerGenTrains[trailerGenTrains.length - 1];
+            const lastTrain = realTrains[realTrains.length - 1];
             if (lastTrain) {
                 newTrain.y = (parseFloat(lastTrain.y) || 0) + trainWidthY(lastTrain) + 300;
             } else if (train1) {
