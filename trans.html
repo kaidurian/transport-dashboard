@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.36)</h1>
+            <h1>🚂 Transport Dashboard (Rev.37)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1000,21 +1000,6 @@
             const armMm = Math.abs(dy * cogXMm - dx * cogYMm + p4.x * p3.y - p4.y * p3.x) / Math.sqrt(lenSq);
             return { armMm, p3, p4 };
         }
-        // Foot of the perpendicular from world point (px, py) onto the
-        // infinite line through p1/p2 — companion to
-        // computeGroup34ArmMm() above (which returns only the
-        // magnitude): used by the plan view's own stability-arm line,
-        // where the actual foot POINT (not just the distance) is
-        // needed to draw the arm as true, non-collapsed perpendicular
-        // geometry — unlike the Right End View triangle, which only
-        // ever needs the magnitude.
-        function footPointOnLine(px, py, p1, p2) {
-            const dx = p2.x - p1.x, dy = p2.y - p1.y;
-            const lenSq = dx * dx + dy * dy;
-            if (lenSq < 1) return { x: p1.x, y: p1.y };
-            const t = ((px - p1.x) * dx + (py - p1.y) * dy) / lenSq;
-            return { x: p1.x + t * dx, y: p1.y + t * dy };
-        }
         // Resolves the final {armMm, angleDeg, fromGroups} for one
         // stability system (single or combined), preferring the
         // Group 3/4 geometric arm (+ locally re-derived angle) over the
@@ -1267,6 +1252,100 @@
             });
         });
 
+        // ---- Header/dolly-bar "block" trailer types — GHF 2F Header&
+        // Dbar 3m and its &PPU variant. Unlike the manufacturer presets
+        // above, these have NO axles at all: they're a fixed-size rigid
+        // block (or, for the PPU variant, two blocks) bolted to the very
+        // front or very back of the whole trailer combination, and are
+        // represented in the Generate Trailer list as a train whose
+        // trailerType is one of these two keys (see
+        // isHeaderDbarBlockTrain/applyTrailerPreset). All dimensions mm,
+        // weight metric tonnes. blockCenterGapX (PPU only) is the
+        // center-to-center distance, along X, from block 1 to block 2 —
+        // block 2 (the PPU pack) sits further outboard than block 1 (the
+        // header/dolly-bar), see computeHeaderDbarBlockPlacements below.
+        const HEADER_DBAR_BLOCK_PRESETS = {
+            ghfHeaderDbar: {
+                label: 'GHF 2F Header&Dbar 3m',
+                defaultLoad: 0.74, // t — total weight, editable via the train's LOAD (T) field
+                blocks: [
+                    { lengthX: 955, widthY: 860, heightZ: 473 }
+                ]
+            },
+            ghfHeaderDbarPpu: {
+                label: 'GHF 2F Header&Dbar 3m&PPU',
+                defaultLoad: 1.29, // t — TOTAL weight of both blocks combined
+                blocks: [
+                    { lengthX: 955, widthY: 860, heightZ: 473 },
+                    { lengthX: 909, widthY: 1034, heightZ: 710 }
+                ],
+                blockCenterGapX: 1069
+            }
+        };
+        function isHeaderDbarBlockTrain(train) {
+            return !!(train && HEADER_DBAR_BLOCK_PRESETS[train.trailerType]);
+        }
+        // World-space bounding box (mm) of every REAL (non-block) train's
+        // axles/deck — the footprint a header/dolly-bar block anchors
+        // itself against. Returns null when there's no real train yet
+        // (rows already excludes block trains, since they carry no axle
+        // groups and so contribute no rows — see computeTrailerGenRows).
+        function computeRealAssemblyBoundsMm(rows) {
+            if (!rows || rows.length === 0) return null;
+            const xs = rows.map(r => r.x);
+            const ys = rows.map(r => r.y);
+            trailerGenTrains.forEach(t => {
+                if (isHeaderDbarBlockTrain(t)) return;
+                if (t.deckLength) { xs.push(parseFloat(t.x) || 0, (parseFloat(t.x) || 0) + t.deckLength); }
+                if (t.deckWidth) { ys.push(parseFloat(t.y) || 0, (parseFloat(t.y) || 0) + t.deckWidth); }
+            });
+            return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+        }
+        // Computes where every header/dolly-bar block train sits, keyed
+        // by train.id: { side: 'left'|'right', yCenter, blocks: [{x1,x2,
+        // widthY,heightZ,zTop,zBase}, ...] } — per spec, automatically
+        // LEFT (before the first real train) when the block train is the
+        // very FIRST entry in trailerGenTrains, RIGHT (after the last
+        // real train) when it's the very LAST entry. Y is centered on
+        // the real assembly's own Y midpoint ("center of trailer"); Z is
+        // measured so the block's TOP face is flush with the trailer's
+        // top deck (tgZTrailerHeightMm), extending downward by the
+        // block's own height. Block 1 (the header/dolly-bar) touches the
+        // assembly's edge; block 2 (PPU only) sits blockCenterGapX
+        // further outboard, in the same outward direction. A block train
+        // that's neither first nor last has no other train to anchor
+        // against (it has no manual X/Y offset fields of its own — see
+        // the reduced train-card UI) and is skipped.
+        function computeHeaderDbarBlockPlacements(rows) {
+            const placements = {};
+            const bounds = computeRealAssemblyBoundsMm(rows);
+            if (!bounds) return placements;
+            const yCenter = (bounds.minY + bounds.maxY) / 2;
+            const lastIdx = trailerGenTrains.length - 1;
+            trailerGenTrains.forEach((train, idx) => {
+                if (!isHeaderDbarBlockTrain(train)) return;
+                let side = null;
+                if (idx === 0) side = 'left';
+                else if (idx === lastIdx) side = 'right';
+                if (!side) return;
+                const preset = HEADER_DBAR_BLOCK_PRESETS[train.trailerType];
+                const dir = side === 'left' ? -1 : 1; // direction the block(s) extend, away from the assembly
+                const anchorX = side === 'left' ? bounds.minX : bounds.maxX;
+                const zTop = tgZTrailerHeightMm;
+                let centerX = anchorX + dir * (preset.blocks[0].lengthX / 2); // block 1 touches the assembly edge
+                const blocks = preset.blocks.map((b, i) => {
+                    if (i > 0) centerX += dir * (preset.blockCenterGapX || 0);
+                    return {
+                        x1: centerX - b.lengthX / 2, x2: centerX + b.lengthX / 2,
+                        widthY: b.widthY, heightZ: b.heightZ,
+                        zTop, zBase: zTop - b.heightZ
+                    };
+                });
+                placements[train.id] = { side, yCenter, blocks };
+            });
+            return placements;
+        }
+
         // ============================================================
         let trailerGenTrains = [];
         let trailerGenNextId = 1;
@@ -1344,7 +1423,12 @@
                 deckWidth: null,
                 axle1OffsetX: null,
                 axle1OffsetY: null,
-                axlePairOffsetY: null
+                axlePairOffsetY: null,
+                // Weight (t) for a header/dolly-bar block train (see
+                // HEADER_DBAR_BLOCK_PRESETS) — the ONLY editable field
+                // shown for that trailerType. null/unset until a block
+                // preset is actually applied (see applyTrailerPreset).
+                blockLoad: null
             };
         }
 
@@ -1359,6 +1443,25 @@
         function applyTrailerPreset(id, presetValue) {
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
+            if (HEADER_DBAR_BLOCK_PRESETS[presetValue]) {
+                // Header/dolly-bar block — no axles, no deck footprint,
+                // no manual X/Y offset (position is fully automatic, see
+                // computeHeaderDbarBlockPlacements). Only its weight is
+                // editable, defaulting to the preset's combined weight.
+                const preset = HEADER_DBAR_BLOCK_PRESETS[presetValue];
+                train.trailerType = presetValue;
+                train.cadSplit = '';
+                train.axleLineCount = null;
+                train.deckLength = null;
+                train.deckWidth = null;
+                train.axle1OffsetX = null;
+                train.axle1OffsetY = null;
+                train.axlePairOffsetY = null;
+                train.groups = []; // no axles at all
+                if (train.blockLoad == null) train.blockLoad = preset.defaultLoad;
+                renderTrailerDashboard();
+                return;
+            }
             const m = /^(goldhofer|spmt)(\d+)$/.exec(presetValue || '');
             if (!m) {
                 // Custom/Manual has no known axle-line count to split
@@ -1374,10 +1477,16 @@
                 train.axle1OffsetX = null;
                 train.axle1OffsetY = null;
                 train.axlePairOffsetY = null;
+                train.blockLoad = null;
+                // Switching away from a header/dolly-bar block (which has
+                // no axle groups at all) back to Custom/Manual needs at
+                // least one group to edit, same as a brand-new train.
+                if (train.groups.length === 0) train.groups = [defaultAxleGroup(1, 5, 25, 1, 'both')];
                 renderTrailerDashboard();
                 return;
             }
             train.trailerType = m[1];
+            train.blockLoad = null;
             const axleLineCount = parseInt(m[2], 10);
             const preset = TRAILER_PRESETS[train.trailerType][axleLineCount];
             if (!preset) return;
@@ -2300,6 +2409,19 @@
             // copy of the wheel grid), so an X offset / Y offset edit is
             // automatically reflected the next time "Push to
             // Adjust_Wheels" is clicked.
+        }
+
+        // Weight (t) for a header/dolly-bar block train — the only
+        // editable field for that trailerType (see HEADER_DBAR_BLOCK_PRESETS
+        // / isHeaderDbarBlockTrain). All geometry stays fixed.
+        function updateTrailerGenBlockLoad(id, rawValue) {
+            const train = trailerGenTrains.find(t => t.id === id);
+            if (!train) return;
+            let v = parseFloat(rawValue);
+            if (isNaN(v) || v < 0) v = 0;
+            train.blockLoad = v;
+            renderTrailerGeneratorTotals();
+            renderTrailerGenPreview();
         }
 
         // ============================================================
@@ -3480,8 +3602,11 @@
                                 <option value="custom" ${train.trailerType === 'custom' || !train.trailerType ? 'selected' : ''}>Custom / Manual</option>
                                 ${['goldhofer', 'spmt'].map(mfr => Object.keys(TRAILER_PRESETS[mfr]).map(Number).sort((a, b) => a - b).map(n => `
                                 <option value="${mfr}${n}" ${train.trailerType === mfr && train.axleLineCount === n ? 'selected' : ''}>${mfr === 'goldhofer' ? 'Goldhofer' : 'SPMT'} (${n} axle line)</option>`).join('')).join('')}
+                                ${Object.keys(HEADER_DBAR_BLOCK_PRESETS).map(key => `
+                                <option value="${key}" ${train.trailerType === key ? 'selected' : ''}>${HEADER_DBAR_BLOCK_PRESETS[key].label}</option>`).join('')}
                             </select>
                         </div>
+                        ${isHeaderDbarBlockTrain(train) ? '' : `
                         <div class="tg-field">
                             <label>Line spacing (mm)</label>
                             <input type="number" step="any" value="${train.spacing}" title="Distance along X between adjacent axles: axle N = axle (N-1) X minus this spacing. Auto-filled (and may be negative) when a trailer preset is selected above."
@@ -3496,9 +3621,24 @@
                             <label>${tgYCell ? '🔗 ' : ''}Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgYCell ? `Pull Y offset from Excel Input!${tgYCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'y')" ${tgYCell ? '' : 'disabled'}>⇩</button></label>
                             <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train.${tgYCell ? ` Synced with Excel sheet 'Input'!${tgYCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
-                        </div>
+                        </div>`}
+                        ${isHeaderDbarBlockTrain(train) ? `
+                        <div class="tg-field">
+                            <label>LOAD (T)</label>
+                            <input type="number" step="any" min="0" value="${train.blockLoad != null ? train.blockLoad : HEADER_DBAR_BLOCK_PRESETS[train.trailerType].defaultLoad}"
+                                   title="Total weight of this header/dolly-bar block (t). All other geometry is fixed by the selected Trailer type."
+                                   onchange="updateTrailerGenBlockLoad(${train.id}, this.value)">
+                        </div>` : ''}
                     </div>
 
+                    ${isHeaderDbarBlockTrain(train) ? `
+                    <div class="tg-train-summary">Header/dolly-bar block (no axles) — positioned automatically at the ${(() => {
+                        const idx = trailerGenTrains.indexOf(train);
+                        if (idx === 0) return 'LEFT end (before the first train)';
+                        if (idx === trailerGenTrains.length - 1) return 'RIGHT end (after the last train)';
+                        return 'end — only works as the FIRST or LAST train in this list';
+                    })()} of the trailer assembly.</div>
+                    ` : `
                     <div class="tg-cad-split-row">
                         <label>AutoCAD split (axle lines per physical trailer, front→back — e.g. "4,6" for a 10-line train built from a 4-line unit then a 6-line unit)</label>
                         <div class="tg-cad-split-input-row">
@@ -3585,6 +3725,7 @@
                     <button type="button" class="tg-add-group-btn" onclick="addAxleGroup(${train.id})">+ Add Axle Group</button>
 
                     <div class="tg-train-summary">${maxAxle} axle line(s) (#1–#${maxAxle || 0}) · ${trainAxleCount} axle(s) total · ${totalLoad.toFixed(1)} t total for this train</div>
+                    `}
                 </div>
             `;
             }).join('');
@@ -3887,20 +4028,28 @@
             const rows = computeTrailerGenRows();
             if (rows.length === 0) { wrap.innerHTML = ''; const d = document.getElementById('tgPreviewGroupDetails'); if (d) d.innerHTML = ''; return; }
 
+            // Header/dolly-bar block trains (see HEADER_DBAR_BLOCK_PRESETS)
+            // have no axles, so they contribute no rows above — their
+            // placement is computed separately, then handed to the top
+            // (plan) view and the combined side+end elevation below so
+            // both draw the same block rectangles at the same world
+            // position.
+            const blockPlacements = computeHeaderDbarBlockPlacements(rows);
+
             // Top view renders on its own (plan), and side+end render
             // together as one aligned elevation drawing directly below it
             // — one combined sheet instead of three separate boxes, in
             // the same layout convention as a standard GA drawing (plan
             // above, elevation below with the end view projected off the
             // side view at a shared height scale).
-            const topResult = renderTrailerGenTopView(rows);
+            const topResult = renderTrailerGenTopView(rows, blockPlacements);
             const topHtml = topResult.svg;
             // Side view reuses the top view's own X mapping (scale +
             // offset + canvas width) so every axle line's horizontal
             // position sits directly below its position in the plan
             // view above, instead of the elevation panel picking its
             // own independent horizontal layout.
-            const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
+            const elevationHtml = renderTrailerGenElevationCombined(rows, topResult, blockPlacements);
             wrap.innerHTML = `
                 <div class="tg-view-section">${topHtml}</div>
                 <div class="tg-view-section">${elevationHtml}</div>
@@ -3927,7 +4076,8 @@
         // ---- Top (plan) view — original live axle-line preview ----
         // Returns an SVG markup string (rather than writing to wrap
         // directly) so all three views can be stacked together.
-        function renderTrailerGenTopView(rows) {
+        function renderTrailerGenTopView(rows, blockPlacements) {
+            blockPlacements = blockPlacements || {};
             const svgW = 680;
             // padT grows with the number of stacked origin→X/Y dimension
             // tiers (2 base rows + one per train + one per cargo item —
@@ -3950,6 +4100,15 @@
             trailerGenTrains.forEach(t => {
                 if (t.deckLength) { xs.push(parseFloat(t.x) || 0, (parseFloat(t.x) || 0) + t.deckLength); }
                 if (t.deckWidth) { ys.push(parseFloat(t.y) || 0, (parseFloat(t.y) || 0) + t.deckWidth); }
+            });
+            // Header/dolly-bar block footprints (see
+            // computeHeaderDbarBlockPlacements) — keep every block fully
+            // in view too.
+            Object.values(blockPlacements).forEach(p => {
+                p.blocks.forEach(b => {
+                    xs.push(b.x1, b.x2);
+                    ys.push(p.yCenter - b.widthY / 2, p.yCenter + b.widthY / 2);
+                });
             });
             // Cargo footprints (X/Y are meters — convert to mm to match
             // every other world coordinate) so the plan view auto-scales
@@ -4067,6 +4226,27 @@
                     `</g>`;
             });
 
+            // Header/dolly-bar block rectangles (see
+            // computeHeaderDbarBlockPlacements) — drawn solid (unlike the
+            // dashed preset-deck outline above) since these are real
+            // physical blocks, not an axle-line footprint guide.
+            trailerGenTrains.forEach(t => {
+                const placement = blockPlacements[t.id];
+                if (!placement) return;
+                const preset = HEADER_DBAR_BLOCK_PRESETS[t.trailerType];
+                placement.blocks.forEach((b, bi) => {
+                    const rx1 = sx(b.x1), rx2 = sx(b.x2);
+                    const ry1 = sy(placement.yCenter - b.widthY / 2), ry2 = sy(placement.yCenter + b.widthY / 2);
+                    const rw = rx2 - rx1, rh = ry2 - ry1;
+                    const midX = (rx1 + rx2) / 2, midY = (ry1 + ry2) / 2;
+                    const label = preset.blocks.length > 1 ? `${t.name} — block ${bi + 1}` : t.name;
+                    deckSvg += `<g>` +
+                        `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="var(--accent-orange, #f97316)" opacity="0.25" stroke="var(--accent-orange, #f97316)" stroke-width="1.5"/>` +
+                        `<text x="${midX}" y="${midY}" font-size="9" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>` +
+                        `</g>`;
+                });
+            });
+
             // Cargo rectangles (plan view) — one per cargo item, centered
             // on its own footprint Middle (X — Middle, Y — Middle), sized
             // by the item's own Length/Width. The CoG symbol is drawn at
@@ -4118,105 +4298,6 @@
                     `<text x="${cCx}" y="${cCy - 24}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}">Combined CoG</text>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
                     `</g>`;
-            }
-
-            // ---- Stability arm(s) — plan view ----
-            // Same arm computed by resolveStabilityArm() for the Right
-            // End View triangle (see its own comment near that block),
-            // drawn here instead as a line in TRUE plan-view geometry —
-            // the plan view is the only panel where the arm isn't
-            // collapsed onto a single (Y-only) axis. Whenever Group 3
-            // AND Group 4 are both present in the current axle-group
-            // setup, this is the actual perpendicular from the CoG to
-            // the straight edge connecting those two groups' own axle
-            // centers (the real tipping line, drawn dashed for
-            // reference); the arm line itself runs from the CoG to the
-            // foot of that perpendicular (footPointOnLine, see above).
-            // Falls back to a plain +Y offset line of the Excel-sourced
-            // arm length whenever Group 3/4 aren't both present,
-            // matching the End View's own magnitude-only fallback
-            // treatment for that same case (no G3/G4 line exists to
-            // project onto).
-            let stabArmSvg = '';
-            const stabGroupCentersPlan = computeAxleGroupCenters(rows);
-            const TG_STAB_ARM_LINE_COLOR = '#22c55e'; // green — the perpendicular arm itself, fixed color regardless of system, matching the 3D plan-view proof's own green line
-            const TG_STAB_SIDE_LINE_COLOR = 'var(--accent-blue, #38bdf8)'; // blue — the Group 3-4 reference side the arm is measured against
-            const planStabSystems = [];
-            if (cargoTotal.weight > 0) {
-                planStabSystems.push({
-                    cogXMm: (parseFloat(cargoTotal.x) || 0) * 1000,
-                    cogYMm: (parseFloat(cargoTotal.y) || 0) * 1000,
-                    excelArmMm: stabilityArmSingleMm,
-                    color: TG_STAB_SINGLE_COLOR,
-                    label: 'Single',
-                });
-            }
-            if (cogCombinedSignLoaded) {
-                planStabSystems.push({
-                    cogXMm: parseFloat(cogCombinedSign.x) || 0,
-                    cogYMm: parseFloat(cogCombinedSign.y) || 0,
-                    excelArmMm: stabilityArmCombinedMm,
-                    color: TG_STAB_COMBINED_COLOR,
-                    label: 'Combined',
-                });
-            }
-            const g3Plan = stabGroupCentersPlan[3], g4Plan = stabGroupCentersPlan[4];
-            const planFromGroups = !!(g3Plan && g4Plan);
-            if (planStabSystems.length && (stabilityArmLoaded || planFromGroups)) {
-                if (planFromGroups) {
-                    stabArmSvg += `<line x1="${sx(g3Plan.x)}" y1="${sy(g3Plan.y)}" x2="${sx(g4Plan.x)}" y2="${sy(g4Plan.y)}" stroke="${TG_STAB_SIDE_LINE_COLOR}" stroke-width="2.5" opacity="0.85"/>`;
-                }
-                planStabSystems.forEach((s, sIdx) => {
-                    let footXMm, footYMm, armMm;
-                    if (planFromGroups) {
-                        const foot = footPointOnLine(s.cogXMm, s.cogYMm, g3Plan, g4Plan);
-                        footXMm = foot.x; footYMm = foot.y;
-                        armMm = Math.hypot(s.cogXMm - footXMm, s.cogYMm - footYMm);
-                    } else {
-                        footXMm = s.cogXMm; footYMm = s.cogYMm + s.excelArmMm;
-                        armMm = s.excelArmMm;
-                    }
-                    const apexX = sx(s.cogXMm), apexY = sy(s.cogYMm);
-                    const footX = sx(footXMm), footY = sy(footYMm);
-                    // Arm line — ALWAYS the fixed green (matches the
-                    // reference image), not the per-system color, so it
-                    // reads unambiguously as "the perpendicular", the
-                    // same way the blue side line always reads as "the
-                    // Group 3-4 reference edge" regardless of which
-                    // system's arm is being measured. Solid (not
-                    // dashed), starting exactly at the CoG apex and
-                    // ending exactly at the true perpendicular foot on
-                    // the Group 3-4 line — a straight run between those
-                    // two points is by definition perpendicular to that
-                    // line whenever `foot` is genuinely the
-                    // perpendicular projection (see footPointOnLine
-                    // above), and sx/sy share one uniform scale, so that
-                    // exact-90° relationship is preserved on screen.
-                    stabArmSvg += `<g>` +
-                        `<line x1="${apexX}" y1="${apexY}" x2="${footX}" y2="${footY}" stroke="${TG_STAB_ARM_LINE_COLOR}" stroke-width="2"/>` +
-                        `<circle cx="${footX}" cy="${footY}" r="3" fill="${TG_STAB_ARM_LINE_COLOR}"/>` +
-                        `</g>`;
-                    const midX = (apexX + footX) / 2, midY = (apexY + footY) / 2;
-                    const labelOff = 10 + sIdx * 12;
-                    stabArmSvg += `<text x="${midX}" y="${midY - labelOff}" font-size="9" text-anchor="middle" fill="${s.color}">${s.label} arm ${armMm.toFixed(0)}${planFromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
-
-                    // Small "90°" callout near the foot, on the Group
-                    // 3-4 side of the arm — confirms at a glance that
-                    // this green line meets the blue reference line at
-                    // a right angle, without cluttering the view with a
-                    // full CAD arc.
-                    if (planFromGroups) {
-                        const dirX = footX - apexX, dirY = footY - apexY;
-                        const dirLen = Math.hypot(dirX, dirY) || 1;
-                        const nX = -dirY / dirLen, nY = dirX / dirLen; // perpendicular to the arm, i.e. roughly along the blue side
-                        const tagX = footX - dirX / dirLen * 14 + nX * 12;
-                        const tagY = footY - dirY / dirLen * 14 + nY * 12;
-                        stabArmSvg += `<g>` +
-                            `<rect x="${(tagX - 12).toFixed(1)}" y="${(tagY - 8).toFixed(1)}" width="24" height="14" rx="3" fill="var(--tank-box-bg, #0b1220)" stroke="${TG_STAB_ARM_LINE_COLOR}" stroke-width="1" opacity="0.92"/>` +
-                            `<text x="${tagX.toFixed(1)}" y="${(tagY + 3.5).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="${TG_STAB_ARM_LINE_COLOR}">90°</text>` +
-                            `</g>`;
-                    }
-                });
             }
 
             // Dimension call-outs for preset (Goldhofer/SPMT) trailers —
@@ -4474,7 +4555,7 @@
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
+                ${deckSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
@@ -4518,7 +4599,8 @@
         // own true X-scale (length) and the end view its own true
         // Y-scale (width) — only the shared Z axis has to match between
         // the two for the projection to line up. ----
-        function renderTrailerGenElevationCombined(rows, topView) {
+        function renderTrailerGenElevationCombined(rows, topView, blockPlacements) {
+            blockPlacements = blockPlacements || {};
             const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
             // Cargo boxes span base .. base + Height, where "base" is
             // each item's own Height-start reference: the trailer's own
@@ -4569,6 +4651,9 @@
             // to align horizontally with it. ----
             const ys = rows.map(r => r.y);
             trailerGenTrains.forEach(t => { if (t.deckWidth) ys.push((parseFloat(t.y) || 0), (parseFloat(t.y) || 0) + t.deckWidth); });
+            Object.values(blockPlacements).forEach(p => {
+                p.blocks.forEach(b => { ys.push(p.yCenter - b.widthY / 2, p.yCenter + b.widthY / 2); });
+            });
             cargoItems.forEach(c => {
                 const tlYMm = (parseFloat(c.tlY) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
                 ys.push(tlYMm - halfWMm, tlYMm + halfWMm);
@@ -4693,6 +4778,24 @@
                 sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${deckTopY - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
             });
 
+            // ---- Side view: header/dolly-bar block rectangles (see
+            // computeHeaderDbarBlockPlacements) — solid fill, top edge
+            // flush with the deck-top line (deckTopY), extending DOWN by
+            // the block's own height, same convention as a real trailer
+            // deck strip drawn just above.
+            trailerGenTrains.forEach(t => {
+                const placement = blockPlacements[t.id];
+                if (!placement) return;
+                const preset = HEADER_DBAR_BLOCK_PRESETS[t.trailerType];
+                placement.blocks.forEach((b, bi) => {
+                    const dx1 = sx(b.x1), dx2 = sx(b.x2);
+                    const bzTop = sz(b.zTop), bzBase = sz(b.zBase);
+                    const label = preset.blocks.length > 1 ? `${t.name} #${bi + 1}` : t.name;
+                    sideDecksSvg += `<rect x="${Math.min(dx1, dx2)}" y="${bzTop}" width="${Math.abs(dx2 - dx1)}" height="${bzBase - bzTop}" fill="var(--accent-orange, #f97316)" opacity="0.3" stroke="var(--accent-orange, #f97316)" stroke-width="1.5"/>`;
+                    sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${bzTop - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>`;
+                });
+            });
+
             // ---- End views: one tire block per unique (train, Y, group),
             // drawn once per panel (left, using sy1; right, mirrored,
             // using sy2) so both end-view panels share this same logic.
@@ -4795,6 +4898,20 @@
                     const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
                     decks += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
                     decks += `<text x="${(dx1 + dx2) / 2}" y="${deckTopYEnd - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
+                });
+                // Header/dolly-bar block cross-section — only drawn in
+                // the panel matching the end the block actually sits at
+                // (see computeHeaderDbarBlockPlacements' side), so it
+                // never appears mirrored/duplicated in both end views.
+                trailerGenTrains.forEach(t => {
+                    const placement = blockPlacements[t.id];
+                    if (!placement) return;
+                    if ((placement.side === 'left') !== isLeftPanel) return;
+                    placement.blocks.forEach(b => {
+                        const dx1 = syFn(placement.yCenter - b.widthY / 2), dx2 = syFn(placement.yCenter + b.widthY / 2);
+                        const bzTop = szEnd(b.zTop), bzBase = szEnd(b.zBase);
+                        decks += `<rect x="${Math.min(dx1, dx2)}" y="${bzTop}" width="${Math.abs(dx2 - dx1)}" height="${bzBase - bzTop}" fill="var(--accent-orange, #f97316)" opacity="0.3" stroke="var(--accent-orange, #f97316)" stroke-width="1.5"/>`;
+                    });
                 });
                 return { wheels, decks };
             }
@@ -5419,6 +5536,7 @@
             // axle extent ±300mm when the train has no fixed deck
             // footprint, exactly like the 2D side/end views do) ----
             trailerGenTrains.forEach(train => {
+                if (isHeaderDbarBlockTrain(train)) return; // drawn separately below, from its own placement geometry
                 const trainRows = rows.filter(r => r.trainName === train.name);
                 const rowXs = trainRows.map(r => r.x);
                 const rowYs = trainRows.map(r => r.y);
@@ -5448,6 +5566,34 @@
                 const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x475569 }));
                 edges.position.copy(mesh.position);
                 world3dGroupTG.add(edges);
+            });
+
+            // ---- Header/dolly-bar blocks — solid (not transparent like
+            // the deck plates above, since these are real physical
+            // blocks) boxes at each block's own placement geometry (see
+            // computeHeaderDbarBlockPlacements). Top face flush with
+            // deckTopWorldZ, extending down by the block's own height.
+            const blockPlacements3d = computeHeaderDbarBlockPlacements(rows);
+            Object.values(blockPlacements3d).forEach(placement => {
+                placement.blocks.forEach(b => {
+                    extend(b.x1, placement.yCenter - b.widthY / 2, b.zTop);
+                    extend(b.x2, placement.yCenter + b.widthY / 2, b.zTop);
+                    const lenM = Math.max(0.02, (b.x2 - b.x1) * S);
+                    const widM = Math.max(0.02, b.widthY * S);
+                    const heightM = Math.max(0.02, b.heightZ * S);
+                    const geo = new THREE.BoxGeometry(lenM, heightM, widM);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0xf97316, metalness: 0.1, roughness: 0.7, transparent: true, opacity: 0.55 });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(
+                        (b.x1 + b.x2) / 2 * S,
+                        (b.zBase + b.zTop) / 2 * S,
+                        placement.yCenter * S
+                    );
+                    world3dGroupTG.add(mesh);
+                    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xf97316 }));
+                    edges.position.copy(mesh.position);
+                    world3dGroupTG.add(edges);
+                });
             });
 
             // ---- Axle wheels — one cylinder per axle row, colored by
@@ -5535,8 +5681,9 @@
                 const lineGeo = new THREE.BufferGeometry().setFromPoints([
                     toV(p3.x, 30, p3.y), toV(p4.x, 30, p4.y)
                 ]);
-                const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 }); // blue — matches the 2D plan view's Group 3-4 reference side
+                const lineMat = new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.3, gapSize: 0.18, transparent: true, opacity: 0.8 });
                 const line = new THREE.Line(lineGeo, lineMat);
+                line.computeLineDistances();
                 world3dGroupTG.add(line);
             }
 
@@ -5670,49 +5817,20 @@
                         const perpMat = new THREE.LineBasicMaterial({ color: 0x22c55e }); // green — CoG -> foot perpendicular
                         world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([cogGroundPt, footGroundPt]), perpMat));
 
-                        // Right-angle callout at the foot — same CAD
-                        // perpendicularity convention as the 2D plan
-                        // view's own arc (see stabArmSvg above, "arc +
-                        // outward arrowheads + 90° label"): a quarter-
-                        // circle arc swept between the Group 3–4 side
-                        // direction and the CoG direction (towardCog),
-                        // capped with a short outward leader on each
-                        // ray. towardCog and alongSide are, by
-                        // construction, exactly perpendicular (foot is
-                        // the true perpendicular projection of the CoG
-                        // onto the Group 3–4 line), so the arc always
-                        // sweeps a genuine 90°, not an approximation.
-                        const radiusM = Math.min(0.4, Math.max(0.12, (s.armMm * S) * 0.25));
+                        // Right-angle tick at the foot: one short leg
+                        // back along the Group 3–4 side direction, one
+                        // short leg toward the CoG (perpendicular to
+                        // it) — the two legs are, by construction,
+                        // exactly perpendicular to each other.
+                        const tickLenM = Math.min(0.4, Math.max(0.12, (s.armMm * S) * 0.25));
                         const towardCog = new THREE.Vector3().subVectors(cogGroundPt, footGroundPt).normalize();
                         const alongSide = new THREE.Vector3(ux, 0, uy);
-                        const ARC_SEGMENTS = 12;
-                        const arcPts = [];
-                        for (let i = 0; i <= ARC_SEGMENTS; i++) {
-                            const t = (i / ARC_SEGMENTS) * (Math.PI / 2);
-                            arcPts.push(footGroundPt.clone()
-                                .addScaledVector(alongSide, Math.cos(t) * radiusM)
-                                .addScaledVector(towardCog, Math.sin(t) * radiusM));
-                        }
-                        const arcMat = new THREE.LineBasicMaterial({ color: 0xeab308 }); // amber — right-angle arc + side reference
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts), arcMat));
-                        // Short outward leaders past each end of the arc,
-                        // along the same two ray directions — visually
-                        // matches the 2D view's arrow leaders (arrowheads
-                        // aren't drawn in 3D since THREE.Line has no
-                        // marker support, but the leader + arc together
-                        // still read clearly as a right-angle callout).
-                        const leaderOuterM = radiusM * 1.6;
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-                            footGroundPt.clone().addScaledVector(alongSide, radiusM),
-                            footGroundPt.clone().addScaledVector(alongSide, leaderOuterM),
-                        ]), arcMat));
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-                            footGroundPt.clone().addScaledVector(towardCog, radiusM),
-                            footGroundPt.clone().addScaledVector(towardCog, leaderOuterM),
-                        ]), arcMat));
+                        const corner = footGroundPt.clone().addScaledVector(alongSide, tickLenM);
+                        const corner2 = corner.clone().addScaledVector(towardCog, tickLenM);
+                        const tickMat = new THREE.LineBasicMaterial({ color: 0xeab308 }); // amber — right-angle tick + side reference
+                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([corner, corner2, footGroundPt.clone().addScaledVector(towardCog, tickLenM)]), tickMat));
 
-                        const bisector = new THREE.Vector3().addVectors(alongSide, towardCog).normalize();
-                        labelAnchors3dTG.push({ pos: footGroundPt.clone().addScaledVector(bisector, radiusM + 0.18), text: '90°', color: '#eab308' });
+                        labelAnchors3dTG.push({ pos: corner2.clone().add(new THREE.Vector3(0, 0.05, 0)), text: '90°', color: '#eab308' });
                     }
                 });
             }
