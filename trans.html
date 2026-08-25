@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.38)</h1>
+            <h1>🚂 Transport Dashboard (Rev.39)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1291,6 +1291,25 @@
         function isHeaderDbarBlockTrain(train) {
             return !!(train && HEADER_DBAR_BLOCK_PRESETS[train.trailerType]);
         }
+        // Physically moves a header/dolly-bar block train to the front
+        // or back of trailerGenTrains itself (not just its computed
+        // placement geometry — see computeHeaderDbarBlockPlacements),
+        // following its own blockPosition ('first' -> unshift to index
+        // 0, 'last' -> push to the end). This is what actually reorders
+        // its card in the Generate Trailer list AND — since every push/
+        // pull to Excel (Adjust_Wheels, Input!A11:C30, X/Y offset links)
+        // walks trailerGenTrains in array order — its column position
+        // relative to the other trains there too. Called right after
+        // blockPosition is set, from applyTrailerPreset (on first
+        // selecting a block preset) and updateTrailerGenBlockPosition
+        // (on changing the Position field).
+        function reorderHeaderDbarBlockTrain(train) {
+            const idx = trailerGenTrains.indexOf(train);
+            if (idx === -1) return;
+            trailerGenTrains.splice(idx, 1);
+            if (train.blockPosition === 'last') trailerGenTrains.push(train);
+            else trailerGenTrains.unshift(train);
+        }
         // World-space bounding box (mm) of every REAL (non-block) train's
         // axles/deck — the footprint a header/dolly-bar block anchors
         // itself against. Returns null when there's no real train yet
@@ -1324,7 +1343,12 @@
         // only) sits at that SAME X but offset sideways by
         // blockCenterGapY (center-to-center, along Y) from block 1 — the
         // two blocks sit side-by-side, not one further outboard than the
-        // other.
+        // other. The offset DIRECTION follows the block's own Position:
+        // First (front, side==='left') -> block 2 sits ABOVE block 1
+        // (+Y); Last (back, side==='right') -> block 2 sits BELOW block 1
+        // (-Y). "Above"/"below" here mean +Y/-Y in world coordinates —
+        // flip gapDir's sign below if that reads visually inverted for
+        // this drawing's Y-axis convention.
         function computeHeaderDbarBlockPlacements(rows) {
             const placements = {};
             const bounds = computeRealAssemblyBoundsMm(rows);
@@ -1335,11 +1359,12 @@
                 const side = train.blockPosition === 'last' ? 'right' : 'left';
                 const preset = HEADER_DBAR_BLOCK_PRESETS[train.trailerType];
                 const dir = side === 'left' ? -1 : 1; // direction block 1 extends, away from the assembly
+                const gapDir = side === 'left' ? 1 : -1; // First -> block 2 above (+Y); Last -> block 2 below (-Y)
                 const anchorX = side === 'left' ? bounds.minX : bounds.maxX;
                 const zTop = tgZTrailerHeightMm;
                 const centerX = anchorX + dir * (preset.blocks[0].lengthX / 2); // every block shares this X — block 1 touches the assembly edge, block 2 (if any) sits beside it, not further out
                 const blocks = preset.blocks.map((b, i) => {
-                    const blockYCenter = i === 0 ? yCenter : yCenter + (preset.blockCenterGapY || 0);
+                    const blockYCenter = i === 0 ? yCenter : yCenter + gapDir * (preset.blockCenterGapY || 0);
                     return {
                         x1: centerX - b.lengthX / 2, x2: centerX + b.lengthX / 2,
                         yCenter: blockYCenter,
@@ -1474,6 +1499,7 @@
                 train.groups = []; // no axles at all
                 if (train.blockLoad == null) train.blockLoad = preset.defaultLoad;
                 if (!train.blockPosition) train.blockPosition = 'first'; // default to front end until the operator picks otherwise
+                reorderHeaderDbarBlockTrain(train); // move its card (and Excel column slot) to match blockPosition
                 renderTrailerDashboard();
                 return;
             }
@@ -1550,7 +1576,21 @@
         // right axle. A train with no AutoCAD split (or a split that
         // doesn't add up to its axle count) is treated as one segment =
         // the whole train, same as the AutoCAD export's own fallback.
+        // A header/dolly-bar block train (see HEADER_DBAR_BLOCK_PRESETS)
+        // has no axle groups to split, so it gets a single identifying
+        // row instead: its preset label, LOAD (T) in the "left" column,
+        // and its Position (First/Last) in the "right" column — same
+        // three-column shape as every other train's rows, so it pushes/
+        // pulls through Input!A11:C30 the same way.
         function computeSetTrainGroupRows(train) {
+            if (isHeaderDbarBlockTrain(train)) {
+                const preset = HEADER_DBAR_BLOCK_PRESETS[train.trailerType];
+                return [{
+                    label: preset.label,
+                    left: train.blockLoad != null ? train.blockLoad : preset.defaultLoad,
+                    right: train.blockPosition === 'last' ? 'Last' : 'First'
+                }];
+            }
             const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
             if (maxAxle === 0) return [];
             const parsedSplit = parseCadSplitString(train.cadSplit);
@@ -2062,6 +2102,7 @@
             try {
                 let lineLabels = [], blockValues = [], trainNameRow = [];
                 const inputOffsets = []; // {x, y} per linked train position (1..OFFSET_LINK_MAX_TRAINS)
+                const setGroupRows = []; // [label, left, right] per Set Train Group column-block (1..SETGROUP_MAX_TRAINS), see below
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
                     const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
@@ -2093,6 +2134,29 @@
                         inputRanges = null;
                     }
 
+                    // Also grab row 1 of every "Set Train Group" column
+                    // block (Input!A11:C11, D11:F11, ... — see
+                    // SETGROUP_*) in the same batch. A header/dolly-bar
+                    // block train's push writes exactly one identifying
+                    // row there (label/LOAD/Position — see
+                    // computeSetTrainGroupRows), so reading it back lets
+                    // a block train's blockLoad/blockPosition be
+                    // recovered straight from Excel instead of only from
+                    // whatever's already in memory.
+                    let setGroupRanges = null;
+                    try {
+                        const inputSheet2 = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                        setGroupRanges = [];
+                        for (let i = 0; i < SETGROUP_MAX_TRAINS; i++) {
+                            const startCol = SETGROUP_FIRST_TRAIN_COL + i * SETGROUP_BLOCK_WIDTH;
+                            const r = inputSheet2.getRange(`${colLetter(startCol)}${SETGROUP_START_ROW}:${colLetter(startCol + 2)}${SETGROUP_START_ROW}`);
+                            r.load("values");
+                            setGroupRanges.push(r);
+                        }
+                    } catch (setGroupErr) {
+                        setGroupRanges = null;
+                    }
+
                     await context.sync();
                     lineLabels = labelRange.values;
                     blockValues = dataRange.values;
@@ -2102,6 +2166,9 @@
                             x: parseFloat(r.xR.values[0][0]),
                             y: parseFloat(r.yR.values[0][0])
                         }));
+                    }
+                    if (setGroupRanges) {
+                        setGroupRanges.forEach(r => setGroupRows.push(r.values[0]));
                     }
                 });
 
@@ -2172,6 +2239,19 @@
                         const blockKey = Object.keys(HEADER_DBAR_BLOCK_PRESETS).find(k => HEADER_DBAR_BLOCK_PRESETS[k].label === rawName);
                         if (blockKey) {
                             const oldBlock = prevTrains.find(t => t.name === rawName && t.trailerType === blockKey);
+                            // Prefer the Input!A11:C30 "Set Train Group" row
+                            // for this same column-block index (b < SETGROUP_MAX_TRAINS)
+                            // when its label matches, since that's the
+                            // authoritative Excel-side copy of LOAD/Position
+                            // (see computeSetTrainGroupRows) — falls back to
+                            // the in-memory match above when out of range or
+                            // blank (e.g. Excel not connected, or this train
+                            // sits beyond SETGROUP_MAX_TRAINS column-blocks).
+                            const sgRow = (b < SETGROUP_MAX_TRAINS) ? setGroupRows[b] : null;
+                            const sgLabel = sgRow ? (sgRow[0] || '').toString().trim() : '';
+                            const sgMatches = sgLabel === rawName;
+                            const sgLoad = sgMatches ? parseFloat(sgRow[1]) : NaN;
+                            const sgPosRaw = sgMatches ? (sgRow[2] || '').toString().trim().toLowerCase() : '';
                             rebuiltTrains.push({
                                 id: trailerGenNextId++,
                                 name: rawName,
@@ -2187,8 +2267,10 @@
                                 axle1OffsetX: null,
                                 axle1OffsetY: null,
                                 axlePairOffsetY: null,
-                                blockLoad: oldBlock && oldBlock.blockLoad != null ? oldBlock.blockLoad : HEADER_DBAR_BLOCK_PRESETS[blockKey].defaultLoad,
-                                blockPosition: oldBlock && oldBlock.blockPosition ? oldBlock.blockPosition : 'first'
+                                blockLoad: Number.isFinite(sgLoad) ? sgLoad
+                                    : (oldBlock && oldBlock.blockLoad != null ? oldBlock.blockLoad : HEADER_DBAR_BLOCK_PRESETS[blockKey].defaultLoad),
+                                blockPosition: sgPosRaw === 'last' ? 'last' : (sgPosRaw === 'first' ? 'first'
+                                    : (oldBlock && oldBlock.blockPosition ? oldBlock.blockPosition : 'first'))
                             });
                         }
                         continue;
@@ -2492,6 +2574,7 @@
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
             train.blockPosition = (value === 'last') ? 'last' : 'first';
+            reorderHeaderDbarBlockTrain(train); // move its card (and Excel column slot) to match blockPosition
             renderTrailerDashboard();
         }
 
