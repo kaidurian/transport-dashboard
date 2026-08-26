@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.44)</h1>
+            <h1>🚂 Transport Dashboard (Rev.45)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1305,6 +1305,42 @@
             await pushValueToSheetCell(PROPERTIES_SHEET_NAME, 'D5', sumHeaderDbarWeight('3m_ppu'), 'Header&Dbar 3m&PPU weight');
         }
 
+        // Infers a train's Header/Dbar selection back out of a raw
+        // Input!A11:.. "Set Train Group" read (setGroupValues — the 2D
+        // values array for the WHOLE block, all SETGROUP_MAX_TRAINS
+        // train slots at once, as loaded by pullWheelDataFromExcel) for
+        // one train index (0-based, same indexing as trailerGenTrains).
+        // Reuses the existing 3-column-per-train layout — no separate
+        // storage: scans that train's label column (column 0 of its
+        // SETGROUP_BLOCK_WIDTH-wide slot) for a row whose text matches a
+        // HEADER_DBAR_TYPES label, and infers the side from whether it's
+        // the FIRST or LAST non-blank row of that train's block (see
+        // computeSetTrainGroupRows — 'left' unshifts it to the front,
+        // 'right' pushes it to the back). Returns 'none'/'left' when
+        // setGroupValues is unavailable (e.g. the read failed) or no
+        // matching row is found for this train.
+        function parseHeaderDbarFromSetGroupBlock(setGroupValues, trainIndex) {
+            const fallback = { headerDbar: 'none', headerDbarSide: 'left' };
+            if (!setGroupValues || trainIndex >= SETGROUP_MAX_TRAINS) return fallback;
+            const localBase = trainIndex * SETGROUP_BLOCK_WIDTH; // label column within this train's slot
+            const labels = [];
+            for (let r = 0; r < setGroupValues.length; r++) {
+                const raw = (setGroupValues[r][localBase] || '').toString().trim();
+                if (!raw) break; // trailing blank ends this train's block, same convention as pushSetTrainGroupToExcel
+                labels.push(raw);
+            }
+            if (labels.length === 0) return fallback;
+            const typeKeyForLabel = (text) => {
+                const entry = Object.keys(HEADER_DBAR_TYPES).find(k => HEADER_DBAR_TYPES[k].label === text);
+                return entry || null;
+            };
+            const firstKey = typeKeyForLabel(labels[0]);
+            if (firstKey) return { headerDbar: firstKey, headerDbarSide: 'left' };
+            const lastKey = typeKeyForLabel(labels[labels.length - 1]);
+            if (lastKey) return { headerDbar: lastKey, headerDbarSide: 'right' };
+            return fallback;
+        }
+
         function getGroupDef(groupNumber) {
             return TRAILER_GROUP_DEFS.find(g => g.number === groupNumber) || TRAILER_GROUP_DEFS[0];
         }
@@ -2072,6 +2108,7 @@
             try {
                 let lineLabels = [], blockValues = [], trainNameRow = [];
                 const inputOffsets = []; // {x, y} per linked train position (1..OFFSET_LINK_MAX_TRAINS)
+                let setGroupValues = null; // Input!A11:.. block, all trains — see parseHeaderDbarFromSetGroupBlock below
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
                     const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
@@ -2103,6 +2140,24 @@
                         inputRanges = null;
                     }
 
+                    // Also grab the whole "Set Train Group" block
+                    // (Input!A11:..30, all SETGROUP_MAX_TRAINS 3-column
+                    // train slots at once) in the same batch, so each
+                    // train's Header/Dbar accessory selection can be
+                    // inferred below from whichever row (if any) has a
+                    // label matching a HEADER_DBAR_TYPES entry — see
+                    // parseHeaderDbarFromSetGroupBlock.
+                    let setGroupRange = null;
+                    try {
+                        const inputSheet2 = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                        const sgLastRow = SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1;
+                        const sgLastCol = colLetter(SETGROUP_FIRST_TRAIN_COL + SETGROUP_MAX_TRAINS * SETGROUP_BLOCK_WIDTH - 1);
+                        setGroupRange = inputSheet2.getRange(`${colLetter(SETGROUP_FIRST_TRAIN_COL)}${SETGROUP_START_ROW}:${sgLastCol}${sgLastRow}`);
+                        setGroupRange.load("values");
+                    } catch (sgErr) {
+                        setGroupRange = null;
+                    }
+
                     await context.sync();
                     lineLabels = labelRange.values;
                     blockValues = dataRange.values;
@@ -2113,6 +2168,7 @@
                             y: parseFloat(r.yR.values[0][0])
                         }));
                     }
+                    setGroupValues = setGroupRange ? setGroupRange.values : null;
                 });
 
                 // How many axle-line rows actually hold data.
@@ -2236,8 +2292,7 @@
                         axle1OffsetX: detectedPreset ? detectedPreset.axle1X : null,
                         axle1OffsetY: detectedPreset ? detectedPreset.axle1Y : null,
                         axlePairOffsetY: axlePairOffsetY,
-                        headerDbar: oldTrain ? (oldTrain.headerDbar || 'none') : 'none',
-                        headerDbarSide: oldTrain ? (oldTrain.headerDbarSide || 'left') : 'left'
+                        ...parseHeaderDbarFromSetGroupBlock(setGroupValues, b)
                     });
                 }
 
