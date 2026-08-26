@@ -679,7 +679,7 @@
                                 </label>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dGroupPlanToggle" checked onchange="renderTrailerGen3D()">
-                                    ▭ Show group plan
+                                    ▲ Show support triangle
                                 </label>
                             </div>
                         </div>
@@ -5874,31 +5874,24 @@
                 world3dGroupTG.add(line);
             }
 
-            // ---- Group 3 / Group 4 "plan" volumes — a translucent
-            // footprint box per stability-reference group, extruded from
-            // ground level up to the SAME suspension arm ground height
-            // (Properties!G2, stabilityArmHeightMm) used by the
-            // stability triangle's own foot/arm points above, so this
-            // box visually reads as "the ground-height plane the
-            // stability arm is measured from, at this group's own
-            // footprint" — same convention as the reference screenshot.
-            // Footprint is the bounding box of that group's own axle
-            // positions, padded out so it reads as a volume rather than
-            // a line hugging the wheels. Colored in the group's own
-            // color (TRAILER_GROUP_DEFS) at low opacity, and labeled the
-            // same as its flagpole sign above.
+            // ---- Support triangle (Group 1 – Group 2 – Group 3) — a
+            // raised, transparent blue triangular plane connecting the
+            // THREE groups' own axle centroids, extruded to the SAME
+            // suspension arm ground height (Properties!G2,
+            // stabilityArmHeightMm) as the stability triangle's own
+            // foot/arm points, in the same visual style as that triangle
+            // (filled MeshBasicMaterial plane + LineLoop outline, dashed
+            // vertical reference legs down to each group's ground
+            // position). This replaces the earlier per-group footprint
+            // box — the correct shape here is a single triangle spanning
+            // all three groups, not one box per group.
             const showGroupPlan = document.getElementById('tg3dGroupPlanToggle')?.checked !== false;
             if (showGroupPlan && stabilityArmHeightLoaded && stabilityArmHeightMm > 0) {
-                const GROUP_PLAN_PAD_MM = 500;
-                [3, 4].forEach(gn => {
-                    const groupRows = rows.filter(r => r.groupNumber === gn);
-                    if (!groupRows.length) return;
-                    const xs = groupRows.map(r => r.x), ys = groupRows.map(r => r.y);
-                    const x1 = Math.min(...xs) - GROUP_PLAN_PAD_MM, x2 = Math.max(...xs) + GROUP_PLAN_PAD_MM;
-                    const y1 = Math.min(...ys) - GROUP_PLAN_PAD_MM, y2 = Math.max(...ys) + GROUP_PLAN_PAD_MM;
-                    extend(x1, y1); extend(x2, y2, stabilityArmHeightMm);
-                    addGroupPlanBoxTG(x1, x2, y1, y2, stabilityArmHeightMm, tg3dResolveColor(getGroupColor(gn), '#94a3b8'), getGroupLabel(gn));
-                });
+                const g1 = stabGroupCentersTG[1], g2 = stabGroupCentersTG[2], g3 = stabGroupCentersTG[3];
+                if (g1 && g2 && g3) {
+                    [g1, g2, g3].forEach(g => extend(g.x, g.y, stabilityArmHeightMm));
+                    addGroupTriangleTG(g1, g2, g3, stabilityArmHeightMm, 0x38bdf8, 'Support Triangle (G1–2–3)');
+                }
             }
 
             // ---- Stability triangle(s) — same right-triangle geometry
@@ -6161,26 +6154,47 @@
             labelAnchors3dTG.push({ pos: new THREE.Vector3(xMm * S, poleHeightM + 0.16, yMm * S), text: label, color: hex });
         }
 
-        // Group "plan" volume — a translucent box spanning a group's
-        // own footprint (x1..x2, y1..y2, all mm) from ground level up
-        // to topZMm (the stability arm's own ground height), labeled at
-        // its top face. See the call site in renderTrailerGen3D for the
-        // reasoning; kept as its own function since it's independent of
-        // addGroupSignTG's pole+flag marker.
-        function addGroupPlanBoxTG(x1Mm, x2Mm, y1Mm, y2Mm, topZMm, hex, label) {
+        // Support triangle — a raised, transparent triangular plane
+        // connecting three group centroids (p1/p2/p3, each {x,y} in mm)
+        // at height topZMm, plus a wire outline and dashed vertical
+        // reference legs down to each group's own ground position — same
+        // visual convention (MeshBasicMaterial fill + LineLoop outline +
+        // dashed reference legs) as the stability triangle drawn below,
+        // so the two read as the same family of "tipping/support plane"
+        // visuals rather than looking like unrelated shapes.
+        function addGroupTriangleTG(p1, p2, p3, topZMm, hex, label) {
             const S = TG3D_SCALE;
-            const lenM = Math.max(0.05, (x2Mm - x1Mm) * S);
-            const widM = Math.max(0.05, (y2Mm - y1Mm) * S);
-            const heightM = Math.max(0.05, topZMm * S);
-            const geo = new THREE.BoxGeometry(lenM, heightM, widM);
-            const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set((x1Mm + x2Mm) / 2 * S, heightM / 2, (y1Mm + y2Mm) / 2 * S);
+            const v1 = new THREE.Vector3(p1.x * S, topZMm * S, p1.y * S);
+            const v2 = new THREE.Vector3(p2.x * S, topZMm * S, p2.y * S);
+            const v3 = new THREE.Vector3(p3.x * S, topZMm * S, p3.y * S);
+
+            const shape = new THREE.BufferGeometry().setFromPoints([v1, v2, v3]);
+            shape.setIndex([0, 1, 2]);
+            shape.computeVertexNormals();
+            const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+            const mesh = new THREE.Mesh(shape, mat);
             world3dGroupTG.add(mesh);
-            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity: 0.8 }));
-            edges.position.copy(mesh.position);
-            world3dGroupTG.add(edges);
-            labelAnchors3dTG.push({ pos: new THREE.Vector3(mesh.position.x, heightM + 0.18, mesh.position.z), text: label, color: hex });
+
+            const outline = new THREE.LineLoop(
+                new THREE.BufferGeometry().setFromPoints([v1, v2, v3]),
+                new THREE.LineBasicMaterial({ color: hex, linewidth: 1.5 })
+            );
+            world3dGroupTG.add(outline);
+
+            // Dashed vertical legs down to each group's own ground
+            // position, so the raised plane visually anchors back to the
+            // three groups it's actually spanning.
+            [v1, v2, v3].forEach((v) => {
+                const groundV = new THREE.Vector3(v.x, 0, v.z);
+                const dashMat = new THREE.LineDashedMaterial({ color: hex, dashSize: 0.15, gapSize: 0.1, transparent: true, opacity: 0.55 });
+                const dashGeo = new THREE.BufferGeometry().setFromPoints([v, groundV]);
+                const dashLine = new THREE.Line(dashGeo, dashMat);
+                dashLine.computeLineDistances();
+                world3dGroupTG.add(dashLine);
+            });
+
+            const centroid = v1.clone().add(v2).add(v3).divideScalar(3);
+            labelAnchors3dTG.push({ pos: centroid.add(new THREE.Vector3(0, 0.2, 0)), text: label, color: hex });
         }
 
         function renderTrailerGeneratorTotals() {
