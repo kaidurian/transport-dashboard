@@ -471,7 +471,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.43)</h1>
+            <h1>🚂 Transport Dashboard (Rev.44)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1349,21 +1349,26 @@
         // block is positioned relative to that deck rectangle; custom/
         // manual trains (no fixed deck) return [].
         //
-        // X: block(s) centered on the deck's own lengthwise center
-        // (train.x + deckLength/2) — "center of block same with trailer
-        // center in X direction" — the SAME X regardless of
-        // train.headerDbarSide. That dropdown ('left' = "before all
-        // trailer", 'right' = "after all trailer") only controls where
-        // this accessory's row is inserted in the AutoCAD split / Set
-        // Train Group export — first (unshift) vs last (push) — see
-        // computeSetTrainGroupRows; it does not move the block in X.
+        // X: 'left' ("before all trailer") = the FIRST block, mounted at
+        // the train's FRONT — immediately ahead of the deck's own front
+        // edge (train.x — world -X = FRONT, per renderTrailerGenTopView).
+        // 'right' ("after all trailer") = the LAST block, mounted at the
+        // train's BACK — immediately behind the deck's rear edge
+        // (train.x + deckLength — world +X = REAR). Either way the block
+        // sits flush against, and extends further outward from, that
+        // edge of the deck — it does not sit at the deck's own X-center.
+        // That same 'left'/'right' choice also controls where this
+        // accessory's row is inserted in the AutoCAD split / Set Train
+        // Group export — first (unshift) vs last (push) — see
+        // computeSetTrainGroupRows.
         // Y: centered on the deck's own width-center (train.y +
         // deckWidth/2) — i.e. dead center of the trailer, not an edge.
         // The PPU second block then shifts secondBlockOffsetY mm from
-        // that center — per the plan view's own world convention (see
-        // sy() in renderTrailerGenTopView — +Y renders straight down, no
-        // flip), 'left' shifts toward smaller Y (renders "above" the
-        // first block) and 'right' toward larger Y ("below" it).
+        // that center (same X as the first block) — per the plan view's
+        // own world convention (see sy() in renderTrailerGenTopView —
+        // +Y renders straight down, no flip), 'left' shifts toward
+        // smaller Y (renders "above" the first block) and 'right' toward
+        // larger Y ("below" it).
         // Z: "top of block same trailer top deck" — the block hangs BELOW
         // the deck-top line by its own height.
         function computeHeaderDbarBlocks(train) {
@@ -1374,9 +1379,11 @@
             if (!deckLen || !deckWid) return [];
             const trainX = parseFloat(train.x) || 0;
             const trainY = parseFloat(train.y) || 0;
-            const xCenter = trainX + deckLen / 2;
-            const yCenter0 = trainY + deckWid / 2;
             const side = train.headerDbarSide === 'right' ? 'right' : 'left';
+            // Deck FRONT edge (small X) for 'left'; REAR edge (large X) for 'right'.
+            const edgeX = side === 'left' ? trainX : (trainX + deckLen);
+            const outwardSign = side === 'left' ? -1 : 1; // extend further ahead of front / behind rear
+            const yCenter0 = trainY + deckWid / 2;
             const secondSign = side === 'left' ? -1 : 1;
             const deckTopZ = tgZTrailerHeightMm;
             return def.blocks.map((b, i) => ({
@@ -1384,7 +1391,7 @@
                 lengthMm: b.length,
                 widthMm: b.width,
                 heightMm: b.height,
-                xCenter,
+                xCenter: edgeX + outwardSign * (b.length / 2),
                 yCenter: i === 0 ? yCenter0 : yCenter0 + secondSign * (def.secondBlockOffsetY || 0),
                 zTop: deckTopZ,
                 zBase: deckTopZ - b.height,
@@ -3673,7 +3680,7 @@
                         ${train.headerDbar && train.headerDbar !== 'none' ? `
                         <div class="tg-field">
                             <label>Position</label>
-                            <select title="Where this accessory's row appears in the AutoCAD split / Set Train Group export for this train — 'Trailer left side' inserts it BEFORE all this train's axle-group segments (e.g. 'Header&amp;Dbar 3m,4,4,6'), 'Trailer right side' inserts it AFTER them (e.g. '4,4,6,Header&amp;Dbar 3m'). The block itself is always centered on the trailer in both X and Y (top flush with the trailer top deck); for the &amp;PPU variant the second block sits 1069mm center-to-center from the first, toward smaller Y (renders above it in plan view) for 'left', toward larger Y (below it) for 'right'."
+                            <select title="Where the block sits and where its row appears in the AutoCAD split / Set Train Group export for this train. 'Trailer left side' = the FIRST block, mounted at the train's FRONT (just ahead of the deck's front edge) and listed BEFORE all this train's axle-group segments (e.g. 'Header&amp;Dbar 3m,4,4,6'). 'Trailer right side' = the LAST block, mounted at the train's BACK (just behind the deck's rear edge) and listed AFTER them (e.g. '4,4,6,Header&amp;Dbar 3m'). Either way the block is centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward smaller Y (above it in plan view) for 'left', toward larger Y (below it) for 'right'."
                                     onchange="updateHeaderDbarField(${train.id}, 'headerDbarSide', this.value)">
                                 <option value="left" ${train.headerDbarSide !== 'right' ? 'selected' : ''}>Trailer left side</option>
                                 <option value="right" ${train.headerDbarSide === 'right' ? 'selected' : ''}>Trailer right side</option>
