@@ -336,7 +336,11 @@
         .tg-3d-label {
             position: absolute; transform: translate(-50%, -50%);
             font-size: 10.5px; font-weight: 700; white-space: nowrap;
-            padding: 1px 5px; border-radius: 4px; background: rgba(15,17,21,0.72);
+            padding: 2px 7px 2px 6px; border-radius: 4px;
+            background: rgba(8,10,14,0.9);
+            color: #f4f6f8;
+            border-left: 3px solid var(--lbl-color, #94a3b8);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.55);
             text-shadow: none;
         }
         .tg-3d-hint { font-size: 10px; color: var(--text-muted); padding: 4px 8px 0; opacity: 0.75; }
@@ -471,7 +475,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.45)</h1>
+            <h1>🚂 Transport Dashboard (Rev.46)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -672,6 +676,10 @@
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dCogToggle" checked onchange="renderTrailerGen3D()">
                                     ⊕ Show CoG markers
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dGroupPlanToggle" checked onchange="renderTrailerGen3D()">
+                                    ▭ Show group plan
                                 </label>
                             </div>
                         </div>
@@ -5199,6 +5207,13 @@
                         label: 'Combined',
                     });
                 }
+                // Apex screen positions for every system, computed up
+                // front (before the drawing loop below needs them) so
+                // the "Single" system's angle label can be placed at the
+                // vertical midpoint between the Cargo CoG apex and the
+                // Combined CoG apex — see the label-placement comment
+                // inside the loop.
+                const stabApexPositions = stabSystems.map(s => ({ x: sy2(s.cogYMm), y: szEnd(s.cogZMm) }));
                 stabSystems.forEach((s, sIdx) => {
                     const apexX = sy2(s.cogYMm), apexY = szEnd(s.cogZMm);
                     const armX = sy2(s.cogYMm + s.armMm);
@@ -5235,7 +5250,22 @@
                     let px = -hz / hLen, py = hx / hLen;
                     if (px * footSign < 0) { px = -px; py = -py; }
                     const labelOff = 14 + sIdx * TG_STAB_LABEL_STEP;
-                    const angleLabelX = midX + px * labelOff, angleLabelY = midY + py * labelOff;
+                    let angleLabelX = midX + px * labelOff, angleLabelY = midY + py * labelOff;
+                    // The "Single" (Cargo CoG) angle label is relocated
+                    // to sit directly between the Cargo CoG apex and the
+                    // Combined CoG apex — the vertical/horizontal
+                    // midpoint of the two CoG points themselves — rather
+                    // than out past its own hypotenuse, so it reads as
+                    // "the angle between these two CoGs' triangles"
+                    // instead of floating off to one side.
+                    if (s.label === 'Single' && stabApexPositions.length > 1) {
+                        const combinedIdx = stabSystems.findIndex(x => x.label === 'Combined');
+                        if (combinedIdx !== -1) {
+                            const a0 = stabApexPositions[sIdx], a1 = stabApexPositions[combinedIdx];
+                            angleLabelX = (a0.x + a1.x) / 2;
+                            angleLabelY = (a0.y + a1.y) / 2;
+                        }
+                    }
                     stabTriSvg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
                     // Arm distance label — placed below the arm foot
                     // point, outside the triangle's base leg, each
@@ -5532,7 +5562,13 @@
                 if (v.z > 1) return; // behind camera
                 const sx = (v.x * 0.5 + 0.5) * w;
                 const sy = (-v.y * 0.5 + 0.5) * h;
-                html += `<div class="tg-3d-label" style="left:${sx.toFixed(1)}px; top:${sy.toFixed(1)}px; color:${a.color};">${a.text}</div>`;
+                // Text stays a fixed light color for readability against
+                // the dark 3D viewport; the per-marker color now only
+                // tints the left edge + background wash (via --lbl-color)
+                // instead of coloring the text itself, since dark or
+                // saturated marker colors (purple, teal, etc.) were hard
+                // to read as text on the semi-transparent background.
+                html += `<div class="tg-3d-label" style="left:${sx.toFixed(1)}px; top:${sy.toFixed(1)}px; --lbl-color:${a.color};">${a.text}</div>`;
             });
             layer.innerHTML = html;
         }
@@ -5777,7 +5813,12 @@
                     extend(b.xCenter - b.lengthMm / 2, b.yCenter - b.widthMm / 2, b.zTop);
                     extend(b.xCenter + b.lengthMm / 2, b.yCenter + b.widthMm / 2, b.zTop);
                     const geo = new THREE.BoxGeometry(b.lengthMm * S, b.heightMm * S, b.widthMm * S);
-                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6 });
+                    // Transparent, like the deck/cargo boxes above, so
+                    // anything sitting behind or underneath the
+                    // Header/Dbar block (deck edge, axle wheels, CoG
+                    // markers) stays visible instead of being hidden by
+                    // a solid amber block.
+                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6, transparent: true, opacity: 0.35, depthWrite: false });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(b.xCenter * S, (b.zBase + b.zTop) / 2 * S, b.yCenter * S);
                     world3dGroupTG.add(mesh);
@@ -5831,6 +5872,33 @@
                 const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 }); // blue — matches the 2D plan view's Group 3-4 reference side
                 const line = new THREE.Line(lineGeo, lineMat);
                 world3dGroupTG.add(line);
+            }
+
+            // ---- Group 3 / Group 4 "plan" volumes — a translucent
+            // footprint box per stability-reference group, extruded from
+            // ground level up to the SAME suspension arm ground height
+            // (Properties!G2, stabilityArmHeightMm) used by the
+            // stability triangle's own foot/arm points above, so this
+            // box visually reads as "the ground-height plane the
+            // stability arm is measured from, at this group's own
+            // footprint" — same convention as the reference screenshot.
+            // Footprint is the bounding box of that group's own axle
+            // positions, padded out so it reads as a volume rather than
+            // a line hugging the wheels. Colored in the group's own
+            // color (TRAILER_GROUP_DEFS) at low opacity, and labeled the
+            // same as its flagpole sign above.
+            const showGroupPlan = document.getElementById('tg3dGroupPlanToggle')?.checked !== false;
+            if (showGroupPlan && stabilityArmHeightLoaded && stabilityArmHeightMm > 0) {
+                const GROUP_PLAN_PAD_MM = 500;
+                [3, 4].forEach(gn => {
+                    const groupRows = rows.filter(r => r.groupNumber === gn);
+                    if (!groupRows.length) return;
+                    const xs = groupRows.map(r => r.x), ys = groupRows.map(r => r.y);
+                    const x1 = Math.min(...xs) - GROUP_PLAN_PAD_MM, x2 = Math.max(...xs) + GROUP_PLAN_PAD_MM;
+                    const y1 = Math.min(...ys) - GROUP_PLAN_PAD_MM, y2 = Math.max(...ys) + GROUP_PLAN_PAD_MM;
+                    extend(x1, y1); extend(x2, y2, stabilityArmHeightMm);
+                    addGroupPlanBoxTG(x1, x2, y1, y2, stabilityArmHeightMm, tg3dResolveColor(getGroupColor(gn), '#94a3b8'), getGroupLabel(gn));
+                });
             }
 
             // ---- Stability triangle(s) — same right-triangle geometry
@@ -6091,6 +6159,28 @@
             world3dGroupTG.add(flag);
 
             labelAnchors3dTG.push({ pos: new THREE.Vector3(xMm * S, poleHeightM + 0.16, yMm * S), text: label, color: hex });
+        }
+
+        // Group "plan" volume — a translucent box spanning a group's
+        // own footprint (x1..x2, y1..y2, all mm) from ground level up
+        // to topZMm (the stability arm's own ground height), labeled at
+        // its top face. See the call site in renderTrailerGen3D for the
+        // reasoning; kept as its own function since it's independent of
+        // addGroupSignTG's pole+flag marker.
+        function addGroupPlanBoxTG(x1Mm, x2Mm, y1Mm, y2Mm, topZMm, hex, label) {
+            const S = TG3D_SCALE;
+            const lenM = Math.max(0.05, (x2Mm - x1Mm) * S);
+            const widM = Math.max(0.05, (y2Mm - y1Mm) * S);
+            const heightM = Math.max(0.05, topZMm * S);
+            const geo = new THREE.BoxGeometry(lenM, heightM, widM);
+            const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set((x1Mm + x2Mm) / 2 * S, heightM / 2, (y1Mm + y2Mm) / 2 * S);
+            world3dGroupTG.add(mesh);
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity: 0.8 }));
+            edges.position.copy(mesh.position);
+            world3dGroupTG.add(edges);
+            labelAnchors3dTG.push({ pos: new THREE.Vector3(mesh.position.x, heightM + 0.18, mesh.position.z), text: label, color: hex });
         }
 
         function renderTrailerGeneratorTotals() {
