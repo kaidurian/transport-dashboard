@@ -624,6 +624,39 @@
                                     onclick="pushCargoToExcel()">📤 Push Cargo to Excel</button>
                         </div>
                     </div>
+
+                    <div class="tg-cargo-card">
+                        <div class="tg-train-card-header">
+                            <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
+                            <button type="button" class="tg-help-btn" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓ Help</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgHLoadsHelpPanel">
+                            Wind, speed/acceleration, road-gradient, curve, and friction inputs used for the
+                            horizontal-load / stability calc, linked to their own Excel sheet
+                            <strong>"Input horizontal loads"</strong>: <strong>H14</strong> (Centre of Wind
+                            height, m), <strong>H16</strong> (Operational allowable wind speed, m/s),
+                            <strong>H18</strong> (Drag coefficient), <strong>H20</strong> (Trailer speed,
+                            km/h), <strong>H21</strong> (Max. acceleration, m/sec&sup2;), <strong>H22</strong>
+                            (Max. deceleration, m/sec&sup2;), <strong>B23/E23</strong> (Transverse road
+                            gradient / inc. stroke compensation, %) with <strong>H23</strong> (Gr_trans, deg)
+                            as its Excel-computed result, <strong>B24/E24</strong> (Longitudinal road
+                            gradient / inc. stroke compensation, %) with <strong>H24</strong> (Gr_long, deg)
+                            as its Excel-computed result, <strong>H25</strong> (Curve impact, %), and
+                            <strong>H26</strong> (Friction Steel/Wood). Every field except H23/H24 (🔒
+                            read-only — Excel computes those) is pulled/pushed like the fields above: pulled
+                            automatically when this panel opens or refreshes, on-demand via each field's own
+                            ⇩ button, and written back with <strong>"📤 Push to Excel"</strong> below. The
+                            current values are also drawn as a small callout in the plan-view preview,
+                            top-right of the origin sign.
+                        </p>
+                        <div id="tgHLoadsFields"><!-- Horizontal Loads field grid rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull every Horizontal Loads field from Excel 'Input horizontal loads'!H14/H16/H18/H20/H21/H22/B23/E23/H23/B24/E24/H24/H25/H26"
+                                    onclick="pullHorizontalLoadsFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" title="Write every editable Horizontal Loads field to Excel 'Input horizontal loads' (H23/H24 skipped — Excel-computed)"
+                                    onclick="pushHorizontalLoadsToExcel()">📤 Push to Excel</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tg-modal-col-right">
@@ -718,6 +751,16 @@
         function toggleTgHelp() {
             const panel = document.getElementById('tgHelpPanel');
             const btn = document.getElementById('tgHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+        }
+
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the Horizontal Loads card.
+        function toggleTgHLoadsHelp() {
+            const panel = document.getElementById('tgHLoadsHelpPanel');
+            const btn = document.getElementById('tgHLoadsHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
             if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
@@ -864,6 +907,43 @@
         const ZHEIGHT_CELL = "BD26";
         const TG_Z_TRAILER_HEIGHT_DEFAULT = 1500;
         let tgZTrailerHeightMm = TG_Z_TRAILER_HEIGHT_DEFAULT;
+
+        // ---- Horizontal Loads — own Excel sheet "Input horizontal
+        // loads". A flat set of single-cell values (not a repeatable
+        // list like trains/cargo), covering wind, speed/acceleration,
+        // road-gradient, curve, and friction inputs used for the
+        // horizontal-load / stability calc elsewhere in the workbook.
+        // H23 (Gr_trans) and H24 (Gr_long) are READ-ONLY — Excel
+        // computes those from B23/E23 and B24/E24 respectively — so
+        // they're only ever pulled/displayed, never pushed. Every other
+        // field here is a normal editable input, pulled on panel open/
+        // refresh (see seedInitialOffsetsFromExcel -> pullHorizontalLoadsFromExcel)
+        // and pushed via "📤 Push to Excel" in this card (own button,
+        // independent of the trailer/cargo push buttons).
+        const HLOADS_SHEET_NAME = "Input horizontal loads";
+        const HLOADS_CELLS = {
+            hCow: 'H14',        // Centre of Wind height from ground level (H_CoW) — m
+            vWind: 'H16',       // Operational allowable wind speed (v) — m/s
+            cd: 'H18',          // Drag coefficient (cd) — dimensionless
+            vTrailer: 'H20',    // Trailer speed (v) — km/h
+            aAcc: 'H21',        // Max. acceleration (a_acc) — m/sec²
+            aDec: 'H22',        // Max. deceleration (a_dec) — m/sec²
+            transGrad: 'B23',   // Transverse road gradient — %
+            transStroke: 'E23', // Transverse — Inc. stroke compensation — %
+            transGrDeg: 'H23',  // Transverse — Gr_trans — deg — READ-ONLY (Excel-computed)
+            longGrad: 'B24',    // Longitudinal road gradient — %
+            longStroke: 'E24',  // Longitudinal — Inc. stroke compensation — %
+            longGrDeg: 'H24',   // Longitudinal — Gr_long — deg — READ-ONLY (Excel-computed)
+            curveImpact: 'H25', // Curve impact (C_j) — %
+            muFriction: 'H26',  // Friction Steel/Wood (M_u) — dimensionless
+        };
+        const HLOADS_READONLY_KEYS = ['transGrDeg', 'longGrDeg'];
+        let tgHLoads = {
+            hCow: 0, vWind: 0, cd: 0, vTrailer: 0, aAcc: 0, aDec: 0,
+            transGrad: 0, transStroke: 0, transGrDeg: 0,
+            longGrad: 0, longStroke: 0, longGrDeg: 0,
+            curveImpact: 0, muFriction: 0,
+        };
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
         // AZ34 = "LOAD DETAILS" header, BA34:BD34 = column headers
@@ -3326,6 +3406,69 @@
             }
         }
 
+        // ---- Horizontal Loads — editing a field updates the local
+        // value and re-renders (the plan-view readout below the origin
+        // sign depends on it); pullHorizontalLoadsFromExcel() re-reads
+        // every field on demand (⇩ button) or silently on panel open/
+        // refresh; pushHorizontalLoadsToExcel() writes every EDITABLE
+        // field back out (H23/H24 are Excel-computed and skipped). ----
+        function updateHLoadsField(key, rawValue) {
+            if (!(key in tgHLoads) || HLOADS_READONLY_KEYS.includes(key)) return;
+            const v = parseFloat(rawValue);
+            tgHLoads[key] = Number.isFinite(v) ? v : 0;
+            renderTrailerGenPreview();
+        }
+        async function pullHorizontalLoadsFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Horizontal Loads.');
+                return;
+            }
+            try {
+                const raw = {};
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(HLOADS_SHEET_NAME);
+                    const ranges = {};
+                    Object.entries(HLOADS_CELLS).forEach(([key, cell]) => {
+                        ranges[key] = sheet.getRange(cell);
+                        ranges[key].load('values');
+                    });
+                    await context.sync();
+                    Object.entries(ranges).forEach(([key, range]) => { raw[key] = range.values[0][0]; });
+                });
+                Object.keys(HLOADS_CELLS).forEach(key => {
+                    const v = parseFloat(raw[key]);
+                    tgHLoads[key] = Number.isFinite(v) ? v : 0;
+                });
+                renderTgHLoadsFields();
+                renderTrailerGenPreview();
+                if (!silent) logMsg(`↺ Pulled Horizontal Loads from '${HLOADS_SHEET_NAME}'!H14/H16/H18/H20/H21/H22/B23/E23/H23/B24/E24/H24/H25/H26.`);
+            } catch (e) {
+                console.warn(`Could not read '${HLOADS_SHEET_NAME}' sheet`, e);
+                if (!silent) alert(`Could not read sheet "${HLOADS_SHEET_NAME}". Make sure it exists with the Horizontal Loads values in place.`);
+            }
+        }
+        async function pushHorizontalLoadsToExcel() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to push Horizontal Loads.');
+                return;
+            }
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(HLOADS_SHEET_NAME);
+                    Object.entries(HLOADS_CELLS).forEach(([key, cell]) => {
+                        if (HLOADS_READONLY_KEYS.includes(key)) return; // Excel-computed — never written
+                        sheet.getRange(cell).values = [[tgHLoads[key]]];
+                    });
+                    await context.sync();
+                });
+                logMsg(`📤 Pushed Horizontal Loads to '${HLOADS_SHEET_NAME}'.`);
+            } catch (e) {
+                console.warn(`Could not write Horizontal Loads to '${HLOADS_SHEET_NAME}'`, e);
+                alert(`Could not write to sheet "${HLOADS_SHEET_NAME}". Make sure it exists.`);
+            }
+        }
+
         // Writes X offset/Y offset for every train in the linked range
         // (Train 1-OFFSET_LINK_MAX_TRAINS) to their respective Excel
         // "Input" sheet cells (see offsetCellForTrainIndex()). Called
@@ -3448,6 +3591,7 @@
                 }
                 await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
                 await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside
+                await pullHorizontalLoadsFromExcel({ silent: true }); // Horizontal Loads — own try/catch inside
                 renderTrailerDashboard();
                 logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
@@ -3670,7 +3814,58 @@
             return rows;
         }
 
+        // ---- Horizontal Loads field grid — flat set of labeled inputs
+        // (not a repeatable list), same "🔗 label + ⇩ pull button"
+        // pattern as the Number of trains / Z Trailer Height fields
+        // above. The two read-only cells (Gr_trans/Gr_long, H23/H24 —
+        // Excel-computed) render as plain disabled fields with a "🔒"
+        // marker instead of a pull button, since there's nothing to
+        // individually pull/push per-field (only the card-level
+        // ⇩ Refresh / 📤 Push buttons touch them, and push skips them).
+        function renderTgHLoadsFields() {
+            const el = document.getElementById('tgHLoadsFields');
+            if (!el) return;
+            const field = (key, label, unit, opts = {}) => {
+                const readonly = HLOADS_READONLY_KEYS.includes(key);
+                const cell = HLOADS_CELLS[key];
+                const val = tgHLoads[key];
+                const unitLabel = unit ? ` (${unit})` : '';
+                if (readonly) {
+                    return `
+                    <div class="tg-field" title="Excel-computed — read-only. '${HLOADS_SHEET_NAME}'!${cell}">
+                        <label>🔒 ${label}${unitLabel}</label>
+                        <input type="number" value="${val}" disabled>
+                    </div>`;
+                }
+                return `
+                <div class="tg-field">
+                    <label>🔗 ${label}${unitLabel} <button type="button" class="tg-xy-sync-btn" title="Pull ${label} from Excel '${HLOADS_SHEET_NAME}'!${cell}" onclick="pullHorizontalLoadsFromExcel()">⇩</button></label>
+                    <input type="number" step="any" value="${val}"
+                           title="Synced with Excel sheet '${HLOADS_SHEET_NAME}'!${cell}. Pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel' below."
+                           onchange="updateHLoadsField('${key}', this.value)">
+                </div>`;
+            };
+            el.innerHTML = `
+                <div class="tg-field-grid">
+                    ${field('hCow', 'Centre of Wind height (H_CoW)', 'm')}
+                    ${field('vWind', 'Operational allowable wind speed (v)', 'm/s')}
+                    ${field('cd', 'Drag coefficient (cd)', '')}
+                    ${field('vTrailer', 'Trailer speed (v)', 'km/h')}
+                    ${field('aAcc', 'Max. acceleration (a_acc)', 'm/sec\u00b2')}
+                    ${field('aDec', 'Max. deceleration (a_dec)', 'm/sec\u00b2')}
+                    ${field('transGrad', 'Transverse road gradient', '%')}
+                    ${field('transStroke', 'Transverse — inc. stroke compensation', '%')}
+                    ${field('transGrDeg', 'Transverse gradient (Gr_trans)', 'deg')}
+                    ${field('longGrad', 'Longitudinal road gradient', '%')}
+                    ${field('longStroke', 'Longitudinal — inc. stroke compensation', '%')}
+                    ${field('longGrDeg', 'Longitudinal gradient (Gr_long)', 'deg')}
+                    ${field('curveImpact', 'Curve impact (C_j)', '%')}
+                    ${field('muFriction', 'Friction Steel/Wood (M_u)', '')}
+                </div>`;
+        }
+
         function renderTrailerDashboard() {
+            renderTgHLoadsFields();
             // Auto-refresh each train's AutoCAD split on every dashboard
             // load/refresh, so a stale split (axle groups changed by
             // hand, a preset swap, an Excel pull, etc.) never needs a
@@ -4631,6 +4826,34 @@
                 `<text x="${ox0 + 4}" y="${oy0 - 5}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
                 `</g>`;
 
+            // ---- Horizontal Loads readout — a small fixed overlay panel
+            // (not tied to any world point, since these are global scalar
+            // inputs rather than positioned objects) in the top-right
+            // corner of the plan view, showing each Horizontal Loads
+            // value alongside a small glyph ("sign") per KKKai's request.
+            // Gr_trans/Gr_long show the Excel-computed degree value
+            // (H23/H24); every other row is the raw editable value.
+            const hlRows = [
+                ['💨', `Wind v ${tgHLoads.vWind.toFixed(1)} m/s`],
+                ['↕', `H_CoW ${tgHLoads.hCow.toFixed(2)} m`],
+                ['◐', `cd ${tgHLoads.cd.toFixed(2)}`],
+                ['➡', `Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`],
+                ['⏩', `a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`],
+                ['⏪', `a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`],
+                ['⤢', `Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`],
+                ['⤡', `Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`],
+                ['↻', `C_j ${tgHLoads.curveImpact.toFixed(1)}%`],
+                ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
+            ];
+            const hlRowH = 12;
+            const hlBoxW = 150, hlBoxH = 28 + hlRows.length * hlRowH;
+            const hlX = svgW - padR - hlBoxW - 4, hlY = padT + 4;
+            let hLoadsSvg = `<g opacity="0.95">` +
+                `<rect x="${hlX}" y="${hlY}" width="${hlBoxW}" height="${hlBoxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
+                `<text x="${hlX + 6}" y="${hlY + 13}" font-size="8.5" font-weight="700" fill="var(--text-main, #e2e8f0)">⚠ Horizontal Loads</text>` +
+                hlRows.map((row, i) => `<text x="${hlX + 6}" y="${hlY + 26 + i * hlRowH}" font-size="8" fill="var(--text-muted, #94a3b8)">${row[0]} ${escapeHtml(row[1])}</text>`).join('') +
+                `</g>`;
+
             let spineSvg = '';
             Object.values(trainSpines).forEach(points => {
                 for (let i = 0; i < points.length - 1; i++) {
@@ -4750,7 +4973,7 @@
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
+                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${hLoadsSvg}
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
@@ -6403,7 +6626,8 @@
                 cargoIdCounter: cargoIdCounter,
                 tgZTrailerHeightMm: tgZTrailerHeightMm,
                 tgShowGroupLabels: tgShowGroupLabels,
-                tgShowDimensions: tgShowDimensions
+                tgShowDimensions: tgShowDimensions,
+                tgHLoads: tgHLoads
             };
             const json = JSON.stringify(state, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
@@ -6435,6 +6659,12 @@
                     }
                     if (typeof state.tgShowGroupLabels === 'boolean') tgShowGroupLabels = state.tgShowGroupLabels;
                     if (typeof state.tgShowDimensions === 'boolean') tgShowDimensions = state.tgShowDimensions;
+                    if (state.tgHLoads && typeof state.tgHLoads === 'object') {
+                        Object.keys(tgHLoads).forEach(key => {
+                            const v = parseFloat(state.tgHLoads[key]);
+                            if (Number.isFinite(v)) tgHLoads[key] = v;
+                        });
+                    }
 
                     // ID counters: trust the saved counters if present and
                     // high enough, otherwise recompute from the highest id
