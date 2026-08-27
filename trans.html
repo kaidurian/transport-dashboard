@@ -133,7 +133,18 @@
             overflow-y: auto;
             padding-right: 4px;
         }
-        .tg-modal-col-right { width: 100%; min-width: 0; }
+        .tg-modal-col-right {
+            width: 100%;
+            min-width: 0;
+            /* 2D preview, Drawing Table, and 3D viewer all live in this
+               one column — giving IT the scroll (rather than the whole
+               page) means the three move up/down together as a unit,
+               with their own dedicated scrollbar, independent of the
+               input cards in the left column. */
+            max-height: 90vh;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
         .tg-modal-body.tg-side-layout .tg-modal-col-right {
             flex: 1 1 auto;
             min-width: 340px;
@@ -232,6 +243,26 @@
             margin-bottom: 14px;
             background: var(--tank-box-bg);
         }
+
+        /* ---- Drawing Table — read-only mirror of Excel "Drawing_table"
+           (A1:F63), rendered between the 2D and 3D preview. Column
+           widths loosely mirror that sheet's own (A widest — labels,
+           B/C/D numeric, E/F numeric/notes). Row 3's title banner and
+           the known bold section-header rows are styled to match the
+           sheet's own blue title bar / bold sub-headers; a fully-blank
+           row renders as a thin spacer instead of an empty data row,
+           matching the sheet's blank rows between sections. */
+        .tg-drawing-table-wrap { overflow-x: auto; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel-bg); }
+        table.tg-drawing-table { width: 100%; border-collapse: collapse; font-size: 10.5px; color: var(--text-main); }
+        table.tg-drawing-table td { padding: 3px 8px; border-bottom: 1px solid var(--panel-border); white-space: nowrap; }
+        table.tg-drawing-table td:first-child { width: 34%; text-align: left; color: var(--text-muted); white-space: normal; }
+        table.tg-drawing-table td:not(:first-child) { text-align: center; }
+        table.tg-drawing-table tr.tg-dt-bold td { font-weight: 700; color: var(--text-main); background: var(--tank-box-bg); }
+        table.tg-drawing-table tr.tg-dt-title td {
+            text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 1px;
+            padding: 8px; color: #ffffff; background: var(--accent-blue, #009fda); border-bottom: none;
+        }
+        table.tg-drawing-table tr.tg-dt-spacer td { padding: 3px; border-bottom: none; }
         .tg-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 0 6px 6px; }
         .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
         .tg-preview-toggle input { cursor: pointer; }
@@ -475,7 +506,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.49)</h1>
+            <h1>🚂 Transport Dashboard (Rev.50)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -689,6 +720,21 @@
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
                         <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
                         <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
+                    </div>
+
+                    <div class="tg-cargo-card">
+                        <div class="tg-train-card-header">
+                            <h2 class="tg-cargo-title">📋 Drawing Table</h2>
+                        </div>
+                        <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
+                            Read-only mirror of Excel sheet <strong>"Drawing_table"</strong> — pulled, never
+                            pushed (the sheet's own values are Excel-computed).
+                        </p>
+                        <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
+                                    onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
                     </div>
 
                     <div class="tg-3d-wrap">
@@ -944,6 +990,26 @@
             longGrad: 0, longStroke: 0, longGrDeg: 0,
             curveImpact: 0, muFriction: 0,
         };
+
+        // ---- Drawing Table — a READ-ONLY mirror of Excel sheet
+        // "Drawing_table" (A1:F63), shown between the 2D and 3D preview.
+        // Unlike every other synced field above, this is pull-only —
+        // there's no push button, since the sheet's own values are
+        // Excel-computed (title/arrangement summary, load-details rows,
+        // hydraulic-group breakdown, static/Case A/Case B loading, GBP,
+        // and stability-check rows) and this dashboard never edits them.
+        // A whole-range pull (one Excel.run call) rather than named
+        // per-field cells, since the layout is a big fixed grid, not a
+        // handful of scalar inputs — see renderTgDrawingTable() for how
+        // the pulled 2D array is turned into an HTML table, including
+        // which row numbers get the bold "section header" styling and
+        // which single row is the big merged title banner.
+        const DRAWING_TABLE_SHEET_NAME = "Drawing_table";
+        const DRAWING_TABLE_RANGE = "A1:F63";
+        const DRAWING_TABLE_TITLE_ROW = 3;   // 1-indexed — "TRANSPORT TABLE" banner, merged across all columns
+        const DRAWING_TABLE_MERGE_BC_ROW = 4; // 1-indexed — B holds the value, spans B:C ("TRAILER ARRANGEMENT" value)
+        const DRAWING_TABLE_BOLD_ROWS = new Set([1, 4, 9, 17, 23, 30, 38, 46, 55]); // 1-indexed section-header rows
+        let tgDrawingTableRows = []; // raw 2D array of pulled cell values, row-major, same shape as DRAWING_TABLE_RANGE
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
         // AZ34 = "LOAD DETAILS" header, BA34:BD34 = column headers
@@ -3469,6 +3535,77 @@
             }
         }
 
+        // ---- Drawing Table — pull-only (see the const block above for
+        // why: this whole sheet is Excel-computed, so there's nothing to
+        // push back). Pulled silently on panel open/refresh, and
+        // on-demand via its own "⇩ Refresh from Excel" button.
+        async function pullDrawingTableFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Drawing Table.');
+                return;
+            }
+            try {
+                let values = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DRAWING_TABLE_SHEET_NAME);
+                    const range = sheet.getRange(DRAWING_TABLE_RANGE);
+                    range.load('values');
+                    await context.sync();
+                    values = range.values;
+                });
+                tgDrawingTableRows = values || [];
+                renderTgDrawingTable();
+                if (!silent) logMsg(`↺ Pulled Drawing Table from '${DRAWING_TABLE_SHEET_NAME}'!${DRAWING_TABLE_RANGE}.`);
+            } catch (e) {
+                console.warn(`Could not read '${DRAWING_TABLE_SHEET_NAME}' sheet`, e);
+                if (!silent) alert(`Could not read sheet "${DRAWING_TABLE_SHEET_NAME}". Make sure it exists.`);
+            }
+        }
+
+        // Turns the raw pulled grid (tgDrawingTableRows) into an HTML
+        // table mirroring the Excel sheet's layout: row 3 renders as the
+        // big merged "TRANSPORT TABLE" banner, row 4's column B spans
+        // B:C (matching that sheet's B4:C4 merge), the known section-
+        // header rows render bold, a completely-empty row renders as a
+        // thin spacer (matching the sheet's blank spacer rows between
+        // sections) instead of an empty-looking data row, and every
+        // other cell is shown exactly as pulled — including error
+        // strings like "#REF!" if the live workbook has one, since this
+        // table only ever mirrors what's actually in the sheet.
+        function renderTgDrawingTable() {
+            const el = document.getElementById('tgDrawingTable');
+            if (!el) return;
+            if (!tgDrawingTableRows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${DRAWING_TABLE_SHEET_NAME}'.</div>`;
+                return;
+            }
+            const fmt = v => {
+                if (v === null || v === undefined || v === '') return '';
+                if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+                return escapeHtml(String(v));
+            };
+            let html = '<table class="tg-drawing-table">';
+            tgDrawingTableRows.forEach((row, i) => {
+                const rowNum = i + 1; // 1-indexed, matching Excel row numbers
+                const isEmpty = row.every(v => v === null || v === undefined || v === '');
+                if (isEmpty) { html += `<tr class="tg-dt-spacer"><td colspan="6"></td></tr>`; return; }
+                if (rowNum === DRAWING_TABLE_TITLE_ROW) {
+                    html += `<tr class="tg-dt-title"><td colspan="6">${fmt(row[0])}</td></tr>`;
+                    return;
+                }
+                const boldClass = DRAWING_TABLE_BOLD_ROWS.has(rowNum) ? ' class="tg-dt-bold"' : '';
+                if (rowNum === DRAWING_TABLE_MERGE_BC_ROW) {
+                    html += `<tr${boldClass}><td>${fmt(row[0])}</td><td colspan="2">${fmt(row[1])}</td>` +
+                        row.slice(3).map(v => `<td>${fmt(v)}</td>`).join('') + `</tr>`;
+                    return;
+                }
+                html += `<tr${boldClass}>` + row.map(v => `<td>${fmt(v)}</td>`).join('') + `</tr>`;
+            });
+            html += '</table>';
+            el.innerHTML = html;
+        }
+
         // Writes X offset/Y offset for every train in the linked range
         // (Train 1-OFFSET_LINK_MAX_TRAINS) to their respective Excel
         // "Input" sheet cells (see offsetCellForTrainIndex()). Called
@@ -3592,6 +3729,7 @@
                 await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
                 await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside
                 await pullHorizontalLoadsFromExcel({ silent: true }); // Horizontal Loads — own try/catch inside
+                await pullDrawingTableFromExcel({ silent: true }); // Drawing Table — own try/catch inside
                 renderTrailerDashboard();
                 logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
@@ -3866,6 +4004,7 @@
 
         function renderTrailerDashboard() {
             renderTgHLoadsFields();
+            renderTgDrawingTable();
             // Auto-refresh each train's AutoCAD split on every dashboard
             // load/refresh, so a stale split (axle groups changed by
             // hand, a preset swap, an Excel pull, etc.) never needs a
