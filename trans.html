@@ -475,7 +475,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.46)</h1>
+            <h1>🚂 Transport Dashboard (Rev.47)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2514,14 +2514,47 @@
         // ============================================================
         // GENERATE CARGO — up to 5 items, Excel "Input"!AZ35:BD39
         // ============================================================
-        // Creates a fresh cargo item and auto-links it to Excel
-        // "Input horizontal loads"!H11:H13 only if no other cargo item
-        // currently holds that link — so a brand-new dashboard (or one
-        // whose only cargo item was just removed) always has exactly one
-        // linked item, without ever silently stealing the link from an
-        // item the user already has linked.
+        // Copies every data field (weight, position, size, box/CoG
+        // options) from one cargo item into another, leaving the
+        // target's own id untouched so the two remain distinct items.
+        // Shared by newCargoItem's auto-copy-from-previous behavior and
+        // the "Copy from previous" button (copyFromPreviousCargo).
+        // linkExcelDim is intentionally NEVER copied here — at most one
+        // cargo item may be linked to Excel "Input horizontal
+        // loads"!H11:H13 at a time (see toggleCargoExcelLink), so
+        // copying it could silently create two linked items.
+        function copyCargoFieldsInto(target, source) {
+            target.weight = source.weight;
+            target.x = source.x;
+            target.y = source.y;
+            target.z = source.z;
+            target.length = source.length;
+            target.width = source.width;
+            target.height = source.height;
+            target.anchor = source.anchor;
+            target.heightStart = source.heightStart;
+            target.gap = source.gap;
+            target.groupCog = source.groupCog;
+            target.tlX = source.tlX;
+            target.tlY = source.tlY;
+            return target;
+        }
+
+        // Creates a fresh cargo item, auto-seeded with every field
+        // (weight/position/size/options) copied from the CURRENT last
+        // cargo item, if one exists — the operator no longer has to
+        // re-enter matching values for a new item that's similar to the
+        // previous one. Auto-links to Excel "Input horizontal
+        // loads"!H11:H13 only if no other cargo item currently holds
+        // that link — so a brand-new dashboard (or one whose only cargo
+        // item was just removed) always has exactly one linked item,
+        // without ever silently stealing the link from an item the user
+        // already has linked, and without the copy step above ever
+        // duplicating that link either.
         function newCargoItem(index) {
             const item = defaultCargoItem(index);
+            const prev = cargoItems[cargoItems.length - 1];
+            if (prev) copyCargoFieldsInto(item, prev);
             if (!cargoItems.some(c => c.linkExcelDim)) item.linkExcelDim = true;
             return item;
         }
@@ -2538,6 +2571,18 @@
         function removeCargoItem(id) {
             cargoItems = cargoItems.filter(c => c.id !== id);
             if (cargoItems.length === 0) cargoItems.push(newCargoItem(1));
+            renderTrailerDashboard();
+        }
+
+        // "Copy from previous" button — overwrites this cargo item's own
+        // fields with a copy of the item immediately above it in the
+        // list (same field set as newCargoItem's auto-copy; see
+        // copyCargoFieldsInto). No-op for the first item (no previous
+        // item to copy from).
+        function copyFromPreviousCargo(id) {
+            const idx = cargoItems.findIndex(c => c.id === id);
+            if (idx <= 0) return;
+            copyCargoFieldsInto(cargoItems[idx], cargoItems[idx - 1]);
             renderTrailerDashboard();
         }
 
@@ -2730,6 +2775,9 @@
                                    onchange="toggleCargoGroupCog(${cargo.id}, this.checked)">
                             🧲 Group
                         </label>
+                        ${idx > 0 ? `
+                        <button type="button" class="tg-remove-train" title="Copy all data (weight, position, size, options) from the previous cargo item"
+                                onclick="copyFromPreviousCargo(${cargo.id})">⧉</button>` : ''}
                         <button type="button" class="tg-remove-train" title="Remove cargo item"
                                 onclick="removeCargoItem(${cargo.id})"
                                 ${cargoItems.length <= 1 ? 'disabled' : ''}>✕</button>
@@ -4223,6 +4271,25 @@
             // points down) and the "top-left corner, +X / +Y" convention
             // used to describe trailer decks and axle offsets.
             const sy = y => offsetY + (y - minY) * scale;
+            // Generic "leader line" label placement — used to pull every
+            // plan-view label (CoG signs, cargo tags, header/dbar tag)
+            // OUT away from the trailer/cargo shapes instead of sitting
+            // directly on top of them, connected back to its real anchor
+            // point by a thin line, like a standard CAD callout. Direction
+            // is away from the drawn content's own screen-space center, so
+            // a label naturally lands on whichever side is actually clear.
+            const planLeaderLabel = (anchorX, anchorY, text, color, opts = {}) => {
+                const fontSize = opts.fontSize || 9.5;
+                const dist = opts.dist || 30;
+                const ccx = offsetX + usedW / 2, ccy = offsetY + usedH / 2;
+                let dx = anchorX - ccx, dy = anchorY - ccy;
+                const len = Math.hypot(dx, dy) || 1;
+                dx /= len; dy /= len;
+                const labelX = anchorX + dx * dist, labelY = anchorY + dy * dist;
+                const anchorAlign = Math.abs(dx) < 0.35 ? 'middle' : (dx > 0 ? 'start' : 'end');
+                return `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${labelX.toFixed(1)}" y2="${labelY.toFixed(1)}" stroke="${color}" stroke-width="1" opacity="0.55"/>` +
+                    `<text x="${(labelX + (anchorAlign === 'middle' ? 0 : (dx > 0 ? 4 : -4))).toFixed(1)}" y="${(labelY + (dy >= 0 ? 4 : -3)).toFixed(1)}" font-size="${fontSize}" font-weight="700" text-anchor="${anchorAlign}" fill="${color}">${text}</text>`;
+            };
 
             const trainClusters = {};
             const trainClusterOrder = [];
@@ -4304,9 +4371,9 @@
             // Header/Dbar accessory block(s) (plan view) — see
             // computeHeaderDbarBlocks. Drawn in a fixed amber color
             // (distinct from cargo/group colors, since it's a trailer
-            // accessory, not a group or a payload item) with a small
-            // "1"/"2" tag on the &PPU second block so the two boxes read
-            // as one assembly.
+            // accessory, not a group or a payload item). The type label is
+            // pulled out clear of the block with a leader line (see
+            // planLeaderLabel); no per-block "1"/"2" index tag is drawn.
             const TG_HEADER_DBAR_COLOR = '#eab308';
             let headerDbarSvg = '';
             trailerGenTrains.forEach(t => {
@@ -4317,8 +4384,7 @@
                     const cx = (hx1 + hx2) / 2, cy = (hy1 + hy2) / 2;
                     headerDbarSvg += `<g>` +
                         `<rect x="${Math.min(hx1, hx2)}" y="${Math.min(hy1, hy2)}" width="${Math.abs(hx2 - hx1)}" height="${Math.abs(hy2 - hy1)}" fill="${TG_HEADER_DBAR_COLOR}" fill-opacity="0.25" stroke="${TG_HEADER_DBAR_COLOR}" stroke-width="1.5"/>` +
-                        `<text x="${cx}" y="${cy}" font-size="8" text-anchor="middle" dominant-baseline="middle" fill="${TG_HEADER_DBAR_COLOR}">${b.index + 1}</text>` +
-                        (b.index === 0 ? `<text x="${cx}" y="${Math.min(hy1, hy2) - 5}" font-size="9" text-anchor="middle" fill="${TG_HEADER_DBAR_COLOR}">${escapeHtml(b.label)} (${b.side})</text>` : '') +
+                        (b.index === 0 ? planLeaderLabel(cx, Math.min(hy1, hy2), `${escapeHtml(b.label)} (${b.side})`, TG_HEADER_DBAR_COLOR, { fontSize: 9 }) : '') +
                         `</g>`;
                 });
             });
@@ -4345,7 +4411,7 @@
                 const cogCx = sx(cogXMm), cogCy = sy(cogYMm);
                 cargoSvg += `<g>` +
                     `<rect x="${Math.min(rx1, rx2)}" y="${Math.min(ry1, ry2)}" width="${Math.abs(rx2 - rx1)}" height="${Math.abs(ry2 - ry1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
-                    `<text x="${boxCx}" y="${Math.min(ry1, ry2) - 5}" font-size="9" text-anchor="middle" fill="${cargoColor}">${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t</text>` +
+                    planLeaderLabel(boxCx, Math.min(ry1, ry2), `${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`, cargoColor) +
                     cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
                     `</g>`;
             });
@@ -4364,116 +4430,25 @@
             if (cogTrailerSignLoaded) {
                 const tCx = sx(parseFloat(cogTrailerSign.x) || 0), tCy = sy(parseFloat(cogTrailerSign.y) || 0);
                 cargoSvg += `<g>` +
-                    `<text x="${tCx}" y="${tCy - 12}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_COG_TRAILER_COLOR}">Trailer CoG</text>` +
+                    planLeaderLabel(tCx, tCy, 'Transport CoG', TG_COG_TRAILER_COLOR) +
                     cogSymbolSvg(tCx, tCy, 9, TG_COG_TRAILER_COLOR) +
                     `</g>`;
             }
             if (cogCombinedSignLoaded) {
                 const cCx = sx(parseFloat(cogCombinedSign.x) || 0), cCy = sy(parseFloat(cogCombinedSign.y) || 0);
                 cargoSvg += `<g>` +
-                    `<text x="${cCx}" y="${cCy - 24}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${TG_CARGO_TOTAL_COLOR}">Combined CoG</text>` +
+                    planLeaderLabel(cCx, cCy, 'CCoG', TG_CARGO_TOTAL_COLOR) +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
                     `</g>`;
             }
 
             // ---- Stability arm(s) — plan view ----
-            // Same arm computed by resolveStabilityArm() for the Right
-            // End View triangle (see its own comment near that block),
-            // drawn here instead as a line in TRUE plan-view geometry —
-            // the plan view is the only panel where the arm isn't
-            // collapsed onto a single (Y-only) axis. Whenever Group 3
-            // AND Group 4 are both present in the current axle-group
-            // setup, this is the actual perpendicular from the CoG to
-            // the straight edge connecting those two groups' own axle
-            // centers (the real tipping line, drawn dashed for
-            // reference); the arm line itself runs from the CoG to the
-            // foot of that perpendicular (footPointOnLine, see above).
-            // Falls back to a plain +Y offset line of the Excel-sourced
-            // arm length whenever Group 3/4 aren't both present,
-            // matching the End View's own magnitude-only fallback
-            // treatment for that same case (no G3/G4 line exists to
-            // project onto).
+            // Removed per request: the single/combined stability-arm
+            // lines, foot markers, arm-length labels and 90° callouts
+            // are no longer drawn in the plan view. stabArmSvg is kept
+            // (empty) since it's still referenced in the panel's SVG
+            // composition below.
             let stabArmSvg = '';
-            const stabGroupCentersPlan = computeAxleGroupCenters(rows);
-            const TG_STAB_ARM_LINE_COLOR = '#22c55e'; // green — the perpendicular arm itself, fixed color regardless of system, matching the 3D plan-view proof's own green line
-            const TG_STAB_SIDE_LINE_COLOR = 'var(--accent-blue, #38bdf8)'; // blue — the Group 3-4 reference side the arm is measured against
-            const planStabSystems = [];
-            if (cargoTotal.weight > 0) {
-                planStabSystems.push({
-                    cogXMm: (parseFloat(cargoTotal.x) || 0) * 1000,
-                    cogYMm: (parseFloat(cargoTotal.y) || 0) * 1000,
-                    excelArmMm: stabilityArmSingleMm,
-                    color: TG_STAB_SINGLE_COLOR,
-                    label: 'Single',
-                });
-            }
-            if (cogCombinedSignLoaded) {
-                planStabSystems.push({
-                    cogXMm: parseFloat(cogCombinedSign.x) || 0,
-                    cogYMm: parseFloat(cogCombinedSign.y) || 0,
-                    excelArmMm: stabilityArmCombinedMm,
-                    color: TG_STAB_COMBINED_COLOR,
-                    label: 'Combined',
-                });
-            }
-            const g3Plan = stabGroupCentersPlan[3], g4Plan = stabGroupCentersPlan[4];
-            const planFromGroups = !!(g3Plan && g4Plan);
-            if (planStabSystems.length && (stabilityArmLoaded || planFromGroups)) {
-                if (planFromGroups) {
-                    stabArmSvg += `<line x1="${sx(g3Plan.x)}" y1="${sy(g3Plan.y)}" x2="${sx(g4Plan.x)}" y2="${sy(g4Plan.y)}" stroke="${TG_STAB_SIDE_LINE_COLOR}" stroke-width="2.5" opacity="0.85"/>`;
-                }
-                planStabSystems.forEach((s, sIdx) => {
-                    let footXMm, footYMm, armMm;
-                    if (planFromGroups) {
-                        const foot = footPointOnLine(s.cogXMm, s.cogYMm, g3Plan, g4Plan);
-                        footXMm = foot.x; footYMm = foot.y;
-                        armMm = Math.hypot(s.cogXMm - footXMm, s.cogYMm - footYMm);
-                    } else {
-                        footXMm = s.cogXMm; footYMm = s.cogYMm + s.excelArmMm;
-                        armMm = s.excelArmMm;
-                    }
-                    const apexX = sx(s.cogXMm), apexY = sy(s.cogYMm);
-                    const footX = sx(footXMm), footY = sy(footYMm);
-                    // Arm line — ALWAYS the fixed green (matches the
-                    // reference image), not the per-system color, so it
-                    // reads unambiguously as "the perpendicular", the
-                    // same way the blue side line always reads as "the
-                    // Group 3-4 reference edge" regardless of which
-                    // system's arm is being measured. Solid (not
-                    // dashed), starting exactly at the CoG apex and
-                    // ending exactly at the true perpendicular foot on
-                    // the Group 3-4 line — a straight run between those
-                    // two points is by definition perpendicular to that
-                    // line whenever `foot` is genuinely the
-                    // perpendicular projection (see footPointOnLine
-                    // above), and sx/sy share one uniform scale, so that
-                    // exact-90° relationship is preserved on screen.
-                    stabArmSvg += `<g>` +
-                        `<line x1="${apexX}" y1="${apexY}" x2="${footX}" y2="${footY}" stroke="${TG_STAB_ARM_LINE_COLOR}" stroke-width="2"/>` +
-                        `<circle cx="${footX}" cy="${footY}" r="3" fill="${TG_STAB_ARM_LINE_COLOR}"/>` +
-                        `</g>`;
-                    const midX = (apexX + footX) / 2, midY = (apexY + footY) / 2;
-                    const labelOff = 10 + sIdx * 12;
-                    stabArmSvg += `<text x="${midX}" y="${midY - labelOff}" font-size="9" text-anchor="middle" fill="${s.color}">${s.label} arm ${armMm.toFixed(0)}${planFromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
-
-                    // Small "90°" callout near the foot, on the Group
-                    // 3-4 side of the arm — confirms at a glance that
-                    // this green line meets the blue reference line at
-                    // a right angle, without cluttering the view with a
-                    // full CAD arc.
-                    if (planFromGroups) {
-                        const dirX = footX - apexX, dirY = footY - apexY;
-                        const dirLen = Math.hypot(dirX, dirY) || 1;
-                        const nX = -dirY / dirLen, nY = dirX / dirLen; // perpendicular to the arm, i.e. roughly along the blue side
-                        const tagX = footX - dirX / dirLen * 14 + nX * 12;
-                        const tagY = footY - dirY / dirLen * 14 + nY * 12;
-                        stabArmSvg += `<g>` +
-                            `<rect x="${(tagX - 12).toFixed(1)}" y="${(tagY - 8).toFixed(1)}" width="24" height="14" rx="3" fill="var(--tank-box-bg, #0b1220)" stroke="${TG_STAB_ARM_LINE_COLOR}" stroke-width="1" opacity="0.92"/>` +
-                            `<text x="${tagX.toFixed(1)}" y="${(tagY + 3.5).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="${TG_STAB_ARM_LINE_COLOR}">90°</text>` +
-                            `</g>`;
-                    }
-                });
-            }
 
             // Dimension call-outs for preset (Goldhofer/SPMT) trailers —
             // real mm distances, drawn to scale now that sx/sy share a
@@ -5367,7 +5342,7 @@
                 // from the ground line (not the trailer deck), since
                 // Display!D15/D16 is already the ground -> CoG height.
                 const tgCogZDims = [];
-                if (cogTrailerSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG Z' });
+                if (cogTrailerSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Transport CoG Z' });
                 if (cogCombinedSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'Combined CoG Z' });
                 tgCogZDims.forEach((d, dIdx) => {
                     const dimX = endOffsetX2 + endW + 15 + TG_COGZ_LINE_GAP + dIdx * TG_COGZ_TIER_STEP;
@@ -5832,17 +5807,27 @@
                 if (cargoTotal && cargoTotal.weight > 0) {
                     const x = (parseFloat(cargoTotal.x) || 0) * 1000, y = (parseFloat(cargoTotal.y) || 0) * 1000;
                     const z = deckTopWorldZ + (parseFloat(cargoTotal.z) || 0) * 1000;
-                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_CARGO_COLOR, '#f97316'), 'Cargo CoG');
+                    // Label suppressed (null) here — when the stability
+                    // triangle below is shown, its own "Cargo CoG X.X°"
+                    // label (combining name + tilt angle) covers this
+                    // marker, so this avoids a duplicate "Cargo CoG" tag
+                    // floating at the same point. Falls back to no label
+                    // at all when the triangle isn't shown; the crosshair
+                    // marker itself still reads as a CoG point.
+                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_CARGO_COLOR, '#f97316'), null);
                     extend(x, y, z);
                 }
                 if (cogTrailerSignLoaded) {
                     const x = parseFloat(cogTrailerSign.x) || 0, y = parseFloat(cogTrailerSign.y) || 0, z = parseFloat(cogTrailerSign.z) || 0;
-                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_COG_TRAILER_COLOR, '#a855f7'), 'Trailer CoG');
+                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_COG_TRAILER_COLOR, '#a855f7'), 'Transport CoG');
                     extend(x, y, z);
                 }
                 if (cogCombinedSignLoaded) {
+                    // Label suppressed (null) — see the Cargo CoG marker
+                    // above; the combined "CCoG X.X°" label from the
+                    // stability triangle below replaces this tag.
                     const x = parseFloat(cogCombinedSign.x) || 0, y = parseFloat(cogCombinedSign.y) || 0, z = parseFloat(cogCombinedSign.z) || 0;
-                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_CARGO_TOTAL_COLOR, '#ef4444'), 'Combined CoG');
+                    addCogMarkerTG(x, z, y, tg3dResolveColor(TG_CARGO_TOTAL_COLOR, '#ef4444'), null);
                     extend(x, y, z);
                 }
             }
@@ -5858,12 +5843,17 @@
             // useful for sanity-checking that math even when the
             // triangle itself isn't shown.
             const stabGroupCentersTG = computeAxleGroupCenters(rows);
-            [3, 4].forEach(gn => {
+            // Group 3's own flag label removed per request — it's now
+            // redundant with the "G3" vertex label on the support
+            // triangle above. Group 4 doesn't appear on that triangle,
+            // so its flag + label is kept as the only marker for it.
+            [4].forEach(gn => {
                 const c = stabGroupCentersTG[gn];
                 if (!c) return;
                 addGroupSignTG(c.x, c.y, tg3dResolveColor(getGroupColor(gn), '#94a3b8'), getGroupLabel(gn));
                 extend(c.x, c.y);
             });
+            if (stabGroupCentersTG[3]) extend(stabGroupCentersTG[3].x, stabGroupCentersTG[3].y);
             if (stabGroupCentersTG[3] && stabGroupCentersTG[4]) {
                 const p3 = stabGroupCentersTG[3], p4 = stabGroupCentersTG[4];
                 const lineGeo = new THREE.BufferGeometry().setFromPoints([
@@ -5890,7 +5880,20 @@
                 const g1 = stabGroupCentersTG[1], g2 = stabGroupCentersTG[2], g3 = stabGroupCentersTG[3];
                 if (g1 && g2 && g3) {
                     [g1, g2, g3].forEach(g => extend(g.x, g.y, stabilityArmHeightMm));
-                    addGroupTriangleTG(g1, g2, g3, stabilityArmHeightMm, 0x38bdf8, 'Support Triangle (G1–2–3)');
+                    // Separate G1/G2/G3 labels at each triangle vertex
+                    // instead of one combined "Support Triangle
+                    // (G1-2-3)" label — addGroupTriangleTG's own centroid
+                    // label is suppressed (null) and replaced with three
+                    // per-vertex anchors below.
+                    addGroupTriangleTG(g1, g2, g3, stabilityArmHeightMm, 0x38bdf8, null);
+                    const S = TG3D_SCALE;
+                    [[g1, 1], [g2, 2], [g3, 3]].forEach(([g, gn]) => {
+                        labelAnchors3dTG.push({
+                            pos: new THREE.Vector3(g.x * S, stabilityArmHeightMm * S + 0.2, g.y * S),
+                            text: `G${gn}`,
+                            color: tg3dResolveColor(getGroupColor(gn), '#38bdf8'),
+                        });
+                    });
                 }
             }
 
@@ -5924,7 +5927,7 @@
                         cogXMm: cX, cogYMm: cY, cogZMm: cZ,
                         armMm: resolved.armMm, angleDeg: resolved.angleDeg, fromGroups: resolved.fromGroups,
                         color: tg3dResolveColor(TG_STAB_SINGLE_COLOR, '#f97316'),
-                        label: 'Single',
+                        label: 'Cargo CoG',
                     });
                 }
                 if (cogCombinedSignLoaded) {
@@ -5936,7 +5939,7 @@
                         cogXMm: cX, cogYMm: cY, cogZMm: cZ,
                         armMm: resolved.armMm, angleDeg: resolved.angleDeg, fromGroups: resolved.fromGroups,
                         color: tg3dResolveColor(TG_STAB_COMBINED_COLOR, '#ef4444'),
-                        label: 'Combined',
+                        label: 'CCoG',
                     });
                 }
                 stabSystems.forEach(s => {
@@ -6000,74 +6003,10 @@
                         color: s.color,
                     });
 
-                    // ---- Plan-view perpendicularity proof ----
-                    // A second, independent visual (near ground level,
-                    // separate from the vertical tipping triangle above)
-                    // that directly proves the arm meets the Group 3/4
-                    // side at a true right angle: a green line from the
-                    // CoG's own plan position straight to its
-                    // perpendicular foot on the Group 3–4 line, with a
-                    // small right-angle tick where the two meet — the
-                    // same convention as a standard CAD perpendicularity
-                    // callout (CoG -> foot, foot -> right-angle tick on
-                    // the reference side, 90° label).
-                    if (s.fromGroups) {
-                        const p3 = stabGroupCentersTG[3], p4 = stabGroupCentersTG[4];
-                        const dirX = p4.x - p3.x, dirY = p4.y - p3.y;
-                        const dirLen = Math.hypot(dirX, dirY) || 1;
-                        const ux = dirX / dirLen, uy = dirY / dirLen; // unit vector along the Group 3–4 side
-                        const footXMm = armPt.x / S, footYMm = armPt.z / S; // same perpendicular foot as the triangle above, at ground height instead
-                        const planH = 60; // mm above ground — just enough to read clearly over the grid
-                        const cogGroundPt = toV(s.cogXMm, planH, s.cogYMm);
-                        const footGroundPt = toV(footXMm, planH, footYMm);
-
-                        const perpMat = new THREE.LineBasicMaterial({ color: 0x22c55e }); // green — CoG -> foot perpendicular
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([cogGroundPt, footGroundPt]), perpMat));
-
-                        // Right-angle callout at the foot — same CAD
-                        // perpendicularity convention as the 2D plan
-                        // view's own arc (see stabArmSvg above, "arc +
-                        // outward arrowheads + 90° label"): a quarter-
-                        // circle arc swept between the Group 3–4 side
-                        // direction and the CoG direction (towardCog),
-                        // capped with a short outward leader on each
-                        // ray. towardCog and alongSide are, by
-                        // construction, exactly perpendicular (foot is
-                        // the true perpendicular projection of the CoG
-                        // onto the Group 3–4 line), so the arc always
-                        // sweeps a genuine 90°, not an approximation.
-                        const radiusM = Math.min(0.4, Math.max(0.12, (s.armMm * S) * 0.25));
-                        const towardCog = new THREE.Vector3().subVectors(cogGroundPt, footGroundPt).normalize();
-                        const alongSide = new THREE.Vector3(ux, 0, uy);
-                        const ARC_SEGMENTS = 12;
-                        const arcPts = [];
-                        for (let i = 0; i <= ARC_SEGMENTS; i++) {
-                            const t = (i / ARC_SEGMENTS) * (Math.PI / 2);
-                            arcPts.push(footGroundPt.clone()
-                                .addScaledVector(alongSide, Math.cos(t) * radiusM)
-                                .addScaledVector(towardCog, Math.sin(t) * radiusM));
-                        }
-                        const arcMat = new THREE.LineBasicMaterial({ color: 0xeab308 }); // amber — right-angle arc + side reference
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts), arcMat));
-                        // Short outward leaders past each end of the arc,
-                        // along the same two ray directions — visually
-                        // matches the 2D view's arrow leaders (arrowheads
-                        // aren't drawn in 3D since THREE.Line has no
-                        // marker support, but the leader + arc together
-                        // still read clearly as a right-angle callout).
-                        const leaderOuterM = radiusM * 1.6;
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-                            footGroundPt.clone().addScaledVector(alongSide, radiusM),
-                            footGroundPt.clone().addScaledVector(alongSide, leaderOuterM),
-                        ]), arcMat));
-                        world3dGroupTG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-                            footGroundPt.clone().addScaledVector(towardCog, radiusM),
-                            footGroundPt.clone().addScaledVector(towardCog, leaderOuterM),
-                        ]), arcMat));
-
-                        const bisector = new THREE.Vector3().addVectors(alongSide, towardCog).normalize();
-                        labelAnchors3dTG.push({ pos: footGroundPt.clone().addScaledVector(bisector, radiusM + 0.18), text: '90°', color: '#eab308' });
-                    }
+                    // Plan-view perpendicularity proof (green CoG->foot
+                    // line + right-angle arc/90° callout near ground
+                    // level) removed per request — the stability arm is
+                    // no longer drawn in the plan view.
                 });
             }
 
@@ -6123,7 +6062,7 @@
                 ]);
                 world3dGroupTG.add(new THREE.Line(g, lineMat));
             });
-            labelAnchors3dTG.push({ pos: mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), text: label, color: hex });
+            if (label) labelAnchors3dTG.push({ pos: mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), text: label, color: hex });
         }
 
         // Group support "sign" — a thin pole + small flag-like cone
@@ -6193,8 +6132,10 @@
                 world3dGroupTG.add(dashLine);
             });
 
-            const centroid = v1.clone().add(v2).add(v3).divideScalar(3);
-            labelAnchors3dTG.push({ pos: centroid.add(new THREE.Vector3(0, 0.2, 0)), text: label, color: hex });
+            if (label) {
+                const centroid = v1.clone().add(v2).add(v3).divideScalar(3);
+                labelAnchors3dTG.push({ pos: centroid.add(new THREE.Vector3(0, 0.2, 0)), text: label, color: hex });
+            }
         }
 
         function renderTrailerGeneratorTotals() {
