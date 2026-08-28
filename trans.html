@@ -506,11 +506,15 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.50)</h1>
+            <h1>🚂 Transport Dashboard (Rev.51)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
             <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
+            <label style="font-size:11px; color:var(--text-muted); display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="When on, every dashboard edit is pushed to Excel automatically (no button press needed), and a small set of read-only values (Z Trailer Height, Horizontal Loads, CoG signs, Stability, Drawing Table) are pulled back automatically too. Turn off to go back to manual 📤 Push / ⇩ Refresh buttons only.">
+                <input type="checkbox" id="autoSyncToggle" checked onchange="toggleAutoSync(this.checked)"> Auto-sync
+            </label>
+            <span id="autoSyncStatus"><span style="color:var(--accent-green);">✓ Synced</span></span>
             <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, Z Trailer Height, and other settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
             <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
             <input type="file" id="appImportFileInput" accept=".json,application/json" style="display:none" onchange="importAppState(event)">
@@ -856,6 +860,120 @@
         // OFFICE / EXCEL CONNECTION STATE
         // ============================================================
         let isOfficeInitialized = false;
+
+        // ============================================================
+        // AUTO-SYNC (push/pull without pressing a button)
+        // ============================================================
+        // Push side: every field-editing handler below schedules a
+        // debounced call to the SAME push*() function the old "📤 Push
+        // to Excel" buttons called, via scheduleAutoPush(). The buttons
+        // themselves are left in place (harmless — an immediate push on
+        // top of an already-scheduled one is a no-op) as a manual
+        // "force it now" fallback.
+        //
+        // Pull side: runAutoPull() polls, on a timer, the same handful
+        // of read paths that were already pulled silently on panel
+        // open/refresh — Z Trailer Height, Horizontal Loads, CoG signs,
+        // Stability, Drawing Table — so a value typed directly into
+        // Excel shows up on the dashboard without a manual "⇩ Refresh".
+        // It deliberately EXCLUDES pullWheelDataFromExcel,
+        // pullCargoFromExcel, pullNumTrainsFromExcel and
+        // pullNumHydraulicGroupsFromExcel: those don't just update a
+        // value, they REBUILD trailerGenTrains/cargoItems wholesale
+        // from whatever is currently in Excel (add/remove trains,
+        // replace axle groups, re-detect trailer type, etc.). Running
+        // that on a timer in the background could silently discard
+        // in-progress dashboard edits the moment Excel and the
+        // dashboard disagree — those stay explicit, on-demand pulls
+        // (the "⇩ Refresh" buttons), same as before.
+        //
+        // Loop guards: isAutoPushing/isAutoPulling make the two sides
+        // take turns instead of re-triggering each other, and
+        // isEditingDashboard() skips a pull poll entirely while any
+        // field on the page currently has focus, so a background pull
+        // can never blow away an edit mid-keystroke.
+        let autoSyncEnabled = true;
+        let isAutoPushing = false;
+        let isAutoPulling = false;
+        let autoPullTimer = null;
+        const autoPushTimers = {};
+        const AUTO_PUSH_DEBOUNCE_MS = 400;
+        const AUTO_PULL_POLL_MS = 5000;
+
+        function setSyncStatus(text, color) {
+            const el = document.getElementById('autoSyncStatus');
+            if (el) el.innerHTML = `<span style="color:${color || 'var(--text-muted, #888)'};">${text}</span>`;
+        }
+
+        // Debounced dispatcher shared by every auto-push call site below:
+        // coalesces several field edits committed in quick succession
+        // (or a batch state change like adding a train) into a single
+        // Excel write per push function, AUTO_PUSH_DEBOUNCE_MS after the
+        // last one. `key` just needs to be unique per push function so
+        // two different push functions don't cancel each other's timers.
+        function scheduleAutoPush(key, fn) {
+            if (!autoSyncEnabled || !isOfficeInitialized || isAutoPulling) return;
+            if (autoPushTimers[key]) clearTimeout(autoPushTimers[key]);
+            autoPushTimers[key] = setTimeout(async () => {
+                delete autoPushTimers[key];
+                isAutoPushing = true;
+                setSyncStatus('⏳ Syncing…', '#eab308');
+                try {
+                    await fn({ silent: true });
+                    setSyncStatus('✓ Synced', 'var(--accent-green)');
+                } catch (e) {
+                    console.warn(`Auto-push (${key}) error`, e);
+                    setSyncStatus('⚠ Auto-sync error — see log', '#ef4444');
+                } finally {
+                    isAutoPushing = false;
+                }
+            }, AUTO_PUSH_DEBOUNCE_MS);
+        }
+
+        function isEditingDashboard() {
+            const el = document.activeElement;
+            if (!el) return false;
+            const tag = el.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+        }
+
+        // See the big comment above for exactly what this does and does
+        // NOT re-pull, and why.
+        async function runAutoPull() {
+            if (!autoSyncEnabled || !isOfficeInitialized || isAutoPushing || isEditingDashboard()) return;
+            isAutoPulling = true;
+            try {
+                await pullZTrailerHeightFromExcel({ silent: true });
+                await pullHorizontalLoadsFromExcel({ silent: true });
+                await pullCogSignsFromExcel();
+                await pullStabilityFromExcel();
+                await pullDrawingTableFromExcel({ silent: true });
+                renderTrailerGenPreview();
+            } catch (e) {
+                console.warn('Auto-pull error', e);
+            } finally {
+                isAutoPulling = false;
+            }
+        }
+
+        function startAutoPullPolling() {
+            if (autoPullTimer) return;
+            autoPullTimer = setInterval(runAutoPull, AUTO_PULL_POLL_MS);
+        }
+        function stopAutoPullPolling() {
+            if (autoPullTimer) { clearInterval(autoPullTimer); autoPullTimer = null; }
+        }
+
+        function toggleAutoSync(checked) {
+            autoSyncEnabled = !!checked;
+            if (autoSyncEnabled) {
+                setSyncStatus('✓ Synced', 'var(--accent-green)');
+                startAutoPullPolling();
+            } else {
+                setSyncStatus('⏸ Auto-sync off', '#888');
+                stopAutoPullPolling();
+            }
+        }
 
         function logMsg(text) {
             const el = document.getElementById('tgLog');
@@ -1677,6 +1795,7 @@
                 train.axle1OffsetY = null;
                 train.axlePairOffsetY = null;
                 renderTrailerDashboard();
+                scheduleAutoPush('pushDataToExcel', pushDataToExcel);
                 return;
             }
             train.trailerType = m[1];
@@ -1708,6 +1827,7 @@
             // right and left physical axle of each line.
             train.groups = [defaultAxleGroup(1, axleLineCount, existingLoad, 1, 'both')];
             renderTrailerDashboard();
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         // Sets a train's Header/Dbar accessory type or side (dropdowns in
@@ -1721,6 +1841,7 @@
             if (field === 'headerDbar') train.headerDbar = value;
             else if (field === 'headerDbarSide') train.headerDbarSide = (value === 'right') ? 'right' : 'left';
             renderTrailerDashboard();
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         // Parses a train's cadSplit text ("4,6" / "4 6" / "4, 6, ...")
@@ -1925,6 +2046,7 @@
             trailerGenTrains.push(buildTrainCopiedFromTrain1());
             renderTrailerDashboard();
             pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         // Adds/removes trains at the end so trailerGenTrains.length
@@ -1948,7 +2070,10 @@
                 trailerGenTrains.length = Math.max(n, 1);
             }
             renderTrailerDashboard();
-            if (!opts.skipPush) pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
+            if (!opts.skipPush) {
+                pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
+                scheduleAutoPush('pushDataToExcel', pushDataToExcel);
+            }
         }
 
         // Adds/removes axle groups at the end of EVERY train so each
@@ -1978,7 +2103,10 @@
                 }
             });
             renderTrailerDashboard();
-            if (!opts.skipPush) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, n, 'Number of Hydraulic Groups');
+            if (!opts.skipPush) {
+                pushValueToInputCell(INPUT_NUM_GROUPS_CELL, n, 'Number of Hydraulic Groups');
+                scheduleAutoPush('pushDataToExcel', pushDataToExcel);
+            }
         }
 
         // ============================================================
@@ -2076,23 +2204,24 @@
         // Kept generically named (not "...ToAdjustWheels") since more
         // sheets may be added here in future — add any new sheet write
         // inside this same function so it stays under one button.
-        async function pushDataToExcel() {
+        async function pushDataToExcel(opts) {
+            const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
-                alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
                 return;
             }
             const trainsData = computeAdjustWheelsTrains();
             const maxLines = trainsData.reduce((m, t) => Math.max(m, t.lines.length), 0);
             if (maxLines === 0) {
-                alert('Add at least one train with at least one axle group before pushing.');
+                if (!silent) alert('Add at least one train with at least one axle group before pushing.');
                 return;
             }
             if (maxLines > ADJUST_MAX_LINES) {
-                alert(`${maxLines} axle lines exceeds the ${ADJUST_MAX_LINES}-line ${ADJUST_SHEET_NAME} block. Reduce axle counts and try again.`);
+                if (!silent) alert(`${maxLines} axle lines exceeds the ${ADJUST_MAX_LINES}-line ${ADJUST_SHEET_NAME} block. Reduce axle counts and try again.`);
                 return;
             }
             if (trainsData.length > ADJUST_MAX_TRAIN_BLOCKS) {
-                alert(`${trainsData.length} trains exceeds the ${ADJUST_MAX_TRAIN_BLOCKS}-train ${ADJUST_SHEET_NAME} block. Reduce train count and try again.`);
+                if (!silent) alert(`${trainsData.length} trains exceeds the ${ADJUST_MAX_TRAIN_BLOCKS}-train ${ADJUST_SHEET_NAME} block. Reduce train count and try again.`);
                 return;
             }
 
@@ -2132,7 +2261,7 @@
                 });
             } catch (e) {
                 console.warn('Adjust_Wheels clear/label error', e);
-                alert(`Could not push wheel data to Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
+                if (!silent) alert(`Could not push wheel data to Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
                 return;
             }
 
@@ -2187,7 +2316,7 @@
             if (writeErrors.length) {
                 const detail = writeErrors.map(w => `${w.name}: ${w.error}`).join(' | ');
                 logMsg(`❌ ${writeErrors.length} train(s) failed to write: ${detail}`);
-                alert(`${writeErrors.length} train(s) could not be written to ${ADJUST_SHEET_NAME} (see log/console for which and why) — often caused by a merged cell or sheet protection over that train's columns.`);
+                if (!silent) alert(`${writeErrors.length} train(s) could not be written to ${ADJUST_SHEET_NAME} (see log/console for which and why) — often caused by a merged cell or sheet protection over that train's columns.`);
             }
         }
 
@@ -2624,6 +2753,7 @@
             if (trailerGenTrains.length === 0) trailerGenTrains.push(defaultTrailerGenTrain(1));
             renderTrailerDashboard();
             pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         // Train-level fields: name, line spacing, X offset/Y offset
@@ -2653,8 +2783,9 @@
             // pushDataToExcel() always calls computeAdjustWheelsTrains()
             // fresh from trailerGenTrains at push time (there's no cached
             // copy of the wheel grid), so an X offset / Y offset edit is
-            // automatically reflected the next time "Push to
-            // Adjust_Wheels" is clicked.
+            // automatically reflected next time it's pushed — see
+            // scheduleAutoPush below.
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         // ============================================================
@@ -2712,12 +2843,14 @@
             }
             cargoItems.push(newCargoItem(cargoItems.length + 1));
             renderTrailerDashboard();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
 
         function removeCargoItem(id) {
             cargoItems = cargoItems.filter(c => c.id !== id);
             if (cargoItems.length === 0) cargoItems.push(newCargoItem(1));
             renderTrailerDashboard();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
 
         // "Copy from previous" button — overwrites this cargo item's own
@@ -2730,6 +2863,7 @@
             if (idx <= 0) return;
             copyCargoFieldsInto(cargoItems[idx], cargoItems[idx - 1]);
             renderTrailerDashboard();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
 
         // Toggles this cargo item's link to Excel "Input horizontal
@@ -2749,6 +2883,7 @@
                 cargo.linkExcelDim = false;
             }
             renderCargoList();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
 
         function updateCargoField(id, field, rawValue) {
@@ -2763,6 +2898,7 @@
                 // in sync with the newly-selected Height-start option.
                 renderCargoList();
                 renderTrailerGenPreview();
+                scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
                 return;
             } else {
                 // CoGx/CoGy/CoGz (x/y/z) — when this item's "Group CoG +
@@ -2802,6 +2938,7 @@
             // (and any 'previous'-stacked item chained below it).
             if (isPositionFieldGroupedRerender(cargo, field) || field === 'z' || field === 'gap') renderCargoList();
             renderTrailerGenPreview();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
         // Small helper so updateCargoField's re-render decision reads
         // clearly above — true only for a grouped item's own x/y/z edit.
@@ -2829,6 +2966,7 @@
             const halfLen = (parseFloat(cargo.length) || 0) / 2;
             cargo.tlX = round3((parseFloat(cargo.x) || 0) - v + halfLen);
             renderTrailerGenPreview();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
         function updateCargoOffsetRear(id, rawValue) {
             const cargo = cargoItems.find(c => c.id === id);
@@ -2838,6 +2976,7 @@
             const halfWid = (parseFloat(cargo.width) || 0) / 2;
             cargo.tlY = round3((parseFloat(cargo.y) || 0) + v - halfWid);
             renderTrailerGenPreview();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
         // Side view: CoG to Bottom (m) — distance from this item's own
         // CoG (Z — CoG) down to the box's base, in meters. Editing this
@@ -2862,6 +3001,7 @@
             cargo.gap = round3((newBaseWorldZ - span.refWorldZ) / 1000);
             renderCargoList(); // Gap's own field (and any 'previous'-stacked item below) needs its shown value refreshed too
             renderTrailerGenPreview();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
 
         // "Group CoG + cargo" toggle — when ON for an item, editing its
@@ -3057,6 +3197,7 @@
             }
             renderCargoList();
             renderTrailerGenPreview();
+            scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
 
         function renderCargoGroupAllSection() {
@@ -3362,9 +3503,10 @@
         // live Excel formula referencing these rows and is never written
         // to directly — it recalculates on its own once the sync below
         // completes.
-        async function pushCargoToExcel() {
+        async function pushCargoToExcel(opts) {
+            const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
-                alert('Not connected to Excel — open this add-in inside an Excel workbook to push cargo data.');
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push cargo data.');
                 return;
             }
             try {
@@ -3407,7 +3549,7 @@
                 logMsg(`📤 Pushed ${cargoItems.length} cargo item(s) to ${INPUT_SHEET_NAME}!${CARGO_RANGE} + geometry to ${CARGO_GEOM_RANGE}${dimPushed ? ` (+ linked item's dimensions to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE})` : ''}.`);
             } catch (e) {
                 console.error('Error pushing cargo data to Excel', e);
-                alert('Error pushing cargo data to Excel — see console for details.');
+                if (!silent) alert('Error pushing cargo data to Excel — see console for details.');
             }
         }
 
@@ -3441,10 +3583,12 @@
             tgZTrailerHeightMm = (Number.isFinite(v) && v > 0) ? v : TG_Z_TRAILER_HEIGHT_DEFAULT;
             renderTrailerGeneratorTotals();
             renderTrailerGenPreview();
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
-        async function pullZTrailerHeightFromExcel() {
+        async function pullZTrailerHeightFromExcel(opts) {
+            const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
-                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Z Trailer Height.');
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Z Trailer Height.');
                 return;
             }
             try {
@@ -3458,17 +3602,29 @@
                 });
                 const v = parseFloat(raw);
                 if (!Number.isFinite(v) || v <= 0) {
-                    alert(`${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL} doesn't hold a valid positive number.`);
+                    if (!silent) alert(`${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL} doesn't hold a valid positive number.`);
                     return;
                 }
+                if (v === tgZTrailerHeightMm) return; // no change — skip the (focus-losing) re-render, matters for silent polling
                 tgZTrailerHeightMm = v;
-                renderTrailerDashboard();
+                // Silent/polled calls avoid the full renderTrailerDashboard()
+                // rebuild (it wipes and rebuilds every card's innerHTML,
+                // which would steal focus from whatever the operator is
+                // typing elsewhere) — the lighter totals/preview renders
+                // are enough to reflect the new height everywhere it's used,
+                // plus a direct value update on the one input that shows it.
+                if (!silent) {
+                    renderTrailerDashboard();
+                } else {
+                    const zEl = document.getElementById('tgZHeightInput');
+                    if (zEl) zEl.value = v;
+                }
                 renderTrailerGeneratorTotals();
                 renderTrailerGenPreview();
-                logMsg(`↺ Pulled Z Trailer Height (${v}mm) from ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}.`);
+                if (!silent) logMsg(`↺ Pulled Z Trailer Height (${v}mm) from ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}.`);
             } catch (e) {
                 console.warn(`Could not read ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}`, e);
-                alert(`Could not read ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}. Make sure a sheet named "${ZHEIGHT_SHEET_NAME}" exists with the value in that cell.`);
+                if (!silent) alert(`Could not read ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}. Make sure a sheet named "${ZHEIGHT_SHEET_NAME}" exists with the value in that cell.`);
             }
         }
 
@@ -3483,6 +3639,7 @@
             const v = parseFloat(rawValue);
             tgHLoads[key] = Number.isFinite(v) ? v : 0;
             renderTrailerGenPreview();
+            scheduleAutoPush('pushHorizontalLoadsToExcel', pushHorizontalLoadsToExcel);
         }
         async function pullHorizontalLoadsFromExcel(opts = {}) {
             const silent = opts.silent === true;
@@ -3514,9 +3671,10 @@
                 if (!silent) alert(`Could not read sheet "${HLOADS_SHEET_NAME}". Make sure it exists with the Horizontal Loads values in place.`);
             }
         }
-        async function pushHorizontalLoadsToExcel() {
+        async function pushHorizontalLoadsToExcel(opts) {
+            const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
-                alert('Not connected to Excel — open this add-in inside an Excel workbook to push Horizontal Loads.');
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push Horizontal Loads.');
                 return;
             }
             try {
@@ -3531,7 +3689,7 @@
                 logMsg(`📤 Pushed Horizontal Loads to '${HLOADS_SHEET_NAME}'.`);
             } catch (e) {
                 console.warn(`Could not write Horizontal Loads to '${HLOADS_SHEET_NAME}'`, e);
-                alert(`Could not write to sheet "${HLOADS_SHEET_NAME}". Make sure it exists.`);
+                if (!silent) alert(`Could not write to sheet "${HLOADS_SHEET_NAME}". Make sure it exists.`);
             }
         }
 
@@ -3831,6 +3989,7 @@
             // Train 1's group count (see renderTrailerDashboard) — keep
             // Excel in sync whenever it changes, on any train.
             if (trailerGenTrains[0]) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, trailerGenTrains[0].groups.length, 'Number of Hydraulic Groups');
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         function removeAxleGroup(trainId, groupId) {
@@ -3840,6 +3999,7 @@
             if (train.groups.length === 0) train.groups.push(defaultAxleGroup(1, 5, 25, 1, 'both'));
             renderTrailerDashboard();
             if (trailerGenTrains[0]) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, trailerGenTrains[0].groups.length, 'Number of Hydraulic Groups');
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         // field: 'groupNumber' | 'from' | 'to' | 'load' | 'loadMode' ('load' or 'none') | 'row' ('both'/'right'/'left')
@@ -3852,16 +4012,19 @@
                 group.groupNumber = parseInt(rawValue, 10) || 1;
                 group.color = getGroupColor(group.groupNumber);
                 renderTrailerDashboard();
+                scheduleAutoPush('pushDataToExcel', pushDataToExcel);
                 return;
             }
             if (field === 'loadMode') {
                 group.noLoad = (rawValue === 'none');
                 renderTrailerDashboard();
+                scheduleAutoPush('pushDataToExcel', pushDataToExcel);
                 return;
             }
             if (field === 'row') {
                 group.row = (rawValue === 'right' || rawValue === 'left') ? rawValue : 'both';
                 renderTrailerDashboard();
+                scheduleAutoPush('pushDataToExcel', pushDataToExcel);
                 return;
             }
             if (field === 'from' || field === 'to') {
@@ -3872,6 +4035,7 @@
             }
             renderTrailerGeneratorTotals();
             renderTrailerGenPreview();
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
         // Expands all trains into individual PHYSICAL axle rows, in train
@@ -4035,7 +4199,7 @@
                     </div>
                     <div class="tg-field">
                         <label>🔗 Z TRAILER HEIGHT (MM) <button type="button" class="tg-xy-sync-btn" title="Pull Z Trailer Height from Excel ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}" onclick="pullZTrailerHeightFromExcel()">⇩</button></label>
-                        <input type="number" step="any" min="0" value="${tgZTrailerHeightMm}"
+                        <input type="number" id="tgZHeightInput" step="any" min="0" value="${tgZTrailerHeightMm}"
                                title="Ground -> top of deck height (mm), shared by every train. Drives the Side + end elevation preview's deck line and the VCG value written to every axle row. Synced with Excel sheet '${ZHEIGHT_SHEET_NAME}'!${ZHEIGHT_CELL} — pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel'."
                                onchange="updateZTrailerHeight(this.value)">
                     </div>
@@ -6866,6 +7030,7 @@
                 // is blank, per "Pull data when first load of side panel
                 // or refresh."
                 await pullCargoFromExcel({ silent: true });
+                if (autoSyncEnabled) startAutoPullPolling();
             }
         }
 
