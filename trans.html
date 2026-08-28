@@ -500,13 +500,37 @@
 
         .tg-log { font-size: 11px; color: var(--text-muted); background: var(--tank-box-bg); border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px; margin-top: 10px; max-height: 110px; overflow-y: auto; }
         .tg-log div { padding: 2px 0; }
+
+        /* ---- Push/Refresh button sync-in-progress indicator ---- */
+        /* Applied to a button while its own push/pull to Excel is in
+           flight (see setBtnSyncing/flashBtnResult), independent of the
+           header's global "autoSyncStatus" text. */
+        @keyframes tgBtnSyncPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+        .tg-add-train-btn.tg-btn-syncing {
+            background: #eab308 !important;
+            border-color: #eab308 !important;
+            color: #3a2c00 !important;
+            animation: tgBtnSyncPulse 0.9s ease-in-out infinite;
+        }
+        .tg-add-train-btn.tg-btn-flash-ok {
+            background: var(--accent-green) !important;
+            border-color: var(--accent-green) !important;
+            color: #06202e !important;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .tg-add-train-btn.tg-btn-flash-err {
+            background: #ef4444 !important;
+            border-color: #ef4444 !important;
+            color: #fff !important;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
     </style>
 </head>
 <body>
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.51)</h1>
+            <h1>🚂 Transport Dashboard (Rev.52)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -608,9 +632,9 @@
 
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
-                            <button type="button" class="tg-add-train-btn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshWheelsBtn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
                                     onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
-                            <button type="button" class="tg-add-train-btn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
+                            <button type="button" class="tg-add-train-btn" id="tgPushWheelsBtn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
                                     onclick="pushDataToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
@@ -653,9 +677,9 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39 + BE35:BJ39)"
                                     onclick="addCargoItem()">+ Add Cargo</button>
-                            <button type="button" class="tg-add-train-btn" title="Pull Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom for every cargo item from Excel Input!AZ35:BD39 + BE35:BJ39"
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshCargoBtn" title="Pull Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom for every cargo item from Excel Input!AZ35:BD39 + BE35:BJ39"
                                     onclick="pullCargoFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" title="Write every cargo item's Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom to Excel Input!AZ35:BD39 + BE35:BJ39"
+                            <button type="button" class="tg-add-train-btn" id="tgPushCargoBtn" title="Write every cargo item's Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom to Excel Input!AZ35:BD39 + BE35:BJ39"
                                     onclick="pushCargoToExcel()">📤 Push Cargo to Excel</button>
                         </div>
                     </div>
@@ -905,6 +929,46 @@
             if (el) el.innerHTML = `<span style="color:${color || 'var(--text-muted, #888)'};">${text}</span>`;
         }
 
+        // ---- Per-button sync-in-progress indicator ----
+        // Independent of the header's global "autoSyncStatus" text:
+        // colors the actual Push/Refresh button that's mid-flight
+        // (pulsing amber while in progress, a brief green/red flash on
+        // completion), whether that button was clicked by hand or the
+        // same push/pull function ran silently via auto-sync. See the
+        // .tg-btn-syncing/.tg-btn-flash-ok/.tg-btn-flash-err CSS.
+        const BTN_FLASH_MS = 900;
+        function setBtnSyncing(btnId, on) {
+            const el = document.getElementById(btnId);
+            if (!el) return;
+            el.classList.toggle('tg-btn-syncing', !!on);
+            if (on) el.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err');
+        }
+        function flashBtnResult(btnId, ok) {
+            const el = document.getElementById(btnId);
+            if (!el) return;
+            el.classList.remove('tg-btn-syncing');
+            el.classList.add(ok ? 'tg-btn-flash-ok' : 'tg-btn-flash-err');
+            setTimeout(() => el.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err'), BTN_FLASH_MS);
+        }
+        // Wraps an async push/pull function so its button (by id) pulses
+        // amber while `fn` is in flight and flashes green/red on
+        // settle, without touching fn's own internal control flow
+        // (early returns / try-catch inside fn are unaffected — this
+        // only observes the outer promise).
+        function withBtnSyncIndicator(btnId, fn) {
+            return async function (...args) {
+                setBtnSyncing(btnId, true);
+                try {
+                    const result = await fn.apply(this, args);
+                    flashBtnResult(btnId, true);
+                    return result;
+                } catch (e) {
+                    flashBtnResult(btnId, false);
+                    throw e;
+                }
+            };
+        }
+
         // Debounced dispatcher shared by every auto-push call site below:
         // coalesces several field edits committed in quick succession
         // (or a batch state change like adding a train) into a single
@@ -947,6 +1011,7 @@
                 await pullHorizontalLoadsFromExcel({ silent: true });
                 await pullCogSignsFromExcel();
                 await pullStabilityFromExcel();
+                await pullLoadPerAxleFromExcel();
                 await pullDrawingTableFromExcel({ silent: true });
                 renderTrailerGenPreview();
             } catch (e) {
@@ -1223,6 +1288,23 @@
         const STAB_ANGLE_COMBINED_ROW = 30;
         const STAB_ANGLE_RANGE = `${STAB_ANGLE_COL}${STAB_ANGLE_SINGLE_ROW}:${STAB_ANGLE_COL}${STAB_ANGLE_COMBINED_ROW}`; // B29:B30
         const STAB_ARM_HEIGHT_CELL = "G2"; // Properties!G2 — arm-point ground height (mm), shared by both triangles
+
+        // "Load per axle (t)" — read-only, Excel-CALCULATED axle-group
+        // loads (moment-balance result), one value per fixed group
+        // (1-4), pulled back onto every train's matching axle group's
+        // "Load per axle (t)" field. Row depends on how many Hydraulic
+        // Groups are active (trailerGenTrains[0].groups.length): 3
+        // groups -> row 38 (B:D), 4 groups -> row 71 (B:E). Columns are
+        // always B,C,D,(E) = Group 1,2,3,(4), left to right, matching
+        // TRAILER_GROUP_DEFS order. No mapping exists yet for 1-2
+        // groups — pullLoadPerAxleFromExcel() is a no-op in that case.
+        const LOAD_PER_AXLE_ROW_BY_GROUPCOUNT = { 3: 38, 4: 71 };
+        function loadPerAxleRangeForGroupCount(numGroups) {
+            const row = LOAD_PER_AXLE_ROW_BY_GROUPCOUNT[numGroups];
+            if (!row) return null;
+            const lastCol = colLetter(1 + numGroups); // B=2 -> 1+numGroups
+            return { row, range: `B${row}:${lastCol}${row}` };
+        }
         const TG_STAB_SINGLE_COLOR = TG_CARGO_COLOR;         // single-system triangle (Cargo CoG apex) — cargo orange, distinct from the Trailer CoG sign (purple) already drawn in this same panel
         const TG_STAB_COMBINED_COLOR = TG_CARGO_TOTAL_COLOR; // combined-system triangle (Combined CoG apex) — matches Combined CoG sign color
 
@@ -1726,6 +1808,37 @@
             };
         }
 
+        // Auto-generates 3 axle groups spanning every axle line of a
+        // freshly-selected/changed preset trailer (Goldhofer/SPMT —
+        // called from applyTrailerPreset). Rule: Group 1 ('both' rows)
+        // takes the FRONT lines, getting the fewest lines of the three
+        // when axleLineCount isn't evenly divisible by 3 (Math.floor).
+        // The remaining lines are then split by ROW rather than by
+        // line — Group 2 = right-side axles only, Group 3 = left-side
+        // axles only — of that same remaining line range, so Group 2
+        // and Group 3 always end up with equal axle counts, and only
+        // ever differ from Group 1's axle count by rounding. Examples
+        // (axleLineCount -> line ranges/rows -> axle counts):
+        //   6 -> G1 both 1-2 (4), G2 right 3-6 (4), G3 left 3-6 (4)
+        //   5 -> G1 both 1   (2), G2 right 2-5 (4), G3 left 2-5 (4)
+        //   2 -> G1 skipped  (0), G2 right 1-2 (2), G3 left 1-2 (2)
+        //   1 -> G1 both 1   (2), G2/G3 skipped (nothing left to split)
+        // Falls back to a single 'both' group over the whole range if
+        // axleLineCount is 0 or otherwise can't be split (defensive —
+        // shouldn't happen for a real preset).
+        function computeAutoThreeAxleGroups(axleLineCount, load) {
+            const n = parseInt(axleLineCount, 10) || 0;
+            if (n <= 0) return [];
+            const a = Math.floor(n / 3); // Group 1's line count — the smallest of the three when uneven
+            const groups = [];
+            if (a >= 1) groups.push(defaultAxleGroup(1, a, load, 1, 'both'));
+            if (a < n) {
+                groups.push(defaultAxleGroup(a + 1, n, load, 2, 'right'));
+                groups.push(defaultAxleGroup(a + 1, n, load, 3, 'left'));
+            }
+            return groups.length ? groups : [defaultAxleGroup(1, n, load, 1, 'both')];
+        }
+
         // Number of physical axles a group actually covers. For custom/
         // manual trailers (no axlePairOffsetY) each axle line is a single
         // physical axle. For preset trailers, a 'both' row group counts
@@ -1823,9 +1936,15 @@
             // the far end of the deck) instead of -X.
             train.spacing = -preset.lineSpacingX;
             const existingLoad = (train.groups[0] && !train.groups[0].noLoad) ? train.groups[0].load : 25;
-            // Single group spanning every axle line, applied to BOTH the
-            // right and left physical axle of each line.
-            train.groups = [defaultAxleGroup(1, axleLineCount, existingLoad, 1, 'both')];
+            // Auto-generate 3 axle groups spanning every axle line —
+            // see computeAutoThreeAxleGroups() for the front-lines/
+            // right-row/left-row split rule.
+            train.groups = computeAutoThreeAxleGroups(axleLineCount, existingLoad);
+            // Keep Excel's Number of Hydraulic Groups (Input!B2) in
+            // sync with the new group count, same as addAxleGroup/
+            // removeAxleGroup — trailerGenTrains[0] is the value that's
+            // authoritative for that single shared cell.
+            if (trailerGenTrains[0]) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, trailerGenTrains[0].groups.length, 'Number of Hydraulic Groups');
             renderTrailerDashboard();
             scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
@@ -2204,7 +2323,7 @@
         // Kept generically named (not "...ToAdjustWheels") since more
         // sheets may be added here in future — add any new sheet write
         // inside this same function so it stays under one button.
-        async function pushDataToExcel(opts) {
+        async function pushDataToExcelImpl(opts) {
             const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
@@ -2319,6 +2438,9 @@
                 if (!silent) alert(`${writeErrors.length} train(s) could not be written to ${ADJUST_SHEET_NAME} (see log/console for which and why) — often caused by a merged cell or sheet protection over that train's columns.`);
             }
         }
+        // "📤 Push to Excel" button — pulses tgPushWheelsBtn amber while
+        // in flight, flashes green/red on settle. See withBtnSyncIndicator.
+        const pushDataToExcel = withBtnSyncIndicator('tgPushWheelsBtn', pushDataToExcelImpl);
 
         // Consecutive-run compression: turns a flat array of group
         // numbers (indexed by axleNum-1, null = no group) into axle-line
@@ -2382,7 +2504,7 @@
         // found" / error alert() popups — used when this runs
         // automatically on panel open/refresh instead of from the
         // button, so a blank Adjust_Wheels sheet doesn't nag the user.
-        async function pullWheelDataFromExcel(opts) {
+        async function pullWheelDataFromExcelImpl(opts) {
             opts = opts || {};
             if (!isOfficeInitialized) {
                 if (!opts.silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull wheel data.');
@@ -2626,6 +2748,9 @@
                 if (!opts.silent) alert(`Could not pull wheel data from Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
             }
         }
+        // "⇩ Refresh from Adjust_Wheels" button — pulses tgRefreshWheelsBtn
+        // amber while in flight, flashes green/red on settle.
+        const pullWheelDataFromExcel = withBtnSyncIndicator('tgRefreshWheelsBtn', pullWheelDataFromExcelImpl);
 
         // ---- Pull existing trailer axle data back from Excel ----
         async function pullTrailerDataFromExcel() {
@@ -3328,11 +3453,55 @@
             }
         }
 
+        // "Load per axle (t)" — read-only, Excel-CALCULATED axle-group
+        // loads (see LOAD_PER_AXLE_ROW_BY_GROUPCOUNT above). Pulled
+        // FROM Display! and written onto every train's matching axle
+        // group's "load" field (skipping groups marked "No line load"
+        // — those have no load to overwrite). Never pushed back the
+        // other way, so no auto-push loop. Own try/catch so a missing
+        // "Display" sheet, or a group count with no row mapping yet
+        // (1-2 groups), never blocks the CoG/stability/cargo pulls
+        // around it. Only triggers a re-render when a value actually
+        // changed, so it doesn't disturb an in-progress edit elsewhere
+        // on the dashboard.
+        async function pullLoadPerAxleFromExcel() {
+            if (!isOfficeInitialized) return;
+            const numGroups = trailerGenTrains[0] ? trailerGenTrains[0].groups.length : 0;
+            const rangeInfo = loadPerAxleRangeForGroupCount(numGroups);
+            if (!rangeInfo) return; // no cell mapping for this group count yet
+            try {
+                let row = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
+                    const range = sheet.getRange(rangeInfo.range);
+                    range.load('values');
+                    await context.sync();
+                    row = range.values[0];
+                });
+                if (!row) return;
+                let changed = false;
+                trailerGenTrains.forEach(train => {
+                    train.groups.forEach(group => {
+                        if (group.noLoad) return;
+                        const v = parseFloat(row[group.groupNumber - 1]);
+                        if (!Number.isFinite(v)) return;
+                        if (Math.abs((parseFloat(group.load) || 0) - v) > 1e-6) {
+                            group.load = v;
+                            changed = true;
+                        }
+                    });
+                });
+                if (changed && !isEditingDashboard()) renderTrailerDashboard();
+            } catch (e) {
+                console.warn(`Could not pull Load per axle from '${DISPLAY_SHEET_NAME}'!${rangeInfo.range}`, e);
+            }
+        }
+
         // Pulled automatically on panel open/refresh (see initDashboard)
         // and via the "⇩ Refresh from Excel" button. Silent + a no-op
         // when every row is blank, matching pullWheelDataFromExcel's
         // behavior — Length/Width (local-only) are preserved as-is.
-        async function pullCargoFromExcel(opts) {
+        async function pullCargoFromExcelImpl(opts) {
             const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull cargo data.');
@@ -3340,6 +3509,7 @@
             }
             await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside, never blocks the cargo pull below
             await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside, never blocks the cargo pull below
+            await pullLoadPerAxleFromExcel(); // Excel-calculated Load per axle (t) per group — own try/catch inside, never blocks the cargo pull below
             try {
                 let values = null, totalValues = null, dimValues = null, geomValues = null;
                 await Excel.run(async (context) => {
@@ -3495,6 +3665,9 @@
                 if (!silent) alert('Error pulling cargo data — see console for details.');
             }
         }
+        // "⇩ Refresh from Excel" (cargo) button — pulses tgRefreshCargoBtn
+        // amber while in flight, flashes green/red on settle.
+        const pullCargoFromExcel = withBtnSyncIndicator('tgRefreshCargoBtn', pullCargoFromExcelImpl);
 
         // Writes Name/W/X/Y/Z for every cargo item to AZ35:BD39, and
         // Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom to
@@ -3503,7 +3676,7 @@
         // live Excel formula referencing these rows and is never written
         // to directly — it recalculates on its own once the sync below
         // completes.
-        async function pushCargoToExcel(opts) {
+        async function pushCargoToExcelImpl(opts) {
             const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push cargo data.');
@@ -3552,6 +3725,9 @@
                 if (!silent) alert('Error pushing cargo data to Excel — see console for details.');
             }
         }
+        // "📤 Push Cargo to Excel" button — pulses tgPushCargoBtn amber
+        // while in flight, flashes green/red on settle.
+        const pushCargoToExcel = withBtnSyncIndicator('tgPushCargoBtn', pushCargoToExcelImpl);
 
         // ---- Push / pull X offset & Y offset to/from Excel "Input" sheet ----
         async function pushValueToInputCell(cell, value, label) {
