@@ -420,6 +420,12 @@
             border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
         }
         .tg-field input:focus { outline: none; border-color: var(--accent-blue); }
+        /* Pull-only (Excel-computed, never editable here) look — same
+           greyed-out styling as .tg-cargo-field-readonly (the "Move All
+           Cargo Together" fields when Group All is unchecked), reused
+           here so every "pulled from Excel, can't edit" field looks the
+           same regardless of which panel it's in. */
+        .tg-field-readonly input { background: var(--panel-bg-alt, rgba(128,128,128,0.08)); color: var(--text-muted); cursor: default; }
 
         /* Small pull-from-Excel button shown next to the X offset / Y
            offset labels (Train 1-10 only — see offsetCellForTrainIndex).
@@ -507,25 +513,19 @@
         .tg-group-field input:focus, .tg-group-field select:focus { outline: none; border-color: var(--accent-blue); }
 
         /* ---- Pull-only field styling (Excel-calculated, no editing
-           here) — visually distinct from the 🔗-push/pull label style
-           used elsewhere (.tg-xy-sync-btn etc.), which stays editable
-           and syncs both ways. Indigo instead of blue on purpose, so
-           the two "synced with Excel" looks are never confused. ---- */
-        .tg-pull-only-label {
-            display: inline-flex; align-items: center; gap: 3px;
-            background: rgba(129, 140, 248, 0.16);
-            border: 1px solid rgba(129, 140, 248, 0.45);
-            border-radius: 4px;
-            padding: 1px 5px;
-            color: #818cf8;
-        }
-        .tg-group-field input.tg-pull-only-input {
-            background: var(--panel-bg);
+           here) — unified with .tg-cargo-field-readonly / .tg-field-
+           readonly above, so every "pulled from Excel, can't edit here"
+           field (Generate Trailer's Load per axle, Horizontal Loads'
+           Gr_trans/Gr_long, Generate Cargo's Move All Cargo Together
+           when unchecked) shares the same plain greyed-out look instead
+           of each panel inventing its own. The label stays a normal
+           .tg-group-field label (muted, no colored badge) — only the
+           input gets the readonly treatment. ---- */
+        .tg-group-field input.tg-group-field-readonly-input {
+            background: var(--panel-bg-alt, rgba(128,128,128,0.08));
             color: var(--text-muted);
-            border-style: dashed;
-            cursor: not-allowed;
+            cursor: default;
         }
-        .tg-group-field input.tg-pull-only-input:focus { border-color: rgba(129, 140, 248, 0.6); }
         .tg-group-summary { margin-top: 6px; font-size: 10px; color: var(--text-muted); }
         .tg-add-group-btn {
             width: 100%; padding: 6px; border: 1px dashed var(--panel-border); background: transparent;
@@ -568,7 +568,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.53)</h1>
+            <h1>🚂 Transport Dashboard (Rev.54)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3936,13 +3936,16 @@
         }
 
         // Recognizes a pass/fail "sign" cell value (e.g. "OK", "NOT OK",
-        // "PASS", "FAIL", "NG", "SAFE", "UNSAFE" — case/spacing-
-        // insensitive) and returns the CSS class to color it with, or
-        // '' for an ordinary (non-status) cell. Checked as a whole-cell
-        // match, not a substring, so a label that merely contains the
-        // word "OK" elsewhere in a sentence is never miscolored.
+        // "PASS", "FAIL", "NG", "SAFE", "UNSAFE", "DETAIL CHECK
+        // REQUIRED" — case/spacing-insensitive) and returns the CSS
+        // class to color it with, or '' for an ordinary (non-status)
+        // cell. "DETAIL CHECK REQUIRED" is treated the same as NOT OK
+        // (red) — it flags a row that needs manual review just like a
+        // failed check. Checked as a whole-cell match, not a substring,
+        // so a label that merely contains the word "OK" elsewhere in a
+        // sentence is never miscolored.
         const DT_OK_TOKENS = new Set(['ok', 'pass', 'passed', 'safe', 'true', 'yes']);
-        const DT_NOTOK_TOKENS = new Set(['notok', 'not ok', 'ng', 'fail', 'failed', 'unsafe', 'false', 'no', 'exceed', 'exceeded', 'over']);
+        const DT_NOTOK_TOKENS = new Set(['notok', 'not ok', 'ng', 'fail', 'failed', 'unsafe', 'false', 'no', 'exceed', 'exceeded', 'over', 'detail check required', 'detail check', 'check required']);
         function cellStatusClass(v) {
             if (typeof v !== 'string') return '';
             const norm = v.trim().toLowerCase();
@@ -4372,7 +4375,7 @@
                 const unitLabel = unit ? ` (${unit})` : '';
                 if (readonly) {
                     return `
-                    <div class="tg-field" title="Excel-computed — read-only. '${HLOADS_SHEET_NAME}'!${cell}">
+                    <div class="tg-field tg-field-readonly" title="Excel-computed — read-only. '${HLOADS_SHEET_NAME}'!${cell}">
                         <label>🔒 ${label}${unitLabel}</label>
                         <input type="number" value="${val}" disabled>
                     </div>`;
@@ -4577,9 +4580,9 @@
                                     </select>
                                 </div>
                                 <div class="tg-group-field">
-                                    <label class="tg-pull-only-label" title="Excel-calculated (moment-balance result) — pulled automatically from Display! whenever it changes there, and can't be edited on the dashboard.">📥 Load per axle (t)</label>
+                                    <label title="Excel-calculated (moment-balance result) — pulled automatically from Display! whenever it changes there, and can't be edited on the dashboard.">📥 Load per axle (t)</label>
                                     <input type="number" step="any" min="0" value="${group.load}" readonly ${group.noLoad ? 'disabled' : ''}
-                                           class="tg-pull-only-input"
+                                           class="tg-group-field-readonly-input"
                                            title="Pulled from Excel 'Display'! — not editable here.">
                                 </div>
                             </div>
