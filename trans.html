@@ -193,9 +193,21 @@
         }
         .tg-trailer-card {
             border: 1px solid var(--panel-border);
+            border-left: 4px solid #f59e0b;
             background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #f59e0b 10%);
             border-radius: 8px;
             padding: 12px 14px;
+        }
+        .tg-card-cargo {
+            border-left: 4px solid var(--accent-green);
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--accent-green) 10%);
+        }
+        .tg-card-hloads {
+            border-left: 4px solid var(--accent-blue);
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--accent-blue) 10%);
         }
         .tg-cargo-groupall-card {
             border: 1px dashed var(--accent-blue);
@@ -263,6 +275,11 @@
             padding: 8px; color: #ffffff; background: var(--accent-blue, #009fda); border-bottom: none;
         }
         table.tg-drawing-table tr.tg-dt-spacer td { padding: 3px; border-bottom: none; }
+        /* Pass/fail "sign" cells (e.g. OK / NOT OK / PASS / FAIL) —
+           colored so a failing check jumps out from the rest of the
+           table. See cellStatusClass() in renderTgDrawingTable(). */
+        table.tg-drawing-table td.tg-dt-ok { color: var(--accent-green); font-weight: 700; }
+        table.tg-drawing-table td.tg-dt-notok { color: #ef4444; font-weight: 700; background: rgba(239, 68, 68, 0.14); }
         .tg-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 0 6px 6px; }
         .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
         .tg-preview-toggle input { cursor: pointer; }
@@ -488,6 +505,27 @@
         }
         .tg-group-field input:disabled { opacity: 0.45; }
         .tg-group-field input:focus, .tg-group-field select:focus { outline: none; border-color: var(--accent-blue); }
+
+        /* ---- Pull-only field styling (Excel-calculated, no editing
+           here) — visually distinct from the 🔗-push/pull label style
+           used elsewhere (.tg-xy-sync-btn etc.), which stays editable
+           and syncs both ways. Indigo instead of blue on purpose, so
+           the two "synced with Excel" looks are never confused. ---- */
+        .tg-pull-only-label {
+            display: inline-flex; align-items: center; gap: 3px;
+            background: rgba(129, 140, 248, 0.16);
+            border: 1px solid rgba(129, 140, 248, 0.45);
+            border-radius: 4px;
+            padding: 1px 5px;
+            color: #818cf8;
+        }
+        .tg-group-field input.tg-pull-only-input {
+            background: var(--panel-bg);
+            color: var(--text-muted);
+            border-style: dashed;
+            cursor: not-allowed;
+        }
+        .tg-group-field input.tg-pull-only-input:focus { border-color: rgba(129, 140, 248, 0.6); }
         .tg-group-summary { margin-top: 6px; font-size: 10px; color: var(--text-muted); }
         .tg-add-group-btn {
             width: 100%; padding: 6px; border: 1px dashed var(--panel-border); background: transparent;
@@ -530,7 +568,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.52)</h1>
+            <h1>🚂 Transport Dashboard (Rev.53)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -639,7 +677,7 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card">
+                    <div class="tg-cargo-card tg-card-cargo">
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
                             <button type="button" class="tg-help-btn" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓ Help</button>
@@ -684,7 +722,7 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card">
+                    <div class="tg-cargo-card tg-card-hloads">
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
                             <button type="button" class="tg-help-btn" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓ Help</button>
@@ -3897,6 +3935,23 @@
             }
         }
 
+        // Recognizes a pass/fail "sign" cell value (e.g. "OK", "NOT OK",
+        // "PASS", "FAIL", "NG", "SAFE", "UNSAFE" — case/spacing-
+        // insensitive) and returns the CSS class to color it with, or
+        // '' for an ordinary (non-status) cell. Checked as a whole-cell
+        // match, not a substring, so a label that merely contains the
+        // word "OK" elsewhere in a sentence is never miscolored.
+        const DT_OK_TOKENS = new Set(['ok', 'pass', 'passed', 'safe', 'true', 'yes']);
+        const DT_NOTOK_TOKENS = new Set(['notok', 'not ok', 'ng', 'fail', 'failed', 'unsafe', 'false', 'no', 'exceed', 'exceeded', 'over']);
+        function cellStatusClass(v) {
+            if (typeof v !== 'string') return '';
+            const norm = v.trim().toLowerCase();
+            if (!norm) return '';
+            if (DT_OK_TOKENS.has(norm)) return 'tg-dt-ok';
+            if (DT_NOTOK_TOKENS.has(norm.replace(/\s+/g, ' '))) return 'tg-dt-notok';
+            return '';
+        }
+
         // Turns the raw pulled grid (tgDrawingTableRows) into an HTML
         // table mirroring the Excel sheet's layout: row 3 renders as the
         // big merged "TRANSPORT TABLE" banner, row 4's column B spans
@@ -3906,7 +3961,10 @@
         // sections) instead of an empty-looking data row, and every
         // other cell is shown exactly as pulled — including error
         // strings like "#REF!" if the live workbook has one, since this
-        // table only ever mirrors what's actually in the sheet.
+        // table only ever mirrors what's actually in the sheet. Any
+        // cell whose value is a recognized pass/fail "sign" (OK/NOT OK/
+        // PASS/FAIL/etc. — see cellStatusClass()) is colored green or
+        // red so a failing check is immediately visible.
         function renderTgDrawingTable() {
             const el = document.getElementById('tgDrawingTable');
             if (!el) return;
@@ -3918,6 +3976,10 @@
                 if (v === null || v === undefined || v === '') return '';
                 if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
                 return escapeHtml(String(v));
+            };
+            const cell = v => {
+                const cls = cellStatusClass(v);
+                return `<td${cls ? ` class="${cls}"` : ''}>${fmt(v)}</td>`;
             };
             let html = '<table class="tg-drawing-table">';
             tgDrawingTableRows.forEach((row, i) => {
@@ -3931,10 +3993,10 @@
                 const boldClass = DRAWING_TABLE_BOLD_ROWS.has(rowNum) ? ' class="tg-dt-bold"' : '';
                 if (rowNum === DRAWING_TABLE_MERGE_BC_ROW) {
                     html += `<tr${boldClass}><td>${fmt(row[0])}</td><td colspan="2">${fmt(row[1])}</td>` +
-                        row.slice(3).map(v => `<td>${fmt(v)}</td>`).join('') + `</tr>`;
+                        row.slice(3).map(cell).join('') + `</tr>`;
                     return;
                 }
-                html += `<tr${boldClass}>` + row.map(v => `<td>${fmt(v)}</td>`).join('') + `</tr>`;
+                html += `<tr${boldClass}>` + row.map(cell).join('') + `</tr>`;
             });
             html += '</table>';
             el.innerHTML = html;
@@ -4515,10 +4577,10 @@
                                     </select>
                                 </div>
                                 <div class="tg-group-field">
-                                    <label>Load per axle (t)</label>
-                                    <input type="number" step="any" min="0" value="${group.load}" ${group.noLoad ? 'disabled' : ''}
-                                           title="Load carried by EACH physical axle in this group"
-                                           onchange="updateAxleGroupField(${train.id}, ${group.id}, 'load', this.value)">
+                                    <label class="tg-pull-only-label" title="Excel-calculated (moment-balance result) — pulled automatically from Display! whenever it changes there, and can't be edited on the dashboard.">📥 Load per axle (t)</label>
+                                    <input type="number" step="any" min="0" value="${group.load}" readonly ${group.noLoad ? 'disabled' : ''}
+                                           class="tg-pull-only-input"
+                                           title="Pulled from Excel 'Display'! — not editable here.">
                                 </div>
                             </div>
                             <div class="tg-group-summary">
