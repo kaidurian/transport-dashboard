@@ -568,7 +568,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.55)</h1>
+            <h1>🚂 Transport Dashboard (Rev.56)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -762,22 +762,26 @@
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvHelpPanel">
                             Reproduces the <strong>"CoG_Envelope"</strong> reference workbook's Cargo CoG
-                            envelope calculation (sheet <strong>"2"</strong>, cells <strong>C10:E11</strong>
-                            and <strong>C18:C19</strong>) directly in this dashboard — the 8 fields below are
-                            the workbook's only inputs; the table further down (between the 2D preview and
-                            📋 Drawing Table) is every downstream formula from that sheet (<strong>CoG
-                            envelope (5%)</strong>, load cases <strong>LC1&ndash;LC4</strong>, and the same
-                            again with the uphill/downhill slope shift folded in), computed here in the
-                            dashboard's own code rather than pulled from Excel — so it always matches the
-                            reference workbook's math but never reads or writes any Excel cell. <strong>Cargo
-                            Dim.</strong> (X/Y/Z, m) is the cargo's overall footprint/height in each axis
-                            (workbook C10:E10); <strong>Cargo CoG</strong> (X/Y/Z, m) is the cargo's
-                            center-of-gravity position in each axis (workbook C11:E11); <strong>Slope
-                            shift</strong> is the X-axis CoG shift used for load cases 1&amp;4 (uphill,
-                            workbook C18) and 2&amp;3 (downhill, workbook C19) — Y/Z have no slope-shift
-                            input, matching the workbook's "N/A" there.
+                            envelope calculation (sheet <strong>"2"</strong>) directly in this dashboard.
+                            <strong>Cargo Dim.</strong> (X/Y/Z, m — workbook C10:E10) is 🔒 <strong>pull-only</strong>,
+                            auto-synced from Excel <strong>"Input horizontal loads"!H11:H13</strong>.
+                            <strong>Cargo CoG</strong> (X/Y/Z, m — workbook C11:E11) is also 🔒
+                            <strong>pull-only</strong>, auto-synced from Excel
+                            <strong>"Input"!BB35/BC35/BJ35</strong>. Neither is ever written back to Excel or
+                            editable here. <strong>Slope shift</strong> (uphill LC1&amp;4 / downhill LC2&amp;3,
+                            workbook C18/C19) stays a local-only input — no Excel source given for those, so
+                            type them in directly; Y/Z have no slope-shift input, matching the workbook's
+                            "N/A" there. The table further down (between the 2D preview and 📋 Drawing Table)
+                            is every downstream formula from that sheet (<strong>CoG envelope (5%)</strong>,
+                            load cases <strong>LC1&ndash;LC4</strong>, and the same again with the
+                            uphill/downhill slope shift folded in), computed here in the dashboard's own code
+                            rather than pulled from Excel.
                         </p>
                         <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13 and Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35"
+                                    onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1260,29 +1264,42 @@
             curveImpact: 0, muFriction: 0,
         };
 
-        // ---- CoG Envelope — LOCAL-ONLY calc, no Excel sheet involved
-        // at all (unlike every other card above/below, which pulls from
-        // and/or pushes to a named Excel sheet). Reproduces the
-        // reference workbook "CoG_Envelope.xlsx", sheet "2", cells
-        // C8:E24: 8 raw inputs (cargo dimensions X/Y/Z, cargo CoG
-        // X/Y/Z, and the uphill/downhill slope shift, workbook
-        // C10:E11 + C18:C19) feed a fixed chain of formulas — see
-        // calcCogEnvelope() below, which mirrors that sheet's formulas
-        // cell-for-cell (including reproducing its one quirk as-is:
-        // the "with slope" envelope, workbook C20 = C12+C19, folds in
-        // ONLY the downhill shift C19, even though the row labels above
-        // it distinguish an uphill C18 value for LC1/LC4 — the workbook
-        // itself doesn't actually use C18 in any formula, so neither
-        // does this). Because this is a self-contained calculation
-        // ("permanent in HTML code" per spec) rather than a live Excel
-        // mirror, there's no pull/push here — editing a field just
-        // recomputes the 📊 CoG Envelope Table immediately. ----
+        // ---- CoG Envelope — MOSTLY local-only calc (no Excel sheet
+        // involved), except dimX/dimY/dimZ and cogX/cogY/cogZ, which
+        // are PULL-ONLY, auto-synced from Excel (never pushed, never
+        // hand-edited here) — see COGENV_DIM_CELLS / COGENV_COG_CELLS
+        // and pullCogEnvFromExcel() below. Reproduces the reference
+        // workbook "CoG_Envelope.xlsx", sheet "2", cells C8:E24: those
+        // 6 pulled values plus the 2 local slope-shift inputs
+        // (upSlope/downSlope, workbook C18:C19 — stay locally editable,
+        // no Excel source given for those) feed a fixed chain of
+        // formulas — see calcCogEnvelope() below, which mirrors that
+        // sheet's formulas cell-for-cell (including reproducing its one
+        // quirk as-is: the "with slope" envelope, workbook C20 =
+        // C12+C19, folds in ONLY the downhill shift C19, even though
+        // the row labels above it distinguish an uphill C18 value for
+        // LC1/LC4 — the workbook itself doesn't actually use C18 in any
+        // formula, so neither does this). Because the formula chain
+        // itself is a self-contained calculation ("permanent in HTML
+        // code" per spec) rather than a live Excel formula pull,
+        // there's no push here — pulling a field just recomputes the
+        // 📊 CoG Envelope Table immediately. ----
         let tgCogEnv = {
-            dimX: 0, dimY: 0, dimZ: 0,   // workbook C10 / D10 / E10 — Cargo dim. in axis
-            cogX: 0, cogY: 0, cogZ: 0,   // workbook C11 / D11 / E11 — Cargo CoG. in axis
-            upSlope: 0,                  // workbook C18 — Shift of CoG on slope, uphill (LC1 & LC4) — kept for display only, see note above
-            downSlope: 0,                // workbook C19 — Shift of CoG on slope, downhill (LC2 & LC3) — the value actually used in the "with slope" envelope
+            dimX: 0, dimY: 0, dimZ: 0,   // PULL-ONLY — Excel 'Input horizontal loads'!H11:H13
+            cogX: 0, cogY: 0, cogZ: 0,   // PULL-ONLY — Excel 'Input'!BB35/BC35/BJ35
+            upSlope: 0,                  // workbook C18 — Shift of CoG on slope, uphill (LC1 & LC4) — local input, kept for display only, see note above
+            downSlope: 0,                // workbook C19 — Shift of CoG on slope, downhill (LC2 & LC3) — local input; the value actually used in the "with slope" envelope
         };
+        // Cargo Dim. X/Y/Z — Excel "Input horizontal loads"!H11:H13.
+        const COGENV_DIM_SHEET = "Input horizontal loads";
+        const COGENV_DIM_CELLS = { dimX: 'H11', dimY: 'H12', dimZ: 'H13' };
+        // Cargo CoG. X/Y/Z — Excel "Input"!BB35/BC35/BJ35.
+        const COGENV_COG_SHEET = "Input";
+        const COGENV_COG_CELLS = { cogX: 'BB35', cogY: 'BC35', cogZ: 'BJ35' };
+        // Every key pulled automatically from Excel, above — never
+        // hand-edited, never pushed. Only upSlope/downSlope stay local.
+        const COGENV_READONLY_KEYS = ['dimX', 'dimY', 'dimZ', 'cogX', 'cogY', 'cogZ'];
+
 
         // ---- Drawing Table — a READ-ONLY mirror of Excel sheet
         // "Drawing_table" (A1:F63), shown between the 2D and 3D preview.
@@ -4129,37 +4146,92 @@
             upSlope: 'C18', downSlope: 'C19',
         };
 
-        // Renders the 8 raw-input fields (workbook C10:E11 + C18:C19)
-        // as a field-grid, same visual pattern as the other cards'
-        // field grids. Purely local state — onchange just updates
-        // tgCogEnv and re-renders the table below, no Excel round-trip.
+        // Renders the 8 fields (workbook C10:E11 + C18:C19) as a
+        // field-grid, same visual pattern as the other cards' field
+        // grids. dimX/Y/Z and cogX/Y/Z are PULL-ONLY (greyed out,
+        // disabled — same look as .tg-cargo-field-readonly elsewhere,
+        // e.g. "Move All Cargo Together" when unchecked); only
+        // upSlope/downSlope are locally editable (dashed border, same
+        // as .tg-cargo-field-local elsewhere).
         function renderTgCogEnvFields() {
             const el = document.getElementById('tgCogEnvFields');
             if (!el) return;
-            const field = (key, label, unit) => `
-                <div class="tg-cargo-field tg-cargo-field-local">
-                    <label>${label}${unit ? ` (${unit})` : ''}</label>
-                    <input type="number" step="any" value="${tgCogEnv[key]}"
-                           title="Not linked to Excel — local input only, feeds the 📊 CoG Envelope Table below. Matches workbook 'CoG_Envelope.xlsx'!\"2\"!${COGENV_CELLS[key]}."
+            const field = (key, label, unit, sourceLabel) => {
+                const readonly = COGENV_READONLY_KEYS.includes(key);
+                const wrapCls = readonly ? 'tg-cargo-field tg-cargo-field-readonly' : 'tg-cargo-field tg-cargo-field-local';
+                const labelIcon = readonly ? '🔒' : '';
+                const title = readonly
+                    ? `Excel-computed — pulled automatically from ${sourceLabel}, and can't be edited on the dashboard.`
+                    : `Not linked to Excel — local input only, feeds the 📊 CoG Envelope Table below. Matches workbook 'CoG_Envelope.xlsx'!"2"!${COGENV_CELLS[key]}.`;
+                return `
+                <div class="${wrapCls}">
+                    <label title="${title}">${labelIcon ? labelIcon + ' ' : ''}${label}${unit ? ` (${unit})` : ''}</label>
+                    <input type="number" step="any" value="${tgCogEnv[key]}" ${readonly ? 'disabled' : ''}
+                           title="${title}"
                            onchange="updateCogEnvField('${key}', this.value)">
                 </div>`;
+            };
             el.innerHTML = `
                 <div class="tg-cargo-field-grid">
-                    ${field('dimX', 'Cargo Dim. X', 'm')}
-                    ${field('dimY', 'Cargo Dim. Y', 'm')}
-                    ${field('dimZ', 'Cargo Dim. Z', 'm')}
-                    ${field('cogX', 'Cargo CoG. X', 'm')}
-                    ${field('cogY', 'Cargo CoG. Y', 'm')}
-                    ${field('cogZ', 'Cargo CoG. Z', 'm')}
+                    ${field('dimX', 'Cargo Dim. X', 'm', `${COGENV_DIM_SHEET}!${COGENV_DIM_CELLS.dimX}`)}
+                    ${field('dimY', 'Cargo Dim. Y', 'm', `${COGENV_DIM_SHEET}!${COGENV_DIM_CELLS.dimY}`)}
+                    ${field('dimZ', 'Cargo Dim. Z', 'm', `${COGENV_DIM_SHEET}!${COGENV_DIM_CELLS.dimZ}`)}
+                    ${field('cogX', 'Cargo CoG. X', 'm', `${COGENV_COG_SHEET}!${COGENV_COG_CELLS.cogX}`)}
+                    ${field('cogY', 'Cargo CoG. Y', 'm', `${COGENV_COG_SHEET}!${COGENV_COG_CELLS.cogY}`)}
+                    ${field('cogZ', 'Cargo CoG. Z', 'm', `${COGENV_COG_SHEET}!${COGENV_COG_CELLS.cogZ}`)}
                     ${field('upSlope', 'Slope shift — Uphill (LC1&4)', 'm')}
                     ${field('downSlope', 'Slope shift — Downhill (LC2&3)', 'm')}
                 </div>`;
         }
 
         function updateCogEnvField(key, rawValue) {
+            if (!(key in tgCogEnv) || COGENV_READONLY_KEYS.includes(key)) return;
             const v = parseFloat(rawValue);
             tgCogEnv[key] = isNaN(v) ? 0 : v;
             renderTgCogEnvTable();
+        }
+
+        // Pulls dimX/dimY/dimZ from 'Input horizontal loads'!H11:H13
+        // and cogX/cogY/cogZ from 'Input'!BB35/BC35/BJ35 — the only two
+        // Excel sources this card touches (two different sheets, one
+        // Excel.run). Never pushes anything back — these 6 fields are
+        // strictly pull-only. Called silently on panel open/refresh
+        // (see seedInitialOffsetsFromExcel) and on-demand via this
+        // card's own "⇩ Refresh from Excel" button.
+        async function pullCogEnvFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the CoG Envelope inputs.');
+                return;
+            }
+            try {
+                const raw = {};
+                await Excel.run(async (context) => {
+                    const dimSheet = context.workbook.worksheets.getItem(COGENV_DIM_SHEET);
+                    const cogSheet = context.workbook.worksheets.getItem(COGENV_COG_SHEET);
+                    const ranges = {};
+                    Object.entries(COGENV_DIM_CELLS).forEach(([key, cell]) => {
+                        ranges[key] = dimSheet.getRange(cell);
+                        ranges[key].load('values');
+                    });
+                    Object.entries(COGENV_COG_CELLS).forEach(([key, cell]) => {
+                        ranges[key] = cogSheet.getRange(cell);
+                        ranges[key].load('values');
+                    });
+                    await context.sync();
+                    Object.entries(ranges).forEach(([key, range]) => { raw[key] = range.values[0][0]; });
+                });
+                COGENV_READONLY_KEYS.forEach(key => {
+                    const v = parseFloat(raw[key]);
+                    tgCogEnv[key] = Number.isFinite(v) ? v : 0;
+                });
+                renderTgCogEnvFields();
+                renderTgCogEnvTable();
+                if (!silent) logMsg(`↺ Pulled CoG Envelope inputs from '${COGENV_DIM_SHEET}'!H11:H13 and '${COGENV_COG_SHEET}'!BB35/BC35/BJ35.`);
+            } catch (e) {
+                console.warn('Could not read CoG Envelope source cells', e);
+                if (!silent) alert(`Could not read the CoG Envelope source cells. Make sure sheets "${COGENV_DIM_SHEET}" and "${COGENV_COG_SHEET}" exist with values in H11:H13 and BB35/BC35/BJ35.`);
+            }
         }
 
         // Renders the read-only results table (workbook rows 8-24) —
@@ -4315,6 +4387,7 @@
                 await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
                 await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside
                 await pullHorizontalLoadsFromExcel({ silent: true }); // Horizontal Loads — own try/catch inside
+                await pullCogEnvFromExcel({ silent: true }); // CoG Envelope dim/CoG inputs — own try/catch inside
                 await pullDrawingTableFromExcel({ silent: true }); // Drawing Table — own try/catch inside
                 renderTrailerDashboard();
                 logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
