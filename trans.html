@@ -594,7 +594,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.58)</h1>
+            <h1>🚂 Transport Dashboard (Rev.58.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -809,7 +809,7 @@
                         </p>
                         <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35, and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshCogEnvBtn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35, and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5 (this also runs automatically every few seconds while Auto-sync is on)"
                                     onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
@@ -4257,7 +4257,7 @@
         // strictly pull-only. Called silently on panel open/refresh
         // (see seedInitialOffsetsFromExcel) and on-demand via this
         // card's own "⇩ Refresh from Excel" button.
-        async function pullCogEnvFromExcel(opts = {}) {
+        async function pullCogEnvFromExcelImpl(opts = {}) {
             const silent = opts.silent === true;
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the CoG Envelope inputs.');
@@ -4304,6 +4304,11 @@
                 if (!silent) alert(`Could not read the CoG Envelope source cells. Make sure sheets "${COGENV_DIM_SHEET}", "${COGENV_COG_SHEET}" and "${COGENV_GROUPS_SHEET}" exist with values in H11:H13, BB35/BC35/BJ35, and B3:C5.`);
             }
         }
+        // Wrapped so its button (tgRefreshCogEnvBtn) pulses amber while
+        // in flight and flashes green/red on settle — same per-button
+        // sync indicator as the Wheels/Cargo refresh buttons — whether
+        // triggered by hand or silently by runAutoPull()/initial seed.
+        const pullCogEnvFromExcel = withBtnSyncIndicator('tgRefreshCogEnvBtn', pullCogEnvFromExcelImpl);
 
         // Renders the read-only results table (workbook rows 8-24) —
         // same visual style as the 📋 Drawing Table (.tg-drawing-table),
@@ -4438,7 +4443,7 @@
                     `<line x1="${x1}" y1="${y - 3}" x2="${x1}" y2="${y + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
                     `<line x1="${x2}" y1="${y - 3}" x2="${x2}" y2="${y + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
                     `<line x1="${x2}" y1="${y}" x2="${x2}" y2="${py(0) - 2}" stroke="${dimGreen}" stroke-width="0.75" stroke-dasharray="2 2"/>` +
-                    `<text x="${x2}" y="${y - 4}" font-size="9" text-anchor="end" fill="${dimGreen}">${d.label}</text>` +
+                    `<text x="${(x1 + x2) / 2}" y="${y - 4}" font-size="9" text-anchor="middle" fill="${dimGreen}">${d.label}</text>` +
                     `</g>`;
             });
 
@@ -6208,8 +6213,8 @@
                 ['↻', `C_j ${tgHLoads.curveImpact.toFixed(1)}%`],
                 ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
             ];
-            const hlRowH = 12;
-            const hlBoxW = 150, hlBoxH = 28 + hlRows.length * hlRowH;
+            const hlRowH = 16;
+            const hlBoxW = 200, hlBoxH = 36 + hlRows.length * hlRowH;
             const hlGutter = hlBoxW + 20; // reserved gutter width, own margin beside the end views — never shared with contentW/rightDimMargin so it's always empty space, not an overlap
 
             // Canvas width matches the plan view's own canvas width
@@ -6763,8 +6768,8 @@
             const hlX = svgW - padR - hlBoxW, hlY = endPadT;
             const hLoadsSvg = `<g opacity="0.95">` +
                 `<rect x="${hlX}" y="${hlY}" width="${hlBoxW}" height="${hlBoxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
-                `<text x="${hlX + 6}" y="${hlY + 13}" font-size="8.5" font-weight="700" fill="var(--text-main, #e2e8f0)">⚠ Horizontal Loads</text>` +
-                hlRows.map((row, i) => `<text x="${hlX + 6}" y="${hlY + 26 + i * hlRowH}" font-size="8" fill="var(--text-muted, #94a3b8)">${row[0]} ${escapeHtml(row[1])}</text>`).join('') +
+                `<text x="${hlX + 8}" y="${hlY + 16}" font-size="11" font-weight="700" fill="var(--text-main, #e2e8f0)">⚠ Horizontal Loads</text>` +
+                hlRows.map((row, i) => `<text x="${hlX + 8}" y="${hlY + 33 + i * hlRowH}" font-size="10" fill="var(--text-muted, #94a3b8)">${row[0]} ${escapeHtml(row[1])}</text>`).join('') +
                 `</g>`;
 
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
