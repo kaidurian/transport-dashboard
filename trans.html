@@ -178,18 +178,18 @@
             border: 1px solid var(--panel-border);
             background: var(--tank-box-bg);
             border-radius: 8px;
-            padding: 12px 14px;
-            margin-bottom: 12px;
+            padding: 9px 11px;
+            margin-bottom: 9px;
         }
-        .tg-train-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-        .tg-train-name-input { flex: 1 1 auto; font-weight: 700; font-size: 13px; }
+        .tg-train-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+        .tg-train-name-input { flex: 1 1 auto; font-weight: 700; font-size: 12px; }
 
         .tg-cargo-card {
             border: 1px solid var(--panel-border);
             background: var(--tank-box-bg);
             border-radius: 8px;
-            padding: 12px 14px;
-            margin-top: 16px;
+            padding: 9px 11px;
+            margin-top: 12px;
         }
         .tg-trailer-card {
             border: 1px solid var(--panel-border);
@@ -197,7 +197,7 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #f59e0b 10%);
             border-radius: 8px;
-            padding: 12px 14px;
+            padding: 9px 11px;
         }
         .tg-card-cargo {
             border-left: 4px solid var(--accent-green);
@@ -209,6 +209,10 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--accent-blue) 10%);
         }
+        .tg-cogenv-preview {
+            margin-top: 10px; border: 1px solid var(--panel-border); border-radius: 8px;
+            background: var(--tank-box-bg); padding: 6px; overflow: auto;
+        }
         .tg-cargo-groupall-card {
             border: 1px dashed var(--accent-blue);
             background: var(--panel-bg);
@@ -219,20 +223,20 @@
         .tg-cargo-item-card {
             border: 1px solid var(--panel-border);
             border-radius: 7px;
-            padding: 10px 12px;
-            margin-bottom: 10px;
+            padding: 7px 9px;
+            margin-bottom: 7px;
             background: var(--panel-bg);
         }
         .tg-cargo-item-card:last-child { margin-bottom: 0; }
-        .tg-cargo-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 12px; margin-top: 8px; }
+        .tg-cargo-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px 8px; margin-top: 6px; }
         .tg-modal-body.tg-side-layout .tg-cargo-field-grid { grid-template-columns: repeat(2, 1fr); }
         .tg-cargo-field label {
-            display: flex; align-items: center; gap: 4px;
-            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-            color: var(--text-muted); margin-bottom: 3px;
+            display: flex; align-items: center; gap: 3px;
+            font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+            color: var(--text-muted); margin-bottom: 2px;
         }
         .tg-cargo-field input, .tg-cargo-field select {
-            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
+            width: 100%; box-sizing: border-box; padding: 4px 6px; font-size: 11px; border-radius: 5px;
             border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
         }
         .tg-cargo-field input:focus, .tg-cargo-field select:focus { outline: none; border-color: var(--accent-blue); }
@@ -409,14 +413,14 @@
         }
         .tg-remove-train:hover { border-color: #ef4444; }
 
-        .tg-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }
+        .tg-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 8px; }
         .tg-field label {
-            display: flex; align-items: center; gap: 4px;
-            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-            color: var(--text-muted); margin-bottom: 3px;
+            display: flex; align-items: center; gap: 3px;
+            font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+            color: var(--text-muted); margin-bottom: 2px;
         }
         .tg-field input {
-            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
+            width: 100%; box-sizing: border-box; padding: 4px 6px; font-size: 11px; border-radius: 5px;
             border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
         }
         .tg-field input:focus { outline: none; border-color: var(--accent-blue); }
@@ -568,7 +572,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.56)</h1>
+            <h1>🚂 Transport Dashboard (Rev.57)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -782,6 +786,7 @@
                             <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13 and Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35"
                                     onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
                         </div>
+                        <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, LC1-4) rendered by JS --></div>
                     </div>
                 </div>
 
@@ -4262,6 +4267,149 @@
             c.lcSlope.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z); });
             html += '</table>';
             el.innerHTML = html;
+            renderTgCogEnvPreview(c);
+        }
+
+        // ---- CoG Envelope 2D preview — an AutoCAD-style callout
+        // drawing, same visual language as the plan/side/end preview
+        // above (red X/Y origin axes, dashed extension lines, stacked
+        // dimension lines, small circle + leader-line labels), showing
+        // where LC1-4 (the 5% CoG envelope corners) sit relative to the
+        // cargo's own footprint and CoG. All measurements are in meters
+        // (same units as the CoG Envelope fields above), drawn from
+        // world origin (0,0) — matches the reference callout image
+        // KKKai attached. Colors use the same CSS variables as the rest
+        // of the dashboard, so this follows day/night mode automatically;
+        // the cargo outline keeps the same fixed amber (#f59e0b) already
+        // used for the trailer elsewhere, regardless of theme.
+        function renderTgCogEnvPreview(c) {
+            const el = document.getElementById('tgCogEnvPreview');
+            if (!el) return;
+            c = c || calcCogEnvelope();
+            const { dimX, dimY, cogX, cogY, envX, envY, lcBase } = c;
+            if (!dimX && !dimY && !cogX && !cogY) {
+                el.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding:6px;">Preview appears once Cargo Dim./CoG are pulled from Excel (or a slope shift is entered).</div>`;
+                return;
+            }
+            const padL = 60, padT = 40, padR = 70, padB = 30;
+            const plotW = 560, plotH = 220;
+            const spanX = Math.max(dimX, cogX + envX, 1);
+            const halfSpanY = Math.max(dimY / 2, Math.abs(cogY) + envY, 1);
+            const scale = Math.min(plotW / spanX, (plotH / 2) / halfSpanY);
+            const svgW = padL + plotW + padR, svgH = padT + plotH + padB;
+            const ox = padL, oy = padT + plotH / 2; // world origin (0,0) on screen
+            const px = x => ox + x * scale;
+            const py = y => oy + y * scale;
+
+            const halfEnvX = envX / 2, halfEnvY = envY / 2;
+
+            // Tapered wedge — a generic cargo silhouette (apex at the
+            // world origin, widening to dimY at dimX) so the CoG/LC
+            // callouts read against a recognizable outline, same idea
+            // as the reference image's tapered shape. Purely
+            // illustrative — the app has no actual cargo silhouette
+            // data to draw here.
+            const wedgeSvg = dimX > 0 ? `<polygon points="${px(0)},${py(0)} ${px(dimX)},${py(-dimY / 2)} ${px(dimX)},${py(dimY / 2)}" fill="none" stroke="#f59e0b" stroke-width="2.5"/>` : '';
+            const centerlineSvg = `<line x1="${px(0)}" y1="${py(0)}" x2="${px(spanX * 1.02)}" y2="${py(0)}" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>`;
+
+            // Origin sign — same style as the plan-view origin (X arrow
+            // right, Y arrow down), but in red per the reference image.
+            const axisLen = 34;
+            const originSvg = `<g>` +
+                `<line x1="${ox}" y1="${oy}" x2="${ox + axisLen}" y2="${oy}" stroke="#ef4444" stroke-width="2" marker-end="url(#tgCeArrow)"/>` +
+                `<line x1="${ox}" y1="${oy}" x2="${ox}" y2="${oy + axisLen}" stroke="#ef4444" stroke-width="2" marker-end="url(#tgCeArrow)"/>` +
+                `<circle cx="${ox}" cy="${oy}" r="2.5" fill="var(--text-main, #e2e8f0)"/>` +
+                `<text x="${ox + axisLen + 4}" y="${oy + 4}" font-size="13" font-weight="700" fill="#ef4444">X</text>` +
+                `<text x="${ox - 4}" y="${oy + axisLen + 14}" font-size="13" font-weight="700" fill="#ef4444" text-anchor="middle">Y</text>` +
+                `</g>`;
+
+            // Stacked horizontal dimension lines (top): near-envelope X,
+            // CoG X, far-envelope X — all measured from the origin,
+            // AutoCAD-style, same tick/extension-line look as the main
+            // preview's dimH().
+            const dimGreen = 'var(--accent-green, #10b981)';
+            const hStack = [
+                { v: cogX - halfEnvX, label: (cogX - halfEnvX).toFixed(3) },
+                { v: cogX, label: cogX.toFixed(3) },
+                { v: cogX + halfEnvX, label: (cogX + halfEnvX).toFixed(3) },
+            ].sort((a, b) => a.v - b.v);
+            let hDimSvg = '';
+            hStack.forEach((d, i) => {
+                const y = padT - 8 - i * 13;
+                const x1 = px(0), x2 = px(d.v);
+                hDimSvg += `<g opacity="0.9">` +
+                    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x1}" y1="${y - 3}" x2="${x1}" y2="${y + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x2}" y1="${y - 3}" x2="${x2}" y2="${y + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x2}" y1="${y}" x2="${x2}" y2="${py(0) - 2}" stroke="${dimGreen}" stroke-width="0.75" stroke-dasharray="2 2"/>` +
+                    `<text x="${x2}" y="${y - 4}" font-size="9" text-anchor="end" fill="${dimGreen}">${d.label}</text>` +
+                    `</g>`;
+            });
+
+            // Stacked vertical dimension lines (left): near/CoG/far
+            // envelope Y, same idea rotated 90°.
+            const vStack = [
+                { v: cogY - halfEnvY, label: (cogY - halfEnvY).toFixed(3) },
+                { v: cogY, label: cogY.toFixed(3) },
+                { v: cogY + halfEnvY, label: (cogY + halfEnvY).toFixed(3) },
+            ].sort((a, b) => a.v - b.v);
+            let vDimSvg = '';
+            vStack.forEach((d, i) => {
+                const x = padL - 8 - i * 16;
+                const y1 = py(0), y2 = py(d.v);
+                const textY = (y1 + y2) / 2;
+                vDimSvg += `<g opacity="0.9">` +
+                    `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x - 3}" y1="${y1}" x2="${x + 3}" y2="${y1}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x - 3}" y1="${y2}" x2="${x + 3}" y2="${y2}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x}" y1="${y2}" x2="${px(0) - 2}" y2="${y2}" stroke="${dimGreen}" stroke-width="0.75" stroke-dasharray="2 2"/>` +
+                    `<text x="${x - 4}" y="${textY}" font-size="9" text-anchor="middle" fill="${dimGreen}" transform="rotate(-90 ${x - 4} ${textY})">${d.label}</text>` +
+                    `</g>`;
+            });
+
+            // Small envX / envY spread call-outs, right beside the LC
+            // cluster (matches the reference's "806" / "201" labels).
+            const envCallX = px(cogX) - 30, envCallY = py(cogY + halfEnvY) + 20;
+            const envCalloutSvg = `<g opacity="0.9">` +
+                `<line x1="${px(cogX - halfEnvX)}" y1="${envCallY}" x2="${px(cogX + halfEnvX)}" y2="${envCallY}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogX - halfEnvX)}" y1="${envCallY - 3}" x2="${px(cogX - halfEnvX)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogX + halfEnvX)}" y1="${envCallY - 3}" x2="${px(cogX + halfEnvX)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<text x="${(px(cogX - halfEnvX) + px(cogX + halfEnvX)) / 2}" y="${envCallY + 12}" font-size="9" text-anchor="middle" fill="${dimGreen}">envX ${envX.toFixed(3)}</text>` +
+                `<line x1="${px(cogX + halfEnvX) + 16}" y1="${py(cogY - halfEnvY)}" x2="${px(cogX + halfEnvX) + 16}" y2="${py(cogY + halfEnvY)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogX + halfEnvX) + 13}" y1="${py(cogY - halfEnvY)}" x2="${px(cogX + halfEnvX) + 19}" y2="${py(cogY - halfEnvY)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogX + halfEnvX) + 13}" y1="${py(cogY + halfEnvY)}" x2="${px(cogX + halfEnvX) + 19}" y2="${py(cogY + halfEnvY)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<text x="${px(cogX + halfEnvX) + 22}" y="${(py(cogY - halfEnvY) + py(cogY + halfEnvY)) / 2 + 3}" font-size="9" fill="${dimGreen}">envY ${envY.toFixed(3)}</text>` +
+                `</g>`;
+
+            // CoG marker + LC1-4 — small circle markers with AutoCAD-style
+            // leader-line labels, one per corner, pulled diagonally
+            // outward from the tight cluster so the labels don't overlap.
+            const cogMarkerSvg = `<circle cx="${px(cogX)}" cy="${py(cogY)}" r="3" fill="none" stroke="var(--accent-green, #10b981)" stroke-width="1.5"/>` +
+                `<line x1="${px(cogX) - 6}" y1="${py(cogY)}" x2="${px(cogX) + 6}" y2="${py(cogY)}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
+                `<line x1="${px(cogX)}" y1="${py(cogY) - 6}" x2="${px(cogX)}" y2="${py(cogY) + 6}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>`;
+            const leaderDir = { LC1: [1, -1], LC2: [-1, -1], LC3: [-1, 1], LC4: [1, 1] };
+            let lcSvg = '';
+            lcBase.forEach(lc => {
+                const cx = px(lc.x), cy = py(lc.y);
+                const [dx, dy] = leaderDir[lc.name] || [1, 1];
+                const kx = cx + dx * 26, ky = cy + dy * 18;
+                const tx = kx + dx * 18;
+                lcSvg += `<g opacity="0.95">` +
+                    `<circle cx="${cx}" cy="${cy}" r="2.5" fill="var(--text-main, #e2e8f0)"/>` +
+                    `<line x1="${cx}" y1="${cy}" x2="${kx}" y2="${ky}" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>` +
+                    `<line x1="${kx}" y1="${ky}" x2="${tx}" y2="${ky}" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>` +
+                    `<text x="${tx + (dx > 0 ? 3 : -3)}" y="${ky + 3}" font-size="10" font-weight="700" text-anchor="${dx > 0 ? 'start' : 'end'}" fill="var(--text-main, #e2e8f0)">${lc.name}</text>` +
+                    `</g>`;
+            });
+
+            el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block; min-width:480px;">
+                <defs>
+                    <marker id="tgCeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M0,0 L10,5 L0,10 z" fill="#ef4444"/>
+                    </marker>
+                </defs>
+                ${centerlineSvg}${wedgeSvg}${hDimSvg}${vDimSvg}${envCalloutSvg}${cogMarkerSvg}${lcSvg}${originSvg}
+            </svg>`;
         }
 
         // Writes X offset/Y offset for every train in the linked range
@@ -5632,33 +5780,10 @@
                 `<text x="${ox0 + 4}" y="${oy0 - 5}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
                 `</g>`;
 
-            // ---- Horizontal Loads readout — a small fixed overlay panel
-            // (not tied to any world point, since these are global scalar
-            // inputs rather than positioned objects) in the top-right
-            // corner of the plan view, showing each Horizontal Loads
-            // value alongside a small glyph ("sign") per KKKai's request.
-            // Gr_trans/Gr_long show the Excel-computed degree value
-            // (H23/H24); every other row is the raw editable value.
-            const hlRows = [
-                ['💨', `Wind v ${tgHLoads.vWind.toFixed(1)} m/s`],
-                ['↕', `H_CoW ${tgHLoads.hCow.toFixed(2)} m`],
-                ['◐', `cd ${tgHLoads.cd.toFixed(2)}`],
-                ['➡', `Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`],
-                ['⏩', `a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`],
-                ['⏪', `a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`],
-                ['⤢', `Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`],
-                ['⤡', `Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`],
-                ['↻', `C_j ${tgHLoads.curveImpact.toFixed(1)}%`],
-                ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
-            ];
-            const hlRowH = 12;
-            const hlBoxW = 150, hlBoxH = 28 + hlRows.length * hlRowH;
-            const hlX = svgW - padR - hlBoxW - 4, hlY = padT + 4;
-            let hLoadsSvg = `<g opacity="0.95">` +
-                `<rect x="${hlX}" y="${hlY}" width="${hlBoxW}" height="${hlBoxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
-                `<text x="${hlX + 6}" y="${hlY + 13}" font-size="8.5" font-weight="700" fill="var(--text-main, #e2e8f0)">⚠ Horizontal Loads</text>` +
-                hlRows.map((row, i) => `<text x="${hlX + 6}" y="${hlY + 26 + i * hlRowH}" font-size="8" fill="var(--text-muted, #94a3b8)">${row[0]} ${escapeHtml(row[1])}</text>`).join('') +
-                `</g>`;
+            // ---- Horizontal Loads readout — moved out of the plan view
+            // (see renderTrailerGenElevationCombined's own hLoadsSvg,
+            // drawn in the empty gutter beside the end views instead) so
+            // it no longer overlaps the plan-view drawing/dimensions.
 
             let spineSvg = '';
             Object.values(trainSpines).forEach(points => {
@@ -5779,7 +5904,7 @@
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${hLoadsSvg}
+                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
@@ -5924,11 +6049,35 @@
             const rightDimMargin = cogZDimCount > 0
                 ? TG_COGZ_LINE_GAP + (cogZDimCount - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
 
+            // ---- Horizontal Loads readout — a small fixed overlay panel
+            // (not tied to any world point, since these are global scalar
+            // inputs rather than positioned objects), moved here (out of
+            // the plan view, where it used to overlap the drawing/
+            // dimensions) into its own reserved gutter beside the end
+            // views, so it never interferes with the 2D drawing. Gr_trans/
+            // Gr_long show the Excel-computed degree value (H23/H24);
+            // every other row is the raw editable value.
+            const hlRows = [
+                ['💨', `Wind v ${tgHLoads.vWind.toFixed(1)} m/s`],
+                ['↕', `H_CoW ${tgHLoads.hCow.toFixed(2)} m`],
+                ['◐', `cd ${tgHLoads.cd.toFixed(2)}`],
+                ['➡', `Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`],
+                ['⏩', `a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`],
+                ['⏪', `a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`],
+                ['⤢', `Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`],
+                ['⤡', `Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`],
+                ['↻', `C_j ${tgHLoads.curveImpact.toFixed(1)}%`],
+                ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
+            ];
+            const hlRowH = 12;
+            const hlBoxW = 150, hlBoxH = 28 + hlRows.length * hlRowH;
+            const hlGutter = hlBoxW + 20; // reserved gutter width, own margin beside the end views — never shared with contentW/rightDimMargin so it's always empty space, not an overlap
+
             // Canvas width matches the plan view's own canvas width
             // (unless the two end views together need more room than the
             // plan view's plot area, in which case it grows to fit).
             const contentW = Math.max(sideW, endsTotalW);
-            const svgW = Math.max(svgWTop, padL + leftDimMargin + contentW + rightDimMargin + padR);
+            const svgW = Math.max(svgWTop, padL + leftDimMargin + contentW + rightDimMargin + hlGutter + padR);
             const endOffsetX1 = padL + leftDimMargin + (contentW - endsTotalW) / 2; // left end-view panel
             const endOffsetX2 = endOffsetX1 + endW + endGap;        // right end-view panel
 
@@ -6468,11 +6617,22 @@
                 });
             }
 
+            // Anchored to the SVG's own right edge (inside the hlGutter
+            // reserved above), top-aligned with the end-view panels —
+            // beside the empty space next to the end views, never on top
+            // of any drawing content.
+            const hlX = svgW - padR - hlBoxW, hlY = endPadT;
+            const hLoadsSvg = `<g opacity="0.95">` +
+                `<rect x="${hlX}" y="${hlY}" width="${hlBoxW}" height="${hlBoxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
+                `<text x="${hlX + 6}" y="${hlY + 13}" font-size="8.5" font-weight="700" fill="var(--text-main, #e2e8f0)">⚠ Horizontal Loads</text>` +
+                hlRows.map((row, i) => `<text x="${hlX + 6}" y="${hlY + 26 + i * hlRowH}" font-size="8" fill="var(--text-muted, #94a3b8)">${row[0]} ${escapeHtml(row[1])}</text>`).join('') +
+                `</g>`;
+
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}${hLoadsSvg}
             </svg>`;
         }
 
