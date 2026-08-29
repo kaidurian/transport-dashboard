@@ -301,6 +301,15 @@
             padding: 8px; color: #ffffff; background: var(--accent-blue, #009fda); border-bottom: none;
         }
         table.tg-drawing-table tr.tg-dt-spacer td { padding: 3px; border-bottom: none; }
+        /* Small "this table auto-syncs live from Excel" indicator shown
+           only in the TRANSPORT TABLE LC0 banner — the frozen LC1-4
+           snapshot banners never get this badge. */
+        .tg-dt-sync-badge {
+            display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.5px;
+            background: rgba(255,255,255,0.18); color: #ffffff; border-radius: 10px;
+            padding: 2px 7px; margin-left: 6px; vertical-align: middle;
+        }
+        .tg-snapshot-table + .tg-snapshot-table { margin-top: 10px; }
         /* Pass/fail "sign" cells (e.g. OK / NOT OK / PASS / FAIL) —
            colored so a failing check jumps out from the rest of the
            table. See cellStatusClass() in renderTgDrawingTable(). */
@@ -630,7 +639,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.60)</h1>
+            <h1>🚂 Transport Dashboard (Rev.61)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -918,6 +927,16 @@
                             <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
                                     onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
                         </div>
+                        <p style="font-size:11px; color:var(--text-muted); margin:14px 0 6px;">
+                            Each 📤 button on a 📊 CoG Envelope Table LC1&ndash;4 row freezes a separate
+                            snapshot of the table above under that load case's own name — local only,
+                            never auto-synced or overwritten by later polling.
+                        </p>
+                        <div id="tgSnapshotTransportTables"><!-- Frozen per-LC transport table snapshots rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Clear all local LC1-4 transport table snapshots (does not touch Excel)"
+                                    onclick="clearTgSnapshotTransportTables()">🗑 Clear LC Snapshots</button>
+                        </div>
                     </div>
 
                     <div class="tg-3d-wrap">
@@ -1198,7 +1217,7 @@
                 // user is actively typing in this card's OWN
                 // upSlope/downSlope fields (see isEditingCogEnvFields),
                 // so re-rendering the grid never steals focus mid-keystroke.
-                if (!isEditingCogEnvFields()) await pullCogEnvFromExcel({ silent: true }); // CoG Envelope Table + preview — keeps it live-synced, not just on panel open
+                if (!isEditingCogEnvFields()) await pullCogEnvFromExcel({ silent: true }); // CoG Envelope input fields only — the 📊 CoG Envelope Table below no longer auto-refreshes on poll (see pullCogEnvFromExcel)
                 if (!isEditingDashboard()) {
                     await pullZTrailerHeightFromExcel({ silent: true });
                     await pullHorizontalLoadsFromExcel({ silent: true });
@@ -4190,24 +4209,28 @@
 
         // Turns the raw pulled grid (tgDrawingTableRows) into an HTML
         // table mirroring the Excel sheet's layout: row 3 renders as the
-        // big merged "TRANSPORT TABLE" banner, row 4's column B spans
-        // B:C (matching that sheet's B4:C4 merge), the known section-
-        // header rows render bold, a completely-empty row renders as a
-        // thin spacer (matching the sheet's blank spacer rows between
-        // sections) instead of an empty-looking data row, and every
-        // other cell is shown exactly as pulled — including error
-        // strings like "#REF!" if the live workbook has one, since this
-        // table only ever mirrors what's actually in the sheet. Any
-        // cell whose value is a recognized pass/fail "sign" (OK/NOT OK/
-        // PASS/FAIL/etc. — see cellStatusClass()) is colored green or
-        // red so a failing check is immediately visible.
-        function renderTgDrawingTable() {
-            const el = document.getElementById('tgDrawingTable');
-            if (!el) return;
-            if (!tgDrawingTableRows.length) {
-                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${DRAWING_TABLE_SHEET_NAME}'.</div>`;
-                return;
-            }
+        // big merged banner — shown here as "<sheet's title text> LC0"
+        // plus this dashboard's own auto-sync badge, since this is the
+        // one live transport table that always tracks whatever cargo
+        // CoG is currently active in Excel (as opposed to the frozen
+        // LC1-4 snapshots — see tgSnapshotTransportTables below) — row
+        // 4's column B spans B:C (matching that sheet's B4:C4 merge),
+        // the known section-header rows render bold, a completely-empty
+        // row renders as a thin spacer (matching the sheet's blank
+        // spacer rows between sections) instead of an empty-looking
+        // data row, and every other cell is shown exactly as pulled —
+        // including error strings like "#REF!" if the live workbook has
+        // one, since this table only ever mirrors what's actually in
+        // the sheet. Any cell whose value is a recognized pass/fail
+        // "sign" (OK/NOT OK/PASS/FAIL/etc. — see cellStatusClass()) is
+        // colored green or red so a failing check is immediately
+        // visible.
+        // Shared table-builder used by both the live LC0 table
+        // (renderTgDrawingTable) and every frozen per-load-case
+        // snapshot (renderTgSnapshotTransportTables) — identical cell
+        // formatting/merge/bold/spacer logic, the only difference is
+        // what HTML goes in the title-banner row (titleHtml).
+        function buildTransportTableHtml(rows, titleHtml) {
             const fmt = v => {
                 if (v === null || v === undefined || v === '') return '';
                 if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
@@ -4218,12 +4241,12 @@
                 return `<td${cls ? ` class="${cls}"` : ''}>${fmt(v)}</td>`;
             };
             let html = '<table class="tg-drawing-table">';
-            tgDrawingTableRows.forEach((row, i) => {
+            rows.forEach((row, i) => {
                 const rowNum = i + 1; // 1-indexed, matching Excel row numbers
                 const isEmpty = row.every(v => v === null || v === undefined || v === '');
                 if (isEmpty) { html += `<tr class="tg-dt-spacer"><td colspan="6"></td></tr>`; return; }
                 if (rowNum === DRAWING_TABLE_TITLE_ROW) {
-                    html += `<tr class="tg-dt-title"><td colspan="6">${fmt(row[0])}</td></tr>`;
+                    html += `<tr class="tg-dt-title"><td colspan="6">${titleHtml}</td></tr>`;
                     return;
                 }
                 const boldClass = DRAWING_TABLE_BOLD_ROWS.has(rowNum) ? ' class="tg-dt-bold"' : '';
@@ -4235,7 +4258,58 @@
                 html += `<tr${boldClass}>` + row.map(cell).join('') + `</tr>`;
             });
             html += '</table>';
-            el.innerHTML = html;
+            return html;
+        }
+
+        function renderTgDrawingTable() {
+            const el = document.getElementById('tgDrawingTable');
+            if (!el) return;
+            if (!tgDrawingTableRows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${DRAWING_TABLE_SHEET_NAME}'.</div>`;
+                return;
+            }
+            const titleRow = tgDrawingTableRows[DRAWING_TABLE_TITLE_ROW - 1] || [];
+            const rawTitle = (titleRow[0] === null || titleRow[0] === undefined || titleRow[0] === '') ? 'TRANSPORT TABLE' : escapeHtml(String(titleRow[0]));
+            // "LC0" marks this as the one live table that always
+            // reflects whatever cargo CoG is currently active in Excel
+            // (Input!BB35:BD35) — as opposed to the frozen LC1-4
+            // snapshots below, which never move once created. The small
+            // badge is this dashboard's own auto-sync indicator, not
+            // anything pulled from the sheet.
+            const titleHtml = `${rawTitle} LC0 <span class="tg-dt-sync-badge" title="Auto-synced live — refreshes automatically from Excel '${DRAWING_TABLE_SHEET_NAME}' on every auto-sync poll.">⟳ auto-sync</span>`;
+            el.innerHTML = buildTransportTableHtml(tgDrawingTableRows, titleHtml);
+        }
+
+        // Frozen per-load-case transport table snapshots — one entry
+        // per LC name ('LC1'..'LC4'), each a full deep-copy of
+        // tgDrawingTableRows taken the moment that LC's small 📤 button
+        // was pressed (see pushLoadCaseToExcel). Unlike the live LC0
+        // table above, these are local-only: never auto-synced, never
+        // overwritten by polling, and not pushed anywhere — pressing
+        // the same LC's 📤 button again simply replaces that one entry
+        // with a fresh snapshot. Insertion order (LC1, LC2, ...) is
+        // preserved by normal JS object key order since keys are
+        // always the fixed strings 'LC1'-'LC4'.
+        let tgSnapshotTransportTables = {};
+
+        function renderTgSnapshotTransportTables() {
+            const el = document.getElementById('tgSnapshotTransportTables');
+            if (!el) return;
+            const names = Object.keys(tgSnapshotTransportTables);
+            if (!names.length) { el.innerHTML = ''; return; }
+            el.innerHTML = names.map(name => {
+                const titleHtml = `TRANSPORT TABLE ${name}`; // no auto-sync badge — these are frozen local-only snapshots
+                return `<div class="tg-drawing-table-wrap tg-snapshot-table">${buildTransportTableHtml(tgSnapshotTransportTables[name], titleHtml)}</div>`;
+            }).join('');
+        }
+
+        // Clears every frozen LC1-4 snapshot table (local-only —
+        // nothing in Excel is touched). Bound to the small 🗑 button
+        // shown once at least one snapshot exists.
+        function clearTgSnapshotTransportTables() {
+            tgSnapshotTransportTables = {};
+            renderTgSnapshotTransportTables();
+            logMsg('🗑 Cleared all local LC1-4 transport table snapshots.');
         }
 
         // ============================================================
@@ -4380,6 +4454,17 @@
                 });
                 logMsg(`📤 Pushed ${name} CoG (X ${x}, Y ${y}, Z ${z}) to '${INPUT_SHEET_NAME}'!BB35:BD35 — this is now the active cargo CoG the rest of the workbook's transport table calculates from.`);
                 await pullDrawingTableFromExcel({ silent: true });
+                // Freeze a separate, local-only snapshot of the
+                // just-refreshed transport table under this load case's
+                // own name ("TRANSPORT TABLE LC1", "LC2", ...) — unlike
+                // the live LC0 table above, this copy never auto-syncs
+                // again; pressing this same LC's 📤 button later simply
+                // replaces it with a fresh snapshot.
+                if (tgDrawingTableRows.length) {
+                    tgSnapshotTransportTables[name] = tgDrawingTableRows.map(row => row.slice());
+                    renderTgSnapshotTransportTables();
+                    logMsg(`📋 Saved local snapshot 'TRANSPORT TABLE ${name}' (not auto-synced).`);
+                }
                 btnEl.classList.remove('tg-btn-syncing');
                 btnEl.classList.add('tg-btn-flash-ok');
             } catch (e) {
@@ -4485,7 +4570,16 @@
                     tgCogEnvGroups[key] = Number.isFinite(v) ? v : 0;
                 });
                 renderTgCogEnvFields();
-                renderTgCogEnvTable();
+                // 📊 CoG Envelope Table itself is intentionally NOT
+                // re-rendered on every silent auto-poll tick anymore —
+                // once "🧮 Calculate CoG Envelope" has been pressed, the
+                // table stays exactly as generated until the user
+                // presses Calculate again or uses this card's own
+                // "⇩ Refresh from Excel" button (both call this function
+                // with silent left false/undefined). Only the input
+                // fields above it (dimX/Y/Z, cogX/Y/Z, G1-G3) keep
+                // live-syncing every tick.
+                if (!silent) renderTgCogEnvTable();
                 if (!silent) logMsg(`↺ Pulled CoG Envelope inputs from '${COGENV_DIM_SHEET}'!H11:H13, '${COGENV_COG_SHEET}'!BB35/BC35/BJ35, and hydraulic group positions from '${COGENV_GROUPS_SHEET}'!B3:C5.`);
             } catch (e) {
                 console.warn('Could not read CoG Envelope source cells', e);
@@ -4519,7 +4613,7 @@
             // (unformatted) x/y/z are baked into the onclick call so the
             // push always uses the exact computed value, not the
             // rounded display string.
-            const lcPushBtn = lc => ` <button type="button" class="tg-lc-push-btn" title="Push ${lc.name}'s X/Y/Z to Excel 'Input'!BB35:BD35, then create/refresh the transport table for this load case" onclick="pushLoadCaseToExcel(this, '${lc.name}', ${lc.x}, ${lc.y}, ${lc.z})">📤</button>`;
+            const lcPushBtn = lc => ` <button type="button" class="tg-lc-push-btn" title="Push ${lc.name}'s X/Y/Z to Excel 'Input'!BB35:BD35, refresh the live TRANSPORT TABLE LC0, and save a separate local-only 'TRANSPORT TABLE ${lc.name}' snapshot below" onclick="pushLoadCaseToExcel(this, '${lc.name}', ${lc.x}, ${lc.y}, ${lc.z})">📤</button>`;
             const row = (label, x, y, z, bold, lc) => `
                 <tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}${lc ? lcPushBtn(lc) : ''}</td></tr>`;
             let html = '<table class="tg-drawing-table">';
