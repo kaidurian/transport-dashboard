@@ -594,7 +594,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.58.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.58.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -809,7 +809,7 @@
                         </p>
                         <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" id="tgRefreshCogEnvBtn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35, and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5 (this also runs automatically every few seconds while Auto-sync is on)"
+                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35, and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
                                     onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
@@ -1122,19 +1122,47 @@
             return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
         }
 
+        // Narrow version scoped to the 📐 CoG Envelope card's own field
+        // grid — only upSlope/downSlope are locally typed into there
+        // (dimX/Y/Z and cogX/Y/Z are disabled/pull-only), so this only
+        // ever returns true while the user has one of those two fields
+        // focused, never for focus anywhere else on the dashboard.
+        // Re-rendering that field grid mid-keystroke would steal focus,
+        // so runAutoPull() uses this (instead of the broader
+        // isEditingDashboard()) to decide whether to skip just the CoG
+        // Envelope pull.
+        function isEditingCogEnvFields() {
+            const el = document.activeElement;
+            const container = document.getElementById('tgCogEnvFields');
+            return !!(el && container && container.contains(el));
+        }
+
         // See the big comment above for exactly what this does and does
         // NOT re-pull, and why.
         async function runAutoPull() {
-            if (!autoSyncEnabled || !isOfficeInitialized || isAutoPushing || isEditingDashboard()) return;
+            if (!autoSyncEnabled || !isOfficeInitialized || isAutoPushing) return;
             isAutoPulling = true;
             try {
-                await pullZTrailerHeightFromExcel({ silent: true });
-                await pullHorizontalLoadsFromExcel({ silent: true });
-                await pullCogSignsFromExcel();
-                await pullStabilityFromExcel();
-                await pullLoadPerAxleFromExcel();
-                await pullCogEnvFromExcel({ silent: true }); // CoG Envelope Table + preview — keeps it live-synced, not just on panel open
-                await pullDrawingTableFromExcel({ silent: true });
+                // 📐 CoG Envelope — dimX/Y/Z, cogX/Y/Z, and G1/G2/G3 are
+                // ALL pull-only (never locally typed into), so unlike
+                // the editable fields below there's nothing here an
+                // in-progress edit elsewhere on the dashboard could
+                // clobber. Always refreshed every poll tick, even while
+                // the user is mid-edit in another field (e.g. still
+                // typing in 📦 Generate Cargo) — that's what was
+                // silently blocking it before. Only skipped while the
+                // user is actively typing in this card's OWN
+                // upSlope/downSlope fields (see isEditingCogEnvFields),
+                // so re-rendering the grid never steals focus mid-keystroke.
+                if (!isEditingCogEnvFields()) await pullCogEnvFromExcel({ silent: true }); // CoG Envelope Table + preview — keeps it live-synced, not just on panel open
+                if (!isEditingDashboard()) {
+                    await pullZTrailerHeightFromExcel({ silent: true });
+                    await pullHorizontalLoadsFromExcel({ silent: true });
+                    await pullCogSignsFromExcel();
+                    await pullStabilityFromExcel();
+                    await pullLoadPerAxleFromExcel();
+                    await pullDrawingTableFromExcel({ silent: true });
+                }
                 renderTrailerGenPreview();
             } catch (e) {
                 console.warn('Auto-pull error', e);
@@ -4257,7 +4285,7 @@
         // strictly pull-only. Called silently on panel open/refresh
         // (see seedInitialOffsetsFromExcel) and on-demand via this
         // card's own "⇩ Refresh from Excel" button.
-        async function pullCogEnvFromExcelImpl(opts = {}) {
+        async function pullCogEnvFromExcel(opts = {}) {
             const silent = opts.silent === true;
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the CoG Envelope inputs.');
@@ -4304,11 +4332,6 @@
                 if (!silent) alert(`Could not read the CoG Envelope source cells. Make sure sheets "${COGENV_DIM_SHEET}", "${COGENV_COG_SHEET}" and "${COGENV_GROUPS_SHEET}" exist with values in H11:H13, BB35/BC35/BJ35, and B3:C5.`);
             }
         }
-        // Wrapped so its button (tgRefreshCogEnvBtn) pulses amber while
-        // in flight and flashes green/red on settle — same per-button
-        // sync indicator as the Wheels/Cargo refresh buttons — whether
-        // triggered by hand or silently by runAutoPull()/initial seed.
-        const pullCogEnvFromExcel = withBtnSyncIndicator('tgRefreshCogEnvBtn', pullCogEnvFromExcelImpl);
 
         // Renders the read-only results table (workbook rows 8-24) —
         // same visual style as the 📋 Drawing Table (.tg-drawing-table),
