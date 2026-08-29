@@ -188,7 +188,7 @@
             border: 1px solid var(--panel-border);
             background: var(--tank-box-bg);
             border-radius: 8px;
-            padding: 9px 11px;
+            padding: 12px 14px;
             margin-top: 12px;
         }
         .tg-trailer-card {
@@ -197,8 +197,30 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #f59e0b 10%);
             border-radius: 8px;
-            padding: 9px 11px;
+            padding: 12px 14px;
         }
+        /* ---- Minimize/expand toggle for the 4 top-level input cards
+           (Generate Trailer, Generate Cargo, Horizontal Loads, CoG
+           Envelope) — see toggleTgCardMinimize(). Collapses everything
+           in the card except its .tg-train-card-header, so only the
+           title + buttons stay visible. Scoped to .tg-trailer-card /
+           .tg-cargo-card specifically (not every element that happens
+           to contain a .tg-train-card-header, e.g. individual train
+           cards), since only these 4 cards ever receive the
+           .tg-card-minimized class. */
+        .tg-trailer-card.tg-card-minimized > *:not(.tg-train-card-header),
+        .tg-cargo-card.tg-card-minimized > *:not(.tg-train-card-header) {
+            display: none;
+        }
+        .tg-trailer-card.tg-card-minimized, .tg-cargo-card.tg-card-minimized { padding-bottom: 12px; }
+        .tg-trailer-card.tg-card-minimized .tg-train-card-header,
+        .tg-cargo-card.tg-card-minimized .tg-train-card-header { margin-bottom: 0; }
+        .tg-minimize-btn {
+            padding: 5px 8px; font-size: 11px; font-weight: 700; border-radius: 6px;
+            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
+            cursor: pointer; white-space: nowrap; line-height: 1;
+        }
+        .tg-minimize-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
         .tg-card-cargo {
             border-left: 4px solid var(--accent-green);
             background: var(--tank-box-bg);
@@ -223,20 +245,20 @@
         .tg-cargo-item-card {
             border: 1px solid var(--panel-border);
             border-radius: 7px;
-            padding: 7px 9px;
-            margin-bottom: 7px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
             background: var(--panel-bg);
         }
         .tg-cargo-item-card:last-child { margin-bottom: 0; }
-        .tg-cargo-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px 8px; margin-top: 6px; }
+        .tg-cargo-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 10px; margin-top: 8px; }
         .tg-modal-body.tg-side-layout .tg-cargo-field-grid { grid-template-columns: repeat(2, 1fr); }
         .tg-cargo-field label {
             display: flex; align-items: center; gap: 3px;
-            font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
-            color: var(--text-muted); margin-bottom: 2px;
+            font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+            color: var(--text-muted); margin-bottom: 4px;
         }
         .tg-cargo-field input, .tg-cargo-field select {
-            width: 100%; box-sizing: border-box; padding: 4px 6px; font-size: 11px; border-radius: 5px;
+            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
             border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
         }
         .tg-cargo-field input:focus, .tg-cargo-field select:focus { outline: none; border-color: var(--accent-blue); }
@@ -413,14 +435,14 @@
         }
         .tg-remove-train:hover { border-color: #ef4444; }
 
-        .tg-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 8px; }
+        .tg-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; }
         .tg-field label {
             display: flex; align-items: center; gap: 3px;
-            font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
-            color: var(--text-muted); margin-bottom: 2px;
+            font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+            color: var(--text-muted); margin-bottom: 4px;
         }
         .tg-field input {
-            width: 100%; box-sizing: border-box; padding: 4px 6px; font-size: 11px; border-radius: 5px;
+            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
             border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
         }
         .tg-field input:focus { outline: none; border-color: var(--accent-blue); }
@@ -572,7 +594,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.57)</h1>
+            <h1>🚂 Transport Dashboard (Rev.58)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -597,6 +619,7 @@
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">🚂 Generate Trailer</h2>
                             <button type="button" class="tg-help-btn" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgHelpPanel">
                 Set <strong>Number of trains</strong> and <strong>Number of Hydraulic Groups</strong>
@@ -685,6 +708,7 @@
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
                             <button type="button" class="tg-help-btn" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCargoHelpPanel">
                             Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
@@ -730,6 +754,7 @@
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
                             <button type="button" class="tg-help-btn" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgHLoadsHelpPanel">
                             Wind, speed/acceleration, road-gradient, curve, and friction inputs used for the
@@ -763,6 +788,7 @@
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">📐 CoG Envelope</h2>
                             <button type="button" class="tg-help-btn" id="tgCogEnvHelpToggleBtn" onclick="toggleTgCogEnvHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvHelpPanel">
                             Reproduces the <strong>"CoG_Envelope"</strong> reference workbook's Cargo CoG
@@ -783,10 +809,9 @@
                         </p>
                         <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13 and Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35"
+                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35, and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
                                     onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
                         </div>
-                        <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, LC1-4) rendered by JS --></div>
                     </div>
                 </div>
 
@@ -833,6 +858,7 @@
                             only: never pulled from or pushed to Excel.
                         </p>
                         <div id="tgCogEnvTable" class="tg-drawing-table-wrap"><!-- CoG Envelope table rendered by JS --></div>
+                        <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
                     <div class="tg-cargo-card">
@@ -1107,6 +1133,7 @@
                 await pullCogSignsFromExcel();
                 await pullStabilityFromExcel();
                 await pullLoadPerAxleFromExcel();
+                await pullCogEnvFromExcel({ silent: true }); // CoG Envelope Table + preview — keeps it live-synced, not just on panel open
                 await pullDrawingTableFromExcel({ silent: true });
                 renderTrailerGenPreview();
             } catch (e) {
@@ -1122,6 +1149,21 @@
         }
         function stopAutoPullPolling() {
             if (autoPullTimer) { clearInterval(autoPullTimer); autoPullTimer = null; }
+        }
+
+        // Minimize/expand toggle for the 4 top-level input cards
+        // (Generate Trailer, Generate Cargo, Horizontal Loads, CoG
+        // Envelope) — collapses the card down to just its header (title
+        // + Help/Minimize buttons) via the .tg-card-minimized class (see
+        // CSS above), and expands it again on a second click. Purely a
+        // display toggle — no data is touched, nothing is pulled or
+        // pushed, and no state is persisted across a page reload.
+        function toggleTgCardMinimize(btn) {
+            const card = btn.closest('.tg-trailer-card, .tg-cargo-card');
+            if (!card) return;
+            const minimized = card.classList.toggle('tg-card-minimized');
+            btn.textContent = minimized ? '▢ Expand' : '— Minimize';
+            btn.title = minimized ? 'Expand this card' : 'Minimize this card (show only the header)';
         }
 
         function toggleAutoSync(checked) {
@@ -1304,6 +1346,18 @@
         // Every key pulled automatically from Excel, above — never
         // hand-edited, never pushed. Only upSlope/downSlope stay local.
         const COGENV_READONLY_KEYS = ['dimX', 'dimY', 'dimZ', 'cogX', 'cogY', 'cogZ'];
+
+        // ---- Hydraulic group positions (G1/G2/G3) — PULL-ONLY, feeds
+        // ONLY the 📐 CoG Envelope 2D preview (renderTgCogEnvPreview),
+        // drawn alongside the CoG/LC1-4 callouts so the preview matches
+        // KKKai's reference image ("Position of hydraulic groups" table).
+        // Already in millimeters (same coordinate frame as Adjust_Wheels
+        // axle positions), unlike dimX/dimY/cogX/cogY above which are in
+        // meters — the preview converts those to mm itself before
+        // drawing. Never editable, never pushed. ----
+        let tgCogEnvGroups = { g1x: 0, g1y: 0, g2x: 0, g2y: 0, g3x: 0, g3y: 0 };
+        const COGENV_GROUPS_SHEET = "Display";
+        const COGENV_GROUPS_CELLS = { g1x: 'B3', g1y: 'C3', g2x: 'B4', g2y: 'C4', g3x: 'B5', g3y: 'C5' };
 
 
         // ---- Drawing Table — a READ-ONLY mirror of Excel sheet
@@ -4211,9 +4265,11 @@
             }
             try {
                 const raw = {};
+                const rawGroups = {};
                 await Excel.run(async (context) => {
                     const dimSheet = context.workbook.worksheets.getItem(COGENV_DIM_SHEET);
                     const cogSheet = context.workbook.worksheets.getItem(COGENV_COG_SHEET);
+                    const groupsSheet = context.workbook.worksheets.getItem(COGENV_GROUPS_SHEET);
                     const ranges = {};
                     Object.entries(COGENV_DIM_CELLS).forEach(([key, cell]) => {
                         ranges[key] = dimSheet.getRange(cell);
@@ -4223,19 +4279,29 @@
                         ranges[key] = cogSheet.getRange(cell);
                         ranges[key].load('values');
                     });
+                    const groupRanges = {};
+                    Object.entries(COGENV_GROUPS_CELLS).forEach(([key, cell]) => {
+                        groupRanges[key] = groupsSheet.getRange(cell);
+                        groupRanges[key].load('values');
+                    });
                     await context.sync();
                     Object.entries(ranges).forEach(([key, range]) => { raw[key] = range.values[0][0]; });
+                    Object.entries(groupRanges).forEach(([key, range]) => { rawGroups[key] = range.values[0][0]; });
                 });
                 COGENV_READONLY_KEYS.forEach(key => {
                     const v = parseFloat(raw[key]);
                     tgCogEnv[key] = Number.isFinite(v) ? v : 0;
                 });
+                Object.keys(COGENV_GROUPS_CELLS).forEach(key => {
+                    const v = parseFloat(rawGroups[key]);
+                    tgCogEnvGroups[key] = Number.isFinite(v) ? v : 0;
+                });
                 renderTgCogEnvFields();
                 renderTgCogEnvTable();
-                if (!silent) logMsg(`↺ Pulled CoG Envelope inputs from '${COGENV_DIM_SHEET}'!H11:H13 and '${COGENV_COG_SHEET}'!BB35/BC35/BJ35.`);
+                if (!silent) logMsg(`↺ Pulled CoG Envelope inputs from '${COGENV_DIM_SHEET}'!H11:H13, '${COGENV_COG_SHEET}'!BB35/BC35/BJ35, and hydraulic group positions from '${COGENV_GROUPS_SHEET}'!B3:C5.`);
             } catch (e) {
                 console.warn('Could not read CoG Envelope source cells', e);
-                if (!silent) alert(`Could not read the CoG Envelope source cells. Make sure sheets "${COGENV_DIM_SHEET}" and "${COGENV_COG_SHEET}" exist with values in H11:H13 and BB35/BC35/BJ35.`);
+                if (!silent) alert(`Could not read the CoG Envelope source cells. Make sure sheets "${COGENV_DIM_SHEET}", "${COGENV_COG_SHEET}" and "${COGENV_GROUPS_SHEET}" exist with values in H11:H13, BB35/BC35/BJ35, and B3:C5.`);
             }
         }
 
@@ -4275,45 +4341,69 @@
         // above (red X/Y origin axes, dashed extension lines, stacked
         // dimension lines, small circle + leader-line labels), showing
         // where LC1-4 (the 5% CoG envelope corners) sit relative to the
-        // cargo's own footprint and CoG. All measurements are in meters
-        // (same units as the CoG Envelope fields above), drawn from
-        // world origin (0,0) — matches the reference callout image
-        // KKKai attached. Colors use the same CSS variables as the rest
-        // of the dashboard, so this follows day/night mode automatically;
-        // the cargo outline keeps the same fixed amber (#f59e0b) already
+        // trailer's own hydraulic-group layout (G1/G2/G3) and CoG —
+        // matches the reference callout image KKKai attached. G1/G2/G3
+        // are pulled straight from Excel 'Display'!B3:C5 in millimeters
+        // (see COGENV_GROUPS_CELLS/tgCogEnvGroups); Cargo Dim./Cargo CoG
+        // (and therefore the CoG envelope + LC1-4) are pulled in meters
+        // like the fields above, so this preview multiplies them by
+        // 1000 before drawing so every dimension shares one mm frame —
+        // the same convention as the reference image (100, 10600, 9601,
+        // 9198, 8795, 2174, 2073, 1973, 1173, 2973, 201, 806, all mm).
+        // Colors use the same CSS variables as the rest of the
+        // dashboard, so this follows day/night mode automatically; the
+        // trailer wedge keeps the same fixed amber (#f59e0b) already
         // used for the trailer elsewhere, regardless of theme.
         function renderTgCogEnvPreview(c) {
             const el = document.getElementById('tgCogEnvPreview');
             if (!el) return;
             c = c || calcCogEnvelope();
             const { dimX, dimY, cogX, cogY, envX, envY, lcBase } = c;
-            if (!dimX && !dimY && !cogX && !cogY) {
-                el.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding:6px;">Preview appears once Cargo Dim./CoG are pulled from Excel (or a slope shift is entered).</div>`;
+            const g = tgCogEnvGroups;
+            const haveGroups = !!(g.g2x || g.g3x || g.g2y || g.g3y);
+            if (!dimX && !dimY && !cogX && !cogY && !haveGroups) {
+                el.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding:6px;">Preview appears once Cargo Dim./CoG (or the G1/G2/G3 hydraulic group positions) are pulled from Excel.</div>`;
                 return;
             }
-            const padL = 60, padT = 40, padR = 70, padB = 30;
-            const plotW = 560, plotH = 220;
-            const spanX = Math.max(dimX, cogX + envX, 1);
-            const halfSpanY = Math.max(dimY / 2, Math.abs(cogY) + envY, 1);
-            const scale = Math.min(plotW / spanX, (plotH / 2) / halfSpanY);
+
+            // ---- Convert to millimeters (see comment above) ----
+            const cogXmm = cogX * 1000, cogYmm = cogY * 1000;
+            const envXmm = envX * 1000, envYmm = envY * 1000;
+            const halfEnvXmm = envXmm / 2, halfEnvYmm = envYmm / 2;
+            const lcBaseMm = lcBase.map(lc => ({ name: lc.name, x: lc.x * 1000, y: lc.y * 1000 }));
+
+            // G1/G2/G3 — hydraulic group positions, already mm. Falls
+            // back to a synthetic nose-to-tail shape from Cargo Dim.
+            // X/Y (also converted to mm) if the groups haven't been
+            // pulled from Excel yet, so the preview still shows
+            // something on first open.
+            const g1 = haveGroups ? { x: g.g1x, y: g.g1y } : { x: 0, y: cogYmm };
+            const g2 = haveGroups ? { x: g.g2x, y: g.g2y } : { x: dimX * 1000, y: cogYmm - (dimY * 1000) / 2 };
+            const g3 = haveGroups ? { x: g.g3x, y: g.g3y } : { x: dimX * 1000, y: cogYmm + (dimY * 1000) / 2 };
+            const apex = { x: 0, y: (g2.y + g3.y) / 2 };
+
+            const padL = 90, padT = 78, padR = 90, padB = 55;
+            const plotW = 560, plotH = 260;
+            const spanX = Math.max(g2.x, g3.x, cogXmm + halfEnvXmm, 1);
+            const maxY = Math.max(g2.y, g3.y, cogYmm + halfEnvYmm, apex.y, 1);
+            const scale = Math.min(plotW / spanX, plotH / maxY);
             const svgW = padL + plotW + padR, svgH = padT + plotH + padB;
-            const ox = padL, oy = padT + plotH / 2; // world origin (0,0) on screen
+            const ox = padL, oy = padT; // world origin (0,0) on screen — top-left, Y positive downward
             const px = x => ox + x * scale;
             const py = y => oy + y * scale;
 
-            const halfEnvX = envX / 2, halfEnvY = envY / 2;
-
-            // Tapered wedge — a generic cargo silhouette (apex at the
-            // world origin, widening to dimY at dimX) so the CoG/LC
-            // callouts read against a recognizable outline, same idea
-            // as the reference image's tapered shape. Purely
-            // illustrative — the app has no actual cargo silhouette
-            // data to draw here.
-            const wedgeSvg = dimX > 0 ? `<polygon points="${px(0)},${py(0)} ${px(dimX)},${py(-dimY / 2)} ${px(dimX)},${py(dimY / 2)}" fill="none" stroke="#f59e0b" stroke-width="2.5"/>` : '';
-            const centerlineSvg = `<line x1="${px(0)}" y1="${py(0)}" x2="${px(spanX * 1.02)}" y2="${py(0)}" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>`;
+            // Tapered wedge — the trailer's own plan silhouette: apex at
+            // the world origin (bow), widening out to the G2/G3 corners
+            // (stern, where the hydraulic groups sit) — same idea as the
+            // reference image's tapered shape.
+            const wedgeSvg = `<polygon points="${px(apex.x)},${py(apex.y)} ${px(g2.x)},${py(g2.y)} ${px(g3.x)},${py(g3.y)}" fill="none" stroke="#f59e0b" stroke-width="2.5"/>`;
+            // Top-rail reference line (y=0), solid, spanning the full
+            // drawn length — matches the reference image's plain
+            // horizontal datum line under the dimension stack.
+            const railSvg = `<line x1="${px(0)}" y1="${py(0)}" x2="${px(spanX * 1.03)}" y2="${py(0)}" stroke="var(--text-muted, #94a3b8)" stroke-width="1" opacity="0.6"/>`;
 
             // Origin sign — same style as the plan-view origin (X arrow
-            // right, Y arrow down), but in red per the reference image.
+            // right, Y arrow down), in red per the reference image.
             const axisLen = 34;
             const originSvg = `<g>` +
                 `<line x1="${ox}" y1="${oy}" x2="${ox + axisLen}" y2="${oy}" stroke="#ef4444" stroke-width="2" marker-end="url(#tgCeArrow)"/>` +
@@ -4323,19 +4413,25 @@
                 `<text x="${ox - 4}" y="${oy + axisLen + 14}" font-size="13" font-weight="700" fill="#ef4444" text-anchor="middle">Y</text>` +
                 `</g>`;
 
-            // Stacked horizontal dimension lines (top): near-envelope X,
-            // CoG X, far-envelope X — all measured from the origin,
-            // AutoCAD-style, same tick/extension-line look as the main
-            // preview's dimH().
             const dimGreen = 'var(--accent-green, #10b981)';
+            const fmtMm = v => String(Math.round(v));
+
+            // Stacked horizontal dimension lines (top), all measured
+            // from the origin, AutoCAD-style, one line per named X
+            // position, ascending — smallest value innermost (closest
+            // to the drawing), largest outermost — same stacking rule
+            // the reference image uses (100 (G1) innermost … 10600
+            // (G2,G3) outermost).
             const hStack = [
-                { v: cogX - halfEnvX, label: (cogX - halfEnvX).toFixed(3) },
-                { v: cogX, label: cogX.toFixed(3) },
-                { v: cogX + halfEnvX, label: (cogX + halfEnvX).toFixed(3) },
+                { v: g1.x, label: `${fmtMm(g1.x)} (G1)` },
+                { v: cogXmm - halfEnvXmm, label: `${fmtMm(cogXmm - halfEnvXmm)} (LC2, LC3)` },
+                { v: cogXmm, label: `${fmtMm(cogXmm)} (CoG)` },
+                { v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)` },
+                { v: Math.max(g2.x, g3.x), label: `${fmtMm(Math.max(g2.x, g3.x))} (G2, G3)` },
             ].sort((a, b) => a.v - b.v);
             let hDimSvg = '';
             hStack.forEach((d, i) => {
-                const y = padT - 8 - i * 13;
+                const y = padT - 10 - i * 13;
                 const x1 = px(0), x2 = px(d.v);
                 hDimSvg += `<g opacity="0.9">` +
                     `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${dimGreen}" stroke-width="1"/>` +
@@ -4346,16 +4442,17 @@
                     `</g>`;
             });
 
-            // Stacked vertical dimension lines (left): near/CoG/far
-            // envelope Y, same idea rotated 90°.
+            // Stacked vertical dimension lines (left), same idea rotated
+            // 90° — LC1/LC2, G1, CoG, LC3/LC4, ascending/innermost-out.
             const vStack = [
-                { v: cogY - halfEnvY, label: (cogY - halfEnvY).toFixed(3) },
-                { v: cogY, label: cogY.toFixed(3) },
-                { v: cogY + halfEnvY, label: (cogY + halfEnvY).toFixed(3) },
+                { v: cogYmm - halfEnvYmm, label: `${fmtMm(cogYmm - halfEnvYmm)} (LC1, LC2)` },
+                { v: g1.y, label: `${fmtMm(g1.y)} (G1)` },
+                { v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)` },
+                { v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)` },
             ].sort((a, b) => a.v - b.v);
             let vDimSvg = '';
             vStack.forEach((d, i) => {
-                const x = padL - 8 - i * 16;
+                const x = padL - 10 - i * 18;
                 const y1 = py(0), y2 = py(d.v);
                 const textY = (y1 + y2) / 2;
                 vDimSvg += `<g opacity="0.9">` +
@@ -4367,29 +4464,50 @@
                     `</g>`;
             });
 
+            // Right-side vertical stack for G2/G3 (deck-width edge),
+            // plus the small envY spread call-out ("201" in the
+            // reference image) between them.
+            const rStack = [
+                { v: g2.y, label: `${fmtMm(g2.y)} (G2)` },
+                { v: g3.y, label: `${fmtMm(g3.y)} (G3)` },
+            ].sort((a, b) => a.v - b.v);
+            let rDimSvg = '';
+            rStack.forEach((d, i) => {
+                const x = px(Math.max(g2.x, g3.x)) + 14 + i * 34;
+                const y1 = py(0), y2 = py(d.v);
+                const textY = (y1 + y2) / 2;
+                rDimSvg += `<g opacity="0.9">` +
+                    `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x - 3}" y1="${y1}" x2="${x + 3}" y2="${y1}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x - 3}" y1="${y2}" x2="${x + 3}" y2="${y2}" stroke="${dimGreen}" stroke-width="1"/>` +
+                    `<line x1="${x}" y1="${y2}" x2="${px(Math.max(g2.x, g3.x)) - 2}" y2="${y2}" stroke="${dimGreen}" stroke-width="0.75" stroke-dasharray="2 2"/>` +
+                    `<text x="${x - 4}" y="${textY}" font-size="9" text-anchor="middle" fill="${dimGreen}" transform="rotate(-90 ${x - 4} ${textY})">${d.label}</text>` +
+                    `</g>`;
+            });
+
             // Small envX / envY spread call-outs, right beside the LC
             // cluster (matches the reference's "806" / "201" labels).
-            const envCallX = px(cogX) - 30, envCallY = py(cogY + halfEnvY) + 20;
+            const envCallY = py(cogYmm + halfEnvYmm) + 20;
             const envCalloutSvg = `<g opacity="0.9">` +
-                `<line x1="${px(cogX - halfEnvX)}" y1="${envCallY}" x2="${px(cogX + halfEnvX)}" y2="${envCallY}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<line x1="${px(cogX - halfEnvX)}" y1="${envCallY - 3}" x2="${px(cogX - halfEnvX)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<line x1="${px(cogX + halfEnvX)}" y1="${envCallY - 3}" x2="${px(cogX + halfEnvX)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<text x="${(px(cogX - halfEnvX) + px(cogX + halfEnvX)) / 2}" y="${envCallY + 12}" font-size="9" text-anchor="middle" fill="${dimGreen}">envX ${envX.toFixed(3)}</text>` +
-                `<line x1="${px(cogX + halfEnvX) + 16}" y1="${py(cogY - halfEnvY)}" x2="${px(cogX + halfEnvX) + 16}" y2="${py(cogY + halfEnvY)}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<line x1="${px(cogX + halfEnvX) + 13}" y1="${py(cogY - halfEnvY)}" x2="${px(cogX + halfEnvX) + 19}" y2="${py(cogY - halfEnvY)}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<line x1="${px(cogX + halfEnvX) + 13}" y1="${py(cogY + halfEnvY)}" x2="${px(cogX + halfEnvX) + 19}" y2="${py(cogY + halfEnvY)}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<text x="${px(cogX + halfEnvX) + 22}" y="${(py(cogY - halfEnvY) + py(cogY + halfEnvY)) / 2 + 3}" font-size="9" fill="${dimGreen}">envY ${envY.toFixed(3)}</text>` +
+                `<line x1="${px(cogXmm - halfEnvXmm)}" y1="${envCallY}" x2="${px(cogXmm + halfEnvXmm)}" y2="${envCallY}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogXmm - halfEnvXmm)}" y1="${envCallY - 3}" x2="${px(cogXmm - halfEnvXmm)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogXmm + halfEnvXmm)}" y1="${envCallY - 3}" x2="${px(cogXmm + halfEnvXmm)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<text x="${(px(cogXmm - halfEnvXmm) + px(cogXmm + halfEnvXmm)) / 2}" y="${envCallY + 12}" font-size="9" text-anchor="middle" fill="${dimGreen}">${fmtMm(envXmm)}</text>` +
+                `<line x1="${px(cogXmm + halfEnvXmm) + 16}" y1="${py(cogYmm - halfEnvYmm)}" x2="${px(cogXmm + halfEnvXmm) + 16}" y2="${py(cogYmm + halfEnvYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogXmm + halfEnvXmm) + 13}" y1="${py(cogYmm - halfEnvYmm)}" x2="${px(cogXmm + halfEnvXmm) + 19}" y2="${py(cogYmm - halfEnvYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogXmm + halfEnvXmm) + 13}" y1="${py(cogYmm + halfEnvYmm)}" x2="${px(cogXmm + halfEnvXmm) + 19}" y2="${py(cogYmm + halfEnvYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<text x="${px(cogXmm + halfEnvXmm) + 22}" y="${(py(cogYmm - halfEnvYmm) + py(cogYmm + halfEnvYmm)) / 2 + 3}" font-size="9" fill="${dimGreen}">${fmtMm(envYmm)}</text>` +
                 `</g>`;
 
             // CoG marker + LC1-4 — small circle markers with AutoCAD-style
             // leader-line labels, one per corner, pulled diagonally
             // outward from the tight cluster so the labels don't overlap.
-            const cogMarkerSvg = `<circle cx="${px(cogX)}" cy="${py(cogY)}" r="3" fill="none" stroke="var(--accent-green, #10b981)" stroke-width="1.5"/>` +
-                `<line x1="${px(cogX) - 6}" y1="${py(cogY)}" x2="${px(cogX) + 6}" y2="${py(cogY)}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
-                `<line x1="${px(cogX)}" y1="${py(cogY) - 6}" x2="${px(cogX)}" y2="${py(cogY) + 6}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>`;
+            const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="3" fill="none" stroke="var(--accent-green, #10b981)" stroke-width="1.5"/>` +
+                `<line x1="${px(cogXmm) - 6}" y1="${py(cogYmm)}" x2="${px(cogXmm) + 6}" y2="${py(cogYmm)}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
+                `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - 6}" x2="${px(cogXmm)}" y2="${py(cogYmm) + 6}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>`;
             const leaderDir = { LC1: [1, -1], LC2: [-1, -1], LC3: [-1, 1], LC4: [1, 1] };
             let lcSvg = '';
-            lcBase.forEach(lc => {
+            lcBaseMm.forEach(lc => {
                 const cx = px(lc.x), cy = py(lc.y);
                 const [dx, dy] = leaderDir[lc.name] || [1, 1];
                 const kx = cx + dx * 26, ky = cy + dy * 18;
@@ -4402,13 +4520,34 @@
                     `</g>`;
             });
 
-            el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block; min-width:480px;">
+            // G1/G2/G3 markers — small square (hydraulic-group) markers
+            // with leader-line labels, same visual language as LC1-4
+            // above but in the accent-blue color so they read as a
+            // distinct data series.
+            const dimBlue = 'var(--accent-blue, #38bdf8)';
+            const groupDir = { G1: [-1, -1], G2: [1, -1], G3: [1, 1] };
+            const groupPts = { G1: g1, G2: g2, G3: g3 };
+            let groupSvg = '';
+            Object.entries(groupPts).forEach(([name, pt]) => {
+                const cx = px(pt.x), cy = py(pt.y);
+                const [dx, dy] = groupDir[name];
+                const kx = cx + dx * 22, ky = cy + dy * 16;
+                const tx = kx + dx * 16;
+                groupSvg += `<g opacity="0.95">` +
+                    `<rect x="${cx - 3}" y="${cy - 3}" width="6" height="6" fill="none" stroke="${dimBlue}" stroke-width="1.5"/>` +
+                    `<line x1="${cx}" y1="${cy}" x2="${kx}" y2="${ky}" stroke="${dimBlue}" stroke-width="1"/>` +
+                    `<line x1="${kx}" y1="${ky}" x2="${tx}" y2="${ky}" stroke="${dimBlue}" stroke-width="1"/>` +
+                    `<text x="${tx + (dx > 0 ? 3 : -3)}" y="${ky + 3}" font-size="10" font-weight="700" text-anchor="${dx > 0 ? 'start' : 'end'}" fill="${dimBlue}">${name}</text>` +
+                    `</g>`;
+            });
+
+            el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block; min-width:520px;">
                 <defs>
                     <marker id="tgCeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M0,0 L10,5 L0,10 z" fill="#ef4444"/>
                     </marker>
                 </defs>
-                ${centerlineSvg}${wedgeSvg}${hDimSvg}${vDimSvg}${envCalloutSvg}${cogMarkerSvg}${lcSvg}${originSvg}
+                ${railSvg}${wedgeSvg}${hDimSvg}${vDimSvg}${rDimSvg}${envCalloutSvg}${cogMarkerSvg}${lcSvg}${groupSvg}${originSvg}
             </svg>`;
         }
 
