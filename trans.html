@@ -341,6 +341,31 @@
             font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
             color: var(--text-muted); padding: 0 6px 4px;
         }
+        /* Horizontal Loads readout — its own stacked panel under the 2D
+           preview (plan + elevation), replacing the small fixed overlay
+           box that used to sit inside the elevation SVG's own gutter.
+           Rows wrap into a responsive grid instead of a fixed-width
+           column so it uses the preview's full width. */
+        .tg-hloads-panel {
+            background: var(--tank-box-bg, #0b1220);
+            border: 1px solid var(--panel-border, #242f41);
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+        .tg-hloads-panel-title {
+            font-size: 12px; font-weight: 700; color: var(--text-main, #e2e8f0);
+            margin-bottom: 8px;
+        }
+        .tg-hloads-panel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 6px 12px;
+        }
+        .tg-hloads-panel-row {
+            font-size: 11px; color: var(--text-muted, #94a3b8);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .tg-hloads-panel-icon { margin-right: 4px; }
         /* Orientation cube overlaid in the top-left corner of the whole
            preview (plan + elevation stack), instead of taking up its
            own stacked section or being scoped to just the plan view.
@@ -594,7 +619,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.58.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.59)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -5456,8 +5481,36 @@
             return TG_ORIENT_CUBE_SVG;
         }
 
-        // Live plan-view preview: draws every axle GROUP's axle lines as
-        // colored clusters along X at each train's Y offset.
+        // ---- Horizontal Loads readout — standalone panel, stacked as
+        // its own "tg-view-section" under the whole 2D preview (plan +
+        // elevation), instead of overlaid inside either SVG. These are
+        // global scalar inputs (not tied to any world point), so unlike
+        // the plan/elevation views this is plain HTML, not SVG. Gr_trans/
+        // Gr_long show the Excel-computed degree value (H23/H24); every
+        // other row is the raw editable value.
+        function renderTrailerGenHLoadsPanel() {
+            const hlRows = [
+                ['💨', `Wind v ${tgHLoads.vWind.toFixed(1)} m/s`],
+                ['↕', `H_CoW ${tgHLoads.hCow.toFixed(2)} m`],
+                ['◐', `cd ${tgHLoads.cd.toFixed(2)}`],
+                ['➡', `Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`],
+                ['⏩', `a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`],
+                ['⏪', `a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`],
+                ['⤢', `Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`],
+                ['⤡', `Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`],
+                ['↻', `C_j ${tgHLoads.curveImpact.toFixed(1)}%`],
+                ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
+            ];
+            return `
+                <div class="tg-hloads-panel">
+                    <div class="tg-hloads-panel-title">⚠ Horizontal Loads</div>
+                    <div class="tg-hloads-panel-grid">
+                        ${hlRows.map(row => `<div class="tg-hloads-panel-row"><span class="tg-hloads-panel-icon">${row[0]}</span>${escapeHtml(row[1])}</div>`).join('')}
+                    </div>
+                </div>`;
+        }
+
+
         function renderTrailerGenPreview() {
             let wrap;
             const inlineWrap = document.getElementById('tgPreview');
@@ -5498,6 +5551,7 @@
             wrap.innerHTML = `
                 <div class="tg-view-section">${topHtml}</div>
                 <div class="tg-view-section">${elevationHtml}</div>
+                <div class="tg-view-section">${renderTrailerGenHLoadsPanel()}</div>
                 <div class="tg-orient-cube-overlay">${buildOrientationCubeSvg()}</div>
                 <div class="tg-unit-label-overlay">Unit: mm.</div>
             `;
@@ -5947,10 +6001,11 @@
                 `<text x="${ox0 + 4}" y="${oy0 - 5}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
                 `</g>`;
 
-            // ---- Horizontal Loads readout — moved out of the plan view
-            // (see renderTrailerGenElevationCombined's own hLoadsSvg,
-            // drawn in the empty gutter beside the end views instead) so
-            // it no longer overlaps the plan-view drawing/dimensions.
+            // ---- Horizontal Loads readout — no longer drawn in any of
+            // the 2D SVGs at all (it used to overlap the plan view, then
+            // moved to a gutter beside the end views); now its own
+            // standalone HTML panel stacked below the whole 2D preview,
+            // see renderTrailerGenHLoadsPanel().
 
             let spineSvg = '';
             Object.values(trainSpines).forEach(points => {
@@ -6216,35 +6271,17 @@
             const rightDimMargin = cogZDimCount > 0
                 ? TG_COGZ_LINE_GAP + (cogZDimCount - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
 
-            // ---- Horizontal Loads readout — a small fixed overlay panel
-            // (not tied to any world point, since these are global scalar
-            // inputs rather than positioned objects), moved here (out of
-            // the plan view, where it used to overlap the drawing/
-            // dimensions) into its own reserved gutter beside the end
-            // views, so it never interferes with the 2D drawing. Gr_trans/
-            // Gr_long show the Excel-computed degree value (H23/H24);
-            // every other row is the raw editable value.
-            const hlRows = [
-                ['💨', `Wind v ${tgHLoads.vWind.toFixed(1)} m/s`],
-                ['↕', `H_CoW ${tgHLoads.hCow.toFixed(2)} m`],
-                ['◐', `cd ${tgHLoads.cd.toFixed(2)}`],
-                ['➡', `Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`],
-                ['⏩', `a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`],
-                ['⏪', `a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`],
-                ['⤢', `Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`],
-                ['⤡', `Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`],
-                ['↻', `C_j ${tgHLoads.curveImpact.toFixed(1)}%`],
-                ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
-            ];
-            const hlRowH = 16;
-            const hlBoxW = 200, hlBoxH = 36 + hlRows.length * hlRowH;
-            const hlGutter = hlBoxW + 20; // reserved gutter width, own margin beside the end views — never shared with contentW/rightDimMargin so it's always empty space, not an overlap
+            // Horizontal Loads readout no longer lives in this SVG at
+            // all — it's rendered as its own standalone HTML panel
+            // (see renderTrailerGenHLoadsPanel), stacked as a new
+            // "tg-view-section" under the whole 2D preview (plan +
+            // elevation), so it never needs a reserved gutter here.
 
             // Canvas width matches the plan view's own canvas width
             // (unless the two end views together need more room than the
             // plan view's plot area, in which case it grows to fit).
             const contentW = Math.max(sideW, endsTotalW);
-            const svgW = Math.max(svgWTop, padL + leftDimMargin + contentW + rightDimMargin + hlGutter + padR);
+            const svgW = Math.max(svgWTop, padL + leftDimMargin + contentW + rightDimMargin + padR);
             const endOffsetX1 = padL + leftDimMargin + (contentW - endsTotalW) / 2; // left end-view panel
             const endOffsetX2 = endOffsetX1 + endW + endGap;        // right end-view panel
 
@@ -6784,22 +6821,11 @@
                 });
             }
 
-            // Anchored to the SVG's own right edge (inside the hlGutter
-            // reserved above), top-aligned with the end-view panels —
-            // beside the empty space next to the end views, never on top
-            // of any drawing content.
-            const hlX = svgW - padR - hlBoxW, hlY = endPadT;
-            const hLoadsSvg = `<g opacity="0.95">` +
-                `<rect x="${hlX}" y="${hlY}" width="${hlBoxW}" height="${hlBoxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
-                `<text x="${hlX + 8}" y="${hlY + 16}" font-size="11" font-weight="700" fill="var(--text-main, #e2e8f0)">⚠ Horizontal Loads</text>` +
-                hlRows.map((row, i) => `<text x="${hlX + 8}" y="${hlY + 33 + i * hlRowH}" font-size="10" fill="var(--text-muted, #94a3b8)">${row[0]} ${escapeHtml(row[1])}</text>`).join('') +
-                `</g>`;
-
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}${hLoadsSvg}
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}
             </svg>`;
         }
 
