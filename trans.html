@@ -595,31 +595,42 @@
            flight (see setBtnSyncing/flashBtnResult), independent of the
            header's global "autoSyncStatus" text. */
         @keyframes tgBtnSyncPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
-        .tg-add-train-btn.tg-btn-syncing {
+        .tg-add-train-btn.tg-btn-syncing, .tg-lc-push-btn.tg-btn-syncing {
             background: #eab308 !important;
             border-color: #eab308 !important;
             color: #3a2c00 !important;
             animation: tgBtnSyncPulse 0.9s ease-in-out infinite;
         }
-        .tg-add-train-btn.tg-btn-flash-ok {
+        .tg-add-train-btn.tg-btn-flash-ok, .tg-lc-push-btn.tg-btn-flash-ok {
             background: var(--accent-green) !important;
             border-color: var(--accent-green) !important;
             color: #06202e !important;
             transition: background 0.15s ease, border-color 0.15s ease;
         }
-        .tg-add-train-btn.tg-btn-flash-err {
+        .tg-add-train-btn.tg-btn-flash-err, .tg-lc-push-btn.tg-btn-flash-err {
             background: #ef4444 !important;
             border-color: #ef4444 !important;
             color: #fff !important;
             transition: background 0.15s ease, border-color 0.15s ease;
         }
+        /* Small 📤 push-to-Excel button appended after the Z value on
+           each LC1-4 row of the 📊 CoG Envelope Table — compact so it
+           sits inline in a table cell instead of looking like a full
+           toolbar button. Shares the sync/flash states above. */
+        .tg-lc-push-btn {
+            font-size: 10px; padding: 1px 5px; margin-left: 4px;
+            line-height: 1.5; border-radius: 4px; vertical-align: middle;
+            border: 1px solid var(--panel-border); background: var(--tank-box-bg);
+            color: var(--text-main); cursor: pointer;
+        }
+        .tg-lc-push-btn:hover { border-color: var(--accent-blue, #38bdf8); }
     </style>
 </head>
 <body>
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.59)</h1>
+            <h1>🚂 Transport Dashboard (Rev.60)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -836,6 +847,8 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB35/BC35/BJ35, and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
                                     onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" id="tgCalcCogEnvBtn" title="Compute the 📊 CoG Envelope Table below (CoG envelope 5%, LC1-4, and the with-slope versions) from the fields above, then push the whole table to Excel 'Check CASE A & CASE B'!A65:D81"
+                                    onclick="calculateCogEnvelope()">🧮 Calculate CoG Envelope</button>
                         </div>
                     </div>
                 </div>
@@ -878,9 +891,15 @@
                         </div>
                         <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
                             Same layout as the <strong>"CoG_Envelope"</strong> reference workbook (sheet
-                            "2"!C8:E24) — every row below is calculated live in this dashboard's own code
-                            from the 📐 CoG Envelope fields above, using the workbook's exact formulas. Local
-                            only: never pulled from or pushed to Excel.
+                            "2"!C8:E24) — computed live in this dashboard's own code from the 📐 CoG Envelope
+                            fields above, using the workbook's exact formulas. Starts <strong>blank</strong>;
+                            press <strong>🧮 Calculate CoG Envelope</strong> below to compute, show, and
+                            auto-push the whole table to Excel <strong>"Check CASE A &amp; CASE B"!A65:D81</strong>.
+                            Each <strong>LC1&ndash;LC4</strong> row (both sections) has its own small 📤 button
+                            that pushes just that load case's X/Y/Z to <strong>"Input"!BB35:BD35</strong> —
+                            the same cells the rest of the workbook's transport table calculates the active
+                            cargo CoG from — and refreshes 📋 Drawing Table below so that load case's
+                            transport table shows immediately.
                         </p>
                         <div id="tgCogEnvTable" class="tg-drawing-table-wrap"><!-- CoG Envelope table rendered by JS --></div>
                         <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
@@ -1399,6 +1418,19 @@
         // Every key pulled automatically from Excel, above — never
         // hand-edited, never pushed. Only upSlope/downSlope stay local.
         const COGENV_READONLY_KEYS = ['dimX', 'dimY', 'dimZ', 'cogX', 'cogY', 'cogZ'];
+
+        // ---- 📊 CoG Envelope Table — starts BLANK (see
+        // renderTgCogEnvTable()) until "🧮 Calculate CoG Envelope" is
+        // pressed. That button computes calcCogEnvelope(), shows the
+        // table + 2D preview, and pushes the whole 17-row block to
+        // Excel "Check CASE A & CASE B"!A65:D81 (see
+        // buildCogEnvTableRows()/calculateCogEnvelopeImpl() further
+        // below). Stays true (table keeps showing/recalculating live on
+        // any later input change) once first calculated — only the
+        // very first "no data yet" state is gated, not every render.
+        let tgCogEnvCalculated = false;
+        const COGENV_TABLE_SHEET = "Check CASE A & CASE B";
+        const COGENV_TABLE_RANGE = "A65:D81";
 
         // ---- Hydraulic group positions (G1/G2/G3) — PULL-ONLY, feeds
         // ONLY the 📐 CoG Envelope 2D preview (renderTgCogEnvPreview),
@@ -4258,6 +4290,109 @@
             upSlope: 'C18', downSlope: 'C19',
         };
 
+        // Lays out calcCogEnvelope()'s result as a 17-row × 4-column
+        // grid matching Excel "Check CASE A & CASE B"!A65:D81 exactly
+        // (row-for-row against the reference screenshot: header, "CoG
+        // envelope" banner, dim/CoG/envelope, LC1-4, "with slope"
+        // banner, uphill/downhill shift, envelope-with-slope, LC1-4
+        // again). Used by calculateCogEnvelopeImpl() to push the whole
+        // block in one Excel.run — column A's banner rows are pushed as
+        // plain text in the first cell only (blank in B:D) since those
+        // are merged cells in the template; Excel only needs the value
+        // on the merge's anchor cell.
+        function buildCogEnvTableRows(c) {
+            return [
+                ['', 'X', 'Y', 'Z'],
+                ['CoG envelope', '', '', ''],
+                ['CARGO DIM. In Axis', c.dimX, c.dimY, c.dimZ],
+                ['CARGO CoG. In Axis', c.cogX, c.cogY, c.cogZ],
+                ['GOG envelope (5%)', c.envX, c.envY, c.envZ],
+                ['LC1', c.lcBase[0].x, c.lcBase[0].y, c.lcBase[0].z],
+                ['LC2', c.lcBase[1].x, c.lcBase[1].y, c.lcBase[1].z],
+                ['LC3', c.lcBase[2].x, c.lcBase[2].y, c.lcBase[2].z],
+                ['LC4', c.lcBase[3].x, c.lcBase[3].y, c.lcBase[3].z],
+                ['CoG envelope with slope', '', '', ''],
+                ['Shift of CoG on slope Uphill (Loadcase 1&4)', c.upSlope, 'N/A', 'N/A'],
+                ['Shift of CoG on slope Downhill(Loadcase2&3)', c.downSlope, 'N/A', 'N/A'],
+                ['GOG envelope (5%) with6% slope', c.envXSlope, c.envY, c.envZ],
+                ['LC1', c.lcSlope[0].x, c.lcSlope[0].y, c.lcSlope[0].z],
+                ['LC2', c.lcSlope[1].x, c.lcSlope[1].y, c.lcSlope[1].z],
+                ['LC3', c.lcSlope[2].x, c.lcSlope[2].y, c.lcSlope[2].z],
+                ['LC4', c.lcSlope[3].x, c.lcSlope[3].y, c.lcSlope[3].z],
+            ];
+        }
+
+        // "🧮 Calculate CoG Envelope" — the ONLY thing that flips
+        // tgCogEnvCalculated on and reveals the table (see the blank
+        // gate in renderTgCogEnvTable()). Computes locally first (that
+        // part always succeeds, even offline), THEN pushes to Excel —
+        // so the table still shows even if the push below fails; only
+        // the push failing flashes the button red, since that's the
+        // step that can actually fail.
+        async function calculateCogEnvelopeImpl() {
+            tgCogEnvCalculated = true;
+            renderTgCogEnvTable(); // was blank — now computes + shows immediately
+            if (!isOfficeInitialized) {
+                alert(`Not connected to Excel — the table above is calculated and shown locally, but could not push to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE}. Open this add-in inside an Excel workbook to push.`);
+                throw new Error('Not connected to Excel');
+            }
+            const c = calcCogEnvelope();
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(COGENV_TABLE_SHEET);
+                    sheet.getRange(COGENV_TABLE_RANGE).values = buildCogEnvTableRows(c);
+                    await context.sync();
+                });
+                logMsg(`📤 Calculated CoG Envelope Table and pushed to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE}.`);
+            } catch (e) {
+                console.warn(`Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE}`, e);
+                alert(`CoG Envelope Table calculated and shown locally, but could not push to sheet "${COGENV_TABLE_SHEET}". Make sure it exists with that name.`);
+                throw e;
+            }
+        }
+        // "🧮 Calculate CoG Envelope" button — pulses tgCalcCogEnvBtn
+        // amber while in flight, flashes green only if the Excel push
+        // also succeeded (red if not connected, or the push failed).
+        const calculateCogEnvelope = withBtnSyncIndicator('tgCalcCogEnvBtn', calculateCogEnvelopeImpl);
+
+        // Small 📤 button at the end of each LC1-4 row (both the plain
+        // and "with slope" sections) — pushes just that one load case's
+        // X/Y/Z to Excel "Input"!BB35:BD35, the same cell block the
+        // main 📦 Generate Cargo card's first cargo item writes its own
+        // X/Y/Z to (see CARGO_X_COL/Y/Z_COL). That's the cell block the
+        // rest of the workbook's transport-table formulas read the
+        // "active" cargo CoG from, so setting it to one load case's
+        // corner recomputes/creates the transport table FOR that load
+        // case — nothing further to do on this side beyond the push.
+        // Refreshes 📋 Drawing Table afterward so the resulting
+        // transport table shows immediately in this dashboard too.
+        // Takes the button element directly (not an id) since there
+        // are 8 of these rendered fresh on every table re-render.
+        async function pushLoadCaseToExcel(btnEl, name, x, y, z) {
+            btnEl.classList.add('tg-btn-syncing');
+            btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err');
+            try {
+                if (!isOfficeInitialized) throw new Error('Not connected to Excel');
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
+                    sheet.getRange('BB35:BD35').values = [[x, y, z]];
+                    await context.sync();
+                });
+                logMsg(`📤 Pushed ${name} CoG (X ${x}, Y ${y}, Z ${z}) to '${INPUT_SHEET_NAME}'!BB35:BD35 — this is now the active cargo CoG the rest of the workbook's transport table calculates from.`);
+                await pullDrawingTableFromExcel({ silent: true });
+                btnEl.classList.remove('tg-btn-syncing');
+                btnEl.classList.add('tg-btn-flash-ok');
+            } catch (e) {
+                console.warn(`Could not push ${name} CoG to '${INPUT_SHEET_NAME}'!BB35:BD35`, e);
+                if (!isOfficeInitialized) alert(`Not connected to Excel — open this add-in inside an Excel workbook to push ${name}'s CoG to 'Input'!BB35:BD35.`);
+                else alert(`Could not push ${name}'s CoG to sheet "${INPUT_SHEET_NAME}". Make sure it exists.`);
+                btnEl.classList.remove('tg-btn-syncing');
+                btnEl.classList.add('tg-btn-flash-err');
+            } finally {
+                setTimeout(() => { btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err'); }, BTN_FLASH_MS);
+            }
+        }
+
         // Renders the 8 fields (workbook C10:E11 + C18:C19) as a
         // field-grid, same visual pattern as the other cards' field
         // grids. dimX/Y/Z and cogX/Y/Z are PULL-ONLY (greyed out,
@@ -4364,26 +4499,42 @@
         // envelope section (dim/CoG inputs echoed back, 5% envelope,
         // LC1-4), then the "with slope" section (uphill/downhill shift
         // inputs echoed back, 5%-with-slope envelope, LC1-4 again).
+        // Starts blank (tgCogEnvCalculated === false) until "🧮
+        // Calculate CoG Envelope" is pressed — see that flag's own
+        // comment above for why it stays sticky true afterward instead
+        // of re-blanking on every input change.
         function renderTgCogEnvTable() {
             const el = document.getElementById('tgCogEnvTable');
             if (!el) return;
+            if (!tgCogEnvCalculated) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data yet — click "🧮 Calculate CoG Envelope" below to compute this table and push it to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE}.</div>`;
+                const previewEl = document.getElementById('tgCogEnvPreview');
+                if (previewEl) previewEl.innerHTML = '';
+                return;
+            }
             const c = calcCogEnvelope();
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : v);
-            const row = (label, x, y, z, bold) => `
-                <tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}</td></tr>`;
+            // lc (optional) appends the small 📤 push-to-Input!BB35:BD35
+            // button after the Z value, for LC1-4 rows only — raw
+            // (unformatted) x/y/z are baked into the onclick call so the
+            // push always uses the exact computed value, not the
+            // rounded display string.
+            const lcPushBtn = lc => ` <button type="button" class="tg-lc-push-btn" title="Push ${lc.name}'s X/Y/Z to Excel 'Input'!BB35:BD35, then create/refresh the transport table for this load case" onclick="pushLoadCaseToExcel(this, '${lc.name}', ${lc.x}, ${lc.y}, ${lc.z})">📤</button>`;
+            const row = (label, x, y, z, bold, lc) => `
+                <tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}${lc ? lcPushBtn(lc) : ''}</td></tr>`;
             let html = '<table class="tg-drawing-table">';
             html += `<tr class="tg-dt-title"><td colspan="4">CoG ENVELOPE</td></tr>`;
             html += `<tr class="tg-dt-bold"><td></td><td>X</td><td>Y</td><td>Z</td></tr>`;
             html += row('CARGO DIM. In Axis', c.dimX, c.dimY, c.dimZ);
             html += row('CARGO CoG. In Axis', c.cogX, c.cogY, c.cogZ);
             html += row('CoG envelope (5%)', c.envX, c.envY, c.envZ);
-            c.lcBase.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z); });
+            c.lcBase.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, false, lc); });
             html += `<tr class="tg-dt-spacer"><td colspan="4"></td></tr>`;
             html += `<tr class="tg-dt-bold"><td colspan="4">CoG envelope with slope</td></tr>`;
             html += row('Shift of CoG on slope — Uphill (LC1&4)', c.upSlope, 'N/A', 'N/A');
             html += row('Shift of CoG on slope — Downhill (LC2&3)', c.downSlope, 'N/A', 'N/A');
             html += row('CoG envelope (5%) with slope', c.envXSlope, c.envY, c.envZ);
-            c.lcSlope.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z); });
+            c.lcSlope.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, false, lc); });
             html += '</table>';
             el.innerHTML = html;
             renderTgCogEnvPreview(c);
