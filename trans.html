@@ -630,7 +630,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.62.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.62.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -4399,13 +4399,31 @@
                 const failedRanges = [mainErr ? COGENV_TABLE_RANGE_MAIN : null, slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
                 const okRanges = [!mainErr ? COGENV_TABLE_RANGE_MAIN : null, !slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
                 if (okRanges) logMsg(`📤 Pushed ${okRanges} to '${COGENV_TABLE_SHEET}' — ${failedRanges} failed, see below.`);
+                // Both ranges failing with the same "ItemNotFound"
+                // almost always means worksheets.getItem(COGENV_TABLE_SHEET)
+                // itself couldn't find a sheet with that exact name — not
+                // a problem with the ranges. When that happens, list the
+                // workbook's actual sheet names so the mismatch is
+                // obvious at a glance instead of guessing blind.
+                let sheetNamesNote = '';
+                if ((mainErr && mainErr.code === 'ItemNotFound') || (slopeErr && slopeErr.code === 'ItemNotFound')) {
+                    try {
+                        const names = await Excel.run(async (context) => {
+                            const sheets = context.workbook.worksheets;
+                            sheets.load('items/name');
+                            await context.sync();
+                            return sheets.items.map(s => s.name);
+                        });
+                        sheetNamesNote = ` Actual sheet names in this workbook: ${names.map(n => `"${n}"`).join(', ')}.`;
+                    } catch (e2) { /* best-effort only */ }
+                }
                 // Always log the actual Excel error text (not just an
                 // alert) so it's visible/copyable in the on-screen log
                 // panel — the alert box alone doesn't get captured
                 // anywhere for troubleshooting.
                 const detail = [mainErr ? `${COGENV_TABLE_RANGE_MAIN}: ${errText(mainErr)}` : null, slopeErr ? `${COGENV_TABLE_RANGE_SLOPE}: ${errText(slopeErr)}` : null].filter(Boolean).join(' | ');
-                logMsg(`⚠️ Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}' — ${detail}`);
-                alert(`CoG Envelope Table calculated and shown locally, but could not push ${failedRanges} to sheet "${COGENV_TABLE_SHEET}".\n\n${detail}\n\nMake sure a sheet with that EXACT name exists and those cells aren't merged or protected.`);
+                logMsg(`⚠️ Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}' — ${detail}${sheetNamesNote}`);
+                alert(`CoG Envelope Table calculated and shown locally, but could not push ${failedRanges} to sheet "${COGENV_TABLE_SHEET}".\n\n${detail}${sheetNamesNote}\n\nMake sure a sheet with that EXACT name exists and those cells aren't merged or protected.`);
                 throw (mainErr || slopeErr);
             }
         }
