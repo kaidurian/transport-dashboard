@@ -301,15 +301,6 @@
             padding: 8px; color: #ffffff; background: var(--accent-blue, #009fda); border-bottom: none;
         }
         table.tg-drawing-table tr.tg-dt-spacer td { padding: 3px; border-bottom: none; }
-        /* Small "this table auto-syncs live from Excel" indicator shown
-           only in the TRANSPORT TABLE LC0 banner — the frozen LC1-4
-           snapshot banners never get this badge. */
-        .tg-dt-sync-badge {
-            display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.5px;
-            background: rgba(255,255,255,0.18); color: #ffffff; border-radius: 10px;
-            padding: 2px 7px; margin-left: 6px; vertical-align: middle;
-        }
-        .tg-snapshot-table + .tg-snapshot-table { margin-top: 10px; }
         /* Pass/fail "sign" cells (e.g. OK / NOT OK / PASS / FAIL) —
            colored so a failing check jumps out from the rest of the
            table. See cellStatusClass() in renderTgDrawingTable(). */
@@ -842,9 +833,10 @@
                             auto-synced from Excel <strong>"Input horizontal loads"!H11:H13</strong>.
                             <strong>Cargo CoG</strong> (X/Y/Z, m — workbook C11:E11) is also 🔒
                             <strong>pull-only</strong>, auto-synced from Excel
-                            <strong>"Input"!BB{row}/BC{row}/BJ{row}</strong> for whichever cargo item is picked from
-                            the <strong>Cargo (for CoG)</strong> dropdown below (defaults to row 35, the first
-                            cargo item). Neither is ever written back to Excel or
+                            <strong>"Input"!BB{row}/BC{row}/BJ{row}</strong>, where {row} is whichever cargo
+                            item is picked from the <strong>🔽 Cargo Selection</strong> dropdown above (synced
+                            with <strong>"Input"!AZ35:AZ39</strong>, defaulting to <strong>AZ35</strong>).
+                            Neither is ever written back to Excel or
                             editable here. <strong>Slope shift</strong> (uphill LC1&amp;4 / downhill LC2&amp;3,
                             workbook C18/C19) stays a local-only input — no Excel source given for those, so
                             type them in directly; Y/Z have no slope-shift input, matching the workbook's
@@ -856,9 +848,9 @@
                         </p>
                         <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB/BC/BJ on the selected cargo item's row, and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
+                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input horizontal loads'!H11:H13, Cargo CoG. X/Y/Z from 'Input'!BB{row}/BC{row}/BJ{row} (row set by the 🔽 Cargo Selection dropdown above, AZ35:AZ39), and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
                                     onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgCalcCogEnvBtn" title="Compute the 📊 CoG Envelope Table below (CoG envelope 5%, LC1-4, and the with-slope versions) from the fields above, then push the values to Excel 'Check CASE A & CASE B'!B67:D73 and B75:D81"
+                            <button type="button" class="tg-add-train-btn" id="tgCalcCogEnvBtn" title="Compute the 📊 CoG Envelope Table below (CoG envelope 5%, LC1-4, and the with-slope versions) from the fields above, then push the numeric data to Excel 'Check CASE A & CASE B'!B67:D73 and B75:D81"
                                     onclick="calculateCogEnvelope()">🧮 Calculate CoG Envelope</button>
                         </div>
                     </div>
@@ -905,9 +897,10 @@
                             "2"!C8:E24) — computed live in this dashboard's own code from the 📐 CoG Envelope
                             fields above, using the workbook's exact formulas. Starts <strong>blank</strong>;
                             press <strong>🧮 Calculate CoG Envelope</strong> below to compute, show, and
-                            auto-push the values (X/Y/Z only, no row labels) to Excel
-                            <strong>"Check CASE A &amp; CASE B"!B67:D73</strong> and
-                            <strong>B75:D81</strong>.
+                            auto-push the numeric X/Y/Z data to Excel
+                            <strong>"Check CASE A &amp; CASE B"!B67:D73</strong> (CoG envelope section) and
+                            <strong>B75:D81</strong> (with-slope section) — the row labels already in
+                            column A and the two section banners are left untouched.
                             Each <strong>LC1&ndash;LC4</strong> row (both sections) has its own small 📤 button
                             that pushes just that load case's X/Y/Z to <strong>"Input"!BB35:BD35</strong> —
                             the same cells the rest of the workbook's transport table calculates the active
@@ -930,16 +923,6 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
                                     onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
-                        </div>
-                        <p style="font-size:11px; color:var(--text-muted); margin:14px 0 6px;">
-                            Each 📤 button on a 📊 CoG Envelope Table LC1&ndash;4 row freezes a separate
-                            snapshot of the table above under that load case's own name — local only,
-                            never auto-synced or overwritten by later polling.
-                        </p>
-                        <div id="tgSnapshotTransportTables"><!-- Frozen per-LC transport table snapshots rendered by JS --></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Clear all local LC1-4 transport table snapshots (does not touch Excel)"
-                                    onclick="clearTgSnapshotTransportTables()">🗑 Clear LC Snapshots</button>
                         </div>
                     </div>
 
@@ -1221,7 +1204,7 @@
                 // user is actively typing in this card's OWN
                 // upSlope/downSlope fields (see isEditingCogEnvFields),
                 // so re-rendering the grid never steals focus mid-keystroke.
-                if (!isEditingCogEnvFields()) await pullCogEnvFromExcel({ silent: true }); // CoG Envelope input fields only — the 📊 CoG Envelope Table below no longer auto-refreshes on poll (see pullCogEnvFromExcel)
+                if (!isEditingCogEnvFields()) await pullCogEnvFromExcel({ silent: true }); // CoG Envelope Table + preview — keeps it live-synced, not just on panel open
                 if (!isEditingDashboard()) {
                     await pullZTrailerHeightFromExcel({ silent: true });
                     await pullHorizontalLoadsFromExcel({ silent: true });
@@ -1409,7 +1392,7 @@
         // ---- CoG Envelope — MOSTLY local-only calc (no Excel sheet
         // involved), except dimX/dimY/dimZ and cogX/cogY/cogZ, which
         // are PULL-ONLY, auto-synced from Excel (never pushed, never
-        // hand-edited here) — see COGENV_DIM_CELLS / COGENV_COG_CELLS
+        // hand-edited here) — see COGENV_DIM_CELLS / cogEnvCogCells()
         // and pullCogEnvFromExcel() below. Reproduces the reference
         // workbook "CoG_Envelope.xlsx", sheet "2", cells C8:E24: those
         // 6 pulled values plus the 2 local slope-shift inputs
@@ -1428,30 +1411,23 @@
         // 📊 CoG Envelope Table immediately. ----
         let tgCogEnv = {
             dimX: 0, dimY: 0, dimZ: 0,   // PULL-ONLY — Excel 'Input horizontal loads'!H11:H13
-            cogX: 0, cogY: 0, cogZ: 0,   // PULL-ONLY — Excel 'Input'!BB35/BC35/BJ35
+            cogX: 0, cogY: 0, cogZ: 0,   // PULL-ONLY — Excel 'Input'!BB{cargoRow}/BC{cargoRow}/BJ{cargoRow}
             upSlope: 0,                  // workbook C18 — Shift of CoG on slope, uphill (LC1 & LC4) — local input, kept for display only, see note above
             downSlope: 0,                // workbook C19 — Shift of CoG on slope, downhill (LC2 & LC3) — local input; the value actually used in the "with slope" envelope
+            cargoRow: 35,                // which cargo item (Input!AZ35:AZ39) the Cargo CoG. X/Y/Z pull above comes from — 35 = 1st item (AZ35), ..., 39 = 5th item (AZ39). Selected via the 📐 CoG Envelope card's cargo dropdown — see renderTgCogEnvCargoSelect()/updateCogEnvCargoRow().
         };
         // Cargo Dim. X/Y/Z — Excel "Input horizontal loads"!H11:H13.
         const COGENV_DIM_SHEET = "Input horizontal loads";
         const COGENV_DIM_CELLS = { dimX: 'H11', dimY: 'H12', dimZ: 'H13' };
-        // Cargo CoG. X/Y/Z — Excel "Input"!BB{row}/BC{row}/BJ{row}, where
-        // {row} is whichever cargo item row (35-39) is picked from the
-        // "Cargo" dropdown in this card (see tgCogEnvCargoRow below) —
-        // defaults to row 35 (the first cargo item, Input!AZ35). Row 35
-        // used to be hardcoded; cogEnvCogCells() derives it fresh from
-        // tgCogEnvCargoRow every time it's needed instead.
+        // Cargo CoG. X/Y/Z — Excel "Input"!BB{row}/BC{row}/BJ{row},
+        // where {row} is tgCogEnv.cargoRow (35-39, one of the 5 cargo
+        // items AZ35:AZ39 — see 📐 CoG Envelope card's cargo dropdown).
+        // Defaults to row 35 (1st cargo item, AZ35).
         const COGENV_COG_SHEET = "Input";
         function cogEnvCogCells() {
-            const row = tgCogEnvCargoRow;
+            const row = tgCogEnv.cargoRow || 35;
             return { cogX: `BB${row}`, cogY: `BC${row}`, cogZ: `BJ${row}` };
         }
-        // Which cargo item row (Input!AZ35:AZ39) feeds Cargo CoG. X/Y/Z
-        // above — selected via the "Cargo" dropdown in the 📐 CoG
-        // Envelope card, kept in sync with the cargo item list
-        // (cargoItems) rendered by the 📦 Generate Cargo card. Defaults
-        // to the first cargo item (row 35 = Input!AZ35).
-        let tgCogEnvCargoRow = CARGO_START_ROW;
         // Every key pulled automatically from Excel, above — never
         // hand-edited, never pushed. Only upSlope/downSlope stay local.
         const COGENV_READONLY_KEYS = ['dimX', 'dimY', 'dimZ', 'cogX', 'cogY', 'cogZ'];
@@ -1459,24 +1435,22 @@
         // ---- 📊 CoG Envelope Table — starts BLANK (see
         // renderTgCogEnvTable()) until "🧮 Calculate CoG Envelope" is
         // pressed. That button computes calcCogEnvelope(), shows the
-        // table + 2D preview, and pushes the X/Y/Z VALUES (no row
-        // labels) to Excel "Check CASE A & CASE B"!B67:D73 and B75:D81
-        // (see buildCogEnvValueRows1()/buildCogEnvValueRows2()/calculateCogEnvelopeImpl() further
+        // table + 2D preview, and pushes the whole 17-row block to
+        // Excel "Check CASE A & CASE B"!A65:D81 (see
+        // buildCogEnvTableRows()/calculateCogEnvelopeImpl() further
         // below). Stays true (table keeps showing/recalculating live on
         // any later input change) once first calculated — only the
         // very first "no data yet" state is gated, not every render.
         let tgCogEnvCalculated = false;
         const COGENV_TABLE_SHEET = "Check CASE A & CASE B";
-        const COGENV_TABLE_RANGE = "A65:D81"; // kept for the on-screen table's own labeling/help text only — see the two value-only ranges actually pushed to, below
-        // The button doesn't push the full labeled A65:D81 block — it
-        // writes only the X/Y/Z VALUE cells (no row labels, no header
-        // row, no section-banner rows), split across the two ranges the
-        // template's merged banner/header rows break the block into:
-        // B67:D73 = CARGO DIM./CARGO CoG./GOG envelope(5%)/LC1-4, and
-        // B75:D81 = the uphill/downhill shift/GOG envelope-with-slope/
-        // LC1-4-with-slope block. Matches KKKai's reference screenshot.
-        const COGENV_TABLE_VALUES_RANGE_1 = "B67:D73";
-        const COGENV_TABLE_VALUES_RANGE_2 = "B75:D81";
+        const COGENV_TABLE_RANGE = "A65:D81"; // kept for reference/help text — full block incl. labels/banners; the actual push (see below) only touches the two numeric sub-ranges
+        // Numeric-data-only push ranges — column A row labels (CARGO
+        // DIM./CARGO CoG./GOG envelope/LC1-4/shift labels) and the two
+        // section banner rows (65-66 header, 74 "CoG envelope with
+        // slope") already exist in the template and are left alone;
+        // only the B:D numbers get written.
+        const COGENV_TABLE_RANGE_MAIN = "B67:D73";  // CARGO DIM. / CARGO CoG. / GOG envelope (5%) / LC1-4
+        const COGENV_TABLE_RANGE_SLOPE = "B75:D81"; // Shift Uphill / Shift Downhill / GOG envelope (5%) with slope / LC1-4
 
         // ---- Hydraulic group positions (G1/G2/G3) — PULL-ONLY, feeds
         // ONLY the 📐 CoG Envelope 2D preview (renderTgCogEnvPreview),
@@ -4236,28 +4210,24 @@
 
         // Turns the raw pulled grid (tgDrawingTableRows) into an HTML
         // table mirroring the Excel sheet's layout: row 3 renders as the
-        // big merged banner — shown here as "<sheet's title text> LC0"
-        // plus this dashboard's own auto-sync badge, since this is the
-        // one live transport table that always tracks whatever cargo
-        // CoG is currently active in Excel (as opposed to the frozen
-        // LC1-4 snapshots — see tgSnapshotTransportTables below) — row
-        // 4's column B spans B:C (matching that sheet's B4:C4 merge),
-        // the known section-header rows render bold, a completely-empty
-        // row renders as a thin spacer (matching the sheet's blank
-        // spacer rows between sections) instead of an empty-looking
-        // data row, and every other cell is shown exactly as pulled —
-        // including error strings like "#REF!" if the live workbook has
-        // one, since this table only ever mirrors what's actually in
-        // the sheet. Any cell whose value is a recognized pass/fail
-        // "sign" (OK/NOT OK/PASS/FAIL/etc. — see cellStatusClass()) is
-        // colored green or red so a failing check is immediately
-        // visible.
-        // Shared table-builder used by both the live LC0 table
-        // (renderTgDrawingTable) and every frozen per-load-case
-        // snapshot (renderTgSnapshotTransportTables) — identical cell
-        // formatting/merge/bold/spacer logic, the only difference is
-        // what HTML goes in the title-banner row (titleHtml).
-        function buildTransportTableHtml(rows, titleHtml) {
+        // big merged "TRANSPORT TABLE" banner, row 4's column B spans
+        // B:C (matching that sheet's B4:C4 merge), the known section-
+        // header rows render bold, a completely-empty row renders as a
+        // thin spacer (matching the sheet's blank spacer rows between
+        // sections) instead of an empty-looking data row, and every
+        // other cell is shown exactly as pulled — including error
+        // strings like "#REF!" if the live workbook has one, since this
+        // table only ever mirrors what's actually in the sheet. Any
+        // cell whose value is a recognized pass/fail "sign" (OK/NOT OK/
+        // PASS/FAIL/etc. — see cellStatusClass()) is colored green or
+        // red so a failing check is immediately visible.
+        function renderTgDrawingTable() {
+            const el = document.getElementById('tgDrawingTable');
+            if (!el) return;
+            if (!tgDrawingTableRows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${DRAWING_TABLE_SHEET_NAME}'.</div>`;
+                return;
+            }
             const fmt = v => {
                 if (v === null || v === undefined || v === '') return '';
                 if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
@@ -4268,12 +4238,12 @@
                 return `<td${cls ? ` class="${cls}"` : ''}>${fmt(v)}</td>`;
             };
             let html = '<table class="tg-drawing-table">';
-            rows.forEach((row, i) => {
+            tgDrawingTableRows.forEach((row, i) => {
                 const rowNum = i + 1; // 1-indexed, matching Excel row numbers
                 const isEmpty = row.every(v => v === null || v === undefined || v === '');
                 if (isEmpty) { html += `<tr class="tg-dt-spacer"><td colspan="6"></td></tr>`; return; }
                 if (rowNum === DRAWING_TABLE_TITLE_ROW) {
-                    html += `<tr class="tg-dt-title"><td colspan="6">${titleHtml}</td></tr>`;
+                    html += `<tr class="tg-dt-title"><td colspan="6">${fmt(row[0])}</td></tr>`;
                     return;
                 }
                 const boldClass = DRAWING_TABLE_BOLD_ROWS.has(rowNum) ? ' class="tg-dt-bold"' : '';
@@ -4285,58 +4255,7 @@
                 html += `<tr${boldClass}>` + row.map(cell).join('') + `</tr>`;
             });
             html += '</table>';
-            return html;
-        }
-
-        function renderTgDrawingTable() {
-            const el = document.getElementById('tgDrawingTable');
-            if (!el) return;
-            if (!tgDrawingTableRows.length) {
-                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${DRAWING_TABLE_SHEET_NAME}'.</div>`;
-                return;
-            }
-            const titleRow = tgDrawingTableRows[DRAWING_TABLE_TITLE_ROW - 1] || [];
-            const rawTitle = (titleRow[0] === null || titleRow[0] === undefined || titleRow[0] === '') ? 'TRANSPORT TABLE' : escapeHtml(String(titleRow[0]));
-            // "LC0" marks this as the one live table that always
-            // reflects whatever cargo CoG is currently active in Excel
-            // (Input!BB35:BD35) — as opposed to the frozen LC1-4
-            // snapshots below, which never move once created. The small
-            // badge is this dashboard's own auto-sync indicator, not
-            // anything pulled from the sheet.
-            const titleHtml = `${rawTitle} LC0 <span class="tg-dt-sync-badge" title="Auto-synced live — refreshes automatically from Excel '${DRAWING_TABLE_SHEET_NAME}' on every auto-sync poll.">⟳ auto-sync</span>`;
-            el.innerHTML = buildTransportTableHtml(tgDrawingTableRows, titleHtml);
-        }
-
-        // Frozen per-load-case transport table snapshots — one entry
-        // per LC name ('LC1'..'LC4'), each a full deep-copy of
-        // tgDrawingTableRows taken the moment that LC's small 📤 button
-        // was pressed (see pushLoadCaseToExcel). Unlike the live LC0
-        // table above, these are local-only: never auto-synced, never
-        // overwritten by polling, and not pushed anywhere — pressing
-        // the same LC's 📤 button again simply replaces that one entry
-        // with a fresh snapshot. Insertion order (LC1, LC2, ...) is
-        // preserved by normal JS object key order since keys are
-        // always the fixed strings 'LC1'-'LC4'.
-        let tgSnapshotTransportTables = {};
-
-        function renderTgSnapshotTransportTables() {
-            const el = document.getElementById('tgSnapshotTransportTables');
-            if (!el) return;
-            const names = Object.keys(tgSnapshotTransportTables);
-            if (!names.length) { el.innerHTML = ''; return; }
-            el.innerHTML = names.map(name => {
-                const titleHtml = `TRANSPORT TABLE ${name}`; // no auto-sync badge — these are frozen local-only snapshots
-                return `<div class="tg-drawing-table-wrap tg-snapshot-table">${buildTransportTableHtml(tgSnapshotTransportTables[name], titleHtml)}</div>`;
-            }).join('');
-        }
-
-        // Clears every frozen LC1-4 snapshot table (local-only —
-        // nothing in Excel is touched). Bound to the small 🗑 button
-        // shown once at least one snapshot exists.
-        function clearTgSnapshotTransportTables() {
-            tgSnapshotTransportTables = {};
-            renderTgSnapshotTransportTables();
-            logMsg('🗑 Cleared all local LC1-4 transport table snapshots.');
+            el.innerHTML = html;
         }
 
         // ============================================================
@@ -4391,67 +4310,35 @@
             upSlope: 'C18', downSlope: 'C19',
         };
 
-        // Lays out calcCogEnvelope()'s result as a 17-row × 4-column
-        // grid matching Excel "Check CASE A & CASE B"!A65:D81 exactly
-        // (row-for-row against the reference screenshot: header, "CoG
-        // envelope" banner, dim/CoG/envelope, LC1-4, "with slope"
-        // banner, uphill/downhill shift, envelope-with-slope, LC1-4
-        // again). Used by calculateCogEnvelopeImpl() to push the whole
-        // block in one Excel.run — column A's banner rows are pushed as
-        // plain text in the first cell only (blank in B:D) since those
-        // are merged cells in the template; Excel only needs the value
-        // on the merge's anchor cell.
-        function buildCogEnvTableRows(c) {
-            return [
-                ['', 'X', 'Y', 'Z'],
-                ['CoG envelope', '', '', ''],
-                ['CARGO DIM. In Axis', c.dimX, c.dimY, c.dimZ],
-                ['CARGO CoG. In Axis', c.cogX, c.cogY, c.cogZ],
-                ['GOG envelope (5%)', c.envX, c.envY, c.envZ],
-                ['LC1', c.lcBase[0].x, c.lcBase[0].y, c.lcBase[0].z],
-                ['LC2', c.lcBase[1].x, c.lcBase[1].y, c.lcBase[1].z],
-                ['LC3', c.lcBase[2].x, c.lcBase[2].y, c.lcBase[2].z],
-                ['LC4', c.lcBase[3].x, c.lcBase[3].y, c.lcBase[3].z],
-                ['CoG envelope with slope', '', '', ''],
-                ['Shift of CoG on slope Uphill (Loadcase 1&4)', c.upSlope, 'N/A', 'N/A'],
-                ['Shift of CoG on slope Downhill(Loadcase2&3)', c.downSlope, 'N/A', 'N/A'],
-                ['GOG envelope (5%) with6% slope', c.envXSlope, c.envY, c.envZ],
-                ['LC1', c.lcSlope[0].x, c.lcSlope[0].y, c.lcSlope[0].z],
-                ['LC2', c.lcSlope[1].x, c.lcSlope[1].y, c.lcSlope[1].z],
-                ['LC3', c.lcSlope[2].x, c.lcSlope[2].y, c.lcSlope[2].z],
-                ['LC4', c.lcSlope[3].x, c.lcSlope[3].y, c.lcSlope[3].z],
-            ];
-        }
-
-        // Value-only (no row-label column) versions of the two blocks
-        // above — these are what's actually pushed to
-        // COGENV_TABLE_VALUES_RANGE_1/2 (B67:D73 / B75:D81), since
-        // those ranges start at column B (the row labels live in
-        // column A, which is a pre-existing merged/labeled template
-        // column this dashboard never touches).
-        function buildCogEnvValueRows1(c) {
-            // B67:D73 — CARGO DIM./CARGO CoG./GOG envelope (5%)/LC1-4 (7 rows)
-            return [
-                [c.dimX, c.dimY, c.dimZ],
-                [c.cogX, c.cogY, c.cogZ],
-                [c.envX, c.envY, c.envZ],
-                [c.lcBase[0].x, c.lcBase[0].y, c.lcBase[0].z],
-                [c.lcBase[1].x, c.lcBase[1].y, c.lcBase[1].z],
-                [c.lcBase[2].x, c.lcBase[2].y, c.lcBase[2].z],
-                [c.lcBase[3].x, c.lcBase[3].y, c.lcBase[3].z],
-            ];
-        }
-        function buildCogEnvValueRows2(c) {
-            // B75:D81 — Shift Uphill/Downhill/GOG envelope with slope/LC1-4 (7 rows)
-            return [
-                [c.upSlope, 'N/A', 'N/A'],
-                [c.downSlope, 'N/A', 'N/A'],
-                [c.envXSlope, c.envY, c.envZ],
-                [c.lcSlope[0].x, c.lcSlope[0].y, c.lcSlope[0].z],
-                [c.lcSlope[1].x, c.lcSlope[1].y, c.lcSlope[1].z],
-                [c.lcSlope[2].x, c.lcSlope[2].y, c.lcSlope[2].z],
-                [c.lcSlope[3].x, c.lcSlope[3].y, c.lcSlope[3].z],
-            ];
+        // Lays out calcCogEnvelope()'s result as two 7-row × 3-column
+        // numeric grids matching Excel "Check CASE A & CASE B" exactly
+        // (row-for-row against the reference screenshot). Column A's
+        // row labels and the two section banners (rows 65/66/74)
+        // already exist in the template and are NOT touched — only the
+        // B:D numbers are written, via COGENV_TABLE_RANGE_MAIN
+        // (B67:D73: dim/CoG/envelope/LC1-4) and COGENV_TABLE_RANGE_SLOPE
+        // (B75:D81: uphill/downhill shift/envelope-with-slope/LC1-4).
+        function buildCogEnvTableDataRows(c) {
+            return {
+                main: [
+                    [c.dimX, c.dimY, c.dimZ],
+                    [c.cogX, c.cogY, c.cogZ],
+                    [c.envX, c.envY, c.envZ],
+                    [c.lcBase[0].x, c.lcBase[0].y, c.lcBase[0].z],
+                    [c.lcBase[1].x, c.lcBase[1].y, c.lcBase[1].z],
+                    [c.lcBase[2].x, c.lcBase[2].y, c.lcBase[2].z],
+                    [c.lcBase[3].x, c.lcBase[3].y, c.lcBase[3].z],
+                ],
+                slope: [
+                    [c.upSlope, 'N/A', 'N/A'],
+                    [c.downSlope, 'N/A', 'N/A'],
+                    [c.envXSlope, c.envY, c.envZ],
+                    [c.lcSlope[0].x, c.lcSlope[0].y, c.lcSlope[0].z],
+                    [c.lcSlope[1].x, c.lcSlope[1].y, c.lcSlope[1].z],
+                    [c.lcSlope[2].x, c.lcSlope[2].y, c.lcSlope[2].z],
+                    [c.lcSlope[3].x, c.lcSlope[3].y, c.lcSlope[3].z],
+                ],
+            };
         }
 
         // "🧮 Calculate CoG Envelope" — the ONLY thing that flips
@@ -4465,20 +4352,21 @@
             tgCogEnvCalculated = true;
             renderTgCogEnvTable(); // was blank — now computes + shows immediately
             if (!isOfficeInitialized) {
-                alert(`Not connected to Excel — the table above is calculated and shown locally, but could not push to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_VALUES_RANGE_1} and ${COGENV_TABLE_VALUES_RANGE_2}. Open this add-in inside an Excel workbook to push.`);
+                alert(`Not connected to Excel — the table above is calculated and shown locally, but could not push to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN}/${COGENV_TABLE_RANGE_SLOPE}. Open this add-in inside an Excel workbook to push.`);
                 throw new Error('Not connected to Excel');
             }
             const c = calcCogEnvelope();
             try {
+                const rows = buildCogEnvTableDataRows(c);
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(COGENV_TABLE_SHEET);
-                    sheet.getRange(COGENV_TABLE_VALUES_RANGE_1).values = buildCogEnvValueRows1(c);
-                    sheet.getRange(COGENV_TABLE_VALUES_RANGE_2).values = buildCogEnvValueRows2(c);
+                    sheet.getRange(COGENV_TABLE_RANGE_MAIN).values = rows.main;
+                    sheet.getRange(COGENV_TABLE_RANGE_SLOPE).values = rows.slope;
                     await context.sync();
                 });
-                logMsg(`📤 Calculated CoG Envelope Table and pushed to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_VALUES_RANGE_1} and ${COGENV_TABLE_VALUES_RANGE_2}.`);
+                logMsg(`📤 Calculated CoG Envelope Table and pushed to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN} and ${COGENV_TABLE_RANGE_SLOPE}.`);
             } catch (e) {
-                console.warn(`Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_VALUES_RANGE_1}/${COGENV_TABLE_VALUES_RANGE_2}`, e);
+                console.warn(`Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN}/${COGENV_TABLE_RANGE_SLOPE}`, e);
                 alert(`CoG Envelope Table calculated and shown locally, but could not push to sheet "${COGENV_TABLE_SHEET}". Make sure it exists with that name.`);
                 throw e;
             }
@@ -4513,17 +4401,6 @@
                 });
                 logMsg(`📤 Pushed ${name} CoG (X ${x}, Y ${y}, Z ${z}) to '${INPUT_SHEET_NAME}'!BB35:BD35 — this is now the active cargo CoG the rest of the workbook's transport table calculates from.`);
                 await pullDrawingTableFromExcel({ silent: true });
-                // Freeze a separate, local-only snapshot of the
-                // just-refreshed transport table under this load case's
-                // own name ("TRANSPORT TABLE LC1", "LC2", ...) — unlike
-                // the live LC0 table above, this copy never auto-syncs
-                // again; pressing this same LC's 📤 button later simply
-                // replaces it with a fresh snapshot.
-                if (tgDrawingTableRows.length) {
-                    tgSnapshotTransportTables[name] = tgDrawingTableRows.map(row => row.slice());
-                    renderTgSnapshotTransportTables();
-                    logMsg(`📋 Saved local snapshot 'TRANSPORT TABLE ${name}' (not auto-synced).`);
-                }
                 btnEl.classList.remove('tg-btn-syncing');
                 btnEl.classList.add('tg-btn-flash-ok');
             } catch (e) {
@@ -4547,27 +4424,7 @@
         function renderTgCogEnvFields() {
             const el = document.getElementById('tgCogEnvFields');
             if (!el) return;
-            // Keep the selected row valid against however many cargo
-            // items currently exist locally (cargoItems, synced with
-            // Excel Input!AZ35:AZ39) — falls back to the first cargo
-            // item (row 35) if the previously-selected row no longer
-            // has a matching item (e.g. that cargo item was deleted).
-            const itemCount = Math.max(cargoItems.length, 1);
-            const maxRow = CARGO_START_ROW + itemCount - 1;
-            if (tgCogEnvCargoRow < CARGO_START_ROW || tgCogEnvCargoRow > maxRow) tgCogEnvCargoRow = CARGO_START_ROW;
             const cogCells = cogEnvCogCells();
-            const cargoDropdown = `
-                <div class="tg-cargo-field tg-cargo-field-local">
-                    <label title="Which cargo item (Excel 'Input'!AZ35:AZ39) feeds Cargo CoG. X/Y/Z below — defaults to the first cargo item (AZ35).">🔽 Cargo (for CoG)</label>
-                    <select onchange="onCogEnvCargoRowChange(this.value)"
-                            title="Selects which cargo item row (AZ35:AZ39) Cargo CoG. X/Y/Z is pulled from.">
-                        ${cargoItems.map((item, i) => {
-                            const row = CARGO_START_ROW + i;
-                            const label = item.name || `Cargo_${i + 1}`;
-                            return `<option value="${row}" ${row === tgCogEnvCargoRow ? 'selected' : ''}>${label} (AZ${row})</option>`;
-                        }).join('')}
-                    </select>
-                </div>`;
             const field = (key, label, unit, sourceLabel) => {
                 const readonly = COGENV_READONLY_KEYS.includes(key);
                 const wrapCls = readonly ? 'tg-cargo-field tg-cargo-field-readonly' : 'tg-cargo-field tg-cargo-field-local';
@@ -4583,9 +4440,26 @@
                            onchange="updateCogEnvField('${key}', this.value)">
                 </div>`;
             };
+            // Cargo selection dropdown — picks which of the up to 5
+            // cargo items (Input!AZ35:AZ39, same list as the "Generate
+            // Cargo" card) the Cargo CoG. X/Y/Z fields above pull from.
+            // Defaults to AZ35 (tgCogEnv.cargoRow = 35, the 1st item).
+            // Options are built live from cargoItems (already synced
+            // elsewhere) rather than a fresh Excel read, so no extra
+            // round-trip is needed just to populate the list.
+            const items = cargoItems.length ? cargoItems : [defaultCargoItem(1)];
+            const cargoOptions = items.map((c, i) => {
+                const row = CARGO_START_ROW + i;
+                return `<option value="${row}" ${row === tgCogEnv.cargoRow ? 'selected' : ''}>${c.name} (${CARGO_NAME_COL}${row})</option>`;
+            }).join('');
+            const cargoSelectHtml = `
+                <div class="tg-cargo-field tg-cargo-field-local" style="grid-column: 1 / -1;">
+                    <label title="Selects which cargo item (Input!${CARGO_NAME_COL}35:${CARGO_NAME_COL}39) the Cargo CoG. X/Y/Z fields below pull from. Default: ${CARGO_NAME_COL}35.">🔽 Cargo Selection</label>
+                    <select onchange="updateCogEnvCargoRow(this.value)">${cargoOptions}</select>
+                </div>`;
             el.innerHTML = `
                 <div class="tg-cargo-field-grid">
-                    ${cargoDropdown}
+                    ${cargoSelectHtml}
                     ${field('dimX', 'Cargo Dim. X', 'm', `${COGENV_DIM_SHEET}!${COGENV_DIM_CELLS.dimX}`)}
                     ${field('dimY', 'Cargo Dim. Y', 'm', `${COGENV_DIM_SHEET}!${COGENV_DIM_CELLS.dimY}`)}
                     ${field('dimZ', 'Cargo Dim. Z', 'm', `${COGENV_DIM_SHEET}!${COGENV_DIM_CELLS.dimZ}`)}
@@ -4597,17 +4471,15 @@
                 </div>`;
         }
 
-        // Fires when the "Cargo (for CoG)" dropdown changes — re-points
-        // Cargo CoG. X/Y/Z at the newly-selected cargo item's row
-        // (Input!BB{row}/BC{row}/BJ{row}) and immediately re-pulls that
-        // row's values from Excel so the fields (and, if already
-        // calculated, the 📊 CoG Envelope Table) reflect the new
-        // selection right away.
-        function onCogEnvCargoRowChange(rawRow) {
+        // Fires when the cargo dropdown above changes — updates
+        // tgCogEnv.cargoRow (35-39) and re-pulls cogX/Y/Z from the new
+        // row (Input!BB{row}/BC{row}/BJ{row}), which recomputes the
+        // 📊 CoG Envelope Table + preview if already calculated.
+        function updateCogEnvCargoRow(rawRow) {
             const row = parseInt(rawRow, 10);
             if (!Number.isFinite(row)) return;
-            tgCogEnvCargoRow = row;
-            pullCogEnvFromExcel();
+            tgCogEnv.cargoRow = row;
+            pullCogEnvFromExcel({ silent: false });
         }
 
         function updateCogEnvField(key, rawValue) {
@@ -4618,14 +4490,13 @@
         }
 
         // Pulls dimX/dimY/dimZ from 'Input horizontal loads'!H11:H13
-        // and cogX/cogY/cogZ from 'Input'!BB{row}/BC{row}/BJ{row} (row =
-        // tgCogEnvCargoRow, selected via the "Cargo (for CoG)" dropdown,
-        // defaulting to row 35) — the only two Excel sources this card
-        // touches (two different sheets, one Excel.run). Never pushes
-        // anything back — these 6 fields are strictly pull-only. Called
-        // silently on panel open/refresh (see seedInitialOffsetsFromExcel),
-        // whenever the cargo dropdown changes (see onCogEnvCargoRowChange),
-        // and on-demand via this card's own "⇩ Refresh from Excel" button.
+        // and cogX/cogY/cogZ from 'Input'!BB{row}/BC{row}/BJ{row}
+        // (row set by the 🔽 Cargo Selection dropdown, tgCogEnv.cargoRow)
+        // — the only two Excel sources this card touches (two different sheets, one
+        // Excel.run). Never pushes anything back — these 6 fields are
+        // strictly pull-only. Called silently on panel open/refresh
+        // (see seedInitialOffsetsFromExcel) and on-demand via this
+        // card's own "⇩ Refresh from Excel" button.
         async function pullCogEnvFromExcel(opts = {}) {
             const silent = opts.silent === true;
             if (!isOfficeInitialized) {
@@ -4635,7 +4506,6 @@
             try {
                 const raw = {};
                 const rawGroups = {};
-                const cogCells = cogEnvCogCells();
                 await Excel.run(async (context) => {
                     const dimSheet = context.workbook.worksheets.getItem(COGENV_DIM_SHEET);
                     const cogSheet = context.workbook.worksheets.getItem(COGENV_COG_SHEET);
@@ -4645,7 +4515,7 @@
                         ranges[key] = dimSheet.getRange(cell);
                         ranges[key].load('values');
                     });
-                    Object.entries(cogCells).forEach(([key, cell]) => {
+                    Object.entries(cogEnvCogCells()).forEach(([key, cell]) => {
                         ranges[key] = cogSheet.getRange(cell);
                         ranges[key].load('values');
                     });
@@ -4667,20 +4537,13 @@
                     tgCogEnvGroups[key] = Number.isFinite(v) ? v : 0;
                 });
                 renderTgCogEnvFields();
-                // 📊 CoG Envelope Table itself is intentionally NOT
-                // re-rendered on every silent auto-poll tick anymore —
-                // once "🧮 Calculate CoG Envelope" has been pressed, the
-                // table stays exactly as generated until the user
-                // presses Calculate again or uses this card's own
-                // "⇩ Refresh from Excel" button (both call this function
-                // with silent left false/undefined). Only the input
-                // fields above it (dimX/Y/Z, cogX/Y/Z, G1-G3) keep
-                // live-syncing every tick.
-                if (!silent) renderTgCogEnvTable();
-                if (!silent) logMsg(`↺ Pulled CoG Envelope inputs from '${COGENV_DIM_SHEET}'!H11:H13, '${COGENV_COG_SHEET}'!${cogCells.cogX}/${cogCells.cogY}/${cogCells.cogZ}, and hydraulic group positions from '${COGENV_GROUPS_SHEET}'!B3:C5.`);
+                renderTgCogEnvTable();
+                const cc = cogEnvCogCells();
+                if (!silent) logMsg(`↺ Pulled CoG Envelope inputs from '${COGENV_DIM_SHEET}'!H11:H13, '${COGENV_COG_SHEET}'!${cc.cogX}/${cc.cogY}/${cc.cogZ}, and hydraulic group positions from '${COGENV_GROUPS_SHEET}'!B3:C5.`);
             } catch (e) {
                 console.warn('Could not read CoG Envelope source cells', e);
-                if (!silent) alert(`Could not read the CoG Envelope source cells. Make sure sheets "${COGENV_DIM_SHEET}", "${COGENV_COG_SHEET}" and "${COGENV_GROUPS_SHEET}" exist with values in H11:H13, BB${tgCogEnvCargoRow}/BC${tgCogEnvCargoRow}/BJ${tgCogEnvCargoRow}, and B3:C5.`);
+                const cc = cogEnvCogCells();
+                if (!silent) alert(`Could not read the CoG Envelope source cells. Make sure sheets "${COGENV_DIM_SHEET}", "${COGENV_COG_SHEET}" and "${COGENV_GROUPS_SHEET}" exist with values in H11:H13, ${cc.cogX}/${cc.cogY}/${cc.cogZ}, and B3:C5.`);
             }
         }
 
@@ -4698,7 +4561,7 @@
             const el = document.getElementById('tgCogEnvTable');
             if (!el) return;
             if (!tgCogEnvCalculated) {
-                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data yet — click "🧮 Calculate CoG Envelope" below to compute this table and push it to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_VALUES_RANGE_1} and ${COGENV_TABLE_VALUES_RANGE_2}.</div>`;
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data yet — click "🧮 Calculate CoG Envelope" below to compute this table and push it to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN} and ${COGENV_TABLE_RANGE_SLOPE}.</div>`;
                 const previewEl = document.getElementById('tgCogEnvPreview');
                 if (previewEl) previewEl.innerHTML = '';
                 return;
@@ -4710,7 +4573,7 @@
             // (unformatted) x/y/z are baked into the onclick call so the
             // push always uses the exact computed value, not the
             // rounded display string.
-            const lcPushBtn = lc => ` <button type="button" class="tg-lc-push-btn" title="Push ${lc.name}'s X/Y/Z to Excel 'Input'!BB35:BD35, refresh the live TRANSPORT TABLE LC0, and save a separate local-only 'TRANSPORT TABLE ${lc.name}' snapshot below" onclick="pushLoadCaseToExcel(this, '${lc.name}', ${lc.x}, ${lc.y}, ${lc.z})">📤</button>`;
+            const lcPushBtn = lc => ` <button type="button" class="tg-lc-push-btn" title="Push ${lc.name}'s X/Y/Z to Excel 'Input'!BB35:BD35, then create/refresh the transport table for this load case" onclick="pushLoadCaseToExcel(this, '${lc.name}', ${lc.x}, ${lc.y}, ${lc.z})">📤</button>`;
             const row = (label, x, y, z, bold, lc) => `
                 <tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}${lc ? lcPushBtn(lc) : ''}</td></tr>`;
             let html = '<table class="tg-drawing-table">';
