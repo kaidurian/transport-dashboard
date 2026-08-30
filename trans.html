@@ -630,7 +630,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.62.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.62.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1442,7 +1442,7 @@
         // any later input change) once first calculated — only the
         // very first "no data yet" state is gated, not every render.
         let tgCogEnvCalculated = false;
-        const COGENV_TABLE_SHEET = "Check CASE A & CASE B";
+        const COGENV_TABLE_SHEET = "Check CASE A & CASE B "; // NOTE: trailing space is intentional — that's the sheet's actual name in the workbook (confirmed via worksheets.load('items/name'))
         const COGENV_TABLE_RANGE = "A65:D81"; // kept for reference/help text — full block incl. labels/banners; the actual push (see below) only touches the two numeric sub-ranges
         // Numeric-data-only push ranges — column A row labels (CARGO
         // DIM./CARGO CoG./GOG envelope/LC1-4/shift labels) and the two
