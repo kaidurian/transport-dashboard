@@ -4356,19 +4356,50 @@
                 throw new Error('Not connected to Excel');
             }
             const c = calcCogEnvelope();
+            const rows = buildCogEnvTableDataRows(c);
+            // Excel.run/context.sync rolls back its ENTIRE batch if any
+            // single write in it fails (e.g. NaN/undefined value, a
+            // merged-cell conflict, or a protected range) — see the
+            // batch-write-failure lesson learned on the GHF Header&Dbar
+            // block trains. Guard against that two ways: (1) sanitize
+            // any non-finite/undefined number to 0 so a not-yet-pulled
+            // upstream field can't silently poison a whole write, and
+            // (2) push B67:D73 and B75:D81 as two INDEPENDENT Excel.run
+            // calls so a problem in one range can't block the other.
+            const sanitize = grid => grid.map(r => r.map(v => (typeof v === 'number' && !Number.isFinite(v)) ? 0 : (v === undefined || v === null ? 0 : v)));
+            const mainRows = sanitize(rows.main);
+            const slopeRows = sanitize(rows.slope);
+
+            let mainErr = null, slopeErr = null;
             try {
-                const rows = buildCogEnvTableDataRows(c);
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(COGENV_TABLE_SHEET);
-                    sheet.getRange(COGENV_TABLE_RANGE_MAIN).values = rows.main;
-                    sheet.getRange(COGENV_TABLE_RANGE_SLOPE).values = rows.slope;
+                    sheet.getRange(COGENV_TABLE_RANGE_MAIN).values = mainRows;
                     await context.sync();
                 });
-                logMsg(`📤 Calculated CoG Envelope Table and pushed to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN} and ${COGENV_TABLE_RANGE_SLOPE}.`);
             } catch (e) {
-                console.warn(`Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN}/${COGENV_TABLE_RANGE_SLOPE}`, e);
-                alert(`CoG Envelope Table calculated and shown locally, but could not push to sheet "${COGENV_TABLE_SHEET}". Make sure it exists with that name.`);
-                throw e;
+                mainErr = e;
+                console.warn(`Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN}`, e);
+            }
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(COGENV_TABLE_SHEET);
+                    sheet.getRange(COGENV_TABLE_RANGE_SLOPE).values = slopeRows;
+                    await context.sync();
+                });
+            } catch (e) {
+                slopeErr = e;
+                console.warn(`Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_SLOPE}`, e);
+            }
+
+            if (!mainErr && !slopeErr) {
+                logMsg(`📤 Calculated CoG Envelope Table and pushed to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN} and ${COGENV_TABLE_RANGE_SLOPE}.`);
+            } else {
+                const failedRanges = [mainErr ? COGENV_TABLE_RANGE_MAIN : null, slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
+                const okRanges = [!mainErr ? COGENV_TABLE_RANGE_MAIN : null, !slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
+                if (okRanges) logMsg(`📤 Pushed ${okRanges} to '${COGENV_TABLE_SHEET}' — ${failedRanges} failed, see below.`);
+                alert(`CoG Envelope Table calculated and shown locally, but could not push ${failedRanges} to sheet "${COGENV_TABLE_SHEET}". Make sure it exists with that exact name and that those cells aren't merged or protected.`);
+                throw (mainErr || slopeErr);
             }
         }
         // "🧮 Calculate CoG Envelope" button — pulses tgCalcCogEnvBtn
