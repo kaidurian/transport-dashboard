@@ -630,7 +630,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.63.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.64)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -891,8 +891,9 @@
                     <div class="tg-cargo-card">
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2>
+                            <button type="button" class="tg-help-btn" id="tgCogEnvTableHelpToggleBtn" onclick="toggleTgCogEnvTableHelp()">❓ Help</button>
                         </div>
-                        <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
+                        <p class="tg-modal-sub" id="tgCogEnvTableHelpPanel">
                             Same layout as the <strong>"CoG_Envelope"</strong> reference workbook (sheet
                             "2"!C8:E24) — computed live in this dashboard's own code from the 📐 CoG Envelope
                             fields above, using the workbook's exact formulas. Starts <strong>blank</strong>;
@@ -910,8 +911,12 @@
                             that pushes just that load case's X/Y and its Z (From trailer top deck) —
                             NOT the plain local Z — to <strong>"Input"!BB35:BD35</strong> —
                             the same cells the rest of the workbook's transport table calculates the active
-                            cargo CoG from — and refreshes 📋 Drawing Table below so that load case's
-                            transport table shows immediately.
+                            cargo CoG from — updates the <strong>TRANSPORT TABLE</strong> header in
+                            📋 Drawing Table below to name that load case (e.g. <strong>TRANSPORT TABLE
+                            LC1</strong>), refreshes 📋 Drawing Table so that load case's transport table
+                            shows immediately, and mirrors the same data to Excel sheet
+                            <strong>"Drawing_table_LC"</strong>, in that load case's own column block
+                            (LC0/LC1/LC2/LC3/LC4 side by side).
                         </p>
                         <div id="tgCogEnvTable" class="tg-drawing-table-wrap"><!-- CoG Envelope table rendered by JS --></div>
                         <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
@@ -923,7 +928,11 @@
                         </div>
                         <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
                             Read-only mirror of Excel sheet <strong>"Drawing_table"</strong> — pulled, never
-                            pushed (the sheet's own values are Excel-computed).
+                            pushed (the sheet's own values are Excel-computed). Pressing a 📤 button in the
+                            📊 CoG Envelope Table above updates the <strong>TRANSPORT TABLE</strong> header
+                            below to name that load case (e.g. <strong>TRANSPORT TABLE LC0</strong>) and
+                            mirrors this table's data to Excel sheet <strong>"Drawing_table_LC"</strong>, in
+                            that load case's own column block, keeping a separate snapshot per LC0&ndash;LC4.
                         </p>
                         <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
                         <div class="tg-train-list-actions">
@@ -1022,6 +1031,16 @@
         function toggleTgCogEnvHelp() {
             const panel = document.getElementById('tgCogEnvHelpPanel');
             const btn = document.getElementById('tgCogEnvHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+        }
+
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the 📊 CoG Envelope Table card.
+        function toggleTgCogEnvTableHelp() {
+            const panel = document.getElementById('tgCogEnvTableHelpPanel');
+            const btn = document.getElementById('tgCogEnvTableHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
             if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
@@ -1210,7 +1229,7 @@
                 // user is actively typing in this card's OWN
                 // upSlope/downSlope fields (see isEditingCogEnvFields),
                 // so re-rendering the grid never steals focus mid-keystroke.
-                if (!isEditingCogEnvFields()) await pullCogEnvFromExcel({ silent: true }); // CoG Envelope Table + preview — keeps it live-synced, not just on panel open
+                if (!isEditingCogEnvFields()) await pullCogEnvFromExcel({ silent: true }); // keeps the 📐 CoG Envelope input fields live-synced; deliberately does NOT touch the 📊 CoG Envelope Table — that only recomputes on "🧮 Calculate CoG Envelope"
                 if (!isEditingDashboard()) {
                     await pullZTrailerHeightFromExcel({ silent: true });
                     await pullHorizontalLoadsFromExcel({ silent: true });
@@ -1493,6 +1512,39 @@
         const DRAWING_TABLE_MERGE_BC_ROW = 4; // 1-indexed — B holds the value, spans B:C ("TRAILER ARRANGEMENT" value)
         const DRAWING_TABLE_BOLD_ROWS = new Set([1, 4, 9, 17, 23, 30, 38, 46, 55]); // 1-indexed section-header rows
         let tgDrawingTableRows = []; // raw 2D array of pulled cell values, row-major, same shape as DRAWING_TABLE_RANGE
+        // Which load case's transport table is currently shown in
+        // 📋 Drawing Table — 0-4, set by whichever 📤 button was last
+        // pressed in the 📊 CoG Envelope Table (pushLoadCaseToExcel),
+        // null before any of those buttons has ever been pressed. Purely
+        // a LOCAL display flag: the pulled "TRANSPORT TABLE" banner text
+        // itself never changes in Excel, this just appends " LC{n}" to
+        // it in renderTgDrawingTable() so the dashboard always shows
+        // which load case the table currently reflects.
+        let tgActiveDrawingLC = null;
+        // "Drawing_table_LC" — a reference workbook sheet laid out as 5
+        // side-by-side copies of the single "Drawing_table" A1:F63
+        // block, one per load case, 26 columns apart (LC0 at A, LC1 at
+        // AA, LC2 at BA, LC3 at CA, LC4 at DA — see
+        // 197-Goldhofer-Excel-Modify-LC0.xlsx for the reference). Every
+        // time a 📤 button in the 📊 CoG Envelope Table is pressed, the
+        // freshly-pulled 📋 Drawing Table grid is mirrored into that load
+        // case's own block here, so each LC's transport table is kept as
+        // its own permanent snapshot instead of only the most-recent one.
+        const DRAWING_TABLE_LC_SHEET_NAME = "Drawing_table_LC";
+        const DRAWING_TABLE_LC_BLOCK_WIDTH = 26; // A..Z per block — only A:F (6 cols) are actually written
+        // 1-indexed column number where load case {lcIndex}'s (0-4)
+        // A1:F63-shaped block starts in "Drawing_table_LC" (0 -> col 1 =
+        // "A", 1 -> col 27 = "AA", 2 -> col 53 = "BA", etc.).
+        function drawingTableLcColStart(lcIndex) { return 1 + lcIndex * DRAWING_TABLE_LC_BLOCK_WIDTH; }
+        // Pulls the load case number (0-4) out of a 📤 button's "name"
+        // argument — 'CoG-LC0' -> 0, 'LC1' -> 1, 'LC2' -> 2, etc. (see
+        // the lcPushBtn()/pushLoadCaseToExcel() call sites in
+        // renderTgCogEnvTable()). Returns null if no "LC{n}" pattern is
+        // found.
+        function lcIndexFromPushName(name) {
+            const m = /LC(\d)/i.exec(name || '');
+            return m ? parseInt(m[1], 10) : null;
+        }
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
         // AZ34 = "LOAD DETAILS" header, BA34:BD34 = column headers
@@ -4252,7 +4304,16 @@
                 const isEmpty = row.every(v => v === null || v === undefined || v === '');
                 if (isEmpty) { html += `<tr class="tg-dt-spacer"><td colspan="6"></td></tr>`; return; }
                 if (rowNum === DRAWING_TABLE_TITLE_ROW) {
-                    html += `<tr class="tg-dt-title"><td colspan="6">${fmt(row[0])}</td></tr>`;
+                    let rawTitle = row[0];
+                    // Append " LC{n}" to the pulled "TRANSPORT TABLE"
+                    // banner once a 📤 button in the 📊 CoG Envelope Table
+                    // has been pressed (tgActiveDrawingLC set) — see that
+                    // flag's own comment above. Display-only; never
+                    // written back to Excel.
+                    if (tgActiveDrawingLC !== null && typeof rawTitle === 'string' && /transport table/i.test(rawTitle)) {
+                        rawTitle = `${rawTitle.trim()} LC${tgActiveDrawingLC}`;
+                    }
+                    html += `<tr class="tg-dt-title"><td colspan="6">${fmt(rawTitle)}</td></tr>`;
                     return;
                 }
                 const boldClass = DRAWING_TABLE_BOLD_ROWS.has(rowNum) ? ' class="tg-dt-bold"' : '';
@@ -4498,6 +4559,18 @@
                 });
                 logMsg(`📤 Pushed ${name} CoG (X ${x}, Y ${y}, Z-from-top-deck ${zTopDeck}) to '${INPUT_SHEET_NAME}'!BB35:BD35 — this is now the active cargo CoG the rest of the workbook's transport table calculates from.`);
                 await pullDrawingTableFromExcel({ silent: true });
+                // Which load case this button belongs to (0-4) — sets the
+                // "TRANSPORT TABLE LC{n}" header in 📋 Drawing Table below
+                // (re-render needed since pullDrawingTableFromExcel above
+                // already rendered once, before this flag was set) and
+                // mirrors the just-pulled grid into that load case's own
+                // block in "Drawing_table_LC".
+                const lcIndex = lcIndexFromPushName(name);
+                if (lcIndex !== null) {
+                    tgActiveDrawingLC = lcIndex;
+                    renderTgDrawingTable();
+                    await pushDrawingTableRowsToLCSheet(lcIndex, tgDrawingTableRows);
+                }
                 btnEl.classList.remove('tg-btn-syncing');
                 btnEl.classList.add('tg-btn-flash-ok');
             } catch (e) {
@@ -4508,6 +4581,36 @@
                 btnEl.classList.add('tg-btn-flash-err');
             } finally {
                 setTimeout(() => { btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err'); }, BTN_FLASH_MS);
+            }
+        }
+
+        // Mirrors the just-pulled 📋 Drawing Table grid (rows, same
+        // A1:F63 shape as DRAWING_TABLE_RANGE) into load case {lcIndex}'s
+        // (0-4) own column block in Excel sheet "Drawing_table_LC" — see
+        // the DRAWING_TABLE_LC_SHEET_NAME comment above for the block
+        // layout. Called from pushLoadCaseToExcel right after that load
+        // case's 📤 button has pushed its CoG and refreshed the Drawing
+        // Table, so each load case keeps its own permanent transport-
+        // table snapshot in the reference workbook rather than only the
+        // most recently-viewed one. Best-effort: logs/warns on failure
+        // (e.g. missing sheet) but never blocks or fails the 📤 button's
+        // own flash-ok/flash-err state, since the primary push (Input!
+        // BB35:BD35) already succeeded by the time this runs.
+        async function pushDrawingTableRowsToLCSheet(lcIndex, rows) {
+            if (!isOfficeInitialized || !rows || !rows.length) return;
+            const colStart = drawingTableLcColStart(lcIndex);
+            const colEnd = colStart + 5; // A:F — 6 columns wide, same as DRAWING_TABLE_RANGE
+            const a1 = `${colLetter(colStart)}1:${colLetter(colEnd)}${rows.length}`;
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SHEET_NAME);
+                    sheet.getRange(a1).values = rows;
+                    await context.sync();
+                });
+                logMsg(`📤 Mirrored 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} (LC${lcIndex} block).`);
+            } catch (e) {
+                console.warn(`Could not mirror Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1}`, e);
+                logMsg(`⚠️ Could not mirror 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} — make sure that sheet exists with that exact name.`);
             }
         }
 
@@ -4634,7 +4737,16 @@
                     tgCogEnvGroups[key] = Number.isFinite(v) ? v : 0;
                 });
                 renderTgCogEnvFields();
-                renderTgCogEnvTable();
+                // NOTE: deliberately does NOT call renderTgCogEnvTable()
+                // here — the 📊 CoG Envelope Table only ever
+                // recomputes/re-renders when "🧮 Calculate CoG Envelope"
+                // is explicitly pressed (calculateCogEnvelopeImpl), not
+                // on every auto-sync pull of these 📐 CoG Envelope input
+                // fields (this function runs silently on every
+                // runAutoPull() tick). This keeps the Table's numbers —
+                // and whatever's already been pushed to Excel from it —
+                // stable and predictable until the user chooses to
+                // recompute, even while the underlying inputs drift.
                 const cc = cogEnvCogCells();
                 if (!silent) logMsg(`↺ Pulled CoG Envelope inputs from '${COGENV_DIM_SHEET}'!H11:H13, '${COGENV_COG_SHEET}'!${cc.cogX}/${cc.cogY}/${cc.cogZ}, and hydraulic group positions from '${COGENV_GROUPS_SHEET}'!B3:C5.`);
             } catch (e) {
