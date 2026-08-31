@@ -1463,10 +1463,22 @@
         // table + 2D preview, and pushes the whole 17-row block to
         // Excel "Check CASE A & CASE B"!A65:D81 (see
         // buildCogEnvTableRows()/calculateCogEnvelopeImpl() further
-        // below). Stays true (table keeps showing/recalculating live on
-        // any later input change) once first calculated — only the
-        // very first "no data yet" state is gated, not every render.
+        // below). Stays true once first calculated so the table keeps
+        // showing — but the table's CONTENT is frozen (see
+        // tgCogEnvComputed below), it does NOT keep live-recalculating
+        // on every later input change or Excel auto-pull.
         let tgCogEnvCalculated = false;
+        // Frozen snapshot of calcCogEnvelope()'s result, captured ONLY
+        // inside calculateCogEnvelopeImpl() ("🧮 Calculate CoG Envelope"
+        // pressed). renderTgCogEnvTable()/renderTgCogEnvPreview() render
+        // THIS, never a fresh calcCogEnvelope() call, so editing the 📐
+        // CoG Envelope fields (by hand or via the silent Excel auto-pull
+        // in pullCogEnvFromExcel/runAutoPull) never changes what the 📊
+        // CoG Envelope Table shows until the button is pressed again —
+        // even though renderTrailerDashboard() (called constantly, for
+        // unrelated reasons — cargo edits, Excel pulls elsewhere, etc.)
+        // still calls renderTgCogEnvTable() every time.
+        let tgCogEnvComputed = null;
         const COGENV_TABLE_SHEET = "Check CASE A & CASE B "; // NOTE: trailing space is intentional — that's the sheet's actual name in the workbook (confirmed via worksheets.load('items/name'))
         const COGENV_TABLE_RANGE = "A65:E81"; // kept for reference/help text — full block incl. labels/banners; the actual push (see below) only touches the two numeric sub-ranges
         // Numeric-data-only push ranges — column A row labels (CARGO
@@ -4449,12 +4461,13 @@
         // step that can actually fail.
         async function calculateCogEnvelopeImpl() {
             tgCogEnvCalculated = true;
-            renderTgCogEnvTable(); // was blank — now computes + shows immediately
+            tgCogEnvComputed = calcCogEnvelope(); // freeze the snapshot renderTgCogEnvTable()/renderTgCogEnvPreview() will keep showing until this button is pressed again — see tgCogEnvComputed's own comment above
+            renderTgCogEnvTable(); // was blank — now shows the frozen snapshot immediately
             if (!isOfficeInitialized) {
                 alert(`Not connected to Excel — the table above is calculated and shown locally, but could not push to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN}/${COGENV_TABLE_RANGE_SLOPE}. Open this add-in inside an Excel workbook to push.`);
                 throw new Error('Not connected to Excel');
             }
-            const c = calcCogEnvelope();
+            const c = tgCogEnvComputed;
             const rows = buildCogEnvTableDataRows(c);
             // Excel.run/context.sync rolls back its ENTIRE batch if any
             // single write in it fails (e.g. NaN/undefined value, a
@@ -4592,22 +4605,39 @@
         // case's 📤 button has pushed its CoG and refreshed the Drawing
         // Table, so each load case keeps its own permanent transport-
         // table snapshot in the reference workbook rather than only the
-        // most recently-viewed one. Best-effort: logs/warns on failure
-        // (e.g. missing sheet) but never blocks or fails the 📤 button's
-        // own flash-ok/flash-err state, since the primary push (Input!
-        // BB35:BD35) already succeeded by the time this runs.
+        // most recently-viewed one. The title row (DRAWING_TABLE_TITLE_ROW)
+        // is rewritten to "TRANSPORT TABLE LC{n}" in the copy actually
+        // written to Excel — same suffix renderTgDrawingTable() shows
+        // locally, but baked into the Excel cell itself here so each
+        // LC's block in the sheet is self-labelled. Best-effort: logs/
+        // warns on failure (e.g. missing sheet) but never blocks or
+        // fails the 📤 button's own flash-ok/flash-err state, since the
+        // primary push (Input!BB35:BD35) already succeeded by the time
+        // this runs.
         async function pushDrawingTableRowsToLCSheet(lcIndex, rows) {
             if (!isOfficeInitialized || !rows || !rows.length) return;
             const colStart = drawingTableLcColStart(lcIndex);
             const colEnd = colStart + 5; // A:F — 6 columns wide, same as DRAWING_TABLE_RANGE
             const a1 = `${colLetter(colStart)}1:${colLetter(colEnd)}${rows.length}`;
+            // Deep-ish copy so we can rewrite the title cell without
+            // mutating tgDrawingTableRows (which still backs the local
+            // "TRANSPORT TABLE" display without the LC suffix baked in).
+            const lcRows = rows.map((r, i) => {
+                if (i !== DRAWING_TABLE_TITLE_ROW - 1) return r;
+                const titleRow = r.slice();
+                let rawTitle = titleRow[0];
+                if (typeof rawTitle === 'string' && /transport table/i.test(rawTitle)) {
+                    titleRow[0] = `${rawTitle.trim()} LC${lcIndex}`;
+                }
+                return titleRow;
+            });
             try {
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SHEET_NAME);
-                    sheet.getRange(a1).values = rows;
+                    sheet.getRange(a1).values = lcRows;
                     await context.sync();
                 });
-                logMsg(`📤 Mirrored 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} (LC${lcIndex} block).`);
+                logMsg(`📤 Mirrored 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} (LC${lcIndex} block, header "TRANSPORT TABLE LC${lcIndex}").`);
             } catch (e) {
                 console.warn(`Could not mirror Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1}`, e);
                 logMsg(`⚠️ Could not mirror 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} — make sure that sheet exists with that exact name.`);
@@ -4682,11 +4712,17 @@
             pullCogEnvFromExcel({ silent: false });
         }
 
+        // Updates a 📐 CoG Envelope input field (only upSlope/downSlope
+        // are hand-editable — the rest are pull-only, see
+        // COGENV_READONLY_KEYS). Deliberately does NOT re-render the 📊
+        // CoG Envelope Table — that table only ever reflects the frozen
+        // snapshot from the last "🧮 Calculate CoG Envelope" press (see
+        // tgCogEnvComputed), never live edits, so nothing to do here
+        // beyond storing the new value for the next Calculate press.
         function updateCogEnvField(key, rawValue) {
             if (!(key in tgCogEnv) || COGENV_READONLY_KEYS.includes(key)) return;
             const v = parseFloat(rawValue);
             tgCogEnv[key] = isNaN(v) ? 0 : v;
-            renderTgCogEnvTable();
         }
 
         // Pulls dimX/dimY/dimZ from 'Input horizontal loads'!H11:H13
@@ -4775,7 +4811,12 @@
                 if (previewEl) previewEl.innerHTML = '';
                 return;
             }
-            const c = calcCogEnvelope();
+            // Renders the FROZEN snapshot (tgCogEnvComputed), not a
+            // fresh calcCogEnvelope() call — see that variable's own
+            // comment above for why. Fallback to a fresh calc only as a
+            // safety net in the (shouldn't-happen) case this is reached
+            // with tgCogEnvCalculated true but no snapshot yet captured.
+            const c = tgCogEnvComputed || calcCogEnvelope();
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : v);
             // pushName (optional) appends the small
             // 📤 push-to-Input!BB35:BD35 button AFTER the "Z (From
