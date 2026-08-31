@@ -630,7 +630,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.63.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.63.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -4304,19 +4304,19 @@
             // D20/E20 are unchanged from D12/E12 (no slope shift on Y/Z).
             const envXSlope = envX + downSlope;
             const lcSlope = loadCases(envXSlope / 2);
-            // Column E — "Z (From trailer top deck)". =
-            // (CoG envelope (5%) row's Z, i.e. envZ, /2) + Excel
-            // "Input"!BD{row} (CARGO_Z_COL — the currently-selected
-            // cargo item's own CoG-height-above-deck field), where
-            // {row} is whichever row the 🔽 Cargo Selection dropdown
-            // has picked (tgCogEnv.cargoRow, 35-39). Same value for
-            // every applicable row (CARGO CoG. In Axis-LC0, and LC1-4
-            // in both sections) — every other row in the table is N/A,
-            // see buildCogEnvTableDataRows() below.
+            // Column E — "Z (From trailer top deck)". For the LC1-4
+            // rows (both sections): = (CoG envelope (5%) row's Z, i.e.
+            // envZ, /2) + Excel "Input"!BD{row} (CARGO_Z_COL — the
+            // currently-selected cargo item's own CoG-height-above-deck
+            // field), where {row} is whichever row the 🔽 Cargo
+            // Selection dropdown has picked (tgCogEnv.cargoRow, 35-39).
+            // Exception: the "CARGO CoG. In Axis-LC0" row is just
+            // Excel "Input"!BD{row} on its own (no envZ/2 term) — every
+            // other row in the table is N/A, see
+            // buildCogEnvTableDataRows() below.
             const selCargoZ = cargoSelectionZ(tgCogEnv.cargoRow || 35);
-            const zDeck = envZ / 2 + selCargoZ;
-            const zDeckCog = zDeck;
-            const zDeckLc = zDeck; // same formula/value as zDeckCog now — see comment above
+            const zDeckCog = selCargoZ;
+            const zDeckLc = envZ / 2 + selCargoZ;
             return {
                 dimX, dimY, dimZ, cogX, cogY, cogZ, upSlope, downSlope,
                 envX, envY, envZ, lcBase,
