@@ -630,7 +630,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.63)</h1>
+            <h1>🚂 Transport Dashboard (Rev.63.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -907,7 +907,8 @@
                             reference workbook.
                             Each <strong>CARGO CoG. In Axis-LC0</strong> and <strong>LC1&ndash;LC4</strong> row
                             (both sections) has its own small 📤 button
-                            that pushes just that load case's X/Y/Z to <strong>"Input"!BB35:BD35</strong> —
+                            that pushes just that load case's X/Y and its Z (From trailer top deck) —
+                            NOT the plain local Z — to <strong>"Input"!BB35:BD35</strong> —
                             the same cells the rest of the workbook's transport table calculates the active
                             cargo CoG from — and refreshes 📋 Drawing Table below so that load case's
                             transport table shows immediately.
@@ -1456,7 +1457,7 @@
         // only the B:E numbers get written. Column E ("Z (From trailer
         // top deck)") is N/A for every row except CARGO CoG. In
         // Axis-LC0 and the LC1-4 rows (both sections) — see
-        // buildCogEnvTableDataRows()/sumOtherCargoHeights() below.
+        // buildCogEnvTableDataRows()/cargoSelectionZ() below.
         const COGENV_TABLE_RANGE_MAIN = "B67:E73";  // CARGO DIM. / CARGO CoG. In Axis-LC0 / GOG envelope (5%) / LC1-4
         const COGENV_TABLE_RANGE_SLOPE = "B75:E81"; // Shift Uphill / Shift Downhill / GOG envelope (5%) with slope / LC1-4
 
@@ -4303,45 +4304,39 @@
             // D20/E20 are unchanged from D12/E12 (no slope shift on Y/Z).
             const envXSlope = envX + downSlope;
             const lcSlope = loadCases(envXSlope / 2);
-            // Column E — "Z (From trailer top deck)". Excel formula:
-            // = z + SUM(BG35:BG39) EXCLUDING this cargo item's own row
-            // (BG = CARGO_HGT_COL, each cargo item's own box Height) —
-            // i.e. this row's Z plus every OTHER cargo item's height
-            // stacked on the trailer, giving the absolute Z measured
-            // from the trailer's own top deck rather than just this
-            // one item's local Z. Only meaningful for actual CoG rows
-            // (CARGO CoG. In Axis-LC0, and LC1-4 in both sections,
-            // which all share one Z = cogZ + envZ/2 since slope never
-            // shifts Z) — every other row in the table is N/A, see
-            // buildCogEnvTableDataRows() below.
-            const otherHeights = sumOtherCargoHeights(tgCogEnv.cargoRow || 35);
-            const zDeckCog = cogZ + otherHeights;
-            const zDeckLc = (cogZ + envZ / 2) + otherHeights; // same for every LC1-4 row, base and slope alike — see comment above
+            // Column E — "Z (From trailer top deck)". = z + Excel
+            // "Input"!BD{row} (CARGO_Z_COL — the currently-selected
+            // cargo item's own CoG-height-above-deck field), where
+            // {row} is whichever row the 🔽 Cargo Selection dropdown
+            // has picked (tgCogEnv.cargoRow, 35-39). Only meaningful for
+            // actual CoG rows (CARGO CoG. In Axis-LC0, and LC1-4 in
+            // both sections, which all share one Z = cogZ + envZ/2
+            // since slope never shifts Z) — every other row in the
+            // table is N/A, see buildCogEnvTableDataRows() below.
+            const selCargoZ = cargoSelectionZ(tgCogEnv.cargoRow || 35);
+            const zDeckCog = cogZ + selCargoZ;
+            const zDeckLc = (cogZ + envZ / 2) + selCargoZ; // same for every LC1-4 row, base and slope alike — see comment above
             return {
                 dimX, dimY, dimZ, cogX, cogY, cogZ, upSlope, downSlope,
                 envX, envY, envZ, lcBase,
                 envXSlope, lcSlope,
-                otherHeights, zDeckCog, zDeckLc,
+                selCargoZ, zDeckCog, zDeckLc,
             };
         }
 
-        // Sum of Excel "Input"!BG35:BG39 (CARGO_HGT_COL — each cargo
-        // item's own box Height) EXCLUDING the row given, in meters.
-        // Feeds the "Z (From trailer top deck)" column above —
-        // excludeRow is tgCogEnv.cargoRow (the currently-selected
-        // cargo item, Excel row 35-39, see the 🔽 Cargo Selection
-        // dropdown). Reads straight from the already-synced cargoItems
-        // array (same one the 📦 Generate Cargo card uses) rather than
-        // a fresh Excel pull, so no extra round-trip is needed.
-        function sumOtherCargoHeights(excludeRow) {
-            let sum = 0;
-            cargoItems.forEach((c, i) => {
-                const row = CARGO_START_ROW + i;
-                if (row === excludeRow) return;
-                const h = parseFloat(c.height);
-                if (Number.isFinite(h)) sum += h;
-            });
-            return sum;
+        // The currently-selected cargo item's own CoG-height-above-deck
+        // field — Excel "Input"!BD{row} (CARGO_Z_COL), {row} being
+        // whichever row the 🔽 Cargo Selection dropdown has picked.
+        // Feeds the "Z (From trailer top deck)" column above. Reads
+        // straight from the already-synced cargoItems array (same one
+        // the 📦 Generate Cargo card uses, cargoItems[i].z synced with
+        // Excel Input!BD{cell}) rather than a fresh Excel pull, so no
+        // extra round-trip is needed.
+        function cargoSelectionZ(row) {
+            const idx = row - CARGO_START_ROW;
+            if (idx < 0 || idx >= cargoItems.length) return 0;
+            const v = parseFloat(cargoItems[idx].z);
+            return Number.isFinite(v) ? v : 0;
         }
 
         // Cell references shown in each field's tooltip — workbook
@@ -4474,31 +4469,33 @@
         // also succeeded (red if not connected, or the push failed).
         const calculateCogEnvelope = withBtnSyncIndicator('tgCalcCogEnvBtn', calculateCogEnvelopeImpl);
 
-        // Small 📤 button at the end of the CARGO CoG. In Axis-LC0 row
-        // and each LC1-4 row (both the plain and "with slope"
-        // sections) — pushes just that one load case's
-        // X/Y/Z to Excel "Input"!BB35:BD35, the same cell block the
-        // main 📦 Generate Cargo card's first cargo item writes its own
-        // X/Y/Z to (see CARGO_X_COL/Y/Z_COL). That's the cell block the
-        // rest of the workbook's transport-table formulas read the
-        // "active" cargo CoG from, so setting it to one load case's
-        // corner recomputes/creates the transport table FOR that load
-        // case — nothing further to do on this side beyond the push.
-        // Refreshes 📋 Drawing Table afterward so the resulting
-        // transport table shows immediately in this dashboard too.
-        // Takes the button element directly (not an id) since there
-        // are 8 of these rendered fresh on every table re-render.
-        async function pushLoadCaseToExcel(btnEl, name, x, y, z) {
+        // Small 📤 button after the "Z (From trailer top deck)" column,
+        // on the CARGO CoG. In Axis-LC0 row and each LC1-4 row (both
+        // the plain and "with slope" sections) — pushes that load
+        // case's X/Y and its Z (From trailer top deck) value — NOT the
+        // plain local Z — to Excel "Input"!BB35:BD35, the same cell
+        // block the main 📦 Generate Cargo card's first cargo item
+        // writes its own X/Y/Z to (see CARGO_X_COL/Y/Z_COL). That's the
+        // cell block the rest of the workbook's transport-table
+        // formulas read the "active" cargo CoG from, so setting it to
+        // one load case's corner (with the deck-referenced Z) recomputes/
+        // creates the transport table FOR that load case — nothing
+        // further to do on this side beyond the push. Refreshes
+        // 📋 Drawing Table afterward so the resulting transport table
+        // shows immediately in this dashboard too. Takes the button
+        // element directly (not an id) since there are 8 of these
+        // rendered fresh on every table re-render.
+        async function pushLoadCaseToExcel(btnEl, name, x, y, zTopDeck) {
             btnEl.classList.add('tg-btn-syncing');
             btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err');
             try {
                 if (!isOfficeInitialized) throw new Error('Not connected to Excel');
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
-                    sheet.getRange('BB35:BD35').values = [[x, y, z]];
+                    sheet.getRange('BB35:BD35').values = [[x, y, zTopDeck]];
                     await context.sync();
                 });
-                logMsg(`📤 Pushed ${name} CoG (X ${x}, Y ${y}, Z ${z}) to '${INPUT_SHEET_NAME}'!BB35:BD35 — this is now the active cargo CoG the rest of the workbook's transport table calculates from.`);
+                logMsg(`📤 Pushed ${name} CoG (X ${x}, Y ${y}, Z-from-top-deck ${zTopDeck}) to '${INPUT_SHEET_NAME}'!BB35:BD35 — this is now the active cargo CoG the rest of the workbook's transport table calculates from.`);
                 await pullDrawingTableFromExcel({ silent: true });
                 btnEl.classList.remove('tg-btn-syncing');
                 btnEl.classList.add('tg-btn-flash-ok');
@@ -4667,29 +4664,36 @@
             }
             const c = calcCogEnvelope();
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : v);
-            // lc (optional) appends the small 📤 push-to-Input!BB35:BD35
-            // button after the Z value, for CARGO CoG. In Axis-LC0 and
-            // LC1-4 rows only — raw (unformatted) x/y/z are baked into
-            // the onclick call so the push always uses the exact
-            // computed value, not the rounded display string.
-            const lcPushBtn = lc => ` <button type="button" class="tg-lc-push-btn" title="Push ${lc.name}'s X/Y/Z to Excel 'Input'!BB35:BD35, then create/refresh the transport table for this load case" onclick="pushLoadCaseToExcel(this, '${lc.name}', ${lc.x}, ${lc.y}, ${lc.z})">📤</button>`;
+            // pushName (optional) appends the small
+            // 📤 push-to-Input!BB35:BD35 button AFTER the "Z (From
+            // trailer top deck)" value, for CARGO CoG. In Axis-LC0 and
+            // LC1-4 rows only. The button pushes X, Y, and the Z (From
+            // trailer top deck) value — NOT the plain local Z — into
+            // Excel "Input"!BB35:BD35, so the workbook's transport
+            // table is driven by the deck-referenced height. Raw
+            // (unformatted) x/y/z2 are baked into the onclick call so
+            // the push always uses the exact computed value, not the
+            // rounded display string.
+            const lcPushBtn = (name, x, y, z2) => ` <button type="button" class="tg-lc-push-btn" title="Push ${name}'s X/Y/Z (From trailer top deck) to Excel 'Input'!BB35:BD35, then create/refresh the transport table for this load case" onclick="pushLoadCaseToExcel(this, '${name}', ${x}, ${y}, ${z2})">📤</button>`;
             // z2 (optional) is the "Z (From trailer top deck)" column —
             // 'N/A' for rows where it doesn't apply, a number otherwise.
-            const row = (label, x, y, z, z2, bold, lc) => `
-                <tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}${lc ? lcPushBtn(lc) : ''}</td><td>${fmt(z2)}</td></tr>`;
+            // pushName (optional) is the load case's name — supplying
+            // it renders the 📤 push button right after the z2 cell.
+            const row = (label, x, y, z, z2, bold, pushName) => `
+                <tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}</td><td>${fmt(z2)}${pushName ? lcPushBtn(pushName, x, y, z2) : ''}</td></tr>`;
             let html = '<table class="tg-drawing-table">';
             html += `<tr class="tg-dt-title"><td colspan="5">CoG ENVELOPE</td></tr>`;
             html += `<tr class="tg-dt-bold"><td></td><td>X</td><td>Y</td><td>Z</td><td>Z (From trailer top deck)</td></tr>`;
             html += row('CARGO DIM. In Axis', c.dimX, c.dimY, c.dimZ, 'N/A');
-            html += row('CARGO CoG. In Axis-LC0', c.cogX, c.cogY, c.cogZ, c.zDeckCog, false, { name: 'CoG-LC0', x: c.cogX, y: c.cogY, z: c.cogZ });
+            html += row('CARGO CoG. In Axis-LC0', c.cogX, c.cogY, c.cogZ, c.zDeckCog, false, 'CoG-LC0');
             html += row('CoG envelope (5%)', c.envX, c.envY, c.envZ, 'N/A');
-            c.lcBase.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, c.zDeckLc, false, lc); });
+            c.lcBase.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, c.zDeckLc, false, lc.name); });
             html += `<tr class="tg-dt-spacer"><td colspan="5"></td></tr>`;
             html += `<tr class="tg-dt-bold"><td colspan="5">CoG envelope with slope</td></tr>`;
             html += row('Shift of CoG on slope — Uphill (LC1&4)', c.upSlope, 'N/A', 'N/A', 'N/A');
             html += row('Shift of CoG on slope — Downhill (LC2&3)', c.downSlope, 'N/A', 'N/A', 'N/A');
             html += row('CoG envelope (5%) with slope', c.envXSlope, c.envY, c.envZ, 'N/A');
-            c.lcSlope.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, c.zDeckLc, false, lc); });
+            c.lcSlope.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, c.zDeckLc, false, lc.name); });
             html += '</table>';
             el.innerHTML = html;
             renderTgCogEnvPreview(c);
