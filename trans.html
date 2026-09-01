@@ -236,18 +236,20 @@
             background: var(--tank-box-bg); padding: 6px; overflow: auto;
         }
         /* ---- Minimize/expand toggle for the standalone PREVIEW panels
-           (2D Plan/Elevation .tg-preview-wrap, 3D viewer .tg-3d-wrap,
-           and the CoG Envelope 2D preview's own .tg-cogenv-preview-wrap)
+           (2D Plan/Elevation .tg-preview-wrap and 3D viewer .tg-3d-wrap)
            — see toggleTgPreviewMinimize(). Distinct from
            .tg-card-minimized above (that one hides everything but a
            card's title header; this one hides everything but a
            preview's toolbar row, since previews don't have a separate
-           title header). Default-on at load — see initTgPreviewDefaults(). */
+           title header). Default-on at load — see initTgPreviewDefaults().
+           NOTE: the small CoG Envelope 2D callout preview (#tgCogEnvPreview)
+           does NOT get its own minimize — it lives inside the
+           📊 CoG Envelope Table card and is hidden/shown by that card's
+           own toggleTgCardMinimize() instead. */
         .tg-preview-wrap.tg-preview-minimized #tgPreview,
         .tg-preview-wrap.tg-preview-minimized #tgPreviewGroupDetails { display: none; }
         .tg-3d-wrap.tg-preview-minimized #tgViewer3dWrap,
         .tg-3d-wrap.tg-preview-minimized .tg-3d-hint { display: none; }
-        .tg-cogenv-preview-wrap.tg-preview-minimized #tgCogEnvPreview { display: none; }
         .tg-cargo-groupall-card {
             border: 1px dashed var(--accent-blue);
             background: var(--panel-bg);
@@ -643,7 +645,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.65)</h1>
+            <h1>🚂 Transport Dashboard (Rev.65.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -902,10 +904,11 @@
                         <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
                     </div>
 
-                    <div class="tg-cargo-card">
+                    <div class="tg-cargo-card" id="tgCogEnvTableCard">
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2>
                             <button type="button" class="tg-help-btn" id="tgCogEnvTableHelpToggleBtn" onclick="toggleTgCogEnvTableHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvTableHelpPanel">
                             Same layout as the <strong>"CoG_Envelope"</strong> reference workbook (sheet
@@ -933,33 +936,32 @@
                             📋 Drawing Table below to name that load case (e.g. <strong>TRANSPORT TABLE
                             LC1</strong> or <strong>TRANSPORT TABLE LC1-Slope</strong>), refreshes
                             📋 Drawing Table so that load case's transport table shows immediately, and
-                            mirrors the same data to Excel sheet <strong>"Drawing_table_LC"</strong>, in that
-                            load case's own column block (LC0/LC1/LC2/LC3/LC4 side by side). Pressing an
-                            <strong>LC1-Slope&ndash;LC4-Slope</strong> button ALSO mirrors that same data to a
-                            separate Excel sheet <strong>"Drawing_table_LC_Slope"</strong>, in its own
-                            LC1-Slope/LC2-Slope/LC3-Slope/LC4-Slope column block.
+                            mirrors the same data to Excel — kept STRICTLY separate by section:
+                            <strong>CARGO CoG. In Axis-LC0</strong> and plain <strong>LC1&ndash;LC4</strong>
+                            rows mirror to sheet <strong>"Drawing_table_LC"</strong>, in that load case's own
+                            column block (LC0/LC1/LC2/LC3/LC4 side by side); <strong>LC1-Slope&ndash;LC4-Slope</strong>
+                            rows mirror instead to a separate sheet <strong>"Drawing_table_LC_Slope"</strong>,
+                            in its own LC1-Slope/LC2-Slope/LC3-Slope/LC4-Slope column block — never both.
                         </p>
                         <div id="tgCogEnvTable" class="tg-drawing-table-wrap"><!-- CoG Envelope table rendered by JS --></div>
-                        <div class="tg-cogenv-preview-wrap">
-                            <div class="tg-preview-toolbar" style="padding-top:8px;">
-                                <span class="tg-preview-toggle" style="cursor:default;">📐 CoG Envelope Preview</span>
-                                <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
-                            </div>
-                            <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
-                        </div>
+                        <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
-                    <div class="tg-cargo-card">
+                    <div class="tg-cargo-card" id="tgDrawingTableCard">
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">📋 Drawing Table</h2>
+                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
                             Read-only mirror of Excel sheet <strong>"Drawing_table"</strong> — pulled, never
                             pushed (the sheet's own values are Excel-computed). Pressing a 📤 button in the
                             📊 CoG Envelope Table above updates the <strong>TRANSPORT TABLE</strong> header
-                            below to name that load case (e.g. <strong>TRANSPORT TABLE LC0</strong>) and
-                            mirrors this table's data to Excel sheet <strong>"Drawing_table_LC"</strong>, in
-                            that load case's own column block, keeping a separate snapshot per LC0&ndash;LC4.
+                            below to name that load case (e.g. <strong>TRANSPORT TABLE LC0</strong> or
+                            <strong>TRANSPORT TABLE LC1-Slope</strong>) and mirrors this table's data to
+                            Excel — plain-section rows to sheet <strong>"Drawing_table_LC"</strong>,
+                            with-slope rows (LC1-Slope&ndash;LC4-Slope) to the separate sheet
+                            <strong>"Drawing_table_LC_Slope"</strong> — each in that load case's own column
+                            block, keeping a separate snapshot per load case in its own sheet.
                         </p>
                         <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
                         <div class="tg-train-list-actions">
@@ -1298,14 +1300,17 @@
         }
 
         // Same idea as toggleTgCardMinimize() above, but for the
-        // standalone PREVIEW panels (2D Plan/Elevation, 3D viewer, CoG
-        // Envelope 2D preview) instead of the 4 input cards — these
-        // don't have a dedicated title header to collapse down to, so
-        // .tg-preview-minimized (see CSS) hides just the drawing area
-        // and leaves the toolbar row (with this same button) visible.
-        // Default state is minimized — see initTgPreviewDefaults().
+        // standalone PREVIEW panels (2D Plan/Elevation, 3D viewer)
+        // instead of the 4 input cards — these don't have a dedicated
+        // title header to collapse down to, so .tg-preview-minimized
+        // (see CSS) hides just the drawing area and leaves the toolbar
+        // row (with this same button) visible. Default state is
+        // minimized — see initTgPreviewDefaults(). (The CoG Envelope
+        // Table and Drawing Table cards, and the small CoG Envelope 2D
+        // callout preview inside the former, use toggleTgCardMinimize()
+        // instead — see their own — Minimize buttons.)
         function toggleTgPreviewMinimize(btn) {
-            const wrap = btn.closest('.tg-preview-wrap, .tg-3d-wrap, .tg-cogenv-preview-wrap');
+            const wrap = btn.closest('.tg-preview-wrap, .tg-3d-wrap');
             if (!wrap) return;
             const minimized = wrap.classList.toggle('tg-preview-minimized');
             btn.textContent = minimized ? '▢ Expand' : '— Minimize';
@@ -1313,22 +1318,37 @@
         }
 
         // Default panel state on open: "⬌ Show preview beside input
-        // data" checked (side-by-side layout) and every preview panel
-        // (2D, 3D, CoG Envelope 2D) minimized down to just its toolbar
-        // — called once from initDashboard(). The checkbox itself
-        // already defaults to checked in the HTML (see tgPreviewSideToggle),
-        // but that alone doesn't apply .tg-side-layout (browsers don't
-        // fire onchange for a load-time "checked" attribute), so
-        // toggleTgPreviewSide(true) is called explicitly here too.
+        // data" checked (side-by-side layout) and every preview/output
+        // panel — 2D preview, 3D preview, 📊 CoG Envelope Table card,
+        // and 📋 Drawing Table card — minimized/collapsed down to just
+        // its toolbar or header — called once from initDashboard(). The
+        // checkbox itself already defaults to checked in the HTML (see
+        // tgPreviewSideToggle), but that alone doesn't apply
+        // .tg-side-layout (browsers don't fire onchange for a load-time
+        // "checked" attribute), so toggleTgPreviewSide(true) is called
+        // explicitly here too. The two cards are targeted by id
+        // (tgCogEnvTableCard/tgDrawingTableCard) rather than a blanket
+        // .tg-cargo-card selector, since the OTHER 4 top-level input
+        // cards (Generate Trailer, Generate Cargo, Horizontal Loads,
+        // CoG Envelope fields) are deliberately left expanded by
+        // default — only the preview/output panels start collapsed.
         function initTgPreviewDefaults() {
             const sideToggle = document.getElementById('tgPreviewSideToggle');
             if (sideToggle) { sideToggle.checked = true; toggleTgPreviewSide(true); }
-            document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap, .tg-cogenv-preview-wrap').forEach(wrap => {
+            document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap').forEach(wrap => {
                 wrap.classList.add('tg-preview-minimized');
                 const btn = wrap.querySelector('.tg-preview-minimize-btn');
                 if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this preview'; }
             });
+            ['tgCogEnvTableCard', 'tgDrawingTableCard'].forEach(id => {
+                const card = document.getElementById(id);
+                if (!card) return;
+                card.classList.add('tg-card-minimized');
+                const btn = card.querySelector('.tg-minimize-btn');
+                if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this card'; }
+            });
         }
+
 
         function toggleAutoSync(checked) {
             autoSyncEnabled = !!checked;
@@ -1621,9 +1641,10 @@
         // section (LC1-Slope..LC4-Slope — there's no LC0-Slope, slope
         // shift only applies to LC1-4). 4 side-by-side blocks, 26
         // columns apart (LC1-Slope at A, LC2-Slope at AA, LC3-Slope at
-        // BA, LC4-Slope at CA). Written ADDITIONALLY (alongside, not
-        // instead of) the normal "Drawing_table_LC" mirror whenever a
-        // 📤 button on one of the with-slope rows is pressed — see
+        // BA, LC4-Slope at CA). STRICTLY separate from "Drawing_table_LC":
+        // a 📤 press on a plain-section row (CoG-LC0, LC1-LC4) mirrors
+        // ONLY to "Drawing_table_LC"; a press on a with-slope row
+        // (LC1-Slope..LC4-Slope) mirrors ONLY to this sheet — see
         // pushLoadCaseToExcel().
         const DRAWING_TABLE_LC_SLOPE_SHEET_NAME = "Drawing_table_LC_Slope";
         // 1-indexed column number where LC{n}-Slope's (n = 1-4)
@@ -4685,19 +4706,21 @@
                 if (lcIndex !== null) {
                     tgActiveDrawingLC = lcIndex;
                     renderTgDrawingTable();
-                    // Slope-section buttons (LC1-Slope..LC4-Slope, see
-                    // COGENV_LC_SLOPE_NAMES) get an "-Slope" title suffix
-                    // in "Drawing_table_LC" instead of the plain "LC{n}"
-                    // one, so its header always reflects which section
-                    // the push actually came from — AND get mirrored a
-                    // second time into the separate
-                    // "Drawing_table_LC_Slope" sheet, in that load
-                    // case's own LC1-Slope..LC4-Slope block.
+                    // Strictly separate by section — see
+                    // DRAWING_TABLE_LC_SLOPE_SHEET_NAME's own comment.
+                    // Plain-section rows (CoG-LC0, LC1-LC4) mirror ONLY
+                    // to "Drawing_table_LC"; with-slope rows
+                    // (LC1-Slope..LC4-Slope, see COGENV_LC_SLOPE_NAMES)
+                    // mirror ONLY to the separate "Drawing_table_LC_Slope"
+                    // sheet — never both — each keeping its own
+                    // "TRANSPORT TABLE LC{n}"/"TRANSPORT TABLE LC{n}-Slope"
+                    // title so the two sheets never mix data.
                     const isSlope = /slope/i.test(name);
                     const lcLabel = isSlope ? `LC${lcIndex}-Slope` : `LC${lcIndex}`;
-                    await pushDrawingTableRowsToLCSheet(lcIndex, tgDrawingTableRows, lcLabel);
                     if (isSlope) {
                         await pushDrawingTableRowsToLCSlopeSheet(lcIndex, tgDrawingTableRows, lcLabel);
+                    } else {
+                        await pushDrawingTableRowsToLCSheet(lcIndex, tgDrawingTableRows, lcLabel);
                     }
                 }
                 btnEl.classList.remove('tg-btn-syncing');
@@ -4765,14 +4788,14 @@
 
         // Same idea as pushDrawingTableRowsToLCSheet() above, but writes
         // into the SEPARATE "Drawing_table_LC_Slope" sheet instead —
-        // called ADDITIONALLY (not instead of) that function, only when
+        // called INSTEAD OF (not in addition to) that function whenever
         // the 📤 button pressed belongs to the with-slope section
-        // (LC1-Slope..LC4-Slope). Only 4 blocks exist here (no LC0-Slope),
-        // so the block index is lcIndex-1 (LC1-Slope -> block 0,
-        // LC2-Slope -> block 1, etc.) — see drawingTableLcSlopeColStart().
-        // Same best-effort logging/failure behavior as the sibling
-        // function: never blocks or fails the 📤 button's own flash
-        // state.
+        // (LC1-Slope..LC4-Slope) — see pushLoadCaseToExcel() for the
+        // section split. Only 4 blocks exist here (no LC0-Slope), so
+        // the block index is lcIndex-1 (LC1-Slope -> block 0, LC2-Slope
+        // -> block 1, etc.) — see drawingTableLcSlopeColStart(). Same
+        // best-effort logging/failure behavior as the sibling function:
+        // never blocks or fails the 📤 button's own flash state.
         async function pushDrawingTableRowsToLCSlopeSheet(lcIndex, rows, lcLabel) {
             if (!isOfficeInitialized || !rows || !rows.length) return;
             const slopeIdx = lcIndex - 1;
