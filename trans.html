@@ -235,6 +235,19 @@
             margin-top: 10px; border: 1px solid var(--panel-border); border-radius: 8px;
             background: var(--tank-box-bg); padding: 6px; overflow: auto;
         }
+        /* ---- Minimize/expand toggle for the standalone PREVIEW panels
+           (2D Plan/Elevation .tg-preview-wrap, 3D viewer .tg-3d-wrap,
+           and the CoG Envelope 2D preview's own .tg-cogenv-preview-wrap)
+           — see toggleTgPreviewMinimize(). Distinct from
+           .tg-card-minimized above (that one hides everything but a
+           card's title header; this one hides everything but a
+           preview's toolbar row, since previews don't have a separate
+           title header). Default-on at load — see initTgPreviewDefaults(). */
+        .tg-preview-wrap.tg-preview-minimized #tgPreview,
+        .tg-preview-wrap.tg-preview-minimized #tgPreviewGroupDetails { display: none; }
+        .tg-3d-wrap.tg-preview-minimized #tgViewer3dWrap,
+        .tg-3d-wrap.tg-preview-minimized .tg-3d-hint { display: none; }
+        .tg-cogenv-preview-wrap.tg-preview-minimized #tgCogEnvPreview { display: none; }
         .tg-cargo-groupall-card {
             border: 1px dashed var(--accent-blue);
             background: var(--panel-bg);
@@ -630,7 +643,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.64.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.65)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -859,9 +872,10 @@
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
                         <div class="tg-preview-toolbar">
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tgPreviewSideToggle" onchange="toggleTgPreviewSide(this.checked)">
+                                    <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
                                     ⬌ Show preview beside input data
                                 </label>
                                 <label class="tg-preview-toggle">
@@ -896,8 +910,9 @@
                         <p class="tg-modal-sub" id="tgCogEnvTableHelpPanel">
                             Same layout as the <strong>"CoG_Envelope"</strong> reference workbook (sheet
                             "2"!C8:E24) — computed live in this dashboard's own code from the 📐 CoG Envelope
-                            fields above, using the workbook's exact formulas. Starts <strong>blank</strong>;
-                            press <strong>🧮 Calculate CoG Envelope</strong> below to compute, show, and
+                            fields above, using the workbook's exact formulas. The table (row labels only,
+                            dash-filled) is visible as soon as this panel opens; press
+                            <strong>🧮 Calculate CoG Envelope</strong> below to fill in, show, and
                             auto-push the numeric X/Y/Z/Z-from-top-deck data to Excel
                             <strong>"Check CASE A &amp; CASE B"!B67:E73</strong> (CoG envelope section) and
                             <strong>B75:E81</strong> (with-slope section) — the row labels already in
@@ -905,21 +920,33 @@
                             <strong>Z (From trailer top deck)</strong> column is only populated for
                             <strong>CARGO CoG. In Axis-LC0</strong> and the <strong>LC1&ndash;LC4</strong>
                             rows (both sections) — everywhere else it's <strong>N/A</strong>, same as the
-                            reference workbook.
-                            Each <strong>CARGO CoG. In Axis-LC0</strong> and <strong>LC1&ndash;LC4</strong> row
-                            (both sections) has its own small 📤 button
+                            reference workbook. The with-slope section's own LC1&ndash;LC4 rows are labelled
+                            <strong>LC1-Slope</strong>, <strong>LC2-Slope</strong>, <strong>LC3-Slope</strong>
+                            and <strong>LC4-Slope</strong> to keep them visually distinct from the plain
+                            section above.
+                            Each <strong>CARGO CoG. In Axis-LC0</strong>, <strong>LC1&ndash;LC4</strong>, and
+                            <strong>LC1-Slope&ndash;LC4-Slope</strong> row has its own small 📤 button
                             that pushes just that load case's X/Y and its Z (From trailer top deck) —
                             NOT the plain local Z — to <strong>"Input"!BB35:BD35</strong> —
                             the same cells the rest of the workbook's transport table calculates the active
                             cargo CoG from — updates the <strong>TRANSPORT TABLE</strong> header in
                             📋 Drawing Table below to name that load case (e.g. <strong>TRANSPORT TABLE
-                            LC1</strong>), refreshes 📋 Drawing Table so that load case's transport table
-                            shows immediately, and mirrors the same data to Excel sheet
-                            <strong>"Drawing_table_LC"</strong>, in that load case's own column block
-                            (LC0/LC1/LC2/LC3/LC4 side by side).
+                            LC1</strong> or <strong>TRANSPORT TABLE LC1-Slope</strong>), refreshes
+                            📋 Drawing Table so that load case's transport table shows immediately, and
+                            mirrors the same data to Excel sheet <strong>"Drawing_table_LC"</strong>, in that
+                            load case's own column block (LC0/LC1/LC2/LC3/LC4 side by side). Pressing an
+                            <strong>LC1-Slope&ndash;LC4-Slope</strong> button ALSO mirrors that same data to a
+                            separate Excel sheet <strong>"Drawing_table_LC_Slope"</strong>, in its own
+                            LC1-Slope/LC2-Slope/LC3-Slope/LC4-Slope column block.
                         </p>
                         <div id="tgCogEnvTable" class="tg-drawing-table-wrap"><!-- CoG Envelope table rendered by JS --></div>
-                        <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
+                        <div class="tg-cogenv-preview-wrap">
+                            <div class="tg-preview-toolbar" style="padding-top:8px;">
+                                <span class="tg-preview-toggle" style="cursor:default;">📐 CoG Envelope Preview</span>
+                                <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
+                            </div>
+                            <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
+                        </div>
                     </div>
 
                     <div class="tg-cargo-card">
@@ -952,6 +979,7 @@
                                 <button type="button" class="tg-3d-btn tg-3d-lock-btn" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔓 Unlocked</button>
                             </div>
                             <div class="tg-preview-toggles-right">
+                                <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
                                     ⚠ Show stability triangle
@@ -1269,6 +1297,39 @@
             btn.title = minimized ? 'Expand this card' : 'Minimize this card (show only the header)';
         }
 
+        // Same idea as toggleTgCardMinimize() above, but for the
+        // standalone PREVIEW panels (2D Plan/Elevation, 3D viewer, CoG
+        // Envelope 2D preview) instead of the 4 input cards — these
+        // don't have a dedicated title header to collapse down to, so
+        // .tg-preview-minimized (see CSS) hides just the drawing area
+        // and leaves the toolbar row (with this same button) visible.
+        // Default state is minimized — see initTgPreviewDefaults().
+        function toggleTgPreviewMinimize(btn) {
+            const wrap = btn.closest('.tg-preview-wrap, .tg-3d-wrap, .tg-cogenv-preview-wrap');
+            if (!wrap) return;
+            const minimized = wrap.classList.toggle('tg-preview-minimized');
+            btn.textContent = minimized ? '▢ Expand' : '— Minimize';
+            btn.title = minimized ? 'Expand this preview' : 'Minimize this preview (show only the toolbar)';
+        }
+
+        // Default panel state on open: "⬌ Show preview beside input
+        // data" checked (side-by-side layout) and every preview panel
+        // (2D, 3D, CoG Envelope 2D) minimized down to just its toolbar
+        // — called once from initDashboard(). The checkbox itself
+        // already defaults to checked in the HTML (see tgPreviewSideToggle),
+        // but that alone doesn't apply .tg-side-layout (browsers don't
+        // fire onchange for a load-time "checked" attribute), so
+        // toggleTgPreviewSide(true) is called explicitly here too.
+        function initTgPreviewDefaults() {
+            const sideToggle = document.getElementById('tgPreviewSideToggle');
+            if (sideToggle) { sideToggle.checked = true; toggleTgPreviewSide(true); }
+            document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap, .tg-cogenv-preview-wrap').forEach(wrap => {
+                wrap.classList.add('tg-preview-minimized');
+                const btn = wrap.querySelector('.tg-preview-minimize-btn');
+                if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this preview'; }
+            });
+        }
+
         function toggleAutoSync(checked) {
             autoSyncEnabled = !!checked;
             if (autoSyncEnabled) {
@@ -1555,11 +1616,27 @@
         // A1:F63-shaped block starts in "Drawing_table_LC" (0 -> col 1 =
         // "A", 1 -> col 27 = "AA", 2 -> col 53 = "BA", etc.).
         function drawingTableLcColStart(lcIndex) { return 1 + lcIndex * DRAWING_TABLE_LC_BLOCK_WIDTH; }
+        // "Drawing_table_LC_Slope" — same idea as "Drawing_table_LC"
+        // above, but only for the 📊 CoG Envelope Table's with-slope
+        // section (LC1-Slope..LC4-Slope — there's no LC0-Slope, slope
+        // shift only applies to LC1-4). 4 side-by-side blocks, 26
+        // columns apart (LC1-Slope at A, LC2-Slope at AA, LC3-Slope at
+        // BA, LC4-Slope at CA). Written ADDITIONALLY (alongside, not
+        // instead of) the normal "Drawing_table_LC" mirror whenever a
+        // 📤 button on one of the with-slope rows is pressed — see
+        // pushLoadCaseToExcel().
+        const DRAWING_TABLE_LC_SLOPE_SHEET_NAME = "Drawing_table_LC_Slope";
+        // 1-indexed column number where LC{n}-Slope's (n = 1-4)
+        // A1:F63-shaped block starts in "Drawing_table_LC_Slope" (LC1-Slope
+        // -> col 1 = "A", LC2-Slope -> col 27 = "AA", etc.) — note the
+        // index here is 0-based over the 4 slope load cases (LC1-Slope = 0),
+        // NOT the 0-4 lcIndex used by drawingTableLcColStart() above.
+        function drawingTableLcSlopeColStart(slopeIdx) { return 1 + slopeIdx * DRAWING_TABLE_LC_BLOCK_WIDTH; }
         // Pulls the load case number (0-4) out of a 📤 button's "name"
-        // argument — 'CoG-LC0' -> 0, 'LC1' -> 1, 'LC2' -> 2, etc. (see
-        // the lcPushBtn()/pushLoadCaseToExcel() call sites in
-        // renderTgCogEnvTable()). Returns null if no "LC{n}" pattern is
-        // found.
+        // argument — 'CoG-LC0' -> 0, 'LC1' -> 1, 'LC2' -> 2, 'LC1-Slope'
+        // -> 1, etc. (see the lcPushBtn()/pushLoadCaseToExcel() call
+        // sites in renderTgCogEnvTable()). Returns null if no "LC{n}"
+        // pattern is found.
         function lcIndexFromPushName(name) {
             const m = /LC(\d)/i.exec(name || '');
             return m ? parseInt(m[1], 10) : null;
@@ -4361,6 +4438,20 @@
         // the sheet's own rows so renderTgCogEnvTable() can lay it out
         // 1:1 against C8:E24 — nothing here is pulled from or pushed to
         // Excel, it's computed fresh from tgCogEnv every call.
+        // Row-label / 📤 push-button-name metadata for the 📊 CoG
+        // Envelope Table's two LC1-4 blocks — a single source of truth
+        // shared by calcCogEnvelope() (numeric c.lcBase/c.lcSlope
+        // entries, once "🧮 Calculate CoG Envelope" is pressed) and the
+        // "not yet calculated" blank-shell render path in
+        // renderTgCogEnvTable() below, so the with-slope rows'
+        // LC1-Slope..LC4-Slope naming can never drift between the two
+        // states. The "-Slope" suffix here is also what
+        // pushLoadCaseToExcel() sniffs (via /slope/i) to decide whether
+        // a 📤 press should ALSO mirror into "Drawing_table_LC_Slope"
+        // (see that function and DRAWING_TABLE_LC_SLOPE_SHEET_NAME).
+        const COGENV_LC_MAIN_NAMES = ['LC1', 'LC2', 'LC3', 'LC4'];
+        const COGENV_LC_SLOPE_NAMES = ['LC1-Slope', 'LC2-Slope', 'LC3-Slope', 'LC4-Slope'];
+
         function calcCogEnvelope() {
             const { dimX, dimY, dimZ, cogX, cogY, cogZ, upSlope, downSlope } = tgCogEnv;
             // Row 12 — "GOG envelope (5%)" — C12/D12/E12 = dim * 5%
@@ -4371,19 +4462,24 @@
             // every load case; only X flips sign per corner. halfEnvX
             // is passed in separately since the "with slope" table
             // below (rows 21-24) reuses this exact same shape but with
-            // a different X half-envelope.
-            const loadCases = (halfEnvX) => ([
-                { name: 'LC1', x: cogX + halfEnvX, y: cogY - envY / 2, z: cogZ + envZ / 2 },
-                { name: 'LC2', x: cogX - halfEnvX, y: cogY - envY / 2, z: cogZ + envZ / 2 },
-                { name: 'LC3', x: cogX - halfEnvX, y: cogY + envY / 2, z: cogZ + envZ / 2 },
-                { name: 'LC4', x: cogX + halfEnvX, y: cogY + envY / 2, z: cogZ + envZ / 2 },
+            // a different X half-envelope. `names` supplies the row
+            // labels (and 📤 push-button names) — COGENV_LC_MAIN_NAMES
+            // (LC1-LC4) for the plain section, COGENV_LC_SLOPE_NAMES
+            // (LC1-Slope..LC4-Slope) for the with-slope section below,
+            // so the two sections' rows are visually distinguishable
+            // (see renderTgCogEnvTable() and pushLoadCaseToExcel()).
+            const loadCases = (halfEnvX, names) => ([
+                { name: names[0], x: cogX + halfEnvX, y: cogY - envY / 2, z: cogZ + envZ / 2 },
+                { name: names[1], x: cogX - halfEnvX, y: cogY - envY / 2, z: cogZ + envZ / 2 },
+                { name: names[2], x: cogX - halfEnvX, y: cogY + envY / 2, z: cogZ + envZ / 2 },
+                { name: names[3], x: cogX + halfEnvX, y: cogY + envY / 2, z: cogZ + envZ / 2 },
             ]);
-            const lcBase = loadCases(envX / 2);
+            const lcBase = loadCases(envX / 2, COGENV_LC_MAIN_NAMES);
             // Row 20 — "GOG envelope (5%) with 6% slope" — C20 = C12 +
             // C19 (downhill shift only — see block comment above);
             // D20/E20 are unchanged from D12/E12 (no slope shift on Y/Z).
             const envXSlope = envX + downSlope;
-            const lcSlope = loadCases(envXSlope / 2);
+            const lcSlope = loadCases(envXSlope / 2, COGENV_LC_SLOPE_NAMES);
             // Column E — "Z (From trailer top deck)". For the LC1-4
             // rows (both sections): = (CoG envelope (5%) row's Z, i.e.
             // envZ, /2) + Excel "Input"!BD{row} (CARGO_Z_COL — the
@@ -4589,7 +4685,20 @@
                 if (lcIndex !== null) {
                     tgActiveDrawingLC = lcIndex;
                     renderTgDrawingTable();
-                    await pushDrawingTableRowsToLCSheet(lcIndex, tgDrawingTableRows);
+                    // Slope-section buttons (LC1-Slope..LC4-Slope, see
+                    // COGENV_LC_SLOPE_NAMES) get an "-Slope" title suffix
+                    // in "Drawing_table_LC" instead of the plain "LC{n}"
+                    // one, so its header always reflects which section
+                    // the push actually came from — AND get mirrored a
+                    // second time into the separate
+                    // "Drawing_table_LC_Slope" sheet, in that load
+                    // case's own LC1-Slope..LC4-Slope block.
+                    const isSlope = /slope/i.test(name);
+                    const lcLabel = isSlope ? `LC${lcIndex}-Slope` : `LC${lcIndex}`;
+                    await pushDrawingTableRowsToLCSheet(lcIndex, tgDrawingTableRows, lcLabel);
+                    if (isSlope) {
+                        await pushDrawingTableRowsToLCSlopeSheet(lcIndex, tgDrawingTableRows, lcLabel);
+                    }
                 }
                 btnEl.classList.remove('tg-btn-syncing');
                 btnEl.classList.add('tg-btn-flash-ok');
@@ -4613,16 +4722,19 @@
         // Table, so each load case keeps its own permanent transport-
         // table snapshot in the reference workbook rather than only the
         // most recently-viewed one. The title row (DRAWING_TABLE_TITLE_ROW)
-        // is rewritten to "TRANSPORT TABLE LC{n}" in the copy actually
-        // written to Excel — same suffix renderTgDrawingTable() shows
-        // locally, but baked into the Excel cell itself here so each
-        // LC's block in the sheet is self-labelled. Best-effort: logs/
-        // warns on failure (e.g. missing sheet) but never blocks or
-        // fails the 📤 button's own flash-ok/flash-err state, since the
-        // primary push (Input!BB35:BD35) already succeeded by the time
-        // this runs.
-        async function pushDrawingTableRowsToLCSheet(lcIndex, rows) {
+        // is rewritten to "TRANSPORT TABLE {lcLabel}" in the copy actually
+        // written to Excel — lcLabel is "LC{n}" for a plain-section push
+        // or "LC{n}-Slope" for a with-slope one (see pushLoadCaseToExcel),
+        // so this sheet's own header always reflects which section the
+        // push actually came from, not just the bare load-case number.
+        // Baked into the Excel cell itself here so each LC's block in
+        // the sheet is self-labelled. Best-effort: logs/warns on failure
+        // (e.g. missing sheet) but never blocks or fails the 📤 button's
+        // own flash-ok/flash-err state, since the primary push
+        // (Input!BB35:BD35) already succeeded by the time this runs.
+        async function pushDrawingTableRowsToLCSheet(lcIndex, rows, lcLabel) {
             if (!isOfficeInitialized || !rows || !rows.length) return;
+            lcLabel = lcLabel || `LC${lcIndex}`;
             const colStart = drawingTableLcColStart(lcIndex);
             const colEnd = colStart + 5; // A:F — 6 columns wide, same as DRAWING_TABLE_RANGE
             const a1 = `${colLetter(colStart)}1:${colLetter(colEnd)}${rows.length}`;
@@ -4634,7 +4746,7 @@
                 const titleRow = r.slice();
                 let rawTitle = titleRow[0];
                 if (typeof rawTitle === 'string' && /transport table/i.test(rawTitle)) {
-                    titleRow[0] = `${rawTitle.trim()} LC${lcIndex}`;
+                    titleRow[0] = `${rawTitle.trim()} ${lcLabel}`;
                 }
                 return titleRow;
             });
@@ -4644,10 +4756,50 @@
                     sheet.getRange(a1).values = lcRows;
                     await context.sync();
                 });
-                logMsg(`📤 Mirrored 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} (LC${lcIndex} block, header "TRANSPORT TABLE LC${lcIndex}").`);
+                logMsg(`📤 Mirrored 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} (LC${lcIndex} block, header "TRANSPORT TABLE ${lcLabel}").`);
             } catch (e) {
                 console.warn(`Could not mirror Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1}`, e);
                 logMsg(`⚠️ Could not mirror 📋 Drawing Table to '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1} — make sure that sheet exists with that exact name.`);
+            }
+        }
+
+        // Same idea as pushDrawingTableRowsToLCSheet() above, but writes
+        // into the SEPARATE "Drawing_table_LC_Slope" sheet instead —
+        // called ADDITIONALLY (not instead of) that function, only when
+        // the 📤 button pressed belongs to the with-slope section
+        // (LC1-Slope..LC4-Slope). Only 4 blocks exist here (no LC0-Slope),
+        // so the block index is lcIndex-1 (LC1-Slope -> block 0,
+        // LC2-Slope -> block 1, etc.) — see drawingTableLcSlopeColStart().
+        // Same best-effort logging/failure behavior as the sibling
+        // function: never blocks or fails the 📤 button's own flash
+        // state.
+        async function pushDrawingTableRowsToLCSlopeSheet(lcIndex, rows, lcLabel) {
+            if (!isOfficeInitialized || !rows || !rows.length) return;
+            const slopeIdx = lcIndex - 1;
+            if (slopeIdx < 0 || slopeIdx > 3) return; // only LC1-Slope..LC4-Slope exist
+            lcLabel = lcLabel || `LC${lcIndex}-Slope`;
+            const colStart = drawingTableLcSlopeColStart(slopeIdx);
+            const colEnd = colStart + 5; // A:F — 6 columns wide, same as DRAWING_TABLE_RANGE
+            const a1 = `${colLetter(colStart)}1:${colLetter(colEnd)}${rows.length}`;
+            const lcRows = rows.map((r, i) => {
+                if (i !== DRAWING_TABLE_TITLE_ROW - 1) return r;
+                const titleRow = r.slice();
+                let rawTitle = titleRow[0];
+                if (typeof rawTitle === 'string' && /transport table/i.test(rawTitle)) {
+                    titleRow[0] = `${rawTitle.trim()} ${lcLabel}`;
+                }
+                return titleRow;
+            });
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SLOPE_SHEET_NAME);
+                    sheet.getRange(a1).values = lcRows;
+                    await context.sync();
+                });
+                logMsg(`📤 Mirrored 📋 Drawing Table to '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'!${a1} (${lcLabel} block, header "TRANSPORT TABLE ${lcLabel}").`);
+            } catch (e) {
+                console.warn(`Could not mirror Drawing Table to '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'!${a1}`, e);
+                logMsg(`⚠️ Could not mirror 📋 Drawing Table to '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'!${a1} — make sure that sheet exists with that exact name.`);
             }
         }
 
@@ -4816,18 +4968,18 @@
         function renderTgCogEnvTable() {
             const el = document.getElementById('tgCogEnvTable');
             if (!el) return;
-            if (!tgCogEnvCalculated) {
-                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data yet — click "🧮 Calculate CoG Envelope" below to compute this table and push it to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN} and ${COGENV_TABLE_RANGE_SLOPE}.</div>`;
-                const previewEl = document.getElementById('tgCogEnvPreview');
-                if (previewEl) previewEl.innerHTML = '';
-                return;
-            }
-            // Renders the FROZEN snapshot (tgCogEnvComputed), not a
-            // fresh calcCogEnvelope() call — see that variable's own
-            // comment above for why. Fallback to a fresh calc only as a
-            // safety net in the (shouldn't-happen) case this is reached
-            // with tgCogEnvCalculated true but no snapshot yet captured.
-            const c = tgCogEnvComputed || calcCogEnvelope();
+            const calculated = tgCogEnvCalculated;
+            // Renders the FROZEN snapshot (tgCogEnvComputed) once
+            // calculated — see that variable's own comment above for
+            // why. Fallback to a fresh calc only as a safety net in the
+            // (shouldn't-happen) case this is reached with
+            // tgCogEnvCalculated true but no snapshot yet captured.
+            // Before "🧮 Calculate CoG Envelope" is ever pressed, c stays
+            // null and the table below renders as a dash-filled SHELL —
+            // row labels only, no numbers, no 📤 push buttons — instead
+            // of being hidden entirely, so the layout is visible from
+            // the moment this panel opens.
+            const c = calculated ? (tgCogEnvComputed || calcCogEnvelope()) : null;
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : v);
             // pushName (optional) appends the small
             // 📤 push-to-Input!BB35:BD35 button AFTER the "Z (From
@@ -4844,24 +4996,42 @@
             // 'N/A' for rows where it doesn't apply, a number otherwise.
             // pushName (optional) is the load case's name — supplying
             // it renders the 📤 push button right after the z2 cell.
-            const row = (label, x, y, z, z2, bold, pushName) => `
-                <tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}</td><td>${fmt(z2)}${pushName ? lcPushBtn(pushName, x, y, z2) : ''}</td></tr>`;
+            // Before Calculate is pressed (!calculated), every cell
+            // renders as a dash and no push button is drawn at all
+            // (there's nothing computed yet to push).
+            const row = (label, x, y, z, z2, bold, pushName) => {
+                if (!calculated) {
+                    return `<tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+                }
+                return `<tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>${fmt(x)}</td><td>${fmt(y)}</td><td>${fmt(z)}</td><td>${fmt(z2)}${pushName ? lcPushBtn(pushName, x, y, z2) : ''}</td></tr>`;
+            };
             let html = '<table class="tg-drawing-table">';
-            html += `<tr class="tg-dt-title"><td colspan="5">CoG ENVELOPE</td></tr>`;
+            html += `<tr class="tg-dt-title"><td colspan="5">CoG ENVELOPE${calculated ? '' : ' — press 🧮 Calculate below to fill in'}</td></tr>`;
             html += `<tr class="tg-dt-bold"><td></td><td>X</td><td>Y</td><td>Z</td><td>Z (From trailer top deck)</td></tr>`;
-            html += row('CARGO DIM. In Axis', c.dimX, c.dimY, c.dimZ, 'N/A');
-            html += row('CARGO CoG. In Axis-LC0', c.cogX, c.cogY, c.cogZ, c.zDeckCog, false, 'CoG-LC0');
-            html += row('CoG envelope (5%)', c.envX, c.envY, c.envZ, 'N/A');
-            c.lcBase.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, c.zDeckLc, false, lc.name); });
+            html += row('CARGO DIM. In Axis', c && c.dimX, c && c.dimY, c && c.dimZ, 'N/A');
+            html += row('CARGO CoG. In Axis-LC0', c && c.cogX, c && c.cogY, c && c.cogZ, c && c.zDeckCog, false, 'CoG-LC0');
+            html += row('CoG envelope (5%)', c && c.envX, c && c.envY, c && c.envZ, 'N/A');
+            COGENV_LC_MAIN_NAMES.forEach((name, i) => {
+                const lc = calculated ? c.lcBase[i] : null;
+                html += row(name, lc && lc.x, lc && lc.y, lc && lc.z, calculated ? c.zDeckLc : null, false, name);
+            });
             html += `<tr class="tg-dt-spacer"><td colspan="5"></td></tr>`;
             html += `<tr class="tg-dt-bold"><td colspan="5">CoG envelope with slope</td></tr>`;
-            html += row('Shift of CoG on slope — Uphill (LC1&4)', c.upSlope, 'N/A', 'N/A', 'N/A');
-            html += row('Shift of CoG on slope — Downhill (LC2&3)', c.downSlope, 'N/A', 'N/A', 'N/A');
-            html += row('CoG envelope (5%) with slope', c.envXSlope, c.envY, c.envZ, 'N/A');
-            c.lcSlope.forEach(lc => { html += row(lc.name, lc.x, lc.y, lc.z, c.zDeckLc, false, lc.name); });
+            html += row('Shift of CoG on slope — Uphill (LC1&4)', c && c.upSlope, 'N/A', 'N/A', 'N/A');
+            html += row('Shift of CoG on slope — Downhill (LC2&3)', c && c.downSlope, 'N/A', 'N/A', 'N/A');
+            html += row('CoG envelope (5%) with slope', c && c.envXSlope, c && c.envY, c && c.envZ, 'N/A');
+            COGENV_LC_SLOPE_NAMES.forEach((name, i) => {
+                const lc = calculated ? c.lcSlope[i] : null;
+                html += row(name, lc && lc.x, lc && lc.y, lc && lc.z, calculated ? c.zDeckLc : null, false, name);
+            });
             html += '</table>';
             el.innerHTML = html;
-            renderTgCogEnvPreview(c);
+            // The 2D callout preview gates on its own data (dimX/dimY/
+            // cogX/cogY/G1-G3) rather than tgCogEnvCalculated, so it can
+            // show as soon as those Excel-pulled fields exist — pass the
+            // frozen snapshot when calculated, otherwise let it compute
+            // its own live preview from the not-yet-calculated fields.
+            renderTgCogEnvPreview(calculated ? c : undefined);
         }
 
         // ---- CoG Envelope 2D preview — an AutoCAD-style callout
@@ -8374,6 +8544,7 @@
             }
             renderTrailerDashboard();
             init3DSceneTG();
+            initTgPreviewDefaults(); // side-by-side layout + all preview panels minimized by default — see its own comment above
             setTimeout(resize3DViewerTG, 50); // container may report 0 width on first paint
             const dirSelect = document.getElementById('tgLoadDirectionSelect');
             if (dirSelect) dirSelect.value = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
