@@ -645,7 +645,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.65.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.65.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -874,6 +874,7 @@
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
                         <div class="tg-preview-toolbar">
+                            <span class="tg-preview-toggle" style="cursor:default; font-weight:700;">2D</span>
                             <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
@@ -981,6 +982,7 @@
                                 <button type="button" class="tg-3d-btn tg-3d-lock-btn" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔓 Unlocked</button>
                             </div>
                             <div class="tg-preview-toggles-right">
+                                <span class="tg-preview-toggle" style="cursor:default; font-weight:700;">3D</span>
                                 <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
@@ -1318,20 +1320,17 @@
         }
 
         // Default panel state on open: "⬌ Show preview beside input
-        // data" checked (side-by-side layout) and every preview/output
-        // panel — 2D preview, 3D preview, 📊 CoG Envelope Table card,
-        // and 📋 Drawing Table card — minimized/collapsed down to just
-        // its toolbar or header — called once from initDashboard(). The
+        // data" checked (side-by-side layout), ALL 4 top-level input
+        // cards (Generate Trailer, Generate Cargo, Horizontal Loads,
+        // CoG Envelope fields), and all 4 preview/output panels — 2D
+        // preview, 3D preview, 📊 CoG Envelope Table card, and
+        // 📋 Drawing Table card — minimized/collapsed down to just their
+        // header or toolbar — called once from initDashboard(). The
         // checkbox itself already defaults to checked in the HTML (see
         // tgPreviewSideToggle), but that alone doesn't apply
         // .tg-side-layout (browsers don't fire onchange for a load-time
         // "checked" attribute), so toggleTgPreviewSide(true) is called
-        // explicitly here too. The two cards are targeted by id
-        // (tgCogEnvTableCard/tgDrawingTableCard) rather than a blanket
-        // .tg-cargo-card selector, since the OTHER 4 top-level input
-        // cards (Generate Trailer, Generate Cargo, Horizontal Loads,
-        // CoG Envelope fields) are deliberately left expanded by
-        // default — only the preview/output panels start collapsed.
+        // explicitly here too.
         function initTgPreviewDefaults() {
             const sideToggle = document.getElementById('tgPreviewSideToggle');
             if (sideToggle) { sideToggle.checked = true; toggleTgPreviewSide(true); }
@@ -1339,6 +1338,17 @@
                 wrap.classList.add('tg-preview-minimized');
                 const btn = wrap.querySelector('.tg-preview-minimize-btn');
                 if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this preview'; }
+            });
+            // The 4 top-level input cards (by their own distinguishing
+            // classes — .tg-trailer-card for Generate Trailer,
+            // .tg-card-cargo/.tg-card-hloads/.tg-card-cogenv for the 3
+            // .tg-cargo-card variants) PLUS the 2 output table cards (by
+            // id) all use the same .tg-card-minimized mechanism as
+            // toggleTgCardMinimize().
+            document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv').forEach(card => {
+                card.classList.add('tg-card-minimized');
+                const btn = card.querySelector('.tg-minimize-btn');
+                if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this card'; }
             });
             ['tgCogEnvTableCard', 'tgDrawingTableCard'].forEach(id => {
                 const card = document.getElementById(id);
