@@ -71,12 +71,12 @@
             cursor: pointer; white-space: nowrap;
         }
         #themeModeToggle:hover { border-color: var(--accent-blue); color: var(--text-main); }
-        #appExportBtn, #appImportBtn {
+        #appExportBtn, #appImportBtn, #appMinimizeAllBtn {
             padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
             border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
             cursor: pointer; white-space: nowrap;
         }
-        #appExportBtn:hover, #appImportBtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
 
         .tg-page {
             width: 100%;
@@ -246,10 +246,13 @@
            does NOT get its own minimize — it lives inside the
            📊 CoG Envelope Table card and is hidden/shown by that card's
            own toggleTgCardMinimize() instead. */
-        .tg-preview-wrap.tg-preview-minimized #tgPreview,
-        .tg-preview-wrap.tg-preview-minimized #tgPreviewGroupDetails { display: none; }
-        .tg-3d-wrap.tg-preview-minimized #tgViewer3dWrap,
-        .tg-3d-wrap.tg-preview-minimized .tg-3d-hint { display: none; }
+        .tg-preview-wrap.tg-preview-minimized > *:not(.tg-train-card-header),
+        .tg-3d-wrap.tg-preview-minimized > *:not(.tg-train-card-header) {
+            display: none;
+        }
+        .tg-preview-wrap.tg-preview-minimized, .tg-3d-wrap.tg-preview-minimized { padding-bottom: 8px; }
+        .tg-preview-wrap.tg-preview-minimized .tg-train-card-header,
+        .tg-3d-wrap.tg-preview-minimized .tg-train-card-header { margin-bottom: 0; }
         .tg-cargo-groupall-card {
             border: 1px dashed var(--accent-blue);
             background: var(--panel-bg);
@@ -645,7 +648,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.65.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.65.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -657,6 +660,7 @@
             <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, Z Trailer Height, and other settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
             <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
             <input type="file" id="appImportFileInput" accept=".json,application/json" style="display:none" onchange="importAppState(event)">
+            <button type="button" id="appMinimizeAllBtn" title="Minimize all cards and previews (show only their headers)" onclick="toggleAllTgMinimize(this)">▢ Expand All</button>
             <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
         </div>
     </header>
@@ -873,9 +877,11 @@
 
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
+                        <div class="tg-train-card-header">
+                            <h2 class="tg-cargo-title">2D Drawing</h2>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                        </div>
                         <div class="tg-preview-toolbar">
-                            <span class="tg-preview-toggle" style="cursor:default; font-weight:700;">2D</span>
-                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
@@ -972,6 +978,10 @@
                     </div>
 
                     <div class="tg-3d-wrap">
+                        <div class="tg-train-card-header">
+                            <h2 class="tg-cargo-title">3D Drawing</h2>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                        </div>
                         <div class="tg-3d-toolbar">
                             <div class="tg-3d-cam-btns">
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-iso" onclick="set3DCameraTG('iso')">Iso</button>
@@ -982,8 +992,6 @@
                                 <button type="button" class="tg-3d-btn tg-3d-lock-btn" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔓 Unlocked</button>
                             </div>
                             <div class="tg-preview-toggles-right">
-                                <span class="tg-preview-toggle" style="cursor:default; font-weight:700;">3D</span>
-                                <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this preview (show only the toolbar)">— Minimize</button>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
                                     ⚠ Show stability triangle
@@ -1302,21 +1310,67 @@
         }
 
         // Same idea as toggleTgCardMinimize() above, but for the
-        // standalone PREVIEW panels (2D Plan/Elevation, 3D viewer)
-        // instead of the 4 input cards — these don't have a dedicated
-        // title header to collapse down to, so .tg-preview-minimized
-        // (see CSS) hides just the drawing area and leaves the toolbar
-        // row (with this same button) visible. Default state is
-        // minimized — see initTgPreviewDefaults(). (The CoG Envelope
-        // Table and Drawing Table cards, and the small CoG Envelope 2D
-        // callout preview inside the former, use toggleTgCardMinimize()
-        // instead — see their own — Minimize buttons.)
+        // standalone PREVIEW panels (2D Drawing, 3D Drawing) instead of
+        // the 4 input cards. Both now have their own dedicated
+        // .tg-train-card-header (title + this button) matching the
+        // 📊 CoG Envelope Table / 📋 Drawing Table card style, so
+        // .tg-preview-minimized (see CSS) hides everything EXCEPT that
+        // header — toolbar, toggles, and drawing area all collapse away
+        // together, leaving just the title + button visible, same as
+        // toggleTgCardMinimize(). Default state is minimized — see
+        // initTgPreviewDefaults(). (The CoG Envelope Table and Drawing
+        // Table cards, and the small CoG Envelope 2D callout preview
+        // inside the former, use toggleTgCardMinimize() instead — see
+        // their own — Minimize buttons.)
         function toggleTgPreviewMinimize(btn) {
             const wrap = btn.closest('.tg-preview-wrap, .tg-3d-wrap');
             if (!wrap) return;
             const minimized = wrap.classList.toggle('tg-preview-minimized');
             btn.textContent = minimized ? '▢ Expand' : '— Minimize';
-            btn.title = minimized ? 'Expand this preview' : 'Minimize this preview (show only the toolbar)';
+            btn.title = minimized ? 'Expand this card' : 'Minimize this card (show only the header)';
+        }
+
+        // ---- Minimize/expand ALL cards & previews at once ----
+        // Lives in the header toolbar, same button group as 💾 Export /
+        // 📂 Import / 🌙 Night. Single toggle button: if anything on the
+        // page is currently expanded, one click minimizes everything
+        // (the 4 top-level input cards, 2D Drawing, 3D Drawing,
+        // 📊 CoG Envelope Table, and 📋 Drawing Table); if everything is
+        // already minimized, one click expands it all back. Reuses the
+        // exact same two class mechanisms (.tg-card-minimized via
+        // toggleTgCardMinimize(), .tg-preview-minimized via
+        // toggleTgPreviewMinimize()) so it stays perfectly in sync with
+        // clicking each card's own — Minimize/▢ Expand button
+        // individually.
+        function toggleAllTgMinimize(btn) {
+            const cardEls = document.querySelectorAll(
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, #tgCogEnvTableCard, #tgDrawingTableCard'
+            );
+            const previewEls = document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap');
+            const anyExpanded =
+                Array.from(cardEls).some(card => !card.classList.contains('tg-card-minimized')) ||
+                Array.from(previewEls).some(wrap => !wrap.classList.contains('tg-preview-minimized'));
+            const minimize = anyExpanded; // if anything is open, close everything; otherwise open everything
+            cardEls.forEach(card => {
+                card.classList.toggle('tg-card-minimized', minimize);
+                const b = card.querySelector('.tg-minimize-btn');
+                if (b) {
+                    b.textContent = minimize ? '▢ Expand' : '— Minimize';
+                    b.title = minimize ? 'Expand this card' : 'Minimize this card (show only the header)';
+                }
+            });
+            previewEls.forEach(wrap => {
+                wrap.classList.toggle('tg-preview-minimized', minimize);
+                const b = wrap.querySelector('.tg-preview-minimize-btn');
+                if (b) {
+                    b.textContent = minimize ? '▢ Expand' : '— Minimize';
+                    b.title = minimize ? 'Expand this card' : 'Minimize this card (show only the header)';
+                }
+            });
+            if (btn) {
+                btn.textContent = minimize ? '▢ Expand All' : '— Minimize All';
+                btn.title = minimize ? 'Expand all cards and previews' : 'Minimize all cards and previews (show only their headers)';
+            }
         }
 
         // Default panel state on open: "⬌ Show preview beside input
@@ -1357,6 +1411,12 @@
                 const btn = card.querySelector('.tg-minimize-btn');
                 if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this card'; }
             });
+            // Everything above starts minimized, so the header's
+            // ▢ Expand All / — Minimize All button should open on
+            // "▢ Expand All" too, matching every individual card's own
+            // button — see toggleAllTgMinimize().
+            const allBtn = document.getElementById('appMinimizeAllBtn');
+            if (allBtn) { allBtn.textContent = '▢ Expand All'; allBtn.title = 'Expand all cards and previews'; }
         }
 
 
