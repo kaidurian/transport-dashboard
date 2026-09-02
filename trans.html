@@ -665,7 +665,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.69.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.69.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -971,37 +971,6 @@
                         <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-minimized" id="tgCogEnvSummaryCard">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
-                            <button type="button" class="tg-help-btn" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Expand this card">▢ Expand</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgCogEnvSummaryHelpPanel">
-                            Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
-                            <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
-                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>;
-                            <strong>LC0&ndash;LC4</strong> come from sheet <strong>"Drawing_table_LC"</strong>
-                            (each load case's own column block); <strong>LC1-Slope&ndash;LC4-Slope</strong>
-                            (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>. The
-                            <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
-                            MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
-                            Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
-                            this pulls independently, the same way 📋 Drawing Table does. Any <strong>UNITY
-                            CHECK</strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
-                            same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Drawing Table
-                            below — but for the <strong>STABILITY</strong> rows it's the opposite: those are
-                            flagged red when they fall <strong>under</strong> 1, since a smaller stability
-                            angle means less margin. The <strong>Static</strong> column itself is shown
-                            plainly and is never flagged.
-                        </p>
-                        <div id="tgCogEnvSummaryTable" class="tg-drawing-table-wrap"><!-- CoG Envelope Summary rendered by JS --></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
-                                    onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
-                        </div>
-                    </div>
-
                     <div class="tg-cargo-card" id="tgDrawingTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📋 Drawing Table</h2>
@@ -1023,6 +992,37 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
                                     onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-minimized" id="tgCogEnvSummaryCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
+                            <button type="button" class="tg-help-btn" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" title="Expand this card">▢ Expand</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgCogEnvSummaryHelpPanel">
+                            Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
+                            <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
+                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>;
+                            <strong>LC0&ndash;LC4</strong> come from sheet <strong>"Drawing_table_LC"</strong>
+                            (each load case's own column block); <strong>LC1-Slope&ndash;LC4-Slope</strong>
+                            (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>. The
+                            <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
+                            MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
+                            Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
+                            this pulls independently, the same way 📋 Drawing Table does. Any <strong>UNITY
+                            CHECK</strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
+                            same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Drawing Table
+                            above — but for the <strong>STABILITY</strong> rows it's the opposite: those are
+                            flagged red when they fall <strong>under</strong> 1, since a smaller stability
+                            angle means less margin. The <strong>Static</strong> column itself is shown
+                            plainly and is never flagged.
+                        </p>
+                        <div id="tgCogEnvSummaryTable" class="tg-drawing-table-wrap"><!-- CoG Envelope Summary rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
+                                    onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
 
@@ -1382,6 +1382,24 @@
             const minimized = card.classList.toggle('tg-card-minimized');
             btn.textContent = minimized ? '▢ Expand' : '— Minimize';
             btn.title = minimized ? 'Expand this card' : 'Minimize this card (show only the header)';
+        }
+
+        // Forces a single card open by id (never toggles/collapses it) —
+        // used by "🧮 Calculate CoG Envelope" (see calculateCogEnvelopeImpl)
+        // to auto-expand the 📊 CoG Envelope Table and 📈 CoG Envelope
+        // Summary cards on click, per KKKai's spec, regardless of
+        // whichever minimized/expanded state the user last left them in.
+        // No-op (including on the button label/title) if the card is
+        // already expanded, so this is always safe to call unconditionally.
+        function expandTgCardById(cardId) {
+            const card = document.getElementById(cardId);
+            if (!card || !card.classList.contains('tg-card-minimized')) return;
+            card.classList.remove('tg-card-minimized');
+            const btn = card.querySelector('.tg-minimize-btn');
+            if (btn) {
+                btn.textContent = '— Minimize';
+                btn.title = 'Minimize this card (show only the header)';
+            }
         }
 
         // Lets a click ANYWHERE in one of these cards' headers act as
@@ -4797,7 +4815,13 @@
             // Rows 5-11 — the 7 STABILITY sub-rows; no with-slope
             // columns exist for these either.
             COGENV_SUMMARY_ROW_LABELS.forEach((label, i) => {
-                html += `<tr><td>${label}</td>${plainCell(s.b5_11[i])}<td>[deg]</td>` +
+                // Static column for the 7 STABILITY rows is shown as a
+                // plain "-" rather than the pulled Drawing_table!D56:D62
+                // value — that source cell is formatted as e.g. ">8" in
+                // Excel (a text threshold, not a plain number), so a
+                // pulled numeric render here would be misleading/blank
+                // anyway. Per KKKai's spec, just show "-" instead.
+                html += `<tr><td>${label}</td><td>-</td><td>[deg]</td>` +
                     [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
                     blank() + blank() + blank() + blank() + `</tr>`;
             });
@@ -4947,6 +4971,14 @@
             tgCogEnvCalculated = true;
             tgCogEnvComputed = calcCogEnvelope(); // freeze the snapshot renderTgCogEnvTable()/renderTgCogEnvPreview() will keep showing until this button is pressed again — see tgCogEnvComputed's own comment above
             renderTgCogEnvTable(); // was blank — now shows the frozen snapshot immediately
+            // Auto-expand (per KKKai's spec): 📊 CoG Envelope Table and
+            // 📈 CoG Envelope Summary both pop open on every "🧮
+            // Calculate CoG Envelope" click, even if either was left
+            // minimized — done unconditionally here (before the Excel
+            // push below, which can fail/be offline) so the freshly
+            // calculated table is visible either way.
+            expandTgCardById('tgCogEnvTableCard');
+            expandTgCardById('tgCogEnvSummaryCard');
             if (!isOfficeInitialized) {
                 alert(`Not connected to Excel — the table above is calculated and shown locally, but could not push to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN}/${COGENV_TABLE_RANGE_SLOPE}. Open this add-in inside an Excel workbook to push.`);
                 throw new Error('Not connected to Excel');
