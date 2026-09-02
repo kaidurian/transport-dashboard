@@ -231,6 +231,22 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--accent-blue) 10%);
         }
+        .tg-card-cogenv {
+            border-left: 4px solid #a78bfa;
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #a78bfa 10%);
+        }
+        /* Pushes the ❓ Help / — Minimize button group to the flush
+           right edge of every .tg-train-card-header (title takes only
+           its natural width, buttons get the rest) — see the "move
+           Minimize/Expand to right end" card-header layout request. */
+        .tg-cargo-title { flex: 1 1 auto; }
+        /* Cards using toggleTgCardMinimize()'s header-click-to-expand
+           behavior (see handleTgCardHeaderClick()) get a pointer
+           cursor over the whole header, not just the button, since
+           clicking anywhere in a minimized card's (now header-only)
+           area expands it again. */
+        .tg-card-header-clickable { cursor: pointer; }
         .tg-cogenv-preview {
             margin-top: 10px; border: 1px solid var(--panel-border); border-radius: 8px;
             background: var(--tank-box-bg); padding: 6px; overflow: auto;
@@ -433,6 +449,7 @@
             border: 1px solid var(--panel-border);
             border-radius: 8px;
             padding: 8px 4px 4px;
+            margin-top: 18px;
             margin-bottom: 14px;
             background: var(--tank-box-bg);
         }
@@ -648,7 +665,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.66)</h1>
+            <h1>🚂 Transport Dashboard (Rev.67)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -671,10 +688,10 @@
             <div class="tg-modal-body" id="tgModalBody">
                 <div class="tg-modal-col-left">
                     <div class="tg-trailer-card">
-                        <div class="tg-train-card-header">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🚂 Generate Trailer</h2>
                             <button type="button" class="tg-help-btn" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgHelpPanel">
                 Set <strong>Number of trains</strong> and <strong>Number of Hydraulic Groups</strong>
@@ -760,10 +777,10 @@
                     </div>
 
                     <div class="tg-cargo-card tg-card-cargo">
-                        <div class="tg-train-card-header">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
                             <button type="button" class="tg-help-btn" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCargoHelpPanel">
                             Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
@@ -806,10 +823,10 @@
                     </div>
 
                     <div class="tg-cargo-card tg-card-hloads">
-                        <div class="tg-train-card-header">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
                             <button type="button" class="tg-help-btn" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgHLoadsHelpPanel">
                             Wind, speed/acceleration, road-gradient, curve, and friction inputs used for the
@@ -840,10 +857,10 @@
                     </div>
 
                     <div class="tg-cargo-card tg-card-cogenv">
-                        <div class="tg-train-card-header">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📐 CoG Envelope</h2>
                             <button type="button" class="tg-help-btn" id="tgCogEnvHelpToggleBtn" onclick="toggleTgCogEnvHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvHelpPanel">
                             Reproduces the <strong>"CoG_Envelope"</strong> reference workbook's Cargo CoG
@@ -878,7 +895,7 @@
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
                         <div class="tg-train-card-header">
-                            <h2 class="tg-cargo-title">2D Drawing</h2>
+                            <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
                             <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <div class="tg-preview-toolbar">
@@ -912,10 +929,10 @@
                     </div>
 
                     <div class="tg-cargo-card" id="tgCogEnvTableCard">
-                        <div class="tg-train-card-header">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2>
                             <button type="button" class="tg-help-btn" id="tgCogEnvTableHelpToggleBtn" onclick="toggleTgCogEnvTableHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvTableHelpPanel">
                             Same layout as the <strong>"CoG_Envelope"</strong> reference workbook (sheet
@@ -954,12 +971,44 @@
                         <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
-                    <div class="tg-cargo-card" id="tgDrawingTableCard">
-                        <div class="tg-train-card-header">
-                            <h2 class="tg-cargo-title">📋 Drawing Table</h2>
-                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                    <div class="tg-cargo-card tg-card-minimized" id="tgCogEnvSummaryCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
+                            <button type="button" class="tg-help-btn" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" title="Expand this card">▢ Expand</button>
                         </div>
-                        <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
+                        <p class="tg-modal-sub" id="tgCogEnvSummaryHelpPanel">
+                            Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
+                            <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
+                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>;
+                            <strong>LC0&ndash;LC4</strong> come from sheet <strong>"Drawing_table_LC"</strong>
+                            (each load case's own column block); <strong>LC1-Slope&ndash;LC4-Slope</strong>
+                            (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>. The
+                            <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
+                            MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
+                            Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
+                            this pulls independently, the same way 📋 Drawing Table does. Any <strong>UNITY
+                            CHECK</strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
+                            same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Drawing Table
+                            below — but for the <strong>STABILITY</strong> rows it's the opposite: those are
+                            flagged red when they fall <strong>under</strong> 1, since a smaller stability
+                            angle means less margin. The <strong>Static</strong> column itself is shown
+                            plainly and is never flagged.
+                        </p>
+                        <div id="tgCogEnvSummaryTable" class="tg-drawing-table-wrap"><!-- CoG Envelope Summary rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
+                                    onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card" id="tgDrawingTableCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">📋 Drawing Table</h2>
+                            <button type="button" class="tg-help-btn" id="tgDrawingTableHelpToggleBtn" onclick="toggleTgDrawingTableHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgDrawingTableHelpPanel">
                             Read-only mirror of Excel sheet <strong>"Drawing_table"</strong> — pulled, never
                             pushed (the sheet's own values are Excel-computed). Pressing a 📤 button in the
                             📊 CoG Envelope Table above updates the <strong>TRANSPORT TABLE</strong> header
@@ -977,33 +1026,9 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card" id="tgCogEnvSummaryCard">
-                        <div class="tg-train-card-header">
-                            <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
-                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
-                        </div>
-                        <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
-                            Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
-                            <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
-                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>;
-                            <strong>LC0&ndash;LC4</strong> come from sheet <strong>"Drawing_table_LC"</strong>
-                            (each load case's own column block); <strong>LC1-Slope&ndash;LC4-Slope</strong>
-                            (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>.
-                            Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
-                            this pulls independently, the same way 📋 Drawing Table does. Any value over 1
-                            is highlighted the same way <strong>DETAIL CHECK REQUIRED</strong> rows are in
-                            📋 Drawing Table above.
-                        </p>
-                        <div id="tgCogEnvSummaryTable" class="tg-drawing-table-wrap"><!-- CoG Envelope Summary rendered by JS --></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
-                                    onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
-                        </div>
-                    </div>
-
                     <div class="tg-3d-wrap">
                         <div class="tg-train-card-header">
-                            <h2 class="tg-cargo-title">3D Drawing</h2>
+                            <h2 class="tg-cargo-title">🧊 3D Drawing</h2>
                             <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <div class="tg-3d-toolbar">
@@ -1105,6 +1130,26 @@
         function toggleTgCogEnvTableHelp() {
             const panel = document.getElementById('tgCogEnvTableHelpPanel');
             const btn = document.getElementById('tgCogEnvTableHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+        }
+
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the 📋 Drawing Table card.
+        function toggleTgDrawingTableHelp() {
+            const panel = document.getElementById('tgDrawingTableHelpPanel');
+            const btn = document.getElementById('tgDrawingTableHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+        }
+
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the 📈 CoG Envelope Summary card.
+        function toggleTgCogEnvSummaryHelp() {
+            const panel = document.getElementById('tgCogEnvSummaryHelpPanel');
+            const btn = document.getElementById('tgCogEnvSummaryHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
             if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
@@ -1319,19 +1364,42 @@
             if (autoPullTimer) { clearInterval(autoPullTimer); autoPullTimer = null; }
         }
 
-        // Minimize/expand toggle for the 4 top-level input cards
+        // Minimize/expand toggle for the top-level input/output cards
         // (Generate Trailer, Generate Cargo, Horizontal Loads, CoG
-        // Envelope) — collapses the card down to just its header (title
+        // Envelope, CoG Envelope Table, Drawing Table, CoG Envelope
+        // Summary) — collapses the card down to just its header (title
         // + Help/Minimize buttons) via the .tg-card-minimized class (see
         // CSS above), and expands it again on a second click. Purely a
         // display toggle — no data is touched, nothing is pulled or
-        // pushed, and no state is persisted across a page reload.
+        // pushed, and no state is persisted across a page reload. Takes
+        // either the — Minimize/▢ Expand button itself (btn.closest(...)
+        // still resolves correctly) or is called internally by
+        // handleTgCardHeaderClick() below with that same button looked
+        // up from the header that was clicked.
         function toggleTgCardMinimize(btn) {
             const card = btn.closest('.tg-trailer-card, .tg-cargo-card');
             if (!card) return;
             const minimized = card.classList.toggle('tg-card-minimized');
             btn.textContent = minimized ? '▢ Expand' : '— Minimize';
             btn.title = minimized ? 'Expand this card' : 'Minimize this card (show only the header)';
+        }
+
+        // Lets a click ANYWHERE in one of these cards' headers act as
+        // the Minimize/Expand toggle — not just a click directly on the
+        // — Minimize/▢ Expand button — since once a card is minimized,
+        // that header IS the entire visible card, so the whole thing
+        // should feel clickable. Skips (does nothing, lets the button's
+        // own onclick run instead) when the click actually landed on
+        // the ❓ Help button, since that has its own separate action and
+        // shouldn't also collapse/expand the card. The — Minimize/▢
+        // Expand button itself has no onclick of its own anymore — its
+        // click bubbles up to this same header handler, which finds it
+        // via querySelector and calls toggleTgCardMinimize() on it, so
+        // there's exactly one source of truth for the toggle either way.
+        function handleTgCardHeaderClick(e, headerEl) {
+            if (e.target.closest('.tg-help-btn')) return;
+            const btn = headerEl.querySelector('.tg-minimize-btn');
+            if (btn) toggleTgCardMinimize(btn);
         }
 
         // Same idea as toggleTgCardMinimize() above, but for the
@@ -1369,7 +1437,7 @@
         // individually.
         function toggleAllTgMinimize(btn) {
             const cardEls = document.querySelectorAll(
-                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, #tgCogEnvTableCard, #tgDrawingTableCard'
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, #tgCogEnvTableCard, #tgDrawingTableCard, #tgCogEnvSummaryCard'
             );
             const previewEls = document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap');
             const anyExpanded =
@@ -4659,13 +4727,17 @@
 
         // Renders tgCogEnvSummary as an HTML table, same visual
         // language as 📋 Drawing Table (.tg-drawing-table/.tg-dt-bold/
-        // .tg-dt-title/.tg-dt-notok). Per KKKai's spec, red flagging
-        // (tg-dt-notok, ">1" against COGENV_SUMMARY_UNITY_THRESHOLD) is
-        // applied ONLY to the computed LC0-LC4/LC-Slope columns —
-        // never to the Static column, which is shown plainly (matching
-        // "If data in D2:H2/D3:L3/D5:D11.../H5:H11 is more than B2" —
-        // the Static (B) column itself is never in one of those
-        // flagged ranges).
+        // .tg-dt-title/.tg-dt-notok). Column C is a fixed unit label
+        // (not a pulled value) — "[mTe/m²]" for MAX GBP, "[deg]" for
+        // the STABILITY rows, blank for UNITY CHECK. Per KKKai's spec,
+        // red flagging (tg-dt-notok, against COGENV_SUMMARY_UNITY_THRESHOLD)
+        // is applied ONLY to the computed LC0-LC4/LC-Slope columns —
+        // never to the Static column, which is shown plainly — and the
+        // DIRECTION differs by row type: UNITY CHECK (D2:H2) and MAX
+        // GBP (D3:L3) flag when OVER the threshold (utilization ratios
+        // — too high is bad); the 7 STABILITY rows (D5:D11...H5:H11)
+        // flag when UNDER the threshold (a stability angle — too low
+        // is bad) — see flagCellOver()/flagCellUnder() below.
         function renderTgCogEnvSummary() {
             const el = document.getElementById('tgCogEnvSummaryTable');
             if (!el) return;
@@ -4676,30 +4748,31 @@
             }
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
             const plainCell = v => `<td>${fmt(v)}</td>`;
-            const flagCell = v => `<td${(typeof v === 'number' && v > COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            const flagCellOver = v => `<td${(typeof v === 'number' && v > COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            const flagCellUnder = v => `<td${(typeof v === 'number' && v < COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
             const blank = () => `<td></td>`;
             let html = '<table class="tg-drawing-table">';
-            html += `<tr class="tg-dt-title"><td colspan="11">CoG ENVELOPE SUMMARY</td></tr>`;
-            html += `<tr class="tg-dt-bold"><td></td><td>Static</td><td>LC0</td><td>LC1</td><td>LC2</td><td>LC3</td><td>LC4</td><td>LC1-Slope</td><td>LC2-Slope</td><td>LC3-Slope</td><td>LC4-Slope</td></tr>`;
+            html += `<tr class="tg-dt-title"><td colspan="12">CoG ENVELOPE SUMMARY</td></tr>`;
+            html += `<tr class="tg-dt-bold"><td></td><td>Static</td><td>Unit</td><td>LC0</td><td>LC1</td><td>LC2</td><td>LC3</td><td>LC4</td><td>LC1-Slope</td><td>LC2-Slope</td><td>LC3-Slope</td><td>LC4-Slope</td></tr>`;
             // Row 2 — UNITY CHECK. Static column shows the "<1"
-            // threshold label itself (not a pulled value); no
-            // with-slope columns exist for this row.
-            html += `<tr><td>UNITY CHECK</td><td>&lt;1</td>` +
-                [0, 1, 2, 3, 4].map(i => flagCell(s.lc[i].row2)).join('') +
+            // threshold label itself (not a pulled value); no unit and
+            // no with-slope columns exist for this row.
+            html += `<tr><td>UNITY CHECK</td><td>&lt;1</td><td></td>` +
+                [0, 1, 2, 3, 4].map(i => flagCellOver(s.lc[i].row2)).join('') +
                 blank() + blank() + blank() + blank() + `</tr>`;
             // Row 3 — MAX GBP (ALL CASES). Every column populated,
             // including the 4 with-slope ones.
-            html += `<tr><td>MAX GBP (ALL CASES)</td>${plainCell(s.b3)}` +
-                [0, 1, 2, 3, 4].map(i => flagCell(s.lc[i].row3)).join('') +
-                [0, 1, 2, 3].map(i => flagCell(s.slope3[i])).join('') +
+            html += `<tr><td>MAX GBP (ALL CASES)</td>${plainCell(s.b3)}<td>[mTe/m&sup2;]</td>` +
+                [0, 1, 2, 3, 4].map(i => flagCellOver(s.lc[i].row3)).join('') +
+                [0, 1, 2, 3].map(i => flagCellOver(s.slope3[i])).join('') +
                 `</tr>`;
             // Row 4 — STABILITY CHECK section header (label only).
-            html += `<tr class="tg-dt-bold"><td colspan="11">STABILITY CHECK</td></tr>`;
+            html += `<tr class="tg-dt-bold"><td colspan="12">STABILITY CHECK</td></tr>`;
             // Rows 5-11 — the 7 STABILITY sub-rows; no with-slope
             // columns exist for these either.
             COGENV_SUMMARY_ROW_LABELS.forEach((label, i) => {
-                html += `<tr><td>${label}</td>${plainCell(s.b5_11[i])}` +
-                    [0, 1, 2, 3, 4].map(lcIndex => flagCell(s.lc[lcIndex].rows5_11[i])).join('') +
+                html += `<tr><td>${label}</td>${plainCell(s.b5_11[i])}<td>[deg]</td>` +
+                    [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
                     blank() + blank() + blank() + blank() + `</tr>`;
             });
             html += '</table>';
