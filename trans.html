@@ -665,7 +665,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.67)</h1>
+            <h1>🚂 Transport Dashboard (Rev.68)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -894,9 +894,9 @@
 
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
-                        <div class="tg-train-card-header">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
-                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <div class="tg-preview-toolbar">
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
@@ -1027,9 +1027,9 @@
                     </div>
 
                     <div class="tg-3d-wrap">
-                        <div class="tg-train-card-header">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🧊 3D Drawing</h2>
-                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" onclick="toggleTgPreviewMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <div class="tg-3d-toolbar">
                             <div class="tg-3d-cam-btns">
@@ -1400,6 +1400,22 @@
             if (e.target.closest('.tg-help-btn')) return;
             const btn = headerEl.querySelector('.tg-minimize-btn');
             if (btn) toggleTgCardMinimize(btn);
+        }
+
+        // Same idea as handleTgCardHeaderClick() just above, but for the
+        // 🖼 2D Drawing / 🧊 3D Drawing standalone preview headers — lets
+        // a click ANYWHERE in the header act as the Minimize/Expand
+        // toggle (not just a click directly on the — Minimize/▢ Expand
+        // button), since once minimized that header IS the whole
+        // visible panel. The — Minimize/▢ Expand button itself has no
+        // onclick of its own anymore (matching the .tg-minimize-btn
+        // convention used by handleTgCardHeaderClick's cards) — its
+        // click bubbles up here, which finds it via querySelector and
+        // calls toggleTgPreviewMinimize() on it, so there's exactly one
+        // source of truth for the toggle either way.
+        function handleTgPreviewHeaderClick(e, headerEl) {
+            const btn = headerEl.querySelector('.tg-preview-minimize-btn');
+            if (btn) toggleTgPreviewMinimize(btn);
         }
 
         // Same idea as toggleTgCardMinimize() above, but for the
@@ -4733,11 +4749,14 @@
         // red flagging (tg-dt-notok, against COGENV_SUMMARY_UNITY_THRESHOLD)
         // is applied ONLY to the computed LC0-LC4/LC-Slope columns —
         // never to the Static column, which is shown plainly — and the
-        // DIRECTION differs by row type: UNITY CHECK (D2:H2) and MAX
-        // GBP (D3:L3) flag when OVER the threshold (utilization ratios
-        // — too high is bad); the 7 STABILITY rows (D5:D11...H5:H11)
-        // flag when UNDER the threshold (a stability angle — too low
-        // is bad) — see flagCellOver()/flagCellUnder() below.
+        // DIRECTION differs by row type: UNITY CHECK (D2:H2) flags when
+        // OVER the fixed threshold (utilization ratio — too high is
+        // bad); the 7 STABILITY rows (D5:D11...H5:H11) flag when UNDER
+        // the fixed threshold (a stability angle — too low is bad) —
+        // see flagCellOver()/flagCellUnder() below. MAX GBP (D3:L3) is
+        // the one exception: each LC/LC-Slope cell there flags red when
+        // it's OVER that row's OWN Static (B3) value instead of the
+        // fixed threshold — see flagCellOverStatic() below.
         function renderTgCogEnvSummary() {
             const el = document.getElementById('tgCogEnvSummaryTable');
             if (!el) return;
@@ -4750,6 +4769,13 @@
             const plainCell = v => `<td>${fmt(v)}</td>`;
             const flagCellOver = v => `<td${(typeof v === 'number' && v > COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
             const flagCellUnder = v => `<td${(typeof v === 'number' && v < COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            // MAX GBP (ALL CASES) row only — per KKKai's spec, each LC0-LC4/
+            // LC-Slope cell (D3:L3) flags red (same tg-dt-notok red text +
+            // red background as "DETAIL CHECK REQUIRED" in 📋 Drawing
+            // Table) when it exceeds the row's OWN Static column value
+            // (B3, s.b3) — not the fixed COGENV_SUMMARY_UNITY_THRESHOLD
+            // used by every other row.
+            const flagCellOverStatic = v => `<td${(typeof v === 'number' && typeof s.b3 === 'number' && v > s.b3) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
             const blank = () => `<td></td>`;
             let html = '<table class="tg-drawing-table">';
             html += `<tr class="tg-dt-title"><td colspan="12">CoG ENVELOPE SUMMARY</td></tr>`;
@@ -4763,8 +4789,8 @@
             // Row 3 — MAX GBP (ALL CASES). Every column populated,
             // including the 4 with-slope ones.
             html += `<tr><td>MAX GBP (ALL CASES)</td>${plainCell(s.b3)}<td>[mTe/m&sup2;]</td>` +
-                [0, 1, 2, 3, 4].map(i => flagCellOver(s.lc[i].row3)).join('') +
-                [0, 1, 2, 3].map(i => flagCellOver(s.slope3[i])).join('') +
+                [0, 1, 2, 3, 4].map(i => flagCellOverStatic(s.lc[i].row3)).join('') +
+                [0, 1, 2, 3].map(i => flagCellOverStatic(s.slope3[i])).join('') +
                 `</tr>`;
             // Row 4 — STABILITY CHECK section header (label only).
             html += `<tr class="tg-dt-bold"><td colspan="12">STABILITY CHECK</td></tr>`;
@@ -4965,6 +4991,25 @@
             const errText = e => e ? (e.code ? `${e.code}: ${e.message || e}` : (e.message || String(e))) : '';
             if (!mainErr && !slopeErr) {
                 logMsg(`📤 Calculated CoG Envelope Table and pushed to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN} and ${COGENV_TABLE_RANGE_SLOPE}.`);
+                // Auto-continue (per KKKai's spec): once the 📊 CoG
+                // Envelope Table above has calculated and pushed
+                // successfully, automatically refresh the 📈 CoG
+                // Envelope Summary too — no need to press its own ⇩
+                // Refresh from Excel button separately — then, once
+                // that finishes, automatically push this row's CARGO
+                // CoG. In Axis-LC0 (X, Y, and Z-from-trailer-top-deck)
+                // back to Excel 'Input'!BB35:BD35, the same single-row
+                // write the CoG-LC0 row's own small 📤 button performs
+                // (see lcPushBtn()/pushLoadCaseToExcel() above) — so a
+                // single 🧮 Calculate press leaves Table, Summary, and
+                // the active LC0 cargo CoG all in sync without any
+                // further manual clicks. Both steps pass
+                // { silent: true } (no btnEl for the second, either) so
+                // a hiccup in either one logs quietly instead of an
+                // alert() popping up mid-chain and doesn't undo the
+                // Table push that already succeeded above.
+                await pullCogEnvSummaryFromExcel({ silent: true });
+                await pushLoadCaseToExcel(null, 'CoG-LC0', c.cogX, c.cogY, c.zDeckCog, { silent: true });
             } else {
                 const failedRanges = [mainErr ? COGENV_TABLE_RANGE_MAIN : null, slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
                 const okRanges = [!mainErr ? COGENV_TABLE_RANGE_MAIN : null, !slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
@@ -5018,9 +5063,17 @@
         // shows immediately in this dashboard too. Takes the button
         // element directly (not an id) since there are 8 of these
         // rendered fresh on every table re-render.
-        async function pushLoadCaseToExcel(btnEl, name, x, y, zTopDeck) {
-            btnEl.classList.add('tg-btn-syncing');
-            btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err');
+        // btnEl may be null — used that way by the automatic post-⚡
+        // CoG Envelope Summary CoG-LC0 push (see calculateCogEnvelopeImpl()),
+        // which has no button of its own to flash and passes
+        // { silent: true } so a failure there logs quietly instead of
+        // popping an alert() in the middle of an unattended chain.
+        async function pushLoadCaseToExcel(btnEl, name, x, y, zTopDeck, opts = {}) {
+            const silent = !!opts.silent;
+            if (btnEl) {
+                btnEl.classList.add('tg-btn-syncing');
+                btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err');
+            }
             try {
                 if (!isOfficeInitialized) throw new Error('Not connected to Excel');
                 await Excel.run(async (context) => {
@@ -5057,16 +5110,24 @@
                         await pushDrawingTableRowsToLCSheet(lcIndex, tgDrawingTableRows, lcLabel);
                     }
                 }
-                btnEl.classList.remove('tg-btn-syncing');
-                btnEl.classList.add('tg-btn-flash-ok');
+                if (btnEl) {
+                    btnEl.classList.remove('tg-btn-syncing');
+                    btnEl.classList.add('tg-btn-flash-ok');
+                }
             } catch (e) {
                 console.warn(`Could not push ${name} CoG to '${INPUT_SHEET_NAME}'!BB35:BD35`, e);
-                if (!isOfficeInitialized) alert(`Not connected to Excel — open this add-in inside an Excel workbook to push ${name}'s CoG to 'Input'!BB35:BD35.`);
-                else alert(`Could not push ${name}'s CoG to sheet "${INPUT_SHEET_NAME}". Make sure it exists.`);
-                btnEl.classList.remove('tg-btn-syncing');
-                btnEl.classList.add('tg-btn-flash-err');
+                if (!silent) {
+                    if (!isOfficeInitialized) alert(`Not connected to Excel — open this add-in inside an Excel workbook to push ${name}'s CoG to 'Input'!BB35:BD35.`);
+                    else alert(`Could not push ${name}'s CoG to sheet "${INPUT_SHEET_NAME}". Make sure it exists.`);
+                } else {
+                    logMsg(`⚠️ Could not auto-push ${name} CoG to '${INPUT_SHEET_NAME}'!BB35:BD35 — ${e && e.code ? `${e.code}: ${e.message || e}` : (e && e.message) || e}`);
+                }
+                if (btnEl) {
+                    btnEl.classList.remove('tg-btn-syncing');
+                    btnEl.classList.add('tg-btn-flash-err');
+                }
             } finally {
-                setTimeout(() => { btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err'); }, BTN_FLASH_MS);
+                if (btnEl) setTimeout(() => { btnEl.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err'); }, BTN_FLASH_MS);
             }
         }
 
