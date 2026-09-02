@@ -665,7 +665,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.68)</h1>
+            <h1>🚂 Transport Dashboard (Rev.69)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -4995,21 +4995,35 @@
                 // Envelope Table above has calculated and pushed
                 // successfully, automatically refresh the 📈 CoG
                 // Envelope Summary too — no need to press its own ⇩
-                // Refresh from Excel button separately — then, once
-                // that finishes, automatically push this row's CARGO
-                // CoG. In Axis-LC0 (X, Y, and Z-from-trailer-top-deck)
-                // back to Excel 'Input'!BB35:BD35, the same single-row
-                // write the CoG-LC0 row's own small 📤 button performs
-                // (see lcPushBtn()/pushLoadCaseToExcel() above) — so a
-                // single 🧮 Calculate press leaves Table, Summary, and
-                // the active LC0 cargo CoG all in sync without any
-                // further manual clicks. Both steps pass
-                // { silent: true } (no btnEl for the second, either) so
-                // a hiccup in either one logs quietly instead of an
-                // alert() popping up mid-chain and doesn't undo the
-                // Table push that already succeeded above.
+                // Refresh from Excel button separately. Then, once
+                // that finishes, walk through EVERY row's own small 📤
+                // push button in sequence — CoG-LC0, LC1, LC2, LC3,
+                // LC4, LC1-Slope, LC2-Slope, LC3-Slope, LC4-Slope, in
+                // that order — each one pushing its X/Y/Z(-from-deck)
+                // to Excel 'Input'!BB35:BD35 exactly like a manual
+                // press of that row's own button would (see
+                // lcPushBtn()/pushLoadCaseToExcel() above), so every
+                // load case's own "Drawing_table_LC"/
+                // "Drawing_table_LC_Slope" mirror block gets refreshed
+                // along the way too. Finally, CoG-LC0 is pushed a
+                // second time at the very end so 'Input'!BB35:BD35 is
+                // left on LC0 (the default active cargo CoG) rather
+                // than wherever the sequence last landed. Every step
+                // passes { silent: true } (no btnEl for any of them)
+                // so a hiccup on any one row logs quietly instead of
+                // an alert() interrupting the chain, and doesn't undo
+                // the Table push that already succeeded above.
                 await pullCogEnvSummaryFromExcel({ silent: true });
-                await pushLoadCaseToExcel(null, 'CoG-LC0', c.cogX, c.cogY, c.zDeckCog, { silent: true });
+                const lcPushSequence = [
+                    { name: 'CoG-LC0', x: c.cogX, y: c.cogY, z: c.zDeckCog },
+                    ...COGENV_LC_MAIN_NAMES.map((name, i) => ({ name, x: c.lcBase[i].x, y: c.lcBase[i].y, z: c.zDeckLc })),
+                    ...COGENV_LC_SLOPE_NAMES.map((name, i) => ({ name, x: c.lcSlope[i].x, y: c.lcSlope[i].y, z: c.zDeckLc })),
+                    { name: 'CoG-LC0', x: c.cogX, y: c.cogY, z: c.zDeckCog }, // land back on LC0 as the default
+                ];
+                for (const lc of lcPushSequence) {
+                    await pushLoadCaseToExcel(null, lc.name, lc.x, lc.y, lc.z, { silent: true });
+                }
+                logMsg(`📤 Auto-pushed CoG-LC0, LC1-LC4, and LC1-Slope-LC4-Slope to '${INPUT_SHEET_NAME}'!BB35:BD35 in sequence (refreshing each load case's Drawing Table mirror along the way), then landed back on CoG-LC0 as the default.`);
             } else {
                 const failedRanges = [mainErr ? COGENV_TABLE_RANGE_MAIN : null, slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
                 const okRanges = [!mainErr ? COGENV_TABLE_RANGE_MAIN : null, !slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
