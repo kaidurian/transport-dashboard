@@ -665,7 +665,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.69)</h1>
+            <h1>🚂 Transport Dashboard (Rev.69.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -4638,7 +4638,7 @@
         //
         // Sources (1-indexed rows, matching the reference workbook):
         //   Static  — sheet "Drawing_table":       C52:E52 (max) -> MAX GBP row;
-        //                                           C56:C62      -> the 7 STABILITY rows.
+        //                                           D56:D62      -> the 7 STABILITY rows.
         //   LC{n}   — sheet "Drawing_table_LC", load case {n}'s own
         //             26-col-wide block (see drawingTableLcColStart):
         //             C48:E48 (max) -> UNITY CHECK; C51:E51 (max) -> MAX GBP;
@@ -4681,7 +4681,7 @@
         }
 
         // Pulls a single 1-indexed column's worth of values (e.g.
-        // C56:C62) and returns a plain array of numbers/nulls in row
+        // D56:D62) and returns a plain array of numbers/nulls in row
         // order — used for the 7 STABILITY rows, which (unlike UNITY
         // CHECK/MAX GBP) are single values per row, not a 3-cell block
         // to MAX() over.
@@ -4706,7 +4706,7 @@
                     const slopeSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SLOPE_SHEET_NAME);
                     const ranges = {};
                     ranges.baseGbp = dtSheet.getRange('C52:E52');
-                    ranges.baseStab = dtSheet.getRange('C56:C62');
+                    ranges.baseStab = dtSheet.getRange('D56:D62');
                     for (let lcIndex = 0; lcIndex <= 4; lcIndex++) {
                         const cs = drawingTableLcColStart(lcIndex);
                         const c = colLetter(cs + 2), e = colLetter(cs + 4);
