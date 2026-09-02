@@ -665,7 +665,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.69.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.70)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -876,7 +876,7 @@
                             editable here. <strong>Slope shift</strong> (uphill LC1&amp;4 / downhill LC2&amp;3,
                             workbook C18/C19) stays a local-only input — no Excel source given for those, so
                             type them in directly; Y/Z have no slope-shift input, matching the workbook's
-                            "N/A" there. The table further down (between the 2D preview and 📋 Drawing Table)
+                            "N/A" there. The table further down (📊 CoG Envelope Table, below 📋 Drawing Table)
                             is every downstream formula from that sheet (<strong>CoG envelope (5%)</strong>,
                             load cases <strong>LC1&ndash;LC4</strong>, and the same again with the
                             uphill/downhill slope shift folded in), computed here in the dashboard's own code
@@ -928,6 +928,30 @@
                         <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
                     </div>
 
+                    <div class="tg-cargo-card" id="tgDrawingTableCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">📋 Drawing Table</h2>
+                            <button type="button" class="tg-help-btn" id="tgDrawingTableHelpToggleBtn" onclick="toggleTgDrawingTableHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgDrawingTableHelpPanel">
+                            Read-only mirror of Excel sheet <strong>"Drawing_table"</strong> — pulled, never
+                            pushed (the sheet's own values are Excel-computed). Pressing a 📤 button in the
+                            📊 CoG Envelope Table below updates the <strong>TRANSPORT TABLE</strong> header
+                            above to name that load case (e.g. <strong>TRANSPORT TABLE LC0</strong> or
+                            <strong>TRANSPORT TABLE LC1-Slope</strong>) and mirrors this table's data to
+                            Excel — plain-section rows to sheet <strong>"Drawing_table_LC"</strong>,
+                            with-slope rows (LC1-Slope&ndash;LC4-Slope) to the separate sheet
+                            <strong>"Drawing_table_LC_Slope"</strong> — each in that load case's own column
+                            block, keeping a separate snapshot per load case in its own sheet.
+                        </p>
+                        <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
+                                    onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-cargo-card" id="tgCogEnvTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2>
@@ -957,7 +981,7 @@
                             NOT the plain local Z — to <strong>"Input"!BB35:BD35</strong> —
                             the same cells the rest of the workbook's transport table calculates the active
                             cargo CoG from — updates the <strong>TRANSPORT TABLE</strong> header in
-                            📋 Drawing Table below to name that load case (e.g. <strong>TRANSPORT TABLE
+                            📋 Drawing Table above to name that load case (e.g. <strong>TRANSPORT TABLE
                             LC1</strong> or <strong>TRANSPORT TABLE LC1-Slope</strong>), refreshes
                             📋 Drawing Table so that load case's transport table shows immediately, and
                             mirrors the same data to Excel — kept STRICTLY separate by section:
@@ -971,30 +995,6 @@
                         <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
-                    <div class="tg-cargo-card" id="tgDrawingTableCard">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📋 Drawing Table</h2>
-                            <button type="button" class="tg-help-btn" id="tgDrawingTableHelpToggleBtn" onclick="toggleTgDrawingTableHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgDrawingTableHelpPanel">
-                            Read-only mirror of Excel sheet <strong>"Drawing_table"</strong> — pulled, never
-                            pushed (the sheet's own values are Excel-computed). Pressing a 📤 button in the
-                            📊 CoG Envelope Table above updates the <strong>TRANSPORT TABLE</strong> header
-                            below to name that load case (e.g. <strong>TRANSPORT TABLE LC0</strong> or
-                            <strong>TRANSPORT TABLE LC1-Slope</strong>) and mirrors this table's data to
-                            Excel — plain-section rows to sheet <strong>"Drawing_table_LC"</strong>,
-                            with-slope rows (LC1-Slope&ndash;LC4-Slope) to the separate sheet
-                            <strong>"Drawing_table_LC_Slope"</strong> — each in that load case's own column
-                            block, keeping a separate snapshot per load case in its own sheet.
-                        </p>
-                        <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
-                                    onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
-                        </div>
-                    </div>
-
                     <div class="tg-cargo-card tg-card-minimized" id="tgCogEnvSummaryCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
@@ -1004,9 +1004,12 @@
                         <p class="tg-modal-sub" id="tgCogEnvSummaryHelpPanel">
                             Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
                             <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
-                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>;
-                            <strong>LC0&ndash;LC4</strong> come from sheet <strong>"Drawing_table_LC"</strong>
-                            (each load case's own column block); <strong>LC1-Slope&ndash;LC4-Slope</strong>
+                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>
+                            for the <strong>MAX GBP</strong> row, and from sheet
+                            <strong>"Drawing_table_LC"!D56:D62</strong> for the 7 <strong>STABILITY</strong>
+                            rows; <strong>LC0&ndash;LC4</strong> come from sheet
+                            <strong>"Drawing_table_LC"</strong> (each load case's own column block);
+                            <strong>LC1-Slope&ndash;LC4-Slope</strong>
                             (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>. The
                             <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
                             MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
@@ -4655,8 +4658,11 @@
         // same as 📋 Drawing Table's own independent pull.
         //
         // Sources (1-indexed rows, matching the reference workbook):
-        //   Static  — sheet "Drawing_table":       C52:E52 (max) -> MAX GBP row;
-        //                                           D56:D62      -> the 7 STABILITY rows.
+        //   Static  — MAX GBP row: sheet "Drawing_table"!C52:E52 (max).
+        //             7 STABILITY rows: sheet "Drawing_table_LC"!D56:D62
+        //             (literal cells, NOT offset by drawingTableLcColStart —
+        //             this is the fixed LC0 block's own Static column,
+        //             same physical layout as "Drawing_table" itself).
         //   LC{n}   — sheet "Drawing_table_LC", load case {n}'s own
         //             26-col-wide block (see drawingTableLcColStart):
         //             C48:E48 (max) -> UNITY CHECK; C51:E51 (max) -> MAX GBP;
@@ -4724,7 +4730,7 @@
                     const slopeSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SLOPE_SHEET_NAME);
                     const ranges = {};
                     ranges.baseGbp = dtSheet.getRange('C52:E52');
-                    ranges.baseStab = dtSheet.getRange('D56:D62');
+                    ranges.baseStab = lcSheet.getRange('D56:D62');
                     for (let lcIndex = 0; lcIndex <= 4; lcIndex++) {
                         const cs = drawingTableLcColStart(lcIndex);
                         const c = colLetter(cs + 2), e = colLetter(cs + 4);
@@ -4752,7 +4758,7 @@
                     slope3: [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`])),
                 };
                 renderTgCogEnvSummary();
-                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}', '${DRAWING_TABLE_LC_SHEET_NAME}', and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
+                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}' (MAX GBP Static), '${DRAWING_TABLE_LC_SHEET_NAME}' (Static STABILITY + LC0-LC4), and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
             } catch (e) {
                 console.warn('Could not read CoG Envelope Summary source cells', e);
                 if (!silent) alert(`Could not read the CoG Envelope Summary source cells. Make sure sheets "${DRAWING_TABLE_SHEET_NAME}", "${DRAWING_TABLE_LC_SHEET_NAME}", and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
@@ -4815,13 +4821,14 @@
             // Rows 5-11 — the 7 STABILITY sub-rows; no with-slope
             // columns exist for these either.
             COGENV_SUMMARY_ROW_LABELS.forEach((label, i) => {
-                // Static column for the 7 STABILITY rows is shown as a
-                // plain "-" rather than the pulled Drawing_table!D56:D62
-                // value — that source cell is formatted as e.g. ">8" in
-                // Excel (a text threshold, not a plain number), so a
-                // pulled numeric render here would be misleading/blank
-                // anyway. Per KKKai's spec, just show "-" instead.
-                html += `<tr><td>${label}</td><td>-</td><td>[deg]</td>` +
+                // Static column for the 7 STABILITY rows is now the
+                // actual pulled value from "Drawing_table_LC"!D56:D62
+                // (s.b5_11[i]) — unlike "Drawing_table"'s own D56:D62
+                // (text thresholds like ">8"), this sheet's Static
+                // column holds plain numbers, so it renders normally via
+                // fmt(). Per KKKai's spec, this column is still never
+                // flagged red — plainCell(), not flagCellUnder().
+                html += `<tr><td>${label}</td>${plainCell(s.b5_11[i])}<td>[deg]</td>` +
                     [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
                     blank() + blank() + blank() + blank() + `</tr>`;
             });
