@@ -648,7 +648,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.65.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.66)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -977,6 +977,30 @@
                         </div>
                     </div>
 
+                    <div class="tg-cargo-card" id="tgCogEnvSummaryCard">
+                        <div class="tg-train-card-header">
+                            <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
+                            <button type="button" class="tg-minimize-btn" onclick="toggleTgCardMinimize(this)" title="Minimize this card (show only the header)">— Minimize</button>
+                        </div>
+                        <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px;">
+                            Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
+                            <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
+                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>;
+                            <strong>LC0&ndash;LC4</strong> come from sheet <strong>"Drawing_table_LC"</strong>
+                            (each load case's own column block); <strong>LC1-Slope&ndash;LC4-Slope</strong>
+                            (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>.
+                            Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
+                            this pulls independently, the same way 📋 Drawing Table does. Any value over 1
+                            is highlighted the same way <strong>DETAIL CHECK REQUIRED</strong> rows are in
+                            📋 Drawing Table above.
+                        </p>
+                        <div id="tgCogEnvSummaryTable" class="tg-drawing-table-wrap"><!-- CoG Envelope Summary rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
+                                    onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-3d-wrap">
                         <div class="tg-train-card-header">
                             <h2 class="tg-cargo-title">3D Drawing</h2>
@@ -1277,6 +1301,7 @@
                     await pullStabilityFromExcel();
                     await pullLoadPerAxleFromExcel();
                     await pullDrawingTableFromExcel({ silent: true });
+                    await pullCogEnvSummaryFromExcel({ silent: true }); // independent pull — see that function's own comment for why this deliberately never touches tgCogEnvComputed/the 📊 CoG Envelope Table
                 }
                 renderTrailerGenPreview();
             } catch (e) {
@@ -4515,6 +4540,172 @@
             el.innerHTML = html;
         }
 
+        // ---- CoG Envelope Summary — a NEW, separate read-only table
+        // mirroring "CoG_Envelope_Summary.xlsx": UNITY CHECK / MAX GBP
+        // (ALL CASES) / STABILITY CHECK rows, one column per source
+        // (Static + LC0-LC4 + LC1-Slope..LC4-Slope). Pull-only, exactly
+        // like 📋 Drawing Table above — there's nothing here to push,
+        // every value is Excel-computed. Deliberately does NOT read
+        // from or depend on the 📊 CoG Envelope Table/tgCogEnvComputed
+        // in any way (that table only ever recomputes locally on 🧮
+        // Calculate and is never the source of these numbers) — this
+        // pulls straight from the reference sheets on every refresh,
+        // same as 📋 Drawing Table's own independent pull.
+        //
+        // Sources (1-indexed rows, matching the reference workbook):
+        //   Static  — sheet "Drawing_table":       C52:E52 (max) -> MAX GBP row;
+        //                                           C56:C62      -> the 7 STABILITY rows.
+        //   LC{n}   — sheet "Drawing_table_LC", load case {n}'s own
+        //             26-col-wide block (see drawingTableLcColStart):
+        //             C48:E48 (max) -> UNITY CHECK; C51:E51 (max) -> MAX GBP;
+        //             C56:C62 -> the 7 STABILITY rows.
+        //   LC{n}-Slope — sheet "Drawing_table_LC_Slope", slope block
+        //             {n-1} (see drawingTableLcSlopeColStart): C51:E51
+        //             (max) -> MAX GBP row only (no UNITY CHECK or
+        //             STABILITY rows exist for the with-slope columns).
+        // "C48:E48"/"C51:E51" are 3-cell-wide per-axle-group blocks —
+        // MAX() picks the worst of the three, same idea as the
+        // reference workbook's own MAX() formulas.
+        const COGENV_SUMMARY_ROW_LABELS = [
+            'STABILITY "COG LOAD"',
+            'STABILITY "COG COMBINED"',
+            'STABILITY "ON STRENGTH"',
+            'STABILITY "COG LOAD" CASE A',
+            'STABILITY "COG COMBINED" CASE A',
+            'STABILITY "COG LOAD" CASE B',
+            'STABILITY "COG COMBINED" CASE B',
+        ];
+        // The "<1" shown in the UNITY CHECK row's Static column is the
+        // pass/fail threshold every other cell (UNITY CHECK, MAX GBP,
+        // and every STABILITY row) is checked against — any value over
+        // this is flagged red, same styling as "DETAIL CHECK REQUIRED"
+        // in 📋 Drawing Table (see cellStatusClass/tg-dt-notok).
+        const COGENV_SUMMARY_UNITY_THRESHOLD = 1;
+        let tgCogEnvSummary = null; // null until first successful pull — see pullCogEnvSummaryFromExcel()
+
+        // Max of a pulled values block (any shape — 1xN row, Nx1
+        // column, or a single cell), ignoring blanks/non-numeric cells.
+        // Returns null if nothing numeric was found, so callers can
+        // tell "genuinely blank" apart from "computed as 0".
+        function maxOfPulledValues(values) {
+            let best = null;
+            (values || []).forEach(row => (row || []).forEach(v => {
+                const n = parseFloat(v);
+                if (Number.isFinite(n) && (best === null || n > best)) best = n;
+            }));
+            return best;
+        }
+
+        // Pulls a single 1-indexed column's worth of values (e.g.
+        // C56:C62) and returns a plain array of numbers/nulls in row
+        // order — used for the 7 STABILITY rows, which (unlike UNITY
+        // CHECK/MAX GBP) are single values per row, not a 3-cell block
+        // to MAX() over.
+        function columnOfPulledValues(values) {
+            return (values || []).map(row => {
+                const n = parseFloat(row && row[0]);
+                return Number.isFinite(n) ? n : null;
+            });
+        }
+
+        async function pullCogEnvSummaryFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the CoG Envelope Summary.');
+                return;
+            }
+            try {
+                const raw = {};
+                await Excel.run(async (context) => {
+                    const dtSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_SHEET_NAME);
+                    const lcSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SHEET_NAME);
+                    const slopeSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SLOPE_SHEET_NAME);
+                    const ranges = {};
+                    ranges.baseGbp = dtSheet.getRange('C52:E52');
+                    ranges.baseStab = dtSheet.getRange('C56:C62');
+                    for (let lcIndex = 0; lcIndex <= 4; lcIndex++) {
+                        const cs = drawingTableLcColStart(lcIndex);
+                        const c = colLetter(cs + 2), e = colLetter(cs + 4);
+                        ranges[`lc${lcIndex}Unity`] = lcSheet.getRange(`${c}48:${e}48`);
+                        ranges[`lc${lcIndex}Gbp`] = lcSheet.getRange(`${c}51:${e}51`);
+                        ranges[`lc${lcIndex}Stab`] = lcSheet.getRange(`${c}56:${c}62`);
+                    }
+                    for (let slopeIdx = 0; slopeIdx <= 3; slopeIdx++) {
+                        const cs = drawingTableLcSlopeColStart(slopeIdx);
+                        const c = colLetter(cs + 2), e = colLetter(cs + 4);
+                        ranges[`slope${slopeIdx}Gbp`] = slopeSheet.getRange(`${c}51:${e}51`);
+                    }
+                    Object.values(ranges).forEach(r => r.load('values'));
+                    await context.sync();
+                    Object.entries(ranges).forEach(([key, r]) => { raw[key] = r.values; });
+                });
+                tgCogEnvSummary = {
+                    b3: maxOfPulledValues(raw.baseGbp),
+                    b5_11: columnOfPulledValues(raw.baseStab),
+                    lc: [0, 1, 2, 3, 4].map(lcIndex => ({
+                        row2: maxOfPulledValues(raw[`lc${lcIndex}Unity`]),
+                        row3: maxOfPulledValues(raw[`lc${lcIndex}Gbp`]),
+                        rows5_11: columnOfPulledValues(raw[`lc${lcIndex}Stab`]),
+                    })),
+                    slope3: [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`])),
+                };
+                renderTgCogEnvSummary();
+                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}', '${DRAWING_TABLE_LC_SHEET_NAME}', and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
+            } catch (e) {
+                console.warn('Could not read CoG Envelope Summary source cells', e);
+                if (!silent) alert(`Could not read the CoG Envelope Summary source cells. Make sure sheets "${DRAWING_TABLE_SHEET_NAME}", "${DRAWING_TABLE_LC_SHEET_NAME}", and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
+            }
+        }
+
+        // Renders tgCogEnvSummary as an HTML table, same visual
+        // language as 📋 Drawing Table (.tg-drawing-table/.tg-dt-bold/
+        // .tg-dt-title/.tg-dt-notok). Per KKKai's spec, red flagging
+        // (tg-dt-notok, ">1" against COGENV_SUMMARY_UNITY_THRESHOLD) is
+        // applied ONLY to the computed LC0-LC4/LC-Slope columns —
+        // never to the Static column, which is shown plainly (matching
+        // "If data in D2:H2/D3:L3/D5:D11.../H5:H11 is more than B2" —
+        // the Static (B) column itself is never in one of those
+        // flagged ranges).
+        function renderTgCogEnvSummary() {
+            const el = document.getElementById('tgCogEnvSummaryTable');
+            if (!el) return;
+            const s = tgCogEnvSummary;
+            if (!s) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load this summary.</div>`;
+                return;
+            }
+            const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
+            const plainCell = v => `<td>${fmt(v)}</td>`;
+            const flagCell = v => `<td${(typeof v === 'number' && v > COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            const blank = () => `<td></td>`;
+            let html = '<table class="tg-drawing-table">';
+            html += `<tr class="tg-dt-title"><td colspan="11">CoG ENVELOPE SUMMARY</td></tr>`;
+            html += `<tr class="tg-dt-bold"><td></td><td>Static</td><td>LC0</td><td>LC1</td><td>LC2</td><td>LC3</td><td>LC4</td><td>LC1-Slope</td><td>LC2-Slope</td><td>LC3-Slope</td><td>LC4-Slope</td></tr>`;
+            // Row 2 — UNITY CHECK. Static column shows the "<1"
+            // threshold label itself (not a pulled value); no
+            // with-slope columns exist for this row.
+            html += `<tr><td>UNITY CHECK</td><td>&lt;1</td>` +
+                [0, 1, 2, 3, 4].map(i => flagCell(s.lc[i].row2)).join('') +
+                blank() + blank() + blank() + blank() + `</tr>`;
+            // Row 3 — MAX GBP (ALL CASES). Every column populated,
+            // including the 4 with-slope ones.
+            html += `<tr><td>MAX GBP (ALL CASES)</td>${plainCell(s.b3)}` +
+                [0, 1, 2, 3, 4].map(i => flagCell(s.lc[i].row3)).join('') +
+                [0, 1, 2, 3].map(i => flagCell(s.slope3[i])).join('') +
+                `</tr>`;
+            // Row 4 — STABILITY CHECK section header (label only).
+            html += `<tr class="tg-dt-bold"><td colspan="11">STABILITY CHECK</td></tr>`;
+            // Rows 5-11 — the 7 STABILITY sub-rows; no with-slope
+            // columns exist for these either.
+            COGENV_SUMMARY_ROW_LABELS.forEach((label, i) => {
+                html += `<tr><td>${label}</td>${plainCell(s.b5_11[i])}` +
+                    [0, 1, 2, 3, 4].map(lcIndex => flagCell(s.lc[lcIndex].rows5_11[i])).join('') +
+                    blank() + blank() + blank() + blank() + `</tr>`;
+            });
+            html += '</table>';
+            el.innerHTML = html;
+        }
+
         // ============================================================
         // CoG ENVELOPE — local calc mirroring "CoG_Envelope.xlsx"!"2",
         // C8:E24. See the tgCogEnv state-block comment above for the
@@ -5493,6 +5684,7 @@
                 await pullHorizontalLoadsFromExcel({ silent: true }); // Horizontal Loads — own try/catch inside
                 await pullCogEnvFromExcel({ silent: true }); // CoG Envelope dim/CoG inputs — own try/catch inside
                 await pullDrawingTableFromExcel({ silent: true }); // Drawing Table — own try/catch inside
+                await pullCogEnvSummaryFromExcel({ silent: true }); // CoG Envelope Summary — own try/catch inside
                 renderTrailerDashboard();
                 logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
