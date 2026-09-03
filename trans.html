@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1737,6 +1737,24 @@
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
         const CAD_UNIT_SCALE = 1;
+
+        // ---- Drawing Table placement in Paper Space (.scr export) ----
+        // The Drawing Table's row/column dimensions (see
+        // buildDrawingTableGridScript) are true real-world millimetres —
+        // fine in Model Space, but Paper Space units represent the
+        // physical sheet at 1:1, so drawing a 3000mm-wide column
+        // straight into Paper Space would put a 3m-wide table on the
+        // sheet. DRAWING_TABLE_PAPER_SCALE shrinks the table geometry
+        // by the drawing's plotted scale (1:1000) so it lands at the
+        // right printed size on the sheet instead.
+        const DRAWING_TABLE_PAPER_SCALE = 1 / 1000;
+        // Assumed Paper Space sheet size (mm) the table is anchored
+        // against — adjust to match the actual Layout's paper size if
+        // it differs from ISO A3 landscape.
+        const CAD_PAPER_WIDTH_MM = 420;
+        const CAD_PAPER_HEIGHT_MM = 297;
+        // Clear margin kept between the table and the sheet edge (mm).
+        const CAD_PAPER_MARGIN_MM = 10;
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
         // kept in sync with. B5 = X offset, B6 = Y offset. B1 = Number
@@ -9149,11 +9167,20 @@
         function escapeScriptText(s) {
             return String(s).replace(/[\r\n]+/g, ' ').trim();
         }
-        function buildDrawingTableGridScript(rows, insertX, insertY) {
+        // topRightX/topRightY = the table's top-right corner (Paper
+        // Space sheet coordinates, mm). scale shrinks the table's
+        // real-world-mm row/column dimensions down to the drawing's
+        // plotted scale (see DRAWING_TABLE_PAPER_SCALE) — pass 1 to
+        // keep true real-world size (e.g. for a Model Space placement).
+        function buildDrawingTableGridScript(rows, topRightX, topRightY, scale = 1) {
             const numRows = rows.length;
             const numCols = (rows[0] && rows[0].length) || 6;
-            const rowHeightMm = 250 * CAD_UNIT_SCALE;
-            const colWidthMm = 3000 * CAD_UNIT_SCALE;
+            const rowHeightMm = 250 * CAD_UNIT_SCALE * scale;
+            const colWidthMm = 3000 * CAD_UNIT_SCALE * scale;
+            // Anchor from the top-right corner: the table extends left
+            // and down from (topRightX, topRightY).
+            const insertX = topRightX - numCols * colWidthMm;
+            const insertY = topRightY;
             const textHeight = rowHeightMm * 0.4;
             const marginX = colWidthMm * 0.05;
             const marginY = rowHeightMm * 0.3;
@@ -9348,19 +9375,18 @@
             const { inserts, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
 
-            // Drawing Table grid (TEXT + LINE entities) — placed to the
-            // right of every other exported item's bounding box
-            // (trailer inserts + cargo outlines), 5m clear margin, so it
-            // never overlaps the drawing. Falls back to a fixed offset
-            // from the origin if nothing else is being exported this run.
+            // Drawing Table grid (TEXT + LINE entities) — placed in
+            // Paper Space (see buildTrailerCADScript's TILEMODE 0
+            // switch below), anchored to the top-right corner of the
+            // assumed sheet (CAD_PAPER_WIDTH_MM x CAD_PAPER_HEIGHT_MM,
+            // less CAD_PAPER_MARGIN_MM clear margin) and scaled down to
+            // the drawing's plotted scale (1:1000, DRAWING_TABLE_PAPER_SCALE)
+            // so its real-world-mm dimensions print at the right size.
             let drawingTableLispLines = [];
             if (tgDrawingTableRows.length) {
-                const xs = inserts.map(i => i.x).concat(cargoOutlines.flatMap(o => [o.x1, o.x2]));
-                const ys = inserts.map(i => i.y).concat(cargoOutlines.flatMap(o => [o.y1, o.y2]));
-                const maxX = xs.length ? Math.max(...xs) : 0;
-                const minY = ys.length ? Math.min(...ys) : 0;
-                const marginMm = 5000 * CAD_UNIT_SCALE;
-                drawingTableLispLines = buildDrawingTableGridScript(tgDrawingTableRows, maxX + marginMm, minY);
+                const topRightX = CAD_PAPER_WIDTH_MM - CAD_PAPER_MARGIN_MM;
+                const topRightY = CAD_PAPER_HEIGHT_MM - CAD_PAPER_MARGIN_MM;
+                drawingTableLispLines = buildDrawingTableGridScript(tgDrawingTableRows, topRightX, topRightY, DRAWING_TABLE_PAPER_SCALE);
             }
 
             if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0) {
