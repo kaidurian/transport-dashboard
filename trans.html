@@ -677,7 +677,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.73.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.73.5)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9024,6 +9024,18 @@
         // every source row lands in the AutoCAD table as 6 independent
         // cells. Merge/formatting can be applied afterward in AutoCAD
         // if needed.
+        // NOTE: vla-AddTable's NumRows is the table's TOTAL physical
+        // row count, not "data rows only" — with the "Standard" table
+        // style, AutoCAD always carves the first 2 rows off the top as
+        // Title (row 0) / Header (row 1), whether or not they're later
+        // suppressed (suppression only hides them, it doesn't remove
+        // them or shift row numbering). So NumRows must be requested
+        // as (data row count + 2), and every SetText must target
+        // (sourceRow + 2). Getting this wrong — requesting NumRows =
+        // data row count and assuming Title/Header get added on top —
+        // is what previously produced a table with no visible data:
+        // the first 2 source rows silently landed in the hidden
+        // Title/Header cells and the table was undersized besides.
         function escapeLispString(s) {
             return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
         }
@@ -9033,8 +9045,25 @@
             return String(v);
         }
         function buildDrawingTableCADLisp(rows, insertX, insertY) {
-            const numRows = rows.length;
+            const dataRows = rows.length;
             const numCols = (rows[0] && rows[0].length) || 6;
+            // NumRows passed to vla-AddTable is the TOTAL PHYSICAL row
+            // count of the table it creates — it is NOT "data rows,
+            // plus Title/Header added on top". With the "Standard"
+            // table style (Title row + Header row both enabled), the
+            // first 2 of whatever NumRows you pass are always carved
+            // out as Title (row 0) and Header (row 1); only the
+            // remaining (NumRows - 2) are real data rows. Passing
+            // NumRows = dataRows (as this used to do) therefore left
+            // only dataRows-2 usable data rows, silently dropped the
+            // first 2 source rows into the (now-hidden) Title/Header
+            // cells, and under-sized the table for everything else —
+            // this is what produced a table frame with no visible
+            // data. Fix: explicitly reserve the 2 rows by requesting
+            // dataRows + 2, and always target physical row (r + 2) —
+            // no runtime detection needed, since Title/Header always
+            // occupy rows 0/1 regardless of style.
+            const numRows = dataRows + 2;
             // Uniform row height / column width (mm, * CAD_UNIT_SCALE) —
             // vla-AddTable only accepts a single height/width applied to
             // every row/column; resize individual columns in AutoCAD
@@ -9052,27 +9081,17 @@
             // impossible to diagnose last time.
             lines.push(`(setq tgDwgTblResult (vl-catch-all-apply 'vla-AddTable (list (vla-get-ModelSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${insertX.toFixed(3)} ${insertY.toFixed(3)} 0) ${numRows} ${numCols} ${rowHeightMm} ${colWidthMm})))`);
             lines.push('(if (vl-catch-all-error-p tgDwgTblResult) (princ (strcat "\\nDrawing Table TABLE object FAILED: " (vl-catch-all-error-message tgDwgTblResult) "\\n")) (setq tgDwgTbl tgDwgTblResult))');
-            // A freshly-added table reserves its own Title row (and,
-            // depending on the current table style, a Header row) ON
-            // TOP of the NumRows we asked for — our source data (which
-            // already has its own title/header-like text baked into
-            // rows 0/1) has nowhere to go but data rows, so those extra
-            // reserved rows push everything down and left our own row 0
-            // targeting a merged/differently-typed cell that silently
-            // ignored the text — this is what produced a table frame
-            // with no visible data. Suppressing Title (and, where the
-            // property exists, Header — wrapped in vl-catch-all-apply
-            // since not every AutoCAD version exposes it) removes as
-            // many of those reserved rows as possible; reading back the
-            // table's ACTUAL row count afterward and comparing it to
-            // numRows then gives the exact number of reserved rows that
-            // are still left, regardless of AutoCAD version/style, so
-            // every SetText below is offset by that amount and always
-            // lands in the right physical row.
+            // TitleSuppressed/HeaderSuppressed are DISPLAY-ONLY — they
+            // hide rows 0/1, they do NOT remove them or renumber the
+            // rows below. Suppressing both here hides the reserved
+            // Title/Header rows entirely (we don't want that banner
+            // text), leaving exactly `dataRows` visible rows on screen
+            // — matching the source data 1:1 once offset by 2 below.
             lines.push('(if tgDwgTbl (vl-catch-all-apply \'vla-put-TitleSuppressed (list tgDwgTbl :vlax-true)))');
             lines.push('(if tgDwgTbl (vl-catch-all-apply \'vla-put-HeaderSuppressed (list tgDwgTbl :vlax-true)))');
-            lines.push('(setq tgDwgRowOffset 0)');
-            lines.push(`(if tgDwgTbl (progn (setq tgDwgActualRows (vl-catch-all-apply 'vla-get-Rows (list tgDwgTbl))) (if (not (vl-catch-all-error-p tgDwgActualRows)) (setq tgDwgRowOffset (max 0 (- tgDwgActualRows ${numRows}))))))`);
+            lines.push('(setq tgDwgRowOffset 2)');
+            lines.push(`(princ (strcat "\\nDrawing Table: requested " (itoa ${numRows}) " physical row(s) (${dataRows} data + 2 reserved Title/Header)."))`);
+            lines.push('(if tgDwgTbl (progn (setq tgDwgActualRows (vl-catch-all-apply \'vla-get-Rows (list tgDwgTbl))) (if (not (vl-catch-all-error-p tgDwgActualRows)) (princ (strcat "\\nDrawing Table: table reports " (itoa tgDwgActualRows) " actual row(s) after creation.")))))');
             lines.push('(if tgDwgTbl (vla-put-RegenerateTableSuppressed tgDwgTbl :vlax-true))');
             rows.forEach((row, r) => {
                 for (let c = 0; c < numCols; c++) {
