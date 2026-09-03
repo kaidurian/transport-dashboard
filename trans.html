@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1742,12 +1742,12 @@
         // The Drawing Table's row/column dimensions (see
         // buildDrawingTableGridScript) are true real-world millimetres —
         // fine in Model Space, but Paper Space units represent the
-        // physical sheet at 1:1, so drawing a 3000mm-wide column
-        // straight into Paper Space would put a 3m-wide table on the
-        // sheet. DRAWING_TABLE_PAPER_SCALE shrinks the table geometry
-        // by the drawing's plotted scale (1:1000) so it lands at the
-        // right printed size on the sheet instead.
-        const DRAWING_TABLE_PAPER_SCALE = 1 / 1000;
+        // physical sheet at 1:1. DRAWING_TABLE_PAPER_SCALE applies the
+        // drawing's plotted table scale (currently 10:1, i.e. drawn 10x
+        // larger than real-world mm) before placing the table geometry
+        // in Paper Space. Scale "A:B" (A drawing units per B real-world
+        // units) = A / B.
+        const DRAWING_TABLE_PAPER_SCALE = 10 / 1;
         // Assumed Paper Space sheet size (mm) the table is anchored
         // against — adjust to match the actual Layout's paper size if
         // it differs from ISO A3 landscape.
@@ -9379,9 +9379,10 @@
             // Paper Space (see buildTrailerCADScript's TILEMODE 0
             // switch below), anchored to the top-right corner of the
             // assumed sheet (CAD_PAPER_WIDTH_MM x CAD_PAPER_HEIGHT_MM,
-            // less CAD_PAPER_MARGIN_MM clear margin) and scaled down to
-            // the drawing's plotted scale (1:1000, DRAWING_TABLE_PAPER_SCALE)
-            // so its real-world-mm dimensions print at the right size.
+            // less CAD_PAPER_MARGIN_MM clear margin) and scaled to the
+            // drawing's plotted table scale (DRAWING_TABLE_PAPER_SCALE,
+            // currently 10:1) so its real-world-mm dimensions print at
+            // the right size.
             let drawingTableLispLines = [];
             if (tgDrawingTableRows.length) {
                 const topRightX = CAD_PAPER_WIDTH_MM - CAD_PAPER_MARGIN_MM;
