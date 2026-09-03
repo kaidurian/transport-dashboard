@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.74)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9104,7 +9104,12 @@
             // prints an explicit error to the command line instead of
             // silently doing nothing, which is what made the table
             // impossible to diagnose last time.
-            lines.push(`(setq tgDwgTblResult (vl-catch-all-apply 'vla-AddTable (list (vla-get-ModelSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${insertX.toFixed(3)} ${insertY.toFixed(3)} 0) ${numRows} ${numCols} ${rowHeightMm} ${colWidthMm})))`);
+            // PaperSpace (not ModelSpace) — the Drawing Table belongs on
+            // the current Layout tab's paper space, not in Model Space
+            // alongside the trailer/cargo geometry. vla-get-PaperSpace
+            // adds the table to whichever Layout is the ActiveDocument's
+            // ActiveLayout at script-run time.
+            lines.push(`(setq tgDwgTblResult (vl-catch-all-apply 'vla-AddTable (list (vla-get-PaperSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${insertX.toFixed(3)} ${insertY.toFixed(3)} 0) ${numRows} ${numCols} ${rowHeightMm} ${colWidthMm})))`);
             lines.push('(if (vl-catch-all-error-p tgDwgTblResult) (princ (strcat "\\nDrawing Table TABLE object FAILED: " (vl-catch-all-error-message tgDwgTblResult) "\\n")) (setq tgDwgTbl tgDwgTblResult))');
             // TitleSuppressed/HeaderSuppressed are DISPLAY-ONLY — they
             // hide rows 0/1, they do NOT remove them or renumber the
@@ -9300,21 +9305,39 @@
                     lines.push(`${o.x2.toFixed(3)},${o.y2.toFixed(3)},0`);
                 });
             }
-            if (drawingTableLispLines && drawingTableLispLines.length) {
-                lines.push(';; 📋 Drawing Table, as a plain TEXT + LINE grid');
-                lines.push(';; (no ActiveX/TABLE object — see buildDrawingTableGridScript)');
-                drawingTableLispLines.forEach(l => lines.push(l));
-            }
-            // Bring everything just created into view — without this,
-            // any insert/rectangle/table placed outside the current
-            // viewport (e.g. the Drawing Table, which is deliberately
-            // offset clear of the trailer geometry) is invisible until
-            // the user manually zooms out, which reads as "nothing was
-            // exported" even when it was.
-            lines.push(';; Force a display refresh, then zoom to show everything just created');
+            // Bring the Model Space content (trailer inserts + cargo
+            // outlines) into view before switching spaces — once
+            // TILEMODE flips to 0 below, "ZOOM E" would fit the Paper
+            // Space viewport instead and this Model Space geometry
+            // would never get zoomed-to.
+            lines.push(';; Force a display refresh, then zoom to show everything created so far');
             lines.push('REGEN');
             lines.push('ZOOM');
             lines.push('E');
+            if (drawingTableLispLines && drawingTableLispLines.length) {
+                // Switch to Paper Space on the current/last-active Layout
+                // tab — TILEMODE 0 puts the drawing table there instead
+                // of Model Space alongside the trailer/cargo geometry.
+                // (If no Layout tab has ever been activated in this
+                // drawing, AutoCAD creates "Layout1" automatically.)
+                lines.push(';; Switch to a Paper Space Layout tab for the Drawing Table');
+                lines.push('TILEMODE');
+                lines.push('0');
+                lines.push(';; 📋 Drawing Table, as a plain TEXT + LINE grid');
+                lines.push(';; (no ActiveX/TABLE object — see buildDrawingTableGridScript)');
+                drawingTableLispLines.forEach(l => lines.push(l));
+                lines.push(';; Fit the table in the Paper Space view');
+                lines.push('REGEN');
+                lines.push('ZOOM');
+                lines.push('E');
+                // Return to the Model Space tab so the trailer/cargo
+                // geometry drawn above is what's active when the script
+                // finishes, matching prior behavior for everything but
+                // the table itself.
+                lines.push(';; Switch back to the Model Space tab');
+                lines.push('TILEMODE');
+                lines.push('1');
+            }
             lines.push(';; Restores UI dialog boxes at the end of the script');
             lines.push('FILEDIA 1');
             lines.push('CMDDIA 1');
