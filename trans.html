@@ -677,7 +677,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.73.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.73.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9043,17 +9043,24 @@
             const colWidthMm = 3000 * CAD_UNIT_SCALE;
             const lines = [];
             lines.push('(vl-load-com)');
-            lines.push(`(setq tgDwgTbl (vla-AddTable (vla-get-ModelSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${insertX.toFixed(3)} ${insertY.toFixed(3)} 0) ${numRows} ${numCols} ${rowHeightMm} ${colWidthMm}))`);
-            lines.push('(vla-put-RegenerateTableSuppressed tgDwgTbl :vlax-true)');
+            lines.push('(setq tgDwgTbl nil)');
+            // Wrapped in vl-catch-all-apply so a failure here (e.g. this
+            // AutoCAD build/license has no ActiveX support — AutoCAD LT
+            // notably does not — or "Standard" table style is missing)
+            // prints an explicit error to the command line instead of
+            // silently doing nothing, which is what made the table
+            // impossible to diagnose last time.
+            lines.push(`(setq tgDwgTblResult (vl-catch-all-apply 'vla-AddTable (list (vla-get-ModelSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${insertX.toFixed(3)} ${insertY.toFixed(3)} 0) ${numRows} ${numCols} ${rowHeightMm} ${colWidthMm})))`);
+            lines.push('(if (vl-catch-all-error-p tgDwgTblResult) (princ (strcat "\\nDrawing Table TABLE object FAILED: " (vl-catch-all-error-message tgDwgTblResult) "\\n")) (setq tgDwgTbl tgDwgTblResult))');
+            lines.push('(if tgDwgTbl (vla-put-RegenerateTableSuppressed tgDwgTbl :vlax-true))');
             rows.forEach((row, r) => {
                 for (let c = 0; c < numCols; c++) {
                     const text = formatDrawingTableCellForCAD(row[c]);
                     if (text === '') continue; // leave blank cells untouched — skip the call entirely
-                    lines.push(`(vla-SetText tgDwgTbl ${r} ${c} "${escapeLispString(text)}")`);
+                    lines.push(`(if tgDwgTbl (vla-SetText tgDwgTbl ${r} ${c} "${escapeLispString(text)}"))`);
                 }
             });
-            lines.push('(vla-put-RegenerateTableSuppressed tgDwgTbl :vlax-false)');
-            lines.push('(vla-Update tgDwgTbl)');
+            lines.push('(if tgDwgTbl (progn (vla-put-RegenerateTableSuppressed tgDwgTbl :vlax-false) (vla-Update tgDwgTbl) (princ "\\nDrawing Table TABLE object created.\\n")))');
             return lines;
         }
 
@@ -9156,9 +9163,14 @@
             if (cargoOutlines && cargoOutlines.length) {
                 lines.push(';; Cargo footprint outlines — one rectangle per');
                 lines.push(';; item, at its own X — Middle/Y — Middle position');
+                // RECTANG has no dialog-box counterpart, so unlike INSERT
+                // it never takes the "-" prefix — "-RECTANG" is literally
+                // an unrecognized command name in AutoCAD and errors with
+                // "Unknown command". Plain "RECTANG" is already the
+                // command-line-only form.
                 (cargoOutlines || []).forEach(o => {
                     lines.push(`;; ${o.name}`);
-                    lines.push('-RECTANG');
+                    lines.push('RECTANG');
                     lines.push(`${o.x1.toFixed(3)},${o.y1.toFixed(3)},0`);
                     lines.push(`${o.x2.toFixed(3)},${o.y2.toFixed(3)},0`);
                 });
@@ -9168,6 +9180,15 @@
                 lines.push(';; (built via ActiveX — see buildDrawingTableCADLisp)');
                 drawingTableLispLines.forEach(l => lines.push(l));
             }
+            // Bring everything just created into view — without this,
+            // any insert/rectangle/table placed outside the current
+            // viewport (e.g. the Drawing Table, which is deliberately
+            // offset clear of the trailer geometry) is invisible until
+            // the user manually zooms out, which reads as "nothing was
+            // exported" even when it was.
+            lines.push(';; Zoom to show everything just created');
+            lines.push('ZOOM');
+            lines.push('E');
             lines.push(';; Restores UI dialog boxes at the end of the script');
             lines.push('FILEDIA 1');
             lines.push('CMDDIA 1');
