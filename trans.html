@@ -286,6 +286,18 @@
         .tg-cargo-item-card:last-child { margin-bottom: 0; }
         .tg-cargo-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 10px; margin-top: 8px; }
         .tg-modal-body.tg-side-layout .tg-cargo-field-grid { grid-template-columns: repeat(2, 1fr); }
+        /* Groups each cargo item's fields into labelled sub-sections
+           (W/CoG, Length/Width/Height, Top/Side-view offsets, Height
+           start/Gap), same "dashed divider between groups" language as
+           .tg-cad-split-row uses in the 🚂 Generate Trailer card — see
+           renderCargoList()'s tg-cargo-subgroup wrapper divs. First
+           group has no divider (nothing above it to separate from). */
+        .tg-cargo-field-groups .tg-cargo-subgroup { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
+        .tg-cargo-field-groups .tg-cargo-subgroup:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+        .tg-cargo-subgroup-title {
+            font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+            color: var(--text-muted); margin-bottom: 6px;
+        }
         .tg-cargo-field label {
             display: flex; align-items: center; gap: 3px;
             font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
@@ -665,7 +677,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.70)</h1>
+            <h1>🚂 Transport Dashboard (Rev.71)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1711,8 +1723,8 @@
         // FWD = Load Out — a single global setting applies to every
         // train in the export, not per-train).
         const CAD_BLOCK_MAP = {
-            4: { in: 'SCH_SPMT_4L_top_view_AFT', out: 'SCH_SPMT_4L_top_view_FWD' },
-            6: { in: 'SCH_SPMT_6L_top_view_AFT', out: 'SCH_SPMT_6L_top_view_FWD' }
+            4: { in: 'KAMAG_K25_4L_top_view_AFT', out: 'KAMAG_K25_4L_top_view_FWD' },
+            6: { in: 'KAMAG_K25_6L_top_view_AFT', out: 'KAMAG_K25_6L_top_view_FWD' }
         };
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
@@ -2499,6 +2511,12 @@
             '3m': {
                 label: 'GHF 2F Header&Dbar 3m',
                 totalWeightT: 0.74,
+                // AutoCAD block inserted for this accessory in the 📐
+                // Export AutoCAD Script (.scr) — see
+                // computeTrailerCADInserts(). One insert per accessory
+                // instance, regardless of how many sub-blocks[] this
+                // type draws in the 2D/3D preview.
+                cadBlockName: 'KAMAG_K25_YOKE_2F_top_view_AFT',
                 blocks: [
                     { length: 955, width: 860, height: 473 }
                 ]
@@ -2507,6 +2525,7 @@
                 label: 'GHF 2F Header&Dbar 3m&PPU',
                 totalWeightT: 1.29,
                 secondBlockOffsetY: 1069,
+                cadBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_top_view_AFT',
                 blocks: [
                     { length: 955, width: 860, height: 473 },
                     { length: 909, width: 1034, height: 710 }
@@ -3975,7 +3994,8 @@
                                 onclick="removeCargoItem(${cargo.id})"
                                 ${cargoItems.length <= 1 ? 'disabled' : ''}>✕</button>
                     </div>
-                    <div class="tg-cargo-field-grid">
+                    <div class="tg-cargo-field-groups">
+                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
                         <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>🔗 W (t)</label>
                             <input type="number" step="any" value="${cargo.weight}" ${cargo.groupCog ? 'disabled' : ''}
@@ -3997,6 +4017,8 @@
                             <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected.'}"
                                    onchange="updateCargoField(${cargo.id}, 'z', this.value)">
                         </div>
+                        </div>
+                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
                         <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>🔗 Length (m)</label>
                             <input type="number" step="any" value="${cargo.length}" ${cargo.groupCog ? 'disabled' : ''}
@@ -4015,21 +4037,8 @@
                                    title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_HGT_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
                                    onchange="updateCargoField(${cargo.id}, 'height', this.value)">
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>Height start</label>
-                            <select ${cargo.groupCog ? 'disabled' : ''}
-                                    title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Where this cargo's BOX (Length/Width/Height rectangle) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. Only moves/resizes the box; the CoG sign and Z dimension line always measure from the trailer deck using X/Y/Z — CoG, unaffected by this setting.`}"
-                                    onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
-                                <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
-                                <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
-                            </select>
                         </div>
-                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>Gap above ${cargo.heightStart === 'previous' ? 'previous cargo' : 'trailer'} deck (m)</label>
-                            <input type="number" step="any" value="${cargo.gap}" ${cargo.groupCog ? 'disabled' : ''}
-                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG.`}"
-                                   onchange="updateCargoField(${cargo.id}, 'gap', this.value)">
-                        </div>
+                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
                         <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
                             <label>🔗 Top view: CoG to Left (m)</label>
                             <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargoOffsetLeft(cargo)}" ${cargo.groupCog ? 'disabled' : ''}
@@ -4053,6 +4062,24 @@
                                        ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGz at a fixed offset. Untick Group to edit this directly again.'
                                        : `Distance from this item's CoG (CoGz) down to the BOTTOM of its box, in meters. Editing this moves the drawn cargo BOX only (by adjusting Gap under the hood) — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFBOTTOM_COL}${cell} — this distance is the value pushed/pulled.`}"
                                    onchange="updateCargoOffsetBottom(${cargo.id}, this.value)">
+                        </div>
+                        </div>
+                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
+                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                            <label>Height start</label>
+                            <select ${cargo.groupCog ? 'disabled' : ''}
+                                    title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Where this cargo's BOX (Length/Width/Height rectangle) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. Only moves/resizes the box; the CoG sign and Z dimension line always measure from the trailer deck using X/Y/Z — CoG, unaffected by this setting.`}"
+                                    onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
+                                <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
+                                <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
+                            </select>
+                        </div>
+                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                            <label>Gap above ${cargo.heightStart === 'previous' ? 'previous cargo' : 'trailer'} deck (m)</label>
+                            <input type="number" step="any" value="${cargo.gap}" ${cargo.groupCog ? 'disabled' : ''}
+                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG.`}"
+                                   onchange="updateCargoField(${cargo.id}, 'gap', this.value)">
+                        </div>
                         </div>
                     </div>
                 </div>`;
@@ -8996,6 +9023,40 @@
                     });
                     axleOffset += segCount;
                 });
+
+                // Header/Dbar accessory (if any) — ONE AutoCAD block
+                // insert per accessory instance (not per sub-block piece
+                // drawn in the preview), using
+                // HEADER_DBAR_TYPES[train.headerDbar].cadBlockName.
+                // Anchor point = the accessory's first sub-block center,
+                // same X/Y computeHeaderDbarBlocks() positions it at for
+                // the 2D/3D preview (see that function's own comments for
+                // the left/right + PPU-offset geometry). Only meaningful
+                // for trains with a known deck footprint (Goldhofer/SPMT
+                // preset) — computeHeaderDbarBlocks() returns [] otherwise,
+                // same guard the preview itself uses. Rotation follows the
+                // same load-direction convention as the trailer's own
+                // block insert above (no separate FWD block name was
+                // given for this accessory, so the block itself stays the
+                // same for both directions — only its rotation flips).
+                const hdDef = HEADER_DBAR_TYPES[train.headerDbar];
+                if (hdDef && hdDef.cadBlockName) {
+                    const hdBlocks = computeHeaderDbarBlocks(train);
+                    if (hdBlocks.length) {
+                        const anchor = hdBlocks[0];
+                        inserts.push({
+                            trainName: `${train.name} — ${hdDef.label}`,
+                            blockName: hdDef.cadBlockName,
+                            axleCount: null,
+                            loadDirection,
+                            x: anchor.xCenter * CAD_UNIT_SCALE,
+                            y: anchor.yCenter * CAD_UNIT_SCALE,
+                            rotationDeg: (loadDirection === 'out') ? 180 : 0
+                        });
+                    } else {
+                        warnings.push(`Train "${train.name}" has a Header/Dbar accessory (${hdDef.label}) selected but no deck footprint (pick a Goldhofer/SPMT trailer-type preset) — skipped from .scr export.`);
+                    }
+                }
             });
             return { inserts, warnings };
         }
@@ -9049,12 +9110,17 @@
         // dashboard can be saved/reloaded when used as a plain webpage.
         // Covers every train, every cargo item, the ID counters (so
         // newly-added items after an import never collide with restored
-        // ones), and the other global settings below — everything the
-        // dashboard actually holds in memory, EXCEPT Excel connection
-        // state itself (isOfficeInitialized), which always reflects the
-        // live host, not a saved file.
+        // ones), and every other value the dashboard holds in memory —
+        // including fields that are normally PULL-ONLY from Excel
+        // (tgCogEnv's dimX/dimY/dimZ/cogX/cogY/cogZ, tgCogEnvGroups,
+        // the CoG-sign/stability-arm readouts, tgDrawingTableRows,
+        // tgCogEnvSummary) — since on a plain standalone webpage
+        // there's no Excel to pull them FROM, so exporting/restoring
+        // them here is the only way they persist across a reload.
+        // EXCEPT Excel connection state itself (isOfficeInitialized),
+        // which always reflects the live host, not a saved file.
         // ============================================================
-        const APP_STATE_VERSION = 1;
+        const APP_STATE_VERSION = 2;
 
         function exportAppState() {
             const state = {
@@ -9066,10 +9132,51 @@
                 trailerGenLoadDirection: trailerGenLoadDirection,
                 cargoItems: cargoItems,
                 cargoIdCounter: cargoIdCounter,
+                cargoGroupAll: cargoGroupAll,
                 tgZTrailerHeightMm: tgZTrailerHeightMm,
                 tgShowGroupLabels: tgShowGroupLabels,
                 tgShowDimensions: tgShowDimensions,
-                tgHLoads: tgHLoads
+                tgHLoads: tgHLoads,
+                // 📐 CoG Envelope card — local inputs (upSlope/downSlope,
+                // cargoRow) AND the pull-only dim/cog cells, so the card
+                // reads the same standalone as it did when saved.
+                tgCogEnv: tgCogEnv,
+                // Pull-only Position of hydraulic groups (G1-G3), feeds
+                // the CoG Envelope 2D preview only.
+                tgCogEnvGroups: tgCogEnvGroups,
+                // 📊 CoG Envelope Table — whether "🧮 Calculate CoG
+                // Envelope" has been pressed, and its frozen result
+                // (see tgCogEnvComputed's own comment above — the table
+                // never live-recalculates, so the saved snapshot is the
+                // only copy of what was actually shown).
+                tgCogEnvCalculated: tgCogEnvCalculated,
+                tgCogEnvComputed: tgCogEnvComputed,
+                // 📋 Drawing Table — which load case's table is active
+                // (local display flag) and the pulled A1:F63 grid itself.
+                tgActiveDrawingLC: tgActiveDrawingLC,
+                tgDrawingTableRows: tgDrawingTableRows,
+                // CoG Envelope Summary card (UNITY CHECK / MAX GBP /
+                // STATIC STABILITY / LC0-LC4 table) — pulled from Excel,
+                // saved here so it still renders standalone.
+                tgCogEnvSummary: tgCogEnvSummary,
+                // Trailer CoG / Combined CoG signs (Display!B15:D15 /
+                // B16:D16) — pull-only readouts used by the preview's
+                // CoG dimension lines and the stability-arm view.
+                cogTrailerSign: cogTrailerSign,
+                cogTrailerSignLoaded: cogTrailerSignLoaded,
+                cogCombinedSign: cogCombinedSign,
+                cogCombinedSignLoaded: cogCombinedSignLoaded,
+                // Stability-arm view readouts — pull-only, gate whether
+                // that view has anything to draw (see stabHasData in
+                // renderTrailerGen3D/renderStabilityArmView).
+                stabilityArmSingleMm: stabilityArmSingleMm,
+                stabilityArmCombinedMm: stabilityArmCombinedMm,
+                stabilityArmLoaded: stabilityArmLoaded,
+                stabilityAngleSingleDeg: stabilityAngleSingleDeg,
+                stabilityAngleCombinedDeg: stabilityAngleCombinedDeg,
+                stabilityAngleLoaded: stabilityAngleLoaded,
+                stabilityArmHeightMm: stabilityArmHeightMm,
+                stabilityArmHeightLoaded: stabilityArmHeightLoaded
             };
             const json = JSON.stringify(state, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
@@ -9107,6 +9214,68 @@
                             if (Number.isFinite(v)) tgHLoads[key] = v;
                         });
                     }
+                    if (state.cargoGroupAll && typeof state.cargoGroupAll === 'object') {
+                        cargoGroupAll.enabled = !!state.cargoGroupAll.enabled;
+                        ['x', 'y', 'z'].forEach(k => {
+                            const v = parseFloat(state.cargoGroupAll[k]);
+                            cargoGroupAll[k] = Number.isFinite(v) ? v : 0;
+                        });
+                    }
+                    // 📐 CoG Envelope card — restore every key (both the
+                    // local upSlope/downSlope/cargoRow inputs AND the
+                    // normally pull-only dim/cog cells — see
+                    // exportAppState's comment on why those are included).
+                    if (state.tgCogEnv && typeof state.tgCogEnv === 'object') {
+                        Object.keys(tgCogEnv).forEach(key => {
+                            if (key === 'cargoRow') {
+                                const row = parseInt(state.tgCogEnv.cargoRow, 10);
+                                if (row >= 35 && row <= 39) tgCogEnv.cargoRow = row;
+                            } else {
+                                const v = parseFloat(state.tgCogEnv[key]);
+                                if (Number.isFinite(v)) tgCogEnv[key] = v;
+                            }
+                        });
+                    }
+                    if (state.tgCogEnvGroups && typeof state.tgCogEnvGroups === 'object') {
+                        Object.keys(tgCogEnvGroups).forEach(key => {
+                            const v = parseFloat(state.tgCogEnvGroups[key]);
+                            if (Number.isFinite(v)) tgCogEnvGroups[key] = v;
+                        });
+                    }
+                    if (typeof state.tgCogEnvCalculated === 'boolean') tgCogEnvCalculated = state.tgCogEnvCalculated;
+                    if (state.tgCogEnvComputed && typeof state.tgCogEnvComputed === 'object') {
+                        tgCogEnvComputed = state.tgCogEnvComputed;
+                    }
+                    if (state.tgActiveDrawingLC !== undefined) {
+                        const lc = parseInt(state.tgActiveDrawingLC, 10);
+                        tgActiveDrawingLC = Number.isFinite(lc) ? lc : null;
+                    }
+                    if (Array.isArray(state.tgDrawingTableRows)) tgDrawingTableRows = state.tgDrawingTableRows;
+                    if (state.tgCogEnvSummary && typeof state.tgCogEnvSummary === 'object') {
+                        tgCogEnvSummary = state.tgCogEnvSummary;
+                    }
+                    if (state.cogTrailerSign && typeof state.cogTrailerSign === 'object') {
+                        ['x', 'y', 'z'].forEach(k => {
+                            const v = parseFloat(state.cogTrailerSign[k]);
+                            if (Number.isFinite(v)) cogTrailerSign[k] = v;
+                        });
+                    }
+                    if (typeof state.cogTrailerSignLoaded === 'boolean') cogTrailerSignLoaded = state.cogTrailerSignLoaded;
+                    if (state.cogCombinedSign && typeof state.cogCombinedSign === 'object') {
+                        ['x', 'y', 'z'].forEach(k => {
+                            const v = parseFloat(state.cogCombinedSign[k]);
+                            if (Number.isFinite(v)) cogCombinedSign[k] = v;
+                        });
+                    }
+                    if (typeof state.cogCombinedSignLoaded === 'boolean') cogCombinedSignLoaded = state.cogCombinedSignLoaded;
+                    if (Number.isFinite(parseFloat(state.stabilityArmSingleMm))) stabilityArmSingleMm = parseFloat(state.stabilityArmSingleMm);
+                    if (Number.isFinite(parseFloat(state.stabilityArmCombinedMm))) stabilityArmCombinedMm = parseFloat(state.stabilityArmCombinedMm);
+                    if (typeof state.stabilityArmLoaded === 'boolean') stabilityArmLoaded = state.stabilityArmLoaded;
+                    if (Number.isFinite(parseFloat(state.stabilityAngleSingleDeg))) stabilityAngleSingleDeg = parseFloat(state.stabilityAngleSingleDeg);
+                    if (Number.isFinite(parseFloat(state.stabilityAngleCombinedDeg))) stabilityAngleCombinedDeg = parseFloat(state.stabilityAngleCombinedDeg);
+                    if (typeof state.stabilityAngleLoaded === 'boolean') stabilityAngleLoaded = state.stabilityAngleLoaded;
+                    if (Number.isFinite(parseFloat(state.stabilityArmHeightMm))) stabilityArmHeightMm = parseFloat(state.stabilityArmHeightMm);
+                    if (typeof state.stabilityArmHeightLoaded === 'boolean') stabilityArmHeightLoaded = state.stabilityArmHeightLoaded;
 
                     // ID counters: trust the saved counters if present and
                     // high enough, otherwise recompute from the highest id
@@ -9128,6 +9297,12 @@
                     if (dirSelect) dirSelect.value = trailerGenLoadDirection;
 
                     renderTrailerDashboard(); // also re-renders cargo list, totals, and the preview
+                    // renderTgCogEnvSummary() isn't part of
+                    // renderTrailerDashboard() (it's only called after a
+                    // live Excel pull — see pullCogEnvSummaryFromExcel) —
+                    // call it directly so a restored tgCogEnvSummary
+                    // actually shows up standalone.
+                    renderTgCogEnvSummary();
                     logMsg(`📂 Imported dashboard (${trailerGenTrains.length} train(s), ${cargoItems.length} cargo item(s)) from "${file.name}".`);
                 } catch (e) {
                     console.warn('Dashboard import error', e);
