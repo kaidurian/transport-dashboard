@@ -665,7 +665,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.70.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.70)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1308,6 +1308,119 @@
             const tag = el.tagName;
             return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
         }
+
+        // ============================================================
+        // FIELD COMMIT SAFETY NET
+        // ============================================================
+        // Every dashboard field commits its edit via its own
+        // onchange="update...Field(...)" attribute, which normally
+        // only fires on Tab / click-away / a blur that changes focus.
+        // That leaves a gap: an edit typed into a field and then
+        // abandoned WITHOUT tabbing out, pressing Enter, or clicking
+        // elsewhere — e.g. the user switches straight to the Excel
+        // grid, another app, or closes the task pane — never commits
+        // and is silently lost.
+        //
+        // Two layers close that gap, both purely additive (no changes
+        // to any individual field's markup/onchange= needed):
+        //
+        //  1) TYPING-PAUSE AUTO-COMMIT — a single delegated 'input'
+        //     listener debounces FIELD_COMMIT_DEBOUNCE_MS after the
+        //     last keystroke in ANY input/textarea that has an
+        //     onchange= handler, then synthesizes a native, bubbling
+        //     'change' Event on that element. Dispatching 'change'
+        //     invokes the exact same onchange="..." handler the
+        //     element already has wired — updateCogEnvField,
+        //     updateCargoField, updateTrailerGenField, etc. — so the
+        //     field self-commits while still focused, without Tab/
+        //     Enter/click-away ever being required.
+        //
+        //  2) PANEL-ABANDON FLUSH — if the whole task pane loses
+        //     focus (window blur — e.g. clicking into the Excel grid,
+        //     which moves focus outside this document entirely and
+        //     so never fires a blur/change on the field itself) or
+        //     the tab/pane is hidden (visibilitychange), whatever
+        //     field is mid-edit is flushed immediately instead of
+        //     waiting out the debounce.
+        //
+        // A per-element 'tgDirty' data-flag + the fieldCommitTimers
+        // WeakMap track "has this field been typed in since its last
+        // commit" so a natural Tab/Enter/click-away commit (which
+        // fires the browser's own native 'change' event first) simply
+        // cancels the pending synthetic one instead of double-firing.
+        // ============================================================
+        const FIELD_COMMIT_DEBOUNCE_MS = 600;
+        const fieldCommitTimers = new WeakMap();
+
+        // Only input/textarea elements that actually have an
+        // onchange= handler wired are worth auto-committing — this
+        // deliberately excludes buttons, checkboxes, and <select>
+        // (selects commit instantly on choice; there's no "typing
+        // pause" to debounce for them).
+        function isCommittableField(el) {
+            if (!el || !el.tagName) return false;
+            const tag = el.tagName;
+            if (tag !== 'INPUT' && tag !== 'TEXTAREA') return false;
+            return el.hasAttribute('onchange');
+        }
+
+        function cancelFieldCommitTimer(el) {
+            const t = fieldCommitTimers.get(el);
+            if (t) {
+                clearTimeout(t);
+                fieldCommitTimers.delete(el);
+            }
+        }
+
+        // Fires the field's own onchange handler immediately (skips
+        // the rest of the debounce wait) — used by the panel-abandon
+        // flush and internally once the debounce elapses.
+        function flushFieldCommit(el) {
+            if (!el) return;
+            cancelFieldCommitTimer(el);
+            if (isCommittableField(el) && el.dataset.tgDirty === '1') {
+                el.dataset.tgDirty = '';
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+
+        function scheduleFieldCommit(el) {
+            if (!isCommittableField(el)) return;
+            el.dataset.tgDirty = '1';
+            cancelFieldCommitTimer(el);
+            fieldCommitTimers.set(el, setTimeout(() => flushFieldCommit(el), FIELD_COMMIT_DEBOUNCE_MS));
+        }
+
+        // Layer 1 — delegated so it automatically covers every current
+        // AND future field in the dashboard without touching their
+        // individual onchange= attributes.
+        document.addEventListener('input', (e) => {
+            if (isCommittableField(e.target)) scheduleFieldCommit(e.target);
+        }, true);
+
+        // A natural commit (Tab/Enter-then-blur/click-away) fires the
+        // browser's own native 'change' event first — this listener
+        // just clears the dirty flag/pending timer so the debounce
+        // above never double-fires a synthetic 'change' on top of it.
+        // Also fires (harmlessly, as a no-op) when the synthetic
+        // 'change' from flushFieldCommit() itself bubbles through.
+        document.addEventListener('change', (e) => {
+            if (isCommittableField(e.target)) {
+                e.target.dataset.tgDirty = '';
+                cancelFieldCommitTimer(e.target);
+            }
+        }, true);
+
+        // Layer 2 — catches leaving the whole task pane (Excel grid,
+        // another app, closing the pane) before the debounce elapses.
+        window.addEventListener('blur', () => {
+            if (isCommittableField(document.activeElement)) flushFieldCommit(document.activeElement);
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && isCommittableField(document.activeElement)) {
+                flushFieldCommit(document.activeElement);
+            }
+        });
 
         // Narrow version scoped to the 📐 CoG Envelope card's own field
         // grid — only upSlope/downSlope are locally typed into there
