@@ -8981,6 +8981,82 @@
             await pushHeaderDbarWeightToExcel();
         }
 
+        // ---- Cargo footprint outlines for AutoCAD export — one
+        // rectangle per cargo item, positioned exactly like the plan
+        // view draws it: centered on X — Middle/Y — Middle (tlX/tlY,
+        // meters), NOT on CoG (see the "Cargo footprints" comment
+        // above computeTrailerCADPlanCargo... i.e. renderTrailerGenPreview's
+        // own plan-view cargo rect logic) — the CoG sign is a separate
+        // marker and isn't drawn here. mm world coords * CAD_UNIT_SCALE,
+        // same convention as computeTrailerCADInserts(). Zero/negative
+        // footprints (blank Length or Width) are skipped.
+        function computeCargoCADOutlines() {
+            return cargoItems.map(c => {
+                const halfLenMm = ((parseFloat(c.length) || 0) * 1000) / 2;
+                const halfWidMm = ((parseFloat(c.width) || 0) * 1000) / 2;
+                const tlXMm = (parseFloat(c.tlX) || 0) * 1000;
+                const tlYMm = (parseFloat(c.tlY) || 0) * 1000;
+                return {
+                    name: c.name || 'Cargo',
+                    x1: (tlXMm - halfLenMm) * CAD_UNIT_SCALE,
+                    y1: (tlYMm - halfWidMm) * CAD_UNIT_SCALE,
+                    x2: (tlXMm + halfLenMm) * CAD_UNIT_SCALE,
+                    y2: (tlYMm + halfWidMm) * CAD_UNIT_SCALE
+                };
+            }).filter(o => (o.x2 - o.x1) > 0 && (o.y2 - o.y1) > 0);
+        }
+
+        // ---- Drawing Table (tgDrawingTableRows) as an AutoCAD TABLE
+        // object — built with inline AutoLISP/ActiveX (vla-AddTable +
+        // vla-SetText) rather than the interactive "-TABLE" command,
+        // because -TABLE's row/column text entry relies on the
+        // in-place cell text editor, which isn't reliably driveable
+        // from a plain .scr keystroke stream (Tab/Escape aren't
+        // scriptable command-line tokens). vla-AddTable creates the
+        // table frame directly with the right row/column count, and
+        // vla-SetText writes each cell's text straight into it — no
+        // interactive typing involved, so it works the same in every
+        // AutoCAD version that supports the ActiveX API.
+        // NOTE: this exports plain per-cell text only — it does NOT
+        // replicate the on-screen HTML table's merged cells (title row
+        // spanning all 6 columns, the B:C merge on
+        // DRAWING_TABLE_MERGE_BC_ROW) or its bold/red-flag styling;
+        // every source row lands in the AutoCAD table as 6 independent
+        // cells. Merge/formatting can be applied afterward in AutoCAD
+        // if needed.
+        function escapeLispString(s) {
+            return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
+        }
+        function formatDrawingTableCellForCAD(v) {
+            if (v === null || v === undefined || v === '') return '';
+            if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+            return String(v);
+        }
+        function buildDrawingTableCADLisp(rows, insertX, insertY) {
+            const numRows = rows.length;
+            const numCols = (rows[0] && rows[0].length) || 6;
+            // Uniform row height / column width (mm, * CAD_UNIT_SCALE) —
+            // vla-AddTable only accepts a single height/width applied to
+            // every row/column; resize individual columns in AutoCAD
+            // afterward if 6 equal-width columns don't fit the content.
+            const rowHeightMm = 250 * CAD_UNIT_SCALE;
+            const colWidthMm = 3000 * CAD_UNIT_SCALE;
+            const lines = [];
+            lines.push('(vl-load-com)');
+            lines.push(`(setq tgDwgTbl (vla-AddTable (vla-get-ModelSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${insertX.toFixed(3)} ${insertY.toFixed(3)} 0) ${numRows} ${numCols} ${rowHeightMm} ${colWidthMm}))`);
+            lines.push('(vla-put-RegenerateTableSuppressed tgDwgTbl :vlax-true)');
+            rows.forEach((row, r) => {
+                for (let c = 0; c < numCols; c++) {
+                    const text = formatDrawingTableCellForCAD(row[c]);
+                    if (text === '') continue; // leave blank cells untouched — skip the call entirely
+                    lines.push(`(vla-SetText tgDwgTbl ${r} ${c} "${escapeLispString(text)}")`);
+                }
+            });
+            lines.push('(vla-put-RegenerateTableSuppressed tgDwgTbl :vlax-false)');
+            lines.push('(vla-Update tgDwgTbl)');
+            return lines;
+        }
+
         // ---- Export current trains as an AutoCAD script (.scr) ----
         function computeTrailerCADInserts() {
             const inserts = [];
@@ -9065,7 +9141,7 @@
             trailerGenLoadDirection = (value === 'out') ? 'out' : 'in';
         }
 
-        function buildTrailerCADScript(inserts) {
+        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines) {
             const lines = [];
             lines.push(';; Disable snaps');
             lines.push('OSMODE 0');
@@ -9077,6 +9153,21 @@
                 lines.push('1');
                 lines.push(`${ins.rotationDeg}`);
             });
+            if (cargoOutlines && cargoOutlines.length) {
+                lines.push(';; Cargo footprint outlines — one rectangle per');
+                lines.push(';; item, at its own X — Middle/Y — Middle position');
+                (cargoOutlines || []).forEach(o => {
+                    lines.push(`;; ${o.name}`);
+                    lines.push('-RECTANG');
+                    lines.push(`${o.x1.toFixed(3)},${o.y1.toFixed(3)},0`);
+                    lines.push(`${o.x2.toFixed(3)},${o.y2.toFixed(3)},0`);
+                });
+            }
+            if (drawingTableLispLines && drawingTableLispLines.length) {
+                lines.push(';; 📋 Drawing Table, as an AutoCAD TABLE object');
+                lines.push(';; (built via ActiveX — see buildDrawingTableCADLisp)');
+                drawingTableLispLines.forEach(l => lines.push(l));
+            }
             lines.push(';; Restores UI dialog boxes at the end of the script');
             lines.push('FILEDIA 1');
             lines.push('CMDDIA 1');
@@ -9085,11 +9176,28 @@
 
         function exportTrailerLayoutToCADScript() {
             const { inserts, warnings } = computeTrailerCADInserts();
-            if (inserts.length === 0) {
-                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line).');
+            const cargoOutlines = computeCargoCADOutlines();
+
+            // Drawing Table TABLE object — placed to the right of every
+            // other exported item's bounding box (trailer inserts +
+            // cargo outlines), 5m clear margin, so it never overlaps the
+            // drawing. Falls back to a fixed offset from the origin if
+            // nothing else is being exported this run.
+            let drawingTableLispLines = [];
+            if (tgDrawingTableRows.length) {
+                const xs = inserts.map(i => i.x).concat(cargoOutlines.flatMap(o => [o.x1, o.x2]));
+                const ys = inserts.map(i => i.y).concat(cargoOutlines.flatMap(o => [o.y1, o.y2]));
+                const maxX = xs.length ? Math.max(...xs) : 0;
+                const minY = ys.length ? Math.min(...ys) : 0;
+                const marginMm = 5000 * CAD_UNIT_SCALE;
+                drawingTableLispLines = buildDrawingTableCADLisp(tgDrawingTableRows, maxX + marginMm, minY);
+            }
+
+            if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0) {
+                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, and no Drawing Table data has been pulled.');
                 return;
             }
-            const scriptText = buildTrailerCADScript(inserts);
+            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines);
             const blob = new Blob([scriptText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -9098,7 +9206,11 @@
             document.body.appendChild(a); a.click(); a.remove();
             URL.revokeObjectURL(url);
 
-            let msg = `📐 Exported ${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')}) to .scr.`;
+            const parts = [];
+            if (inserts.length) parts.push(`${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')})`);
+            if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
+            if (drawingTableLispLines.length) parts.push(`1 Drawing Table (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) TABLE object`);
+            let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
             logMsg(msg);
             if (warnings.length) console.warn('Trailer CAD export warnings:\n' + warnings.join('\n'));
