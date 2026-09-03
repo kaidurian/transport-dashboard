@@ -1747,12 +1747,12 @@
         // larger than real-world mm) before placing the table geometry
         // in Paper Space. Scale "A:B" (A drawing units per B real-world
         // units) = A / B. Change this line for total table scale export to AutoCAD in Layout
-        const DRAWING_TABLE_PAPER_SCALE = 1 / 1;
+        const DRAWING_TABLE_PAPER_SCALE = 0.1 / 1;
         // Assumed Paper Space sheet size (mm) the table is anchored
         // against — adjust to match the actual Layout's paper size if
         // it differs from ISO A3 landscape. Change this line for each side of table scale export to AutoCAD in Layout
-        const CAD_PAPER_WIDTH_MM = 42.0;
-        const CAD_PAPER_HEIGHT_MM = 29.7;
+        const CAD_PAPER_WIDTH_MM = 420;
+        const CAD_PAPER_HEIGHT_MM = 297;
         // Clear margin kept between the table and the sheet edge (mm).
         const CAD_PAPER_MARGIN_MM = 10;
 
