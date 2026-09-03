@@ -1746,8 +1746,8 @@
         // drawing's plotted table scale (currently 10:1, i.e. drawn 10x
         // larger than real-world mm) before placing the table geometry
         // in Paper Space. Scale "A:B" (A drawing units per B real-world
-        // units) = A / B.
-        const DRAWING_TABLE_PAPER_SCALE = 10 / 1;
+        // units) = A / B.  Change this line for table scale export to AutoCAD in Layout
+        const DRAWING_TABLE_PAPER_SCALE = 1 / 1;
         // Assumed Paper Space sheet size (mm) the table is anchored
         // against — adjust to match the actual Layout's paper size if
         // it differs from ISO A3 landscape.
