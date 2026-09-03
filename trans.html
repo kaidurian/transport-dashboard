@@ -236,6 +236,14 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #a78bfa 10%);
         }
+        /* 📊 CoG Envelope Table and 📈 CoG Envelope Summary share the
+           same background tint as 📐 CoG Envelope (.tg-card-cogenv)
+           above, without taking its purple border-left accent (that
+           stays reserved for the 4 top-level input cards). */
+        .tg-card-cogenv-bg {
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #a78bfa 10%);
+        }
         /* Pushes the ❓ Help / — Minimize button group to the flush
            right edge of every .tg-train-card-header (title takes only
            its natural width, buttons get the rest) — see the "move
@@ -677,11 +685,15 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.73.6)</h1>
+            <h1>🚂 Transport Dashboard (Rev.74)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
             <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
+            <label class="tg-preview-toggle" title="Lay the input cards (left) and preview/output cards (right) side by side instead of stacked. Applies to the whole dashboard layout, not just 🖼 2D Drawing.">
+                <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
+                ⬌ Show preview beside input data
+            </label>
             <label style="font-size:11px; color:var(--text-muted); display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="When on, every dashboard edit is pushed to Excel automatically (no button press needed), and a small set of read-only values (Z Trailer Height, Horizontal Loads, CoG signs, Stability, Drawing Table) are pulled back automatically too. Turn off to go back to manual 📤 Push / ⇩ Refresh buttons only.">
                 <input type="checkbox" id="autoSyncToggle" checked onchange="toggleAutoSync(this.checked)"> Auto-sync
             </label>
@@ -913,10 +925,6 @@
                         <div class="tg-preview-toolbar">
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
-                                    ⬌ Show preview beside input data
-                                </label>
-                                <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
                                     ⧉ Show axle preview in separate window (compatible with two monitors)
                                 </label>
@@ -938,6 +946,42 @@
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
                         <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
                         <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
+                    </div>
+
+                    <div class="tg-3d-wrap">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🧊 3D Drawing</h2>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                        </div>
+                        <div class="tg-3d-toolbar">
+                            <div class="tg-3d-cam-btns">
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-iso" onclick="set3DCameraTG('iso')">Iso</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-top" onclick="set3DCameraTG('top')">Top</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-side" onclick="set3DCameraTG('side')">Side</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-front" onclick="set3DCameraTG('front')">Front</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-rear" onclick="set3DCameraTG('rear')">Rear</button>
+                                <button type="button" class="tg-3d-btn tg-3d-lock-btn" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔓 Unlocked</button>
+                            </div>
+                            <div class="tg-preview-toggles-right">
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
+                                    ⚠ Show stability triangle
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dCogToggle" checked onchange="renderTrailerGen3D()">
+                                    ⊕ Show CoG markers
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dGroupPlanToggle" checked onchange="renderTrailerGen3D()">
+                                    ▲ Show support triangle
+                                </label>
+                            </div>
+                        </div>
+                        <div id="tgViewer3dWrap">
+                            <div id="tgViewer3d"></div>
+                            <div id="tgLabels3d"></div>
+                        </div>
+                        <div class="tg-3d-hint">Drag = orbit · middle-drag / two-finger drag = pan · scroll / pinch = zoom</div>
                     </div>
 
                     <div class="tg-cargo-card" id="tgDrawingTableCard">
@@ -964,7 +1008,7 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card" id="tgCogEnvTableCard">
+                    <div class="tg-cargo-card tg-card-cogenv-bg" id="tgCogEnvTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2>
                             <button type="button" class="tg-help-btn" id="tgCogEnvTableHelpToggleBtn" onclick="toggleTgCogEnvTableHelp()">❓ Help</button>
@@ -1007,7 +1051,7 @@
                         <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-minimized" id="tgCogEnvSummaryCard">
+                    <div class="tg-cargo-card tg-card-minimized tg-card-cogenv-bg" id="tgCogEnvSummaryCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
                             <button type="button" class="tg-help-btn" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓ Help</button>
@@ -1039,42 +1083,6 @@
                             <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
                                     onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
                         </div>
-                    </div>
-
-                    <div class="tg-3d-wrap">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🧊 3D Drawing</h2>
-                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
-                        </div>
-                        <div class="tg-3d-toolbar">
-                            <div class="tg-3d-cam-btns">
-                                <button type="button" class="tg-3d-btn" id="tg3dcam-iso" onclick="set3DCameraTG('iso')">Iso</button>
-                                <button type="button" class="tg-3d-btn" id="tg3dcam-top" onclick="set3DCameraTG('top')">Top</button>
-                                <button type="button" class="tg-3d-btn" id="tg3dcam-side" onclick="set3DCameraTG('side')">Side</button>
-                                <button type="button" class="tg-3d-btn" id="tg3dcam-front" onclick="set3DCameraTG('front')">Front</button>
-                                <button type="button" class="tg-3d-btn" id="tg3dcam-rear" onclick="set3DCameraTG('rear')">Rear</button>
-                                <button type="button" class="tg-3d-btn tg-3d-lock-btn" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔓 Unlocked</button>
-                            </div>
-                            <div class="tg-preview-toggles-right">
-                                <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
-                                    ⚠ Show stability triangle
-                                </label>
-                                <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tg3dCogToggle" checked onchange="renderTrailerGen3D()">
-                                    ⊕ Show CoG markers
-                                </label>
-                                <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tg3dGroupPlanToggle" checked onchange="renderTrailerGen3D()">
-                                    ▲ Show support triangle
-                                </label>
-                            </div>
-                        </div>
-                        <div id="tgViewer3dWrap">
-                            <div id="tgViewer3d"></div>
-                            <div id="tgLabels3d"></div>
-                        </div>
-                        <div class="tg-3d-hint">Drag = orbit · middle-drag / two-finger drag = pan · scroll / pinch = zoom</div>
                     </div>
 
                     <div class="tg-totals" id="tgTotals"></div>
@@ -5485,9 +5493,26 @@
                     <label title="Selects which cargo item (Input!${CARGO_NAME_COL}35:${CARGO_NAME_COL}39) the Cargo CoG. X/Y/Z fields below pull from. Default: ${CARGO_NAME_COL}35.">🔽 Cargo Selection</label>
                     <select onchange="updateCogEnvCargoRow(this.value)">${cargoOptions}</select>
                 </div>`;
+            // Non-editable weight readout for whichever cargo item is
+            // picked above — same read-only visual style as the 📦
+            // Generate Cargo card's own 🔗 W (t) field
+            // (.tg-cargo-field-readonly), but kept as its own separate
+            // field here rather than merged into another one. Purely
+            // informational: mirrors cargoItems[selIdx].weight, which
+            // is itself synced with Excel 'Input'!${CARGO_W_COL}{row} —
+            // edit the actual value in 📦 Generate Cargo, not here.
+            const selIdx = items.findIndex((c, i) => (CARGO_START_ROW + i) === tgCogEnv.cargoRow);
+            const selectedCargo = items[selIdx >= 0 ? selIdx : 0] || defaultCargoItem(1);
+            const cargoWeightHtml = `
+                <div class="tg-cargo-field tg-cargo-field-readonly">
+                    <label title="Weight of the cargo item selected above (🔽 Cargo Selection) — read-only here, edit it in 📦 Generate Cargo. Synced with Excel 'Input'!${CARGO_W_COL}${tgCogEnv.cargoRow}.">🔒 🔗 W (t)</label>
+                    <input type="number" step="any" value="${selectedCargo.weight}" disabled
+                           title="Weight of the cargo item selected above (🔽 Cargo Selection) — read-only here, edit it in 📦 Generate Cargo. Synced with Excel 'Input'!${CARGO_W_COL}${tgCogEnv.cargoRow}.">
+                </div>`;
             el.innerHTML = `
                 <div class="tg-cargo-field-grid">
                     ${cargoSelectHtml}
+                    ${cargoWeightHtml}
                     ${field('dimX', 'Cargo Dim. X', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimX}`)}
                     ${field('dimY', 'Cargo Dim. Y', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimY}`)}
                     ${field('dimZ', 'Cargo Dim. Z', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimZ}`)}
