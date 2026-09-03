@@ -677,7 +677,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.73.5)</h1>
+            <h1>🚂 Transport Dashboard (Rev.73.6)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9104,6 +9104,66 @@
             return lines;
         }
 
+        // ---- Drawing Table as plain TEXT + LINE entities (no ActiveX,
+        // no TABLE object) — a fallback for when vla-AddTable's ActiveX
+        // path comes back blank (wrong text height for the drawing's
+        // unit scale, an AutoCAD build/license with no ActiveX support
+        // such as AutoCAD LT, or a table style quirk that can't be
+        // diagnosed without seeing the actual command-line output).
+        // TEXT and LINE are ordinary scriptable commands — every value
+        // typed here is exactly what ends up on screen, so there's no
+        // hidden row/column/suppression bookkeeping that can silently
+        // swallow data. Trade-off: this is a grid of independent
+        // entities, not an editable AutoCAD TABLE object — resizing a
+        // column means moving the grid lines and text by hand.
+        function escapeScriptText(s) {
+            return String(s).replace(/[\r\n]+/g, ' ').trim();
+        }
+        function buildDrawingTableGridScript(rows, insertX, insertY) {
+            const numRows = rows.length;
+            const numCols = (rows[0] && rows[0].length) || 6;
+            const rowHeightMm = 250 * CAD_UNIT_SCALE;
+            const colWidthMm = 3000 * CAD_UNIT_SCALE;
+            const textHeight = rowHeightMm * 0.4;
+            const marginX = colWidthMm * 0.05;
+            const marginY = rowHeightMm * 0.3;
+            const lines = [];
+            // Horizontal grid lines (top to bottom, row 0 at the top).
+            for (let r = 0; r <= numRows; r++) {
+                const y = insertY - r * rowHeightMm;
+                lines.push('LINE');
+                lines.push(`${insertX.toFixed(3)},${y.toFixed(3)},0`);
+                lines.push(`${(insertX + numCols * colWidthMm).toFixed(3)},${y.toFixed(3)},0`);
+                lines.push(''); // Enter — ends the LINE command
+            }
+            // Vertical grid lines.
+            for (let c = 0; c <= numCols; c++) {
+                const x = insertX + c * colWidthMm;
+                lines.push('LINE');
+                lines.push(`${x.toFixed(3)},${insertY.toFixed(3)},0`);
+                lines.push(`${x.toFixed(3)},${(insertY - numRows * rowHeightMm).toFixed(3)},0`);
+                lines.push('');
+            }
+            // Cell text — left-justified TEXT, one entity per non-blank
+            // cell, anchored near the bottom-left of its grid cell.
+            rows.forEach((row, r) => {
+                const rowTopY = insertY - r * rowHeightMm;
+                for (let c = 0; c < numCols; c++) {
+                    const raw = formatDrawingTableCellForCAD(row[c]);
+                    const text = escapeScriptText(raw);
+                    if (text === '') continue;
+                    const x = insertX + c * colWidthMm + marginX;
+                    const y = rowTopY - rowHeightMm + marginY;
+                    lines.push('TEXT');
+                    lines.push(`${x.toFixed(3)},${y.toFixed(3)},0`);
+                    lines.push(`${textHeight.toFixed(3)}`);
+                    lines.push('0');
+                    lines.push(text);
+                }
+            });
+            return lines;
+        }
+
         // ---- Export current trains as an AutoCAD script (.scr) ----
         function computeTrailerCADInserts() {
             const inserts = [];
@@ -9216,8 +9276,8 @@
                 });
             }
             if (drawingTableLispLines && drawingTableLispLines.length) {
-                lines.push(';; 📋 Drawing Table, as an AutoCAD TABLE object');
-                lines.push(';; (built via ActiveX — see buildDrawingTableCADLisp)');
+                lines.push(';; 📋 Drawing Table, as a plain TEXT + LINE grid');
+                lines.push(';; (no ActiveX/TABLE object — see buildDrawingTableGridScript)');
                 drawingTableLispLines.forEach(l => lines.push(l));
             }
             // Bring everything just created into view — without this,
@@ -9240,11 +9300,11 @@
             const { inserts, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
 
-            // Drawing Table TABLE object — placed to the right of every
-            // other exported item's bounding box (trailer inserts +
-            // cargo outlines), 5m clear margin, so it never overlaps the
-            // drawing. Falls back to a fixed offset from the origin if
-            // nothing else is being exported this run.
+            // Drawing Table grid (TEXT + LINE entities) — placed to the
+            // right of every other exported item's bounding box
+            // (trailer inserts + cargo outlines), 5m clear margin, so it
+            // never overlaps the drawing. Falls back to a fixed offset
+            // from the origin if nothing else is being exported this run.
             let drawingTableLispLines = [];
             if (tgDrawingTableRows.length) {
                 const xs = inserts.map(i => i.x).concat(cargoOutlines.flatMap(o => [o.x1, o.x2]));
@@ -9252,7 +9312,7 @@
                 const maxX = xs.length ? Math.max(...xs) : 0;
                 const minY = ys.length ? Math.min(...ys) : 0;
                 const marginMm = 5000 * CAD_UNIT_SCALE;
-                drawingTableLispLines = buildDrawingTableCADLisp(tgDrawingTableRows, maxX + marginMm, minY);
+                drawingTableLispLines = buildDrawingTableGridScript(tgDrawingTableRows, maxX + marginMm, minY);
             }
 
             if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0) {
@@ -9271,7 +9331,7 @@
             const parts = [];
             if (inserts.length) parts.push(`${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')})`);
             if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
-            if (drawingTableLispLines.length) parts.push(`1 Drawing Table (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) TABLE object`);
+            if (drawingTableLispLines.length) parts.push(`1 Drawing Table (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) text/line grid`);
             let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
             logMsg(msg);
