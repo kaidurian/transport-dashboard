@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75.234)</h1>
+            <h1>🚂 Transport Dashboard (Rev.76)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1097,7 +1097,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Drawing Table, and — once CoG Envelope has been calculated — 4 LC1-4 tables (LC1 top-right, LC2 top-left, LC3 bottom-left, LC4 bottom-right) on their own new Layout tab, created automatically if it doesn't exist yet. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -1763,6 +1763,27 @@
         // it (AutoCAD's SCRIPT command never erases anything on its
         // own — every LINE/TEXT command only ever adds entities).
         const DRAWING_TABLE_LAYER_NAME = "DWG_TABLE";
+
+        // ---- LC1-LC4 quadrant tables — own new Paper Space Layout tab
+        // (.scr export) — see computeLcQuadrantTables()/
+        // buildLcQuadrantLayoutLines()/exportTrailerLayoutToCADScript.
+        // Kept on a SEPARATE Layout tab from the Drawing Table (not just
+        // a separate layer on the same one), per KKai's spec — the
+        // script creates this Layout tab the first time it's run
+        // ((layoutlist) lookup, only "-LAYOUT New" if missing) and just
+        // switches to it ("-LAYOUT Set") on every later run. Its own
+        // dedicated layer means re-running the script always replaces
+        // just these 4 tables (ERASE-by-layer), same pattern as
+        // DRAWING_TABLE_LAYER_NAME above.
+        const LC_TABLE_LAYOUT_NAME = "LC Load Cases";
+        const LC_TABLE_LAYER_NAME = "LC_TABLES";
+        // Per-column widths (mm, before scale) for each small LC1-4
+        // table — label column (name/X/Y/Z/Z-Deck) wider than the
+        // one value column. Passed into buildDrawingTableGridScript's
+        // colWidthsOverride param instead of reusing
+        // DRAWING_TABLE_COL_WIDTHS_MM, which is sized for the 6-column
+        // Drawing Table, not this 2-column layout.
+        const LC_TABLE_COL_WIDTHS_MM = [2200, 1600];
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
         // kept in sync with. B5 = X offset, B6 = Y offset. B1 = Number
@@ -9194,16 +9215,20 @@
         // is always derived from it, so the text can never spill past
         // its row's top edge no matter what this ratio is set to.
         const DRAWING_TABLE_TEXT_HEIGHT_RATIO = 0.6;
-        function buildDrawingTableGridScript(rows, topRightX, topRightY, scale = 1) {
+        function buildDrawingTableGridScript(rows, topRightX, topRightY, scale = 1, colWidthsOverrideMm = null) {
             const numRows = rows.length;
             const numCols = (rows[0] && rows[0].length) || 6;
             const rowHeightMm = 250 * CAD_UNIT_SCALE * scale;
-            // Per-column widths, in export units — pad/truncate
-            // DRAWING_TABLE_COL_WIDTHS_MM to numCols, reusing the last
-            // entry for any extra columns.
+            // Per-column widths, in export units — pad/truncate the
+            // supplied width array (colWidthsOverrideMm, or
+            // DRAWING_TABLE_COL_WIDTHS_MM by default — e.g. the LC1-4
+            // quadrant tables pass LC_TABLE_COL_WIDTHS_MM instead, since
+            // DRAWING_TABLE_COL_WIDTHS_MM is sized for a 6-column table)
+            // to numCols, reusing the last entry for any extra columns.
+            const colWidthsBaseMm = colWidthsOverrideMm || DRAWING_TABLE_COL_WIDTHS_MM;
             const colWidthsMm = [];
             for (let c = 0; c < numCols; c++) {
-                const base = DRAWING_TABLE_COL_WIDTHS_MM[c] ?? DRAWING_TABLE_COL_WIDTHS_MM[DRAWING_TABLE_COL_WIDTHS_MM.length - 1] ?? 3000;
+                const base = colWidthsBaseMm[c] ?? colWidthsBaseMm[colWidthsBaseMm.length - 1] ?? 3000;
                 colWidthsMm.push(base * CAD_UNIT_SCALE * scale);
             }
             // Cumulative X offset (from the table's left edge) where
@@ -9259,6 +9284,84 @@
                     lines.push(text);
                 }
             });
+            return lines;
+        }
+
+        // ---- LC1-LC4 quadrant tables (.scr export) — 4 small 2-column
+        // (label/value) tables, one per COGENV_LC_MAIN_NAMES load case,
+        // laid out in their own new Paper Space Layout tab: LC1
+        // top-right, LC2 top-left, LC3 bottom-left, LC4 bottom-right
+        // (per KKai's spec). Pulls straight from tgCogEnvComputed — the
+        // same frozen snapshot the 📊 CoG Envelope Table renders from —
+        // so these always match whatever the dashboard is currently
+        // showing; returns null (nothing to export) until "🧮 Calculate
+        // CoG Envelope" has been pressed at least once. ----
+        function buildLcTableDataRows(name, x, y, z, zDeck) {
+            return [
+                [name, ''],
+                ['X', x],
+                ['Y', y],
+                ['Z', z],
+                ['Z (Deck)', zDeck],
+            ];
+        }
+        function computeLcQuadrantTables() {
+            if (!tgCogEnvCalculated || !tgCogEnvComputed) return null;
+            const c = tgCogEnvComputed;
+            if (!c.lcBase || c.lcBase.length < 4) return null;
+            const tables = {};
+            COGENV_LC_MAIN_NAMES.forEach((name, i) => {
+                const lc = c.lcBase[i];
+                tables[name] = buildLcTableDataRows(lc.name, lc.x, lc.y, lc.z, c.zDeckLc);
+            });
+            return tables;
+        }
+        // Builds the full .scr/LISP line sequence for the LC1-4 quadrant
+        // tables' OWN Layout tab: create it if it doesn't exist yet
+        // ((layoutlist) lookup — never recreates/duplicates it on later
+        // runs), switch to it, clear any previous tables on
+        // LC_TABLE_LAYER_NAME, draw the 4 tables via the same plain
+        // TEXT+LINE grid used by the Drawing Table
+        // (buildDrawingTableGridScript), then zoom to fit. Does NOT
+        // itself touch TILEMODE — the caller (buildTrailerCADScript) is
+        // expected to already be in Paper Space (TILEMODE 0) before
+        // calling this, and switches back afterward.
+        function buildLcQuadrantLayoutLines(lcTables) {
+            const lines = [];
+            lines.push(';; ---- LC1-LC4 quadrant tables: own Paper Space Layout tab ----');
+            lines.push(';; Create the Layout tab only if it doesn\'t already exist, then switch to it');
+            lines.push(`(if (not (member "${LC_TABLE_LAYOUT_NAME}" (layoutlist))) (command "._-LAYOUT" "_New" "${LC_TABLE_LAYOUT_NAME}"))`);
+            lines.push(`(command "._-LAYOUT" "_Set" "${LC_TABLE_LAYOUT_NAME}")`);
+            lines.push(';; Create/select the LC table layer and clear any previous tables on it');
+            lines.push('-LAYER');
+            lines.push('Make');
+            lines.push(LC_TABLE_LAYER_NAME);
+            lines.push('');
+            lines.push(`(if (setq tgOldLcTbl (ssget "_X" (list (cons 8 "${LC_TABLE_LAYER_NAME}")))) (command "._ERASE" tgOldLcTbl ""))`);
+            // Quadrant anchors — each is the TOP-RIGHT corner of that
+            // table (buildDrawingTableGridScript always anchors from its
+            // own top-right corner and extends left/down from there),
+            // split from the assumed sheet's own center lines so all 4
+            // tables sit clear of each other and of the sheet edges.
+            const halfW = CAD_PAPER_WIDTH_MM / 2;
+            const halfH = CAD_PAPER_HEIGHT_MM / 2;
+            const m = CAD_PAPER_MARGIN_MM;
+            const quadrants = [
+                { name: 'LC1', label: 'top-right quadrant', x: CAD_PAPER_WIDTH_MM - m, y: CAD_PAPER_HEIGHT_MM - m },
+                { name: 'LC2', label: 'top-left quadrant', x: halfW - m, y: CAD_PAPER_HEIGHT_MM - m },
+                { name: 'LC3', label: 'bottom-left quadrant', x: halfW - m, y: halfH - m },
+                { name: 'LC4', label: 'bottom-right quadrant', x: CAD_PAPER_WIDTH_MM - m, y: halfH - m },
+            ];
+            quadrants.forEach(q => {
+                const rows = lcTables[q.name];
+                if (!rows) return;
+                lines.push(`;; ${q.name} (${q.label})`);
+                buildDrawingTableGridScript(rows, q.x, q.y, DRAWING_TABLE_PAPER_SCALE, LC_TABLE_COL_WIDTHS_MM).forEach(l => lines.push(l));
+            });
+            lines.push(';; Fit all 4 LC tables in the Paper Space view');
+            lines.push('REGEN');
+            lines.push('ZOOM');
+            lines.push('E');
             return lines;
         }
 
@@ -9346,7 +9449,7 @@
             trailerGenLoadDirection = (value === 'out') ? 'out' : 'in';
         }
 
-        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines) {
+        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables) {
             const lines = [];
             lines.push(';; Disable snaps');
             lines.push('OSMODE 0');
@@ -9392,42 +9495,61 @@
             lines.push('REGEN');
             lines.push('ZOOM');
             lines.push('E');
-            if (drawingTableLispLines && drawingTableLispLines.length) {
-                // Switch to Paper Space on the current/last-active Layout
-                // tab — TILEMODE 0 puts the drawing table there instead
-                // of Model Space alongside the trailer/cargo geometry.
-                // (If no Layout tab has ever been activated in this
-                // drawing, AutoCAD creates "Layout1" automatically.)
-                lines.push(';; Switch to a Paper Space Layout tab for the Drawing Table');
+            const hasDrawingTable = drawingTableLispLines && drawingTableLispLines.length;
+            const hasLcTables = lcTables && Object.keys(lcTables).length;
+            if (hasDrawingTable || hasLcTables) {
+                // Switch to Paper Space — TILEMODE 0 puts everything
+                // below on a Layout tab instead of Model Space alongside
+                // the trailer/cargo geometry. (If no Layout tab has ever
+                // been activated in this drawing, AutoCAD creates
+                // "Layout1" automatically.)
+                lines.push(';; Switch to Paper Space for the Drawing Table / LC1-4 tables');
                 lines.push('TILEMODE');
                 lines.push('0');
-                // Put the table on its own dedicated layer, and erase
-                // whatever already exists on that layer (i.e. the table
-                // from a previous run of this same script) before
-                // redrawing it — otherwise SCRIPT just keeps adding new
-                // LINE/TEXT entities on top of the old ones every time
-                // it's re-run on the same drawing, and since the table
-                // is always anchored to the same fixed top-right corner,
-                // a smaller re-export looks like nothing changed (it's
-                // hidden inside the old, larger leftover grid).
-                lines.push(';; Create/select the Drawing Table layer and clear any previous table on it');
-                lines.push('-LAYER');
-                lines.push('Make');
-                lines.push(DRAWING_TABLE_LAYER_NAME);
-                lines.push('');
-                lines.push(`(if (setq tgOldDwgTbl (ssget "_X" (list (cons 8 "${DRAWING_TABLE_LAYER_NAME}")))) (command "._ERASE" tgOldDwgTbl ""))`);
-                lines.push(';; 📋 Drawing Table, as a plain TEXT + LINE grid');
-                lines.push(';; (no ActiveX/TABLE object — see buildDrawingTableGridScript)');
-                drawingTableLispLines.forEach(l => lines.push(l));
-                lines.push(';; Fit the table in the Paper Space view');
-                lines.push('REGEN');
-                lines.push('ZOOM');
-                lines.push('E');
+                if (hasDrawingTable) {
+                    // Drawing Table lands on the current/last-active
+                    // Layout tab (whatever that is at script-run time —
+                    // unlike the LC1-4 tables below, this one doesn't
+                    // switch to a Layout of its own). Put it on its own
+                    // dedicated layer, and erase whatever already exists
+                    // on that layer (i.e. the table from a previous run
+                    // of this same script) before redrawing it —
+                    // otherwise SCRIPT just keeps adding new LINE/TEXT
+                    // entities on top of the old ones every time it's
+                    // re-run on the same drawing, and since the table is
+                    // always anchored to the same fixed top-right
+                    // corner, a smaller re-export looks like nothing
+                    // changed (it's hidden inside the old, larger
+                    // leftover grid).
+                    lines.push(';; Create/select the Drawing Table layer and clear any previous table on it');
+                    lines.push('-LAYER');
+                    lines.push('Make');
+                    lines.push(DRAWING_TABLE_LAYER_NAME);
+                    lines.push('');
+                    lines.push(`(if (setq tgOldDwgTbl (ssget "_X" (list (cons 8 "${DRAWING_TABLE_LAYER_NAME}")))) (command "._ERASE" tgOldDwgTbl ""))`);
+                    lines.push(';; 📋 Drawing Table, as a plain TEXT + LINE grid');
+                    lines.push(';; (no ActiveX/TABLE object — see buildDrawingTableGridScript)');
+                    drawingTableLispLines.forEach(l => lines.push(l));
+                    lines.push(';; Fit the table in the Paper Space view');
+                    lines.push('REGEN');
+                    lines.push('ZOOM');
+                    lines.push('E');
+                }
+                if (hasLcTables) {
+                    // LC1-4 tables get their OWN new Layout tab (created
+                    // once, reused on later runs) — see
+                    // buildLcQuadrantLayoutLines(). This switches the
+                    // active Layout away from whatever the Drawing Table
+                    // used above, which is fine since we're about to
+                    // switch back to Model Space entirely below anyway.
+                    buildLcQuadrantLayoutLines(lcTables).forEach(l => lines.push(l));
+                }
                 // Return to the Model Space tab so the trailer/cargo
                 // geometry drawn above is what's active when the script
                 // finishes, matching prior behavior for everything but
-                // the table itself. Also restore layer "0" as current,
-                // since -LAYER Make above left DWG_TABLE current.
+                // the table(s) themselves. Also restore layer "0" as
+                // current, since -LAYER Make above left a table layer
+                // current.
                 lines.push(';; Switch back to the Model Space tab and restore layer 0');
                 lines.push('TILEMODE');
                 lines.push('1');
@@ -9460,12 +9582,17 @@
                 const topRightY = CAD_PAPER_HEIGHT_MM - CAD_PAPER_MARGIN_MM;
                 drawingTableLispLines = buildDrawingTableGridScript(tgDrawingTableRows, topRightX, topRightY, DRAWING_TABLE_PAPER_SCALE);
             }
+            // LC1-4 quadrant tables — own new Layout tab, see
+            // computeLcQuadrantTables()/buildLcQuadrantLayoutLines()
+            // above. null until "🧮 Calculate CoG Envelope" has been
+            // pressed at least once.
+            const lcTables = computeLcQuadrantTables();
 
-            if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0) {
-                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, and no Drawing Table data has been pulled.');
+            if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0 && !lcTables) {
+                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, no Drawing Table data has been pulled, and CoG Envelope hasn\'t been calculated (needed for the LC1-4 tables).');
                 return;
             }
-            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines);
+            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables);
             const blob = new Blob([scriptText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -9478,7 +9605,9 @@
             if (inserts.length) parts.push(`${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')})`);
             if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
             if (drawingTableLispLines.length) parts.push(`1 Drawing Table (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) text/line grid`);
+            if (lcTables) parts.push(`4 LC1-4 tables (new "${LC_TABLE_LAYOUT_NAME}" Layout)`);
             let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
+            if (!lcTables) msg += ' (LC1-4 tables skipped — press "🧮 Calculate CoG Envelope" first to include them.)';
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
             logMsg(msg);
             if (warnings.length) console.warn('Trailer CAD export warnings:\n' + warnings.join('\n'));
