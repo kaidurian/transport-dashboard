@@ -61,22 +61,63 @@
             gap: 10px;
             width: 100%;
         }
-        header h1 { font-size: 16px; letter-spacing: 0.3px; }
-        header .header-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-        #connectionStatus { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-        .tg-header-right { display: flex; align-items: center; gap: 12px; }
+
+            header h1 {
+                font-size: 16px;
+                letter-spacing: 0.3px;
+            }
+
+            header .header-subtitle {
+                font-size: 11px;
+                color: var(--text-muted);
+                margin-top: 2px;
+            }
+
+        #connectionStatus {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .tg-header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         #themeModeToggle {
-            padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
-            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
-            cursor: pointer; white-space: nowrap;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
         }
-        #themeModeToggle:hover { border-color: var(--accent-blue); color: var(--text-main); }
+
+            #themeModeToggle:hover {
+                border-color: var(--accent-blue);
+                color: var(--text-main);
+            }
+
         #appExportBtn, #appImportBtn, #appMinimizeAllBtn {
-            padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
-            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
-            cursor: pointer; white-space: nowrap;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
         }
-        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+
+            #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover {
+                border-color: var(--accent-blue);
+                color: var(--text-main);
+            }
 
         .tg-page {
             width: 100%;
@@ -100,7 +141,11 @@
             color: var(--text-muted);
             cursor: pointer;
         }
-        .tg-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+
+            .tg-btn:hover {
+                border-color: var(--accent-blue);
+                color: var(--text-main);
+            }
 
         .tg-modal {
             background: var(--panel-bg);
@@ -116,12 +161,18 @@
             flex-direction: column;
             gap: 0;
         }
-        .tg-modal-body.tg-side-layout {
-            flex-direction: row;
-            align-items: flex-start;
-            gap: 18px;
+
+            .tg-modal-body.tg-side-layout {
+                flex-direction: row;
+                align-items: flex-start;
+                gap: 18px;
+            }
+
+        .tg-modal-col-left {
+            width: 100%;
+            min-width: 0;
         }
-        .tg-modal-col-left { width: 100%; min-width: 0; }
+
         .tg-modal-body.tg-side-layout .tg-modal-col-left {
             /* Minimized to a narrow, fixed-ish column so the preview on
                the right gets as much of the extra window width as
@@ -133,6 +184,7 @@
             overflow-y: auto;
             padding-right: 4px;
         }
+
         .tg-modal-col-right {
             width: 100%;
             min-width: 0;
@@ -145,6 +197,7 @@
             overflow-y: auto;
             padding-right: 4px;
         }
+
         .tg-modal-body.tg-side-layout .tg-modal-col-right {
             flex: 1 1 auto;
             min-width: 340px;
@@ -156,23 +209,57 @@
            row (instead of the normal 3-per-row grid) so the narrower
            left column stays readable while freeing up width for a
            bigger preview on the right. */
-        .tg-modal-body.tg-side-layout .tg-field-grid { grid-template-columns: 1fr; }
-        .tg-modal-body.tg-side-layout .tg-group-field-grid { grid-template-columns: repeat(2, 1fr); }
+        .tg-modal-body.tg-side-layout .tg-field-grid {
+            grid-template-columns: 1fr;
+        }
 
-        .tg-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-        .tg-modal-header h2 { font-size: 15px; margin: 0; }
+        .tg-modal-body.tg-side-layout .tg-group-field-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .tg-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+            .tg-modal-header h2 {
+                font-size: 15px;
+                margin: 0;
+            }
+
         .tg-help-btn {
-            padding: 5px 10px; font-size: 11px; font-weight: 700; border-radius: 6px;
-            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
-            cursor: pointer; white-space: nowrap;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
         }
-        .tg-help-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+
+            .tg-help-btn:hover {
+                border-color: var(--accent-blue);
+                color: var(--text-main);
+            }
+
         .tg-modal-sub {
-            font-size: 11px; color: var(--text-muted); margin: 0 0 14px;
-            display: none; border: 1px solid var(--panel-border); background: var(--tank-box-bg);
-            border-radius: 8px; padding: 10px 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin: 0 0 14px;
+            display: none;
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            border-radius: 8px;
+            padding: 10px 12px;
         }
-        .tg-modal-sub.tg-help-open { display: block; }
+
+            .tg-modal-sub.tg-help-open {
+                display: block;
+            }
 
         .tg-train-card {
             border: 1px solid var(--panel-border);
@@ -181,8 +268,19 @@
             padding: 9px 11px;
             margin-bottom: 9px;
         }
-        .tg-train-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-        .tg-train-name-input { flex: 1 1 auto; font-weight: 700; font-size: 12px; }
+
+        .tg-train-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 7px;
+        }
+
+        .tg-train-name-input {
+            flex: 1 1 auto;
+            font-weight: 700;
+            font-size: 12px;
+        }
 
         .tg-cargo-card {
             border: 1px solid var(--panel-border);
@@ -191,6 +289,7 @@
             padding: 12px 14px;
             margin-top: 12px;
         }
+
         .tg-trailer-card {
             border: 1px solid var(--panel-border);
             border-left: 4px solid #f59e0b;
@@ -199,7 +298,7 @@
             border-radius: 8px;
             padding: 12px 14px;
         }
-        /* ---- Minimize/expand toggle for the 4 top-level input cards
+            /* ---- Minimize/expand toggle for the 4 top-level input cards
            (Generate Trailer, Generate Cargo, Horizontal Loads, CoG
            Envelope) — see toggleTgCardMinimize(). Collapses everything
            in the card except its .tg-train-card-header, so only the
@@ -208,29 +307,50 @@
            to contain a .tg-train-card-header, e.g. individual train
            cards), since only these 4 cards ever receive the
            .tg-card-minimized class. */
-        .tg-trailer-card.tg-card-minimized > *:not(.tg-train-card-header),
-        .tg-cargo-card.tg-card-minimized > *:not(.tg-train-card-header) {
-            display: none;
-        }
-        .tg-trailer-card.tg-card-minimized, .tg-cargo-card.tg-card-minimized { padding-bottom: 12px; }
-        .tg-trailer-card.tg-card-minimized .tg-train-card-header,
-        .tg-cargo-card.tg-card-minimized .tg-train-card-header { margin-bottom: 0; }
+            .tg-trailer-card.tg-card-minimized > *:not(.tg-train-card-header),
+            .tg-cargo-card.tg-card-minimized > *:not(.tg-train-card-header) {
+                display: none;
+            }
+
+            .tg-trailer-card.tg-card-minimized, .tg-cargo-card.tg-card-minimized {
+                padding-bottom: 12px;
+            }
+
+                .tg-trailer-card.tg-card-minimized .tg-train-card-header,
+                .tg-cargo-card.tg-card-minimized .tg-train-card-header {
+                    margin-bottom: 0;
+                }
+
         .tg-minimize-btn {
-            padding: 5px 8px; font-size: 11px; font-weight: 700; border-radius: 6px;
-            border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
-            cursor: pointer; white-space: nowrap; line-height: 1;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+            line-height: 1;
         }
-        .tg-minimize-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+
+            .tg-minimize-btn:hover {
+                border-color: var(--accent-blue);
+                color: var(--text-main);
+            }
+
         .tg-card-cargo {
             border-left: 4px solid var(--accent-green);
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--accent-green) 10%);
         }
+
         .tg-card-hloads {
             border-left: 4px solid var(--accent-blue);
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--accent-blue) 10%);
         }
+
         .tg-card-cogenv {
             border-left: 4px solid #a78bfa;
             background: var(--tank-box-bg);
@@ -248,16 +368,25 @@
            right edge of every .tg-train-card-header (title takes only
            its natural width, buttons get the rest) — see the "move
            Minimize/Expand to right end" card-header layout request. */
-        .tg-cargo-title { flex: 1 1 auto; }
+        .tg-cargo-title {
+            flex: 1 1 auto;
+        }
         /* Cards using toggleTgCardMinimize()'s header-click-to-expand
            behavior (see handleTgCardHeaderClick()) get a pointer
            cursor over the whole header, not just the button, since
            clicking anywhere in a minimized card's (now header-only)
            area expands it again. */
-        .tg-card-header-clickable { cursor: pointer; }
+        .tg-card-header-clickable {
+            cursor: pointer;
+        }
+
         .tg-cogenv-preview {
-            margin-top: 10px; border: 1px solid var(--panel-border); border-radius: 8px;
-            background: var(--tank-box-bg); padding: 6px; overflow: auto;
+            margin-top: 10px;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            background: var(--tank-box-bg);
+            padding: 6px;
+            overflow: auto;
         }
         /* ---- Minimize/expand toggle for the standalone PREVIEW panels
            (2D Plan/Elevation .tg-preview-wrap and 3D viewer .tg-3d-wrap)
@@ -274,16 +403,40 @@
         .tg-3d-wrap.tg-preview-minimized > *:not(.tg-train-card-header) {
             display: none;
         }
-        .tg-preview-wrap.tg-preview-minimized, .tg-3d-wrap.tg-preview-minimized { padding-bottom: 8px; }
-        .tg-preview-wrap.tg-preview-minimized .tg-train-card-header,
-        .tg-3d-wrap.tg-preview-minimized .tg-train-card-header { margin-bottom: 0; }
+
+        .tg-preview-wrap.tg-preview-minimized, .tg-3d-wrap.tg-preview-minimized {
+            padding-bottom: 8px;
+        }
+
+            .tg-preview-wrap.tg-preview-minimized .tg-train-card-header,
+            .tg-3d-wrap.tg-preview-minimized .tg-train-card-header {
+                margin-bottom: 0;
+            }
+
         .tg-cargo-groupall-card {
             border: 1px dashed var(--accent-blue);
             background: var(--panel-bg);
         }
-        .tg-cargo-groupall-title { font-weight: 700; font-size: 12px; flex: 1 1 auto; }
-        .tg-cargo-title { margin: 0; font-size: 13px; font-weight: 700; }
-        .tg-cargo-sub { font-size: 10.5px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5; }
+
+        .tg-cargo-groupall-title {
+            font-weight: 700;
+            font-size: 12px;
+            flex: 1 1 auto;
+        }
+
+        .tg-cargo-title {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .tg-cargo-sub {
+            font-size: 10.5px;
+            color: var(--text-muted);
+            margin: 0 0 12px;
+            line-height: 1.5;
+        }
+
         .tg-cargo-item-card {
             border: 1px solid var(--panel-border);
             border-radius: 7px;
@@ -291,42 +444,116 @@
             margin-bottom: 10px;
             background: var(--panel-bg);
         }
-        .tg-cargo-item-card:last-child { margin-bottom: 0; }
-        .tg-cargo-field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 10px; margin-top: 8px; }
-        .tg-modal-body.tg-side-layout .tg-cargo-field-grid { grid-template-columns: repeat(2, 1fr); }
+
+            .tg-cargo-item-card:last-child {
+                margin-bottom: 0;
+            }
+
+        .tg-cargo-field-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px 10px;
+            margin-top: 8px;
+        }
+
+        .tg-modal-body.tg-side-layout .tg-cargo-field-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
         /* Groups each cargo item's fields into labelled sub-sections
            (W/CoG, Length/Width/Height, Top/Side-view offsets, Height
            start/Gap), same "dashed divider between groups" language as
            .tg-cad-split-row uses in the 🚂 Generate Trailer card — see
            renderCargoList()'s tg-cargo-subgroup wrapper divs. First
            group has no divider (nothing above it to separate from). */
-        .tg-cargo-field-groups .tg-cargo-subgroup { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
-        .tg-cargo-field-groups .tg-cargo-subgroup:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+        .tg-cargo-field-groups .tg-cargo-subgroup {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--panel-border);
+        }
+
+            .tg-cargo-field-groups .tg-cargo-subgroup:first-child {
+                margin-top: 0;
+                padding-top: 0;
+                border-top: none;
+            }
+
         .tg-cargo-subgroup-title {
-            font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
-            color: var(--text-muted); margin-bottom: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
         }
+
         .tg-cargo-field label {
-            display: flex; align-items: center; gap: 3px;
-            font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
-            color: var(--text-muted); margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
         }
+
         .tg-cargo-field input, .tg-cargo-field select {
-            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
-            border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
+            width: 100%;
+            box-sizing: border-box;
+            padding: 6px 8px;
+            font-size: 12px;
+            border-radius: 5px;
+            border: 1px solid var(--panel-border);
+            background: var(--input-bg);
+            color: var(--text-main);
         }
-        .tg-cargo-field input:focus, .tg-cargo-field select:focus { outline: none; border-color: var(--accent-blue); }
-        .tg-cargo-field-local input, .tg-cargo-field-local select { border-style: dashed; }
-        .tg-cargo-field-readonly input { background: var(--panel-bg-alt, rgba(128,128,128,0.08)); color: var(--text-muted); cursor: default; }
+
+            .tg-cargo-field input:focus, .tg-cargo-field select:focus {
+                outline: none;
+                border-color: var(--accent-blue);
+            }
+
+        .tg-cargo-field-local input, .tg-cargo-field-local select {
+            border-style: dashed;
+        }
+
+        .tg-cargo-field-readonly input {
+            background: var(--panel-bg-alt, rgba(128,128,128,0.08));
+            color: var(--text-muted);
+            cursor: default;
+        }
+
         .tg-cargo-link-toggle {
-            display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted);
-            cursor: pointer; user-select: none; flex: 0 0 auto; white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+            flex: 0 0 auto;
+            white-space: nowrap;
         }
-        .tg-cargo-link-toggle input { cursor: pointer; }
-        .tg-cargo-link-toggle input:disabled { cursor: not-allowed; }
-        .tg-cargo-link-toggle.tg-cargo-link-active { color: var(--accent-green, #10b981); }
-        .tg-cargo-group-toggle.tg-cargo-group-active { color: var(--accent-blue, #38bdf8); }
+
+            .tg-cargo-link-toggle input {
+                cursor: pointer;
+            }
+
+                .tg-cargo-link-toggle input:disabled {
+                    cursor: not-allowed;
+                }
+
+            .tg-cargo-link-toggle.tg-cargo-link-active {
+                color: var(--accent-green, #10b981);
+            }
+
+        .tg-cargo-group-toggle.tg-cargo-group-active {
+            color: var(--accent-blue, #38bdf8);
+        }
 
         .tg-preview-wrap {
             border: 1px solid var(--panel-border);
@@ -344,30 +571,121 @@
            sheet's own blue title bar / bold sub-headers; a fully-blank
            row renders as a thin spacer instead of an empty data row,
            matching the sheet's blank rows between sections. */
-        .tg-drawing-table-wrap { overflow-x: auto; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel-bg); }
-        table.tg-drawing-table { width: 100%; border-collapse: collapse; font-size: 10.5px; color: var(--text-main); }
-        table.tg-drawing-table td { padding: 3px 8px; border-bottom: 1px solid var(--panel-border); white-space: nowrap; }
-        table.tg-drawing-table td:first-child { width: 34%; text-align: left; color: var(--text-muted); white-space: normal; }
-        table.tg-drawing-table td:not(:first-child) { text-align: center; }
-        table.tg-drawing-table tr.tg-dt-bold td { font-weight: 700; color: var(--text-main); background: var(--tank-box-bg); }
-        table.tg-drawing-table tr.tg-dt-title td {
-            text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 1px;
-            padding: 8px; color: #ffffff; background: var(--accent-blue, #009fda); border-bottom: none;
+        .tg-drawing-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            background: var(--panel-bg);
         }
-        table.tg-drawing-table tr.tg-dt-spacer td { padding: 3px; border-bottom: none; }
-        /* Pass/fail "sign" cells (e.g. OK / NOT OK / PASS / FAIL) —
+
+        table.tg-drawing-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10.5px;
+            color: var(--text-main);
+        }
+
+            table.tg-drawing-table td {
+                padding: 3px 8px;
+                border-bottom: 1px solid var(--panel-border);
+                white-space: nowrap;
+            }
+
+                table.tg-drawing-table td:first-child {
+                    width: 34%;
+                    text-align: left;
+                    color: var(--text-muted);
+                    white-space: normal;
+                }
+
+                table.tg-drawing-table td:not(:first-child) {
+                    text-align: center;
+                }
+
+            table.tg-drawing-table tr.tg-dt-bold td {
+                font-weight: 700;
+                color: var(--text-main);
+                background: var(--tank-box-bg);
+            }
+
+            table.tg-drawing-table tr.tg-dt-title td {
+                text-align: center;
+                font-size: 15px;
+                font-weight: 700;
+                letter-spacing: 1px;
+                padding: 8px;
+                color: #ffffff;
+                background: var(--accent-blue, #009fda);
+                border-bottom: none;
+            }
+
+            table.tg-drawing-table tr.tg-dt-spacer td {
+                padding: 3px;
+                border-bottom: none;
+            }
+            /* Pass/fail "sign" cells (e.g. OK / NOT OK / PASS / FAIL) —
            colored so a failing check jumps out from the rest of the
            table. See cellStatusClass() in renderTgDrawingTable(). */
-        table.tg-drawing-table td.tg-dt-ok { color: var(--accent-green); font-weight: 700; }
-        table.tg-drawing-table td.tg-dt-notok { color: #ef4444; font-weight: 700; background: rgba(239, 68, 68, 0.14); }
-        .tg-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 0 6px 6px; }
-        .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
-        .tg-preview-toggle input { cursor: pointer; }
-        .tg-preview-toggles-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-        .tg-preview-external-note { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-muted); font-style: italic; }
+            table.tg-drawing-table td.tg-dt-ok {
+                color: var(--accent-green);
+                font-weight: 700;
+            }
 
-        #tgPreview { overflow: auto; max-height: 70vh; position: relative; cursor: default; }
-        #tgPreview.tg-magnifier-active { cursor: crosshair; }
+            table.tg-drawing-table td.tg-dt-notok {
+                color: #ef4444;
+                font-weight: 700;
+                background: rgba(239, 68, 68, 0.14);
+            }
+
+        .tg-preview-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            padding: 0 6px 6px;
+        }
+
+        .tg-preview-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+        }
+
+            .tg-preview-toggle input {
+                cursor: pointer;
+            }
+
+        .tg-preview-toggles-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .tg-preview-external-note {
+            padding: 18px 10px;
+            text-align: center;
+            font-size: 11.5px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        #tgPreview {
+            overflow: auto;
+            max-height: 70vh;
+            position: relative;
+            cursor: default;
+        }
+
+            #tgPreview.tg-magnifier-active {
+                cursor: crosshair;
+            }
 
         /* 🔍 Magnifier — a floating rectangular lens that follows the
            cursor over #tgPreview, showing a zoomed-in clone of the
@@ -377,7 +695,8 @@
         .tg-magnifier-lens {
             display: none;
             position: fixed;
-            width: 220px; height: 220px;
+            width: 220px;
+            height: 220px;
             border-radius: 8px;
             border: 2px solid var(--accent-blue, #38bdf8);
             box-shadow: 0 6px 20px rgba(0,0,0,0.45);
@@ -386,14 +705,29 @@
             background: var(--bg-dark, #0b1220);
             z-index: 2000;
         }
-        .tg-magnifier-lens > div { position: absolute; top: 0; left: 0; }
+
+            .tg-magnifier-lens > div {
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
 
         /* Stacked Top / Side / End view sections in the preview panel. */
-        .tg-view-section { margin-bottom: 4px; }
-        .tg-view-section:last-child { margin-bottom: 0; }
+        .tg-view-section {
+            margin-bottom: 4px;
+        }
+
+            .tg-view-section:last-child {
+                margin-bottom: 0;
+            }
+
         .tg-view-section-label {
-            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-            color: var(--text-muted); padding: 0 6px 4px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            padding: 0 6px 4px;
         }
         /* Horizontal Loads readout — its own stacked panel under the 2D
            preview (plan + elevation), replacing the small fixed overlay
@@ -406,20 +740,31 @@
             border-radius: 10px;
             padding: 10px 12px;
         }
+
         .tg-hloads-panel-title {
-            font-size: 12px; font-weight: 700; color: var(--text-main, #e2e8f0);
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-main, #e2e8f0);
             margin-bottom: 8px;
         }
+
         .tg-hloads-panel-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 6px 12px;
         }
+
         .tg-hloads-panel-row {
-            font-size: 11px; color: var(--text-muted, #94a3b8);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-size: 11px;
+            color: var(--text-muted, #94a3b8);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        .tg-hloads-panel-icon { margin-right: 4px; }
+
+        .tg-hloads-panel-icon {
+            margin-right: 4px;
+        }
         /* Orientation cube overlaid in the top-left corner of the whole
            preview (plan + elevation stack), instead of taking up its
            own stacked section or being scoped to just the plan view.
@@ -437,10 +782,13 @@
            (680px, matching the plan view's own design viewBox) still
            renders at the original size. */
         .tg-orient-cube-overlay {
-            position: absolute; top: 4px; right: 4px;
+            position: absolute;
+            top: 4px;
+            right: 4px;
             transform: scale(calc(0.475 * var(--tg-orient-scale, 1)));
             transform-origin: top right;
-            pointer-events: none; z-index: 3;
+            pointer-events: none;
+            z-index: 3;
         }
         /* "Unit: mm." moved out of the top-view section's own label row
            and pinned to the top-left corner of the whole preview
@@ -449,9 +797,16 @@
            the elevation view as the container narrows, but floors at 75%
            so the text stays legible instead of shrinking indefinitely. */
         .tg-unit-label-overlay {
-            position: absolute; top: 4px; left: 8px;
-            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-            color: var(--text-muted); pointer-events: none; z-index: 3;
+            position: absolute;
+            top: 4px;
+            left: 8px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            pointer-events: none;
+            z-index: 3;
             transform: scale(max(0.75, var(--tg-orient-scale, 1)));
             transform-origin: top left;
         }
@@ -473,65 +828,179 @@
             margin-bottom: 14px;
             background: var(--tank-box-bg);
         }
-        .tg-3d-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 0 6px 8px; }
-        .tg-3d-cam-btns { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-        .tg-3d-btn {
-            padding: 4px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
-            border-radius: 5px; border: 1px solid var(--panel-border); background: var(--panel-bg); color: var(--text-muted);
-            cursor: pointer; white-space: nowrap;
+
+        .tg-3d-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 0 6px 8px;
         }
-        .tg-3d-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
-        .tg-3d-btn.tg-3d-btn-active { border-color: var(--accent-blue); color: var(--accent-blue); }
-        .tg-3d-lock-btn { background: rgba(16,185,129,0.12); border-color: #10b981; color: #10b981; }
-        .tg-3d-lock-btn.tg-3d-locked { background: rgba(239,68,68,0.12); border-color: #ef4444; color: #ef4444; }
-        #tgViewer3dWrap { position: relative; width: 100%; height: 420px; border-radius: 8px; overflow: hidden; background: #0f1115; }
-        #tgViewer3d { width: 100%; height: 100%; }
-        #tgLabels3d { position: absolute; inset: 0; pointer-events: none; }
+
+        .tg-3d-cam-btns {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .tg-3d-btn {
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            border-radius: 5px;
+            border: 1px solid var(--panel-border);
+            background: var(--panel-bg);
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+            .tg-3d-btn:hover {
+                border-color: var(--accent-blue);
+                color: var(--text-main);
+            }
+
+            .tg-3d-btn.tg-3d-btn-active {
+                border-color: var(--accent-blue);
+                color: var(--accent-blue);
+            }
+
+        .tg-3d-lock-btn {
+            background: rgba(16,185,129,0.12);
+            border-color: #10b981;
+            color: #10b981;
+        }
+
+            .tg-3d-lock-btn.tg-3d-locked {
+                background: rgba(239,68,68,0.12);
+                border-color: #ef4444;
+                color: #ef4444;
+            }
+
+        #tgViewer3dWrap {
+            position: relative;
+            width: 100%;
+            height: 420px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #0f1115;
+        }
+
+        #tgViewer3d {
+            width: 100%;
+            height: 100%;
+        }
+
+        #tgLabels3d {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
         .tg-3d-label {
-            position: absolute; transform: translate(-50%, -50%);
-            font-size: 10.5px; font-weight: 700; white-space: nowrap;
-            padding: 2px 7px 2px 6px; border-radius: 4px;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            font-size: 10.5px;
+            font-weight: 700;
+            white-space: nowrap;
+            padding: 2px 7px 2px 6px;
+            border-radius: 4px;
             background: rgba(8,10,14,0.9);
             color: #f4f6f8;
             border-left: 3px solid var(--lbl-color, #94a3b8);
             box-shadow: 0 1px 4px rgba(0,0,0,0.55);
             text-shadow: none;
         }
-        .tg-3d-hint { font-size: 10px; color: var(--text-muted); padding: 4px 8px 0; opacity: 0.75; }
+
+        .tg-3d-hint {
+            font-size: 10px;
+            color: var(--text-muted);
+            padding: 4px 8px 0;
+            opacity: 0.75;
+        }
 
         /* Group detail legend — shown below the preview instead of the
            on-canvas labels when "Show group label in preview" is off.
            Each row is tinted in its own group's color to keep the same
            at-a-glance color mapping that the on-canvas labels gave. */
-        .tg-preview-group-details { padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 4px; }
+        .tg-preview-group-details {
+            padding: 4px 8px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
         .tg-preview-group-detail-row {
-            font-size: 10.5px; font-weight: 600; padding: 4px 8px; border-radius: 5px;
-            border-left: 3px solid; background: var(--panel-bg);
+            font-size: 10.5px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 5px;
+            border-left: 3px solid;
+            background: var(--panel-bg);
         }
 
         .tg-remove-train {
-            background: none; border: 1px solid var(--panel-border); color: #ef4444;
-            border-radius: 6px; width: 26px; height: 26px; cursor: pointer; flex: 0 0 auto;
+            background: none;
+            border: 1px solid var(--panel-border);
+            color: #ef4444;
+            border-radius: 6px;
+            width: 26px;
+            height: 26px;
+            cursor: pointer;
+            flex: 0 0 auto;
         }
-        .tg-remove-train:hover { border-color: #ef4444; }
 
-        .tg-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; }
+            .tg-remove-train:hover {
+                border-color: #ef4444;
+            }
+
+        .tg-field-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px 10px;
+        }
+
         .tg-field label {
-            display: flex; align-items: center; gap: 3px;
-            font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
-            color: var(--text-muted); margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
         }
+
         .tg-field input {
-            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
-            border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
+            width: 100%;
+            box-sizing: border-box;
+            padding: 6px 8px;
+            font-size: 12px;
+            border-radius: 5px;
+            border: 1px solid var(--panel-border);
+            background: var(--input-bg);
+            color: var(--text-main);
         }
-        .tg-field input:focus { outline: none; border-color: var(--accent-blue); }
+
+            .tg-field input:focus {
+                outline: none;
+                border-color: var(--accent-blue);
+            }
         /* Pull-only (Excel-computed, never editable here) look — same
            greyed-out styling as .tg-cargo-field-readonly (the "Move All
            Cargo Together" fields when Group All is unchecked), reused
            here so every "pulled from Excel, can't edit" field looks the
            same regardless of which panel it's in. */
-        .tg-field-readonly input { background: var(--panel-bg-alt, rgba(128,128,128,0.08)); color: var(--text-muted); cursor: default; }
+        .tg-field-readonly input {
+            background: var(--panel-bg-alt, rgba(128,128,128,0.08));
+            color: var(--text-muted);
+            cursor: default;
+        }
 
         /* Small pull-from-Excel button shown next to the X offset / Y
            offset labels (Train 1-10 only — see offsetCellForTrainIndex).
@@ -552,73 +1021,242 @@
             color: var(--accent-blue);
             cursor: pointer;
         }
-        .tg-xy-sync-btn:hover { border-color: var(--accent-blue); background: var(--accent-blue); color: #06202e; }
 
-        .tg-train-summary { margin-top: 8px; font-size: 10.5px; color: var(--text-muted); }
+            .tg-xy-sync-btn:hover {
+                border-color: var(--accent-blue);
+                background: var(--accent-blue);
+                color: #06202e;
+            }
 
-        .tg-cad-split-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
-        .tg-cad-split-row label {
-            display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
-            color: var(--text-muted); margin-bottom: 3px;
+        .tg-train-summary {
+            margin-top: 8px;
+            font-size: 10.5px;
+            color: var(--text-muted);
         }
-        .tg-cad-split-row input {
-            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
-            border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
+
+        .tg-cad-split-row {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--panel-border);
         }
-        .tg-cad-split-row input:focus { outline: none; border-color: var(--accent-blue); }
-        .tg-cad-split-input-row { display: flex; gap: 6px; align-items: stretch; }
-        .tg-cad-split-input-row input { width: auto; flex: 1 1 auto; min-width: 0; }
+
+            .tg-cad-split-row label {
+                display: block;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+                color: var(--text-muted);
+                margin-bottom: 3px;
+            }
+
+            .tg-cad-split-row input {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 6px 8px;
+                font-size: 12px;
+                border-radius: 5px;
+                border: 1px solid var(--panel-border);
+                background: var(--input-bg);
+                color: var(--text-main);
+            }
+
+                .tg-cad-split-row input:focus {
+                    outline: none;
+                    border-color: var(--accent-blue);
+                }
+
+        .tg-cad-split-input-row {
+            display: flex;
+            gap: 6px;
+            align-items: stretch;
+        }
+
+            .tg-cad-split-input-row input {
+                width: auto;
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
         .tg-cad-split-auto-btn {
-            flex: 0 0 auto; padding: 6px 10px; font-size: 11px; font-weight: 700; border-radius: 5px;
-            border: 1px solid var(--accent-blue); background: transparent; color: var(--accent-blue);
-            cursor: pointer; white-space: nowrap;
+            flex: 0 0 auto;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 5px;
+            border: 1px solid var(--accent-blue);
+            background: transparent;
+            color: var(--accent-blue);
+            cursor: pointer;
+            white-space: nowrap;
         }
-        .tg-cad-split-auto-btn:hover { background: var(--accent-blue); color: #06202e; }
-        .tg-cad-split-status { margin-top: 5px; font-size: 10.5px; color: var(--text-muted); }
-        .tg-cad-split-status.tg-cad-split-error { color: #ef4444; }
+
+            .tg-cad-split-auto-btn:hover {
+                background: var(--accent-blue);
+                color: #06202e;
+            }
+
+        .tg-cad-split-status {
+            margin-top: 5px;
+            font-size: 10.5px;
+            color: var(--text-muted);
+        }
+
+            .tg-cad-split-status.tg-cad-split-error {
+                color: #ef4444;
+            }
 
         .tg-add-train-btn {
-            width: 100%; padding: 10px; border: 1px dashed var(--panel-border); background: transparent;
-            color: var(--accent-blue); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; margin-bottom: 14px;
+            width: 100%;
+            padding: 10px;
+            border: 1px dashed var(--panel-border);
+            background: transparent;
+            color: var(--accent-blue);
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-bottom: 14px;
         }
-        .tg-add-train-btn:hover { border-color: var(--accent-blue); }
-        .tg-train-list-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
-        .tg-train-list-actions .tg-add-train-btn { width: auto; flex: 1 1 50%; margin-bottom: 0; }
+
+            .tg-add-train-btn:hover {
+                border-color: var(--accent-blue);
+            }
+
+        .tg-train-list-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+            .tg-train-list-actions .tg-add-train-btn {
+                width: auto;
+                flex: 1 1 50%;
+                margin-bottom: 0;
+            }
 
         .tg-totals {
-            font-size: 11.5px; color: var(--text-muted); background: var(--tank-box-bg);
-            border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px; margin-bottom: 14px;
+            font-size: 11.5px;
+            color: var(--text-muted);
+            background: var(--tank-box-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 14px;
         }
-        .tg-totals strong { color: var(--text-main); }
-        .tg-totals.tg-totals-error { color: #ef4444; border-color: #ef4444; }
 
-        .tg-groups-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin: 12px 0 6px; }
-        .tg-group-row { border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; background: var(--panel-bg); }
-        .tg-group-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-        .tg-group-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0,0,0,0.25); }
+            .tg-totals strong {
+                color: var(--text-main);
+            }
+
+            .tg-totals.tg-totals-error {
+                color: #ef4444;
+                border-color: #ef4444;
+            }
+
+        .tg-groups-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--text-muted);
+            margin: 12px 0 6px;
+        }
+
+        .tg-group-row {
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            background: var(--panel-bg);
+        }
+
+        .tg-group-row-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .tg-group-swatch {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex: 0 0 auto;
+            border: 1px solid rgba(0,0,0,0.25);
+        }
+
         .tg-group-name-input {
-            flex: 1 1 auto; font-weight: 700; font-size: 12px; padding: 5px 6px; border-radius: 5px;
-            border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
+            flex: 1 1 auto;
+            font-weight: 700;
+            font-size: 12px;
+            padding: 5px 6px;
+            border-radius: 5px;
+            border: 1px solid var(--panel-border);
+            background: var(--input-bg);
+            color: var(--text-main);
         }
-        .tg-group-name-input:focus { outline: none; border-color: var(--accent-blue); }
-        .tg-remove-group {
-            background: none; border: 1px solid var(--panel-border); color: #ef4444; border-radius: 5px;
-            width: 22px; height: 22px; font-size: 11px; cursor: pointer; flex: 0 0 auto;
-        }
-        .tg-remove-group:hover { border-color: #ef4444; }
-        .tg-group-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px 10px; }
-        .tg-group-field label {
-            display: block; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
-            color: var(--text-muted); margin-bottom: 3px;
-        }
-        .tg-group-field input, .tg-group-field select {
-            width: 100%; box-sizing: border-box; padding: 5px 6px; font-size: 11.5px; border-radius: 5px;
-            border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
-        }
-        .tg-group-field input:disabled { opacity: 0.45; }
-        .tg-group-field input:focus, .tg-group-field select:focus { outline: none; border-color: var(--accent-blue); }
 
-        /* ---- Pull-only field styling (Excel-calculated, no editing
+            .tg-group-name-input:focus {
+                outline: none;
+                border-color: var(--accent-blue);
+            }
+
+        .tg-remove-group {
+            background: none;
+            border: 1px solid var(--panel-border);
+            color: #ef4444;
+            border-radius: 5px;
+            width: 22px;
+            height: 22px;
+            font-size: 11px;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+
+            .tg-remove-group:hover {
+                border-color: #ef4444;
+            }
+
+        .tg-group-field-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 6px 10px;
+        }
+
+        .tg-group-field label {
+            display: block;
+            font-size: 9.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--text-muted);
+            margin-bottom: 3px;
+        }
+
+        .tg-group-field input, .tg-group-field select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 5px 6px;
+            font-size: 11.5px;
+            border-radius: 5px;
+            border: 1px solid var(--panel-border);
+            background: var(--input-bg);
+            color: var(--text-main);
+        }
+
+            .tg-group-field input:disabled {
+                opacity: 0.45;
+            }
+
+            .tg-group-field input:focus, .tg-group-field select:focus {
+                outline: none;
+                border-color: var(--accent-blue);
+            }
+
+            /* ---- Pull-only field styling (Excel-calculated, no editing
            here) — unified with .tg-cargo-field-readonly / .tg-field-
            readonly above, so every "pulled from Excel, can't edit here"
            field (Generate Trailer's Load per axle, Horizontal Loads'
@@ -627,41 +1265,94 @@
            of each panel inventing its own. The label stays a normal
            .tg-group-field label (muted, no colored badge) — only the
            input gets the readonly treatment. ---- */
-        .tg-group-field input.tg-group-field-readonly-input {
-            background: var(--panel-bg-alt, rgba(128,128,128,0.08));
+            .tg-group-field input.tg-group-field-readonly-input {
+                background: var(--panel-bg-alt, rgba(128,128,128,0.08));
+                color: var(--text-muted);
+                cursor: default;
+            }
+
+        .tg-group-summary {
+            margin-top: 6px;
+            font-size: 10px;
             color: var(--text-muted);
-            cursor: default;
         }
-        .tg-group-summary { margin-top: 6px; font-size: 10px; color: var(--text-muted); }
+
         .tg-add-group-btn {
-            width: 100%; padding: 6px; border: 1px dashed var(--panel-border); background: transparent;
-            color: var(--accent-blue); border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; margin-bottom: 4px;
+            width: 100%;
+            padding: 6px;
+            border: 1px dashed var(--panel-border);
+            background: transparent;
+            color: var(--accent-blue);
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-bottom: 4px;
         }
-        .tg-add-group-btn:hover { border-color: var(--accent-blue); }
 
-        .tg-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px; }
-        .tg-footer .tg-btn-primary { background: var(--accent-blue); border-color: var(--accent-blue); color: #06202e; }
+            .tg-add-group-btn:hover {
+                border-color: var(--accent-blue);
+            }
 
-        .tg-log { font-size: 11px; color: var(--text-muted); background: var(--tank-box-bg); border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px; margin-top: 10px; max-height: 110px; overflow-y: auto; }
-        .tg-log div { padding: 2px 0; }
+        .tg-footer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+            .tg-footer .tg-btn-primary {
+                background: var(--accent-blue);
+                border-color: var(--accent-blue);
+                color: #06202e;
+            }
+
+        .tg-log {
+            font-size: 11px;
+            color: var(--text-muted);
+            background: var(--tank-box-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-top: 10px;
+            max-height: 110px;
+            overflow-y: auto;
+        }
+
+            .tg-log div {
+                padding: 2px 0;
+            }
 
         /* ---- Push/Refresh button sync-in-progress indicator ---- */
         /* Applied to a button while its own push/pull to Excel is in
            flight (see setBtnSyncing/flashBtnResult), independent of the
            header's global "autoSyncStatus" text. */
-        @keyframes tgBtnSyncPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+        @keyframes tgBtnSyncPulse {
+            0%, 100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.55;
+            }
+        }
+
         .tg-add-train-btn.tg-btn-syncing, .tg-lc-push-btn.tg-btn-syncing {
             background: #eab308 !important;
             border-color: #eab308 !important;
             color: #3a2c00 !important;
             animation: tgBtnSyncPulse 0.9s ease-in-out infinite;
         }
+
         .tg-add-train-btn.tg-btn-flash-ok, .tg-lc-push-btn.tg-btn-flash-ok {
             background: var(--accent-green) !important;
             border-color: var(--accent-green) !important;
             color: #06202e !important;
             transition: background 0.15s ease, border-color 0.15s ease;
         }
+
         .tg-add-train-btn.tg-btn-flash-err, .tg-lc-push-btn.tg-btn-flash-err {
             background: #ef4444 !important;
             border-color: #ef4444 !important;
@@ -673,19 +1364,28 @@
            sits inline in a table cell instead of looking like a full
            toolbar button. Shares the sync/flash states above. */
         .tg-lc-push-btn {
-            font-size: 10px; padding: 1px 5px; margin-left: 4px;
-            line-height: 1.5; border-radius: 4px; vertical-align: middle;
-            border: 1px solid var(--panel-border); background: var(--tank-box-bg);
-            color: var(--text-main); cursor: pointer;
+            font-size: 10px;
+            padding: 1px 5px;
+            margin-left: 4px;
+            line-height: 1.5;
+            border-radius: 4px;
+            vertical-align: middle;
+            border: 1px solid var(--panel-border);
+            background: var(--tank-box-bg);
+            color: var(--text-main);
+            cursor: pointer;
         }
-        .tg-lc-push-btn:hover { border-color: var(--accent-blue, #38bdf8); }
+
+            .tg-lc-push-btn:hover {
+                border-color: var(--accent-blue, #38bdf8);
+            }
     </style>
 </head>
 <body>
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75.14)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75.15)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -718,73 +1418,73 @@
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
                         <p class="tg-modal-sub" id="tgHelpPanel">
-                Set <strong>Number of trains</strong> and <strong>Number of Hydraulic Groups</strong>
-                at the top of the train list to size the dashboard: e.g. Number of trains = 2 gives
-                you 2 trains, Number of Hydraulic Groups = 3 gives EVERY train 3 axle groups (max
-                4, since there are only 4 fixed groups). Both are kept in sync with Excel sheet
-                <strong>"Input"</strong>, cells <strong>B1</strong> (Number of trains) and
-                <strong>B2</strong> (Number of Hydraulic Groups): editing either here writes it
-                straight to Excel, and the ⇩ button pulls the latest value back in and resizes the
-                dashboard to match. Define one or more trailer trains. Axle #1 of each train sits at the entered
-                <strong>X offset</strong> — the distance from the barge's origin (0,0) to the
-                top-left corner of the trailer; every following axle = previous axle's X &minus;
-                line spacing, all sharing the same <strong>Y offset</strong> — the distance from
-                origin (0,0) to the top-left corner of the trailer along Y. X offset and
-                Y offset are kept in sync with Excel sheet <strong>"Input"</strong>, cells
-                <strong>B5</strong> (X offset) and <strong>B6</strong> (Y offset): editing either
-                field here writes it straight to Excel, and the ⇩ button next to each label pulls
-                the latest value back in. New trains start with the same line spacing and X/Y
-                offset as the trailer above them. Split each train's axle-line range into
-                <strong>axle groups</strong> (e.g. axle lines 1&ndash;5 @ 25&nbsp;t, axle lines
-                6&ndash;10 @ 50&nbsp;t) and pick one of the <strong>4 fixed groups</strong> for
-                each range from the dropdown &mdash; or mark a group <strong>No line load</strong>
-                for axles that carry no cargo weight. For a Goldhofer or SPMT preset trailer, each
-                axle line is really a pair of physical axles (a right axle and a left axle sitting
-                opposite each other) &mdash; use each group's <strong>Axle row</strong> field to
-                apply that group to <strong>both</strong> axles, the <strong>right axle only</strong>,
-                or the <strong>left axle only</strong>, so e.g. a 6-line/12-axle Goldhofer can have
-                columns 1&ndash;2 in one group (both rows) while columns 3&ndash;6's right axles sit
-                in a second group and their left axles sit in a third. If a train is actually made up of several separate physical
-                SPMT units (e.g. a 10-line train built from a 4-line unit followed by a 6-line
-                unit), use that train's <strong>AutoCAD split</strong> field to enter the axle-line
-                count per unit, front&nbsp;&rarr;&nbsp;back (e.g. <em>4,6</em>) &mdash; each unit
-                then gets its own AutoCAD block insert on export, instead of one block for the
-                whole train; leave it blank for the old one-block-per-train behavior. Rows are
-                written to <strong>Load_Editor!B</strong> (name, e.g. <em>Group_1_line_1</em>) and
-                <strong>D:G</strong> starting at row <strong id="tgStartRowLabel">124</strong>
-                (D&nbsp;=&nbsp;Line load t, E&nbsp;=&nbsp;X, F&nbsp;=&nbsp;Y, G&nbsp;=&nbsp;VCG).
-                <strong>"📤 Push to Excel"</strong> writes each axle LINE's X/Y
-                position and group number (no load/VCG) to sheet <strong>Adjust_Wheels</strong>,
-                with axle lines as rows (A4&nbsp;=&nbsp;Line&nbsp;1 … A123&nbsp;=&nbsp;Line&nbsp;120)
-                and one 6&#8209;column block per train (Train&nbsp;1&nbsp;=&nbsp;B:G, Train&nbsp;2&nbsp;=&nbsp;H:M,
-                Train&nbsp;3&nbsp;=&nbsp;N:S, …: left x-pos/y-pos/Group then right x-pos/y-pos/Group), and in
-                the same click also writes each train's AutoCAD split segments to
-                <strong>Input!A11:C30</strong> (row 10 = "Set Train Group"): one row per split segment
-                (or one row for the whole train if AutoCAD split is blank), column A/D/G/… = split
-                type (e.g. <em>GHF 4</em>), and the next two columns = that segment's first axle
-                line's Group Nr for the left and right axle respectively — 3 columns per train,
-                Train 1 = A:C, Train 2 = D:F, and so on through Train 10. The same click also
-                writes each linked train's X offset/Y offset to <strong>Input</strong> (Train&nbsp;1
-                = B5/B6, Train&nbsp;2 = E5/E6, Train&nbsp;3 = H5/H6, … through Train 10) — this is
-                the only time those cells are pushed to (they're only ever pulled automatically on
-                panel open/refresh, never on every edit).
-                <strong>Adjust_Wheels stores axle-CENTER positions</strong> (distance from origin
-                0,0 to the center of each axle), which is different from X offset/Y offset (distance
-                from 0,0 to the trailer deck's <strong>top-left corner</strong>) — the preview's
-                dimension callouts show both. "⇩ Refresh from Adjust_Wheels" reads the axle grid
-                back the other way; every linked train's (Train 1-10) X offset/Y offset is then
-                re-linked to its own <strong>Input</strong> cell pair (Train&nbsp;1&nbsp;=&nbsp;B5/B6,
-                Train&nbsp;2&nbsp;=&nbsp;E5/E6, Train&nbsp;3&nbsp;=&nbsp;H5/H6, … 3 columns apart)
-                rather than left as a raw axle position, so it stays the deck-corner value
-                everywhere. Editing X offset/Y offset on the dashboard is always picked up
-                automatically the next time you push, since nothing is cached.
-                This same read also runs automatically the first time the panel opens (and on every
-                refresh) whenever <strong>Adjust_Wheels</strong> isn't blank. While reading, each
-                train's <strong>Trailer type</strong> is auto-detected from the spacing between its
-                axle lines: exactly <strong>1500&nbsp;mm</strong> &rarr; Goldhofer, exactly
-                <strong>1400&nbsp;mm</strong> &rarr; SPMT (anything else stays Custom / Manual), and
-                its axle-line count is taken directly from how many <em>Line N</em> rows that
-                train's block has in Adjust_Wheels.
+                            Set <strong>Number of trains</strong> and <strong>Number of Hydraulic Groups</strong>
+                            at the top of the train list to size the dashboard: e.g. Number of trains = 2 gives
+                            you 2 trains, Number of Hydraulic Groups = 3 gives EVERY train 3 axle groups (max
+                            4, since there are only 4 fixed groups). Both are kept in sync with Excel sheet
+                            <strong>"Input"</strong>, cells <strong>B1</strong> (Number of trains) and
+                            <strong>B2</strong> (Number of Hydraulic Groups): editing either here writes it
+                            straight to Excel, and the ⇩ button pulls the latest value back in and resizes the
+                            dashboard to match. Define one or more trailer trains. Axle #1 of each train sits at the entered
+                            <strong>X offset</strong> — the distance from the barge's origin (0,0) to the
+                            top-left corner of the trailer; every following axle = previous axle's X &minus;
+                            line spacing, all sharing the same <strong>Y offset</strong> — the distance from
+                            origin (0,0) to the top-left corner of the trailer along Y. X offset and
+                            Y offset are kept in sync with Excel sheet <strong>"Input"</strong>, cells
+                            <strong>B5</strong> (X offset) and <strong>B6</strong> (Y offset): editing either
+                            field here writes it straight to Excel, and the ⇩ button next to each label pulls
+                            the latest value back in. New trains start with the same line spacing and X/Y
+                            offset as the trailer above them. Split each train's axle-line range into
+                            <strong>axle groups</strong> (e.g. axle lines 1&ndash;5 @ 25&nbsp;t, axle lines
+                            6&ndash;10 @ 50&nbsp;t) and pick one of the <strong>4 fixed groups</strong> for
+                            each range from the dropdown &mdash; or mark a group <strong>No line load</strong>
+                            for axles that carry no cargo weight. For a Goldhofer or SPMT preset trailer, each
+                            axle line is really a pair of physical axles (a right axle and a left axle sitting
+                            opposite each other) &mdash; use each group's <strong>Axle row</strong> field to
+                            apply that group to <strong>both</strong> axles, the <strong>right axle only</strong>,
+                            or the <strong>left axle only</strong>, so e.g. a 6-line/12-axle Goldhofer can have
+                            columns 1&ndash;2 in one group (both rows) while columns 3&ndash;6's right axles sit
+                            in a second group and their left axles sit in a third. If a train is actually made up of several separate physical
+                            SPMT units (e.g. a 10-line train built from a 4-line unit followed by a 6-line
+                            unit), use that train's <strong>AutoCAD split</strong> field to enter the axle-line
+                            count per unit, front&nbsp;&rarr;&nbsp;back (e.g. <em>4,6</em>) &mdash; each unit
+                            then gets its own AutoCAD block insert on export, instead of one block for the
+                            whole train; leave it blank for the old one-block-per-train behavior. Rows are
+                            written to <strong>Load_Editor!B</strong> (name, e.g. <em>Group_1_line_1</em>) and
+                            <strong>D:G</strong> starting at row <strong id="tgStartRowLabel">124</strong>
+                            (D&nbsp;=&nbsp;Line load t, E&nbsp;=&nbsp;X, F&nbsp;=&nbsp;Y, G&nbsp;=&nbsp;VCG).
+                            <strong>"📤 Push to Excel"</strong> writes each axle LINE's X/Y
+                            position and group number (no load/VCG) to sheet <strong>Adjust_Wheels</strong>,
+                            with axle lines as rows (A4&nbsp;=&nbsp;Line&nbsp;1 … A123&nbsp;=&nbsp;Line&nbsp;120)
+                            and one 6&#8209;column block per train (Train&nbsp;1&nbsp;=&nbsp;B:G, Train&nbsp;2&nbsp;=&nbsp;H:M,
+                            Train&nbsp;3&nbsp;=&nbsp;N:S, …: left x-pos/y-pos/Group then right x-pos/y-pos/Group), and in
+                            the same click also writes each train's AutoCAD split segments to
+                            <strong>Input!A11:C30</strong> (row 10 = "Set Train Group"): one row per split segment
+                            (or one row for the whole train if AutoCAD split is blank), column A/D/G/… = split
+                            type (e.g. <em>GHF 4</em>), and the next two columns = that segment's first axle
+                            line's Group Nr for the left and right axle respectively — 3 columns per train,
+                            Train 1 = A:C, Train 2 = D:F, and so on through Train 10. The same click also
+                            writes each linked train's X offset/Y offset to <strong>Input</strong> (Train&nbsp;1
+                            = B5/B6, Train&nbsp;2 = E5/E6, Train&nbsp;3 = H5/H6, … through Train 10) — this is
+                            the only time those cells are pushed to (they're only ever pulled automatically on
+                            panel open/refresh, never on every edit).
+                            <strong>Adjust_Wheels stores axle-CENTER positions</strong> (distance from origin
+                            0,0 to the center of each axle), which is different from X offset/Y offset (distance
+                            from 0,0 to the trailer deck's <strong>top-left corner</strong>) — the preview's
+                            dimension callouts show both. "⇩ Refresh from Adjust_Wheels" reads the axle grid
+                            back the other way; every linked train's (Train 1-10) X offset/Y offset is then
+                            re-linked to its own <strong>Input</strong> cell pair (Train&nbsp;1&nbsp;=&nbsp;B5/B6,
+                            Train&nbsp;2&nbsp;=&nbsp;E5/E6, Train&nbsp;3&nbsp;=&nbsp;H5/H6, … 3 columns apart)
+                            rather than left as a raw axle position, so it stays the deck-corner value
+                            everywhere. Editing X offset/Y offset on the dashboard is always picked up
+                            automatically the next time you push, since nothing is cached.
+                            This same read also runs automatically the first time the panel opens (and on every
+                            refresh) whenever <strong>Adjust_Wheels</strong> isn't blank. While reading, each
+                            train's <strong>Trailer type</strong> is auto-detected from the spacing between its
+                            axle lines: exactly <strong>1500&nbsp;mm</strong> &rarr; Goldhofer, exactly
+                            <strong>1400&nbsp;mm</strong> &rarr; SPMT (anything else stays Custom / Manual), and
+                            its axle-line count is taken directly from how many <em>Line N</em> rows that
+                            train's block has in Adjust_Wheels.
                         </p>
 
                         <div id="tgGlobalSettings"><!-- Number of trains / Number of Hydraulic Groups rendered by JS --></div>
@@ -794,9 +1494,13 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
                             <button type="button" class="tg-add-train-btn" id="tgRefreshWheelsBtn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
-                                    onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
+                                    onclick="pullWheelDataFromExcel()">
+                                ⇩ Refresh from Adjust_Wheels
+                            </button>
                             <button type="button" class="tg-add-train-btn" id="tgPushWheelsBtn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
-                                    onclick="pushDataToExcel()">📤 Push to Excel</button>
+                                    onclick="pushDataToExcel()">
+                                📤 Push to Excel
+                            </button>
                         </div>
                     </div>
 
@@ -816,8 +1520,10 @@
                             origin the trailer's X offset/Y offset use, just in meters instead of mm — and
                             <strong>Z</strong> is the CoG <strong>height above the trailer deck</strong>.
                             <strong>Length</strong>, <strong>Width</strong>, and <strong>Height</strong> size the
-                            box drawn in the preview, and <strong>CoG to Left</strong>/<strong>CoG to
-                            Rear</strong>/<strong>CoG to Bottom</strong> position that box — each is the distance
+                            box drawn in the preview, and <strong>CoG to Left</strong>/<strong>
+                                CoG to
+                                Rear
+                            </strong>/<strong>CoG to Bottom</strong> position that box — each is the distance
                             from this item's own CoG to the box's left/rear/bottom edge. Editing a CoG field
                             (CoGx/CoGy/CoGz) moves only the CoG sign, and editing a CoG-to-edge field moves only
                             the box — unless the item's <strong>🧲 Group</strong> toggle is on, in which case
@@ -838,11 +1544,17 @@
                         <div id="tgCargoGroupAllSection"><!-- "move all cargo together" master card rendered by JS --></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39 + BE35:BJ39)"
-                                    onclick="addCargoItem()">+ Add Cargo</button>
+                                    onclick="addCargoItem()">
+                                + Add Cargo
+                            </button>
                             <button type="button" class="tg-add-train-btn" id="tgRefreshCargoBtn" title="Pull Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom for every cargo item from Excel Input!AZ35:BD39 + BE35:BJ39"
-                                    onclick="pullCargoFromExcel()">⇩ Refresh from Excel</button>
+                                    onclick="pullCargoFromExcel()">
+                                ⇩ Refresh from Excel
+                            </button>
                             <button type="button" class="tg-add-train-btn" id="tgPushCargoBtn" title="Write every cargo item's Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom to Excel Input!AZ35:BD39 + BE35:BJ39"
-                                    onclick="pushCargoToExcel()">📤 Push Cargo to Excel</button>
+                                    onclick="pushCargoToExcel()">
+                                📤 Push Cargo to Excel
+                            </button>
                         </div>
                     </div>
 
@@ -874,9 +1586,13 @@
                         <div id="tgHLoadsFields"><!-- Horizontal Loads field grid rendered by JS --></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull every Horizontal Loads field from Excel 'Input horizontal loads'!H14/H16/H18/H20/H21/H22/B23/E23/H23/B24/E24/H24/H25/H26"
-                                    onclick="pullHorizontalLoadsFromExcel()">⇩ Refresh from Excel</button>
+                                    onclick="pullHorizontalLoadsFromExcel()">
+                                ⇩ Refresh from Excel
+                            </button>
                             <button type="button" class="tg-add-train-btn" title="Write every editable Horizontal Loads field to Excel 'Input horizontal loads' (H23/H24 skipped — Excel-computed)"
-                                    onclick="pushHorizontalLoadsToExcel()">📤 Push to Excel</button>
+                                    onclick="pushHorizontalLoadsToExcel()">
+                                📤 Push to Excel
+                            </button>
                         </div>
                     </div>
 
@@ -909,9 +1625,13 @@
                         <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input'!BE{row}/BF{row}/BG{row}, Cargo CoG. X/Y/Z from 'Input'!BB{row}/BC{row}/BJ{row} (row set by the 🔽 Cargo Selection dropdown above, AZ35:AZ39), and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
-                                    onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
+                                    onclick="pullCogEnvFromExcel()">
+                                ⇩ Refresh from Excel
+                            </button>
                             <button type="button" class="tg-add-train-btn" id="tgCalcCogEnvBtn" title="Compute the 📊 CoG Envelope Table below (CoG envelope 5%, LC1-4, and the with-slope versions) from the fields above, then push the numeric data to Excel 'Check CASE A & CASE B'!B67:E73 and B75:E81"
-                                    onclick="calculateCogEnvelope()">🧮 Calculate CoG Envelope</button>
+                                    onclick="calculateCogEnvelope()">
+                                🧮 Calculate CoG Envelope
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1004,7 +1724,9 @@
                         <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
-                                    onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
+                                    onclick="pullDrawingTableFromExcel()">
+                                ⇩ Refresh from Excel
+                            </button>
                         </div>
                     </div>
 
@@ -1037,8 +1759,10 @@
                             NOT the plain local Z — to <strong>"Input"!BB35:BD35</strong> —
                             the same cells the rest of the workbook's transport table calculates the active
                             cargo CoG from — updates the <strong>TRANSPORT TABLE</strong> header in
-                            📋 Drawing Table above to name that load case (e.g. <strong>TRANSPORT TABLE
-                            LC1</strong> or <strong>TRANSPORT TABLE LC1-Slope</strong>), refreshes
+                            📋 Drawing Table above to name that load case (e.g. <strong>
+                                TRANSPORT TABLE
+                                LC1
+                            </strong> or <strong>TRANSPORT TABLE LC1-Slope</strong>), refreshes
                             📋 Drawing Table so that load case's transport table shows immediately, and
                             mirrors the same data to Excel — kept STRICTLY separate by section:
                             <strong>CARGO CoG. In Axis-LC0</strong> and plain <strong>LC1&ndash;LC4</strong>
@@ -1070,8 +1794,10 @@
                             <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
                             MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
                             Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
-                            this pulls independently, the same way 📋 Drawing Table does. Any <strong>UNITY
-                            CHECK</strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
+                            this pulls independently, the same way 📋 Drawing Table does. Any <strong>
+                                UNITY
+                                CHECK
+                            </strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
                             same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Drawing Table
                             above — but for the <strong>STABILITY</strong> rows it's the opposite: those are
                             flagged red when they fall <strong>under</strong> 1, since a smaller stability
@@ -1081,7 +1807,9 @@
                         <div id="tgCogEnvSummaryTable" class="tg-drawing-table-wrap"><!-- CoG Envelope Summary rendered by JS --></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
-                                    onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
+                                    onclick="pullCogEnvSummaryFromExcel()">
+                                ⇩ Refresh from Excel
+                            </button>
                         </div>
                     </div>
 
@@ -1098,7 +1826,9 @@
                     </select>
                 </label>
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
-                        onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
+                        onclick="exportTrailerLayoutToCADScript()">
+                    📐 Export AutoCAD Script
+                </button>
             </div>
 
             <div class="tg-log" id="tgLog"></div>
@@ -1704,7 +2434,7 @@
         }
 
         function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
         // Standard weight-and-balance "Center of Gravity" symbol — a
@@ -3490,7 +4220,7 @@
                     const findOldLoad = (groupNumber, row) => {
                         if (!oldTrain) return null;
                         const g = oldTrain.groups.find(g => g.groupNumber === groupNumber && (g.row || 'both') === row) ||
-                                  oldTrain.groups.find(g => g.groupNumber === groupNumber);
+                            oldTrain.groups.find(g => g.groupNumber === groupNumber);
                         return g ? { load: g.load, noLoad: !!g.noLoad } : null;
                     };
 
@@ -3994,129 +4724,129 @@
                 // unlinked again.
                 const linkDisabled = anyLinked && !cargo.linkExcelDim;
                 return `
-                <div class="tg-cargo-item-card">
-                    <div class="tg-train-card-header">
-                        <span title="This cargo item's color in the plan/side/end views" style="display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;flex:0 0 auto;background:${cargoColorFor(idx)};"></span>
-                        <input type="text" class="tg-train-name-input" value="${escapeHtml(cargo.name)}"
-                               title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}`}"
-                               ${cargo.groupCog ? 'disabled' : ''}
-                               onchange="updateCargoField(${cargo.id}, 'name', this.value)">
-                        <label class="tg-cargo-link-toggle ${cargo.linkExcelDim ? 'tg-cargo-link-active' : ''}"
-                               title="${cargo.groupCog
-                                   ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.'
-                                   : (cargo.linkExcelDim
-                                       ? `Length/Width/Height for this item are linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Untick to unlink.`
-                                       : (linkDisabled
-                                           ? `Another cargo item is already linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Unlink it first to link this item instead.`
-                                           : `Link this item's Length/Width/Height to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Only one cargo item can be linked at a time.`))}">
-                            <input type="checkbox" ${cargo.linkExcelDim ? 'checked' : ''} ${(linkDisabled || cargo.groupCog) ? 'disabled' : ''}
-                                   onchange="toggleCargoExcelLink(${cargo.id}, this.checked)">
-                            🔗 H11:H13
-                        </label>
-                        <label class="tg-cargo-group-toggle ${cargo.groupCog ? 'tg-cargo-group-active' : ''}"
-                               title="${cargo.groupCog
-                                   ? `CoGx/CoGy/CoGz are grouped with the cargo box: dragging the CoG sign also drags the box (the CoG→edge offsets stay fixed), and every other field on this item (Name, 🔗 H11:H13, W, Length/Width/Height, Height start, Gap, CoG-to-edge fields) is disabled — only CoGx/CoGy/CoGz stay editable. Untick to ungroup.`
-                                   : `Group this item's CoG sign with its cargo box: while grouped, dragging CoGx/CoGy/CoGz drags the box along with it instead of moving only the sign, and every other field on this item is disabled.`}">
-                            <input type="checkbox" ${cargo.groupCog ? 'checked' : ''}
-                                   onchange="toggleCargoGroupCog(${cargo.id}, this.checked)">
-                            🧲 Group
-                        </label>
-                        ${idx > 0 ? `
-                        <button type="button" class="tg-remove-train" title="Copy all data (weight, position, size, options) from the previous cargo item"
-                                onclick="copyFromPreviousCargo(${cargo.id})">⧉</button>` : ''}
-                        <button type="button" class="tg-remove-train" title="Remove cargo item"
-                                onclick="removeCargoItem(${cargo.id})"
-                                ${cargoItems.length <= 1 ? 'disabled' : ''}>✕</button>
-                    </div>
-                    <div class="tg-cargo-field-groups">
-                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
-                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>🔗 W (t)</label>
-                            <input type="number" step="any" value="${cargo.weight}" ${cargo.groupCog ? 'disabled' : ''}
-                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo weight, metric tonnes. Synced with Excel 'Input'!${CARGO_W_COL}${cell}.`}"
-                                   onchange="updateCargoField(${cargo.id}, 'weight', this.value)">
-                        </div>
-                        <div class="tg-cargo-field" id="cargoFieldX_${cargo.id}">
-                            <label>🔗 CoGx (m)</label>
-                            <input type="number" step="any" id="cargoX_${cargo.id}" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected.'}"
-                                   onchange="updateCargoField(${cargo.id}, 'x', this.value)">
-                        </div>
-                        <div class="tg-cargo-field" id="cargoFieldY_${cargo.id}">
-                            <label>🔗 CoGy (m)</label>
-                            <input type="number" step="any" id="cargoY_${cargo.id}" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected.'}"
-                                   onchange="updateCargoField(${cargo.id}, 'y', this.value)">
-                        </div>
-                        <div class="tg-cargo-field">
-                            <label>🔗 CoGz (m)</label>
-                            <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected.'}"
-                                   onchange="updateCargoField(${cargo.id}, 'z', this.value)">
-                        </div>
-                        </div>
-                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
-                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>🔗 Length (m)</label>
-                            <input type="number" step="any" value="${cargo.length}" ${cargo.groupCog ? 'disabled' : ''}
-                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo rectangle footprint length. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_LEN_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
-                                   onchange="updateCargoField(${cargo.id}, 'length', this.value)">
-                        </div>
-                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>🔗 Width (m)</label>
-                            <input type="number" step="any" value="${cargo.width}" ${cargo.groupCog ? 'disabled' : ''}
-                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo rectangle footprint width. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_WID_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
-                                   onchange="updateCargoField(${cargo.id}, 'width', this.value)">
-                        </div>
-                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>🔗 Height (m)</label>
-                            <input type="number" step="any" value="${cargo.height}" ${cargo.groupCog ? 'disabled' : ''}
-                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_HGT_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
-                                   onchange="updateCargoField(${cargo.id}, 'height', this.value)">
-                        </div>
-                        </div>
-                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
-                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>🔗 Top view: CoG to Left (m)</label>
-                            <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargoOffsetLeft(cargo)}" ${cargo.groupCog ? 'disabled' : ''}
+                    <div class="tg-cargo-item-card">
+                        <div class="tg-train-card-header">
+                            <span title="This cargo item's color in the plan/side/end views" style="display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;flex:0 0 auto;background:${cargoColorFor(idx)};"></span>
+                            <input type="text" class="tg-train-name-input" value="${escapeHtml(cargo.name)}"
+                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}`}"
+                                   ${cargo.groupCog ? 'disabled' : ''}
+                                   onchange="updateCargoField(${cargo.id}, 'name', this.value)">
+                            <label class="tg-cargo-link-toggle ${cargo.linkExcelDim ? 'tg-cargo-link-active' : ''}"
                                    title="${cargo.groupCog
-                                       ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGx at a fixed offset. Untick Group to edit this directly again.'
-                                       : `Distance from this item's CoG (CoGx) to the LEFT edge of its footprint, in meters. Editing this moves the drawn cargo BOX only — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFLEFT_COL}${cell} — this distance is the value pushed/pulled.`}"
-                                   onchange="updateCargoOffsetLeft(${cargo.id}, this.value)">
-                        </div>
-                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>🔗 Top view: CoG to Rear (m)</label>
-                            <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargoOffsetRear(cargo)}" ${cargo.groupCog ? 'disabled' : ''}
+                        ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.'
+                        : (cargo.linkExcelDim
+                            ? `Length/Width/Height for this item are linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Untick to unlink.`
+                            : (linkDisabled
+                                ? `Another cargo item is already linked to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Unlink it first to link this item instead.`
+                                : `Link this item's Length/Width/Height to Excel '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_RANGE}. Only one cargo item can be linked at a time.`))}">
+                                <input type="checkbox" ${cargo.linkExcelDim ? 'checked' : ''} ${(linkDisabled || cargo.groupCog) ? 'disabled' : ''}
+                                       onchange="toggleCargoExcelLink(${cargo.id}, this.checked)">
+                                🔗 H11:H13
+                            </label>
+                            <label class="tg-cargo-group-toggle ${cargo.groupCog ? 'tg-cargo-group-active' : ''}"
                                    title="${cargo.groupCog
-                                       ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGy at a fixed offset. Untick Group to edit this directly again.'
-                                       : `Distance from this item's CoG (CoGy) to the REAR edge of its footprint, in meters (Y renders downward, same convention as the rest of the drawing). Editing this moves the drawn cargo BOX only — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFREAR_COL}${cell} — this distance is the value pushed/pulled.`}"
-                                   onchange="updateCargoOffsetRear(${cargo.id}, this.value)">
+                        ? `CoGx/CoGy/CoGz are grouped with the cargo box: dragging the CoG sign also drags the box (the CoG→edge offsets stay fixed), and every other field on this item (Name, 🔗 H11:H13, W, Length/Width/Height, Height start, Gap, CoG-to-edge fields) is disabled — only CoGx/CoGy/CoGz stay editable. Untick to ungroup.`
+                        : `Group this item's CoG sign with its cargo box: while grouped, dragging CoGx/CoGy/CoGz drags the box along with it instead of moving only the sign, and every other field on this item is disabled.`}">
+                                <input type="checkbox" ${cargo.groupCog ? 'checked' : ''}
+                                       onchange="toggleCargoGroupCog(${cargo.id}, this.checked)">
+                                🧲 Group
+                            </label>
+                            ${idx > 0 ? `
+                            <button type="button" class="tg-remove-train" title="Copy all data (weight, position, size, options) from the previous cargo item"
+                                    onclick="copyFromPreviousCargo(${cargo.id})">⧉</button>` : ''}
+                            <button type="button" class="tg-remove-train" title="Remove cargo item"
+                                    onclick="removeCargoItem(${cargo.id})"
+                                    ${cargoItems.length <= 1 ? 'disabled' : ''}>✕</button>
                         </div>
-                        <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>🔗 Side view: CoG to Bottom (m)</label>
-                            <input type="number" step="any" value="${cargoOffsetBottom(idx, zSpans)}" ${cargo.groupCog ? 'disabled' : ''}
-                                   title="${cargo.groupCog
-                                       ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGz at a fixed offset. Untick Group to edit this directly again.'
-                                       : `Distance from this item's CoG (CoGz) down to the BOTTOM of its box, in meters. Editing this moves the drawn cargo BOX only (by adjusting Gap under the hood) — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFBOTTOM_COL}${cell} — this distance is the value pushed/pulled.`}"
-                                   onchange="updateCargoOffsetBottom(${cargo.id}, this.value)">
+                        <div class="tg-cargo-field-groups">
+                            <div class="tg-cargo-field-grid tg-cargo-subgroup">
+                            <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>🔗 W (t)</label>
+                                <input type="number" step="any" value="${cargo.weight}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo weight, metric tonnes. Synced with Excel 'Input'!${CARGO_W_COL}${cell}.`}"
+                                       onchange="updateCargoField(${cargo.id}, 'weight', this.value)">
+                            </div>
+                            <div class="tg-cargo-field" id="cargoFieldX_${cargo.id}">
+                                <label>🔗 CoGx (m)</label>
+                                <input type="number" step="any" id="cargoX_${cargo.id}" value="${cargo.x}" title="CoG distance from world origin (0,0) along X, in meters — same origin as the trailer's X offset. Synced with Excel 'Input'!${CARGO_X_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected.'}"
+                                       onchange="updateCargoField(${cargo.id}, 'x', this.value)">
+                            </div>
+                            <div class="tg-cargo-field" id="cargoFieldY_${cargo.id}">
+                                <label>🔗 CoGy (m)</label>
+                                <input type="number" step="any" id="cargoY_${cargo.id}" value="${cargo.y}" title="CoG distance from world origin (0,0) along Y, in meters — same origin as the trailer's Y offset. Synced with Excel 'Input'!${CARGO_Y_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview — the cargo box (size/position) is unaffected.'}"
+                                       onchange="updateCargoField(${cargo.id}, 'y', this.value)">
+                            </div>
+                            <div class="tg-cargo-field">
+                                <label>🔗 CoGz (m)</label>
+                                <input type="number" step="any" value="${cargo.z}" title="CoG height above the trailer deck, in meters. Synced with Excel 'Input'!${CARGO_Z_COL}${cell}.${cargo.groupCog ? ' Grouped: dragging this also drags the cargo box (see 🧲 Group toggle above).' : ' Moves only the CoG sign and its dimension line in the preview, always measured from the trailer deck regardless of Height-start — the cargo box (size/position) is unaffected.'}"
+                                       onchange="updateCargoField(${cargo.id}, 'z', this.value)">
+                            </div>
+                            </div>
+                            <div class="tg-cargo-field-grid tg-cargo-subgroup">
+                            <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>🔗 Length (m)</label>
+                                <input type="number" step="any" value="${cargo.length}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo rectangle footprint length. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_LEN_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_LENGTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
+                                       onchange="updateCargoField(${cargo.id}, 'length', this.value)">
+                            </div>
+                            <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>🔗 Width (m)</label>
+                                <input type="number" step="any" value="${cargo.width}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Cargo rectangle footprint width. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_WID_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_WIDTH_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
+                                       onchange="updateCargoField(${cargo.id}, 'width', this.value)">
+                            </div>
+                            <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>🔗 Height (m)</label>
+                                <input type="number" step="any" value="${cargo.height}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Full cargo box height (used to draw the cargo in the side/end views). Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_HGT_COL}${cell}.${cargo.linkExcelDim ? ` This item is ALSO linked to '${HORIZONTAL_LOADS_SHEET_NAME}'!${CARGO_DIM_HEIGHT_CELL} (see 🔗 toggle above), which takes priority on pull.` : ''} Resizes only the cargo box in the preview — the CoG sign is unaffected.`}"
+                                       onchange="updateCargoField(${cargo.id}, 'height', this.value)">
+                            </div>
+                            </div>
+                            <div class="tg-cargo-field-grid tg-cargo-subgroup">
+                            <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>🔗 Top view: CoG to Left (m)</label>
+                                <input type="number" step="any" id="cargoTlX_${cargo.id}" value="${cargoOffsetLeft(cargo)}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog
+                        ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGx at a fixed offset. Untick Group to edit this directly again.'
+                        : `Distance from this item's CoG (CoGx) to the LEFT edge of its footprint, in meters. Editing this moves the drawn cargo BOX only — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFLEFT_COL}${cell} — this distance is the value pushed/pulled.`}"
+                                       onchange="updateCargoOffsetLeft(${cargo.id}, this.value)">
+                            </div>
+                            <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>🔗 Top view: CoG to Rear (m)</label>
+                                <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargoOffsetRear(cargo)}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog
+                        ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGy at a fixed offset. Untick Group to edit this directly again.'
+                        : `Distance from this item's CoG (CoGy) to the REAR edge of its footprint, in meters (Y renders downward, same convention as the rest of the drawing). Editing this moves the drawn cargo BOX only — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFREAR_COL}${cell} — this distance is the value pushed/pulled.`}"
+                                       onchange="updateCargoOffsetRear(${cargo.id}, this.value)">
+                            </div>
+                            <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>🔗 Side view: CoG to Bottom (m)</label>
+                                <input type="number" step="any" value="${cargoOffsetBottom(idx, zSpans)}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog
+                        ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGz at a fixed offset. Untick Group to edit this directly again.'
+                        : `Distance from this item's CoG (CoGz) down to the BOTTOM of its box, in meters. Editing this moves the drawn cargo BOX only (by adjusting Gap under the hood) — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFBOTTOM_COL}${cell} — this distance is the value pushed/pulled.`}"
+                                       onchange="updateCargoOffsetBottom(${cargo.id}, this.value)">
+                            </div>
+                            </div>
+                            <div class="tg-cargo-field-grid tg-cargo-subgroup">
+                            <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>Height start</label>
+                                <select ${cargo.groupCog ? 'disabled' : ''}
+                                        title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Where this cargo's BOX (Length/Width/Height rectangle) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. Only moves/resizes the box; the CoG sign and Z dimension line always measure from the trailer deck using X/Y/Z — CoG, unaffected by this setting.`}"
+                                        onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
+                                    <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
+                                    <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
+                                </select>
+                            </div>
+                            <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
+                                <label>Gap above ${cargo.heightStart === 'previous' ? 'previous cargo' : 'trailer'} deck (m)</label>
+                                <input type="number" step="any" value="${cargo.gap}" ${cargo.groupCog ? 'disabled' : ''}
+                                       title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG.`}"
+                                       onchange="updateCargoField(${cargo.id}, 'gap', this.value)">
+                            </div>
+                            </div>
                         </div>
-                        </div>
-                        <div class="tg-cargo-field-grid tg-cargo-subgroup">
-                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>Height start</label>
-                            <select ${cargo.groupCog ? 'disabled' : ''}
-                                    title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Where this cargo's BOX (Length/Width/Height rectangle) is measured from in the side + end views: the trailer's own top deck, or the top of the previous cargo item's box (for stacked cargo) — not part of the Excel range. Only moves/resizes the box; the CoG sign and Z dimension line always measure from the trailer deck using X/Y/Z — CoG, unaffected by this setting.`}"
-                                    onchange="updateCargoField(${cargo.id}, 'heightStart', this.value)">
-                                <option value="trailer" ${cargo.heightStart !== 'previous' ? 'selected' : ''}>Trailer top deck</option>
-                                <option value="previous" ${cargo.heightStart === 'previous' ? 'selected' : ''}>Previous cargo top deck</option>
-                            </select>
-                        </div>
-                        <div class="tg-cargo-field tg-cargo-field-local ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
-                            <label>Gap above ${cargo.heightStart === 'previous' ? 'previous cargo' : 'trailer'} deck (m)</label>
-                            <input type="number" step="any" value="${cargo.gap}" ${cargo.groupCog ? 'disabled' : ''}
-                                   title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Vertical gap, in meters, inserted between the box's base and its Height-start reference chosen above (${cargo.heightStart === 'previous' ? `the top of the previous cargo item's box` : `the trailer's own top deck`}) — not part of the Excel range. Only moves the box up; the CoG sign and Z dimension line are unaffected, always measuring from the trailer deck using Z — CoG.`}"
-                                   onchange="updateCargoField(${cargo.id}, 'gap', this.value)">
-                        </div>
-                        </div>
-                    </div>
-                </div>`;
+                    </div>`;
             }).join('');
             renderCargoGroupAllSection();
         }
@@ -4176,38 +4906,38 @@
                 ? `Moves every cargo item's CoG AND its drawn box (shape/position) together by this ${label} change, in meters — offsets from each item's own CoG stay fixed. Resets to 0 whenever Group All is (re)enabled — local-only, not part of the Excel range.`
                 : `Tick 🧲 Group All above to enable — editing this then shifts every cargo item's CoG and box together along ${label}.`;
             el.innerHTML = `
-            <div class="tg-cargo-item-card tg-cargo-groupall-card">
-                <div class="tg-train-card-header">
-                    <span class="tg-cargo-groupall-title">🧲 Move All Cargo Together</span>
-                    <label class="tg-cargo-group-toggle ${enabled ? 'tg-cargo-group-active' : ''}"
-                           title="${enabled
-                               ? 'Editing CoGx/CoGy/CoGz below moves EVERY cargo item — CoG sign and drawn box together — by the same delta, keeping each item\u2019s size and its own CoG-to-edge offsets unchanged. Untick to stop.'
-                               : 'Tick to move every cargo item — CoG and box together — as one group: editing CoGx/CoGy/CoGz below will then shift every item by the same delta.'}">
-                        <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleCargoGroupAll(this.checked)">
-                        🧲 Group All
-                    </label>
-                </div>
-                <div class="tg-cargo-field-grid">
-                    <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
-                        <label>🔗 CoGx (m)</label>
-                        <input type="number" step="any" value="${cargoGroupAll.x}" ${enabled ? '' : 'disabled'}
-                               title="${fieldTitle('CoGx')}"
-                               onchange="updateCargoGroupAllField('x', this.value)">
+                <div class="tg-cargo-item-card tg-cargo-groupall-card">
+                    <div class="tg-train-card-header">
+                        <span class="tg-cargo-groupall-title">🧲 Move All Cargo Together</span>
+                        <label class="tg-cargo-group-toggle ${enabled ? 'tg-cargo-group-active' : ''}"
+                               title="${enabled
+                    ? 'Editing CoGx/CoGy/CoGz below moves EVERY cargo item — CoG sign and drawn box together — by the same delta, keeping each item\u2019s size and its own CoG-to-edge offsets unchanged. Untick to stop.'
+                    : 'Tick to move every cargo item — CoG and box together — as one group: editing CoGx/CoGy/CoGz below will then shift every item by the same delta.'}">
+                            <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleCargoGroupAll(this.checked)">
+                            🧲 Group All
+                        </label>
                     </div>
-                    <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
-                        <label>🔗 CoGy (m)</label>
-                        <input type="number" step="any" value="${cargoGroupAll.y}" ${enabled ? '' : 'disabled'}
-                               title="${fieldTitle('CoGy')}"
-                               onchange="updateCargoGroupAllField('y', this.value)">
+                    <div class="tg-cargo-field-grid">
+                        <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
+                            <label>🔗 CoGx (m)</label>
+                            <input type="number" step="any" value="${cargoGroupAll.x}" ${enabled ? '' : 'disabled'}
+                                   title="${fieldTitle('CoGx')}"
+                                   onchange="updateCargoGroupAllField('x', this.value)">
+                        </div>
+                        <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
+                            <label>🔗 CoGy (m)</label>
+                            <input type="number" step="any" value="${cargoGroupAll.y}" ${enabled ? '' : 'disabled'}
+                                   title="${fieldTitle('CoGy')}"
+                                   onchange="updateCargoGroupAllField('y', this.value)">
+                        </div>
+                        <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
+                            <label>🔗 CoGz (m)</label>
+                            <input type="number" step="any" value="${cargoGroupAll.z}" ${enabled ? '' : 'disabled'}
+                                   title="${fieldTitle('CoGz')}"
+                                   onchange="updateCargoGroupAllField('z', this.value)">
+                        </div>
                     </div>
-                    <div class="tg-cargo-field ${enabled ? '' : 'tg-cargo-field-readonly'}">
-                        <label>🔗 CoGz (m)</label>
-                        <input type="number" step="any" value="${cargoGroupAll.z}" ${enabled ? '' : 'disabled'}
-                               title="${fieldTitle('CoGz')}"
-                               onchange="updateCargoGroupAllField('z', this.value)">
-                    </div>
-                </div>
-            </div>`;
+                </div>`;
         }
 
         // Trailer CoG (Display!B15:D15) + Combined CoG (Display!B16:D16)
@@ -5495,12 +6225,12 @@
                     ? `Excel-computed — pulled automatically from ${sourceLabel}, and can't be edited on the dashboard.`
                     : `Not linked to Excel — local input only, feeds the 📊 CoG Envelope Table below. Matches workbook 'CoG_Envelope.xlsx'!"2"!${COGENV_CELLS[key]}.`;
                 return `
-                <div class="${wrapCls}">
-                    <label title="${title}">${labelIcon ? labelIcon + ' ' : ''}${label}${unit ? ` (${unit})` : ''}</label>
-                    <input type="number" step="any" value="${tgCogEnv[key]}" ${readonly ? 'disabled' : ''}
-                           title="${title}"
-                           onchange="updateCogEnvField('${key}', this.value)">
-                </div>`;
+                    <div class="${wrapCls}">
+                        <label title="${title}">${labelIcon ? labelIcon + ' ' : ''}${label}${unit ? ` (${unit})` : ''}</label>
+                        <input type="number" step="any" value="${tgCogEnv[key]}" ${readonly ? 'disabled' : ''}
+                               title="${title}"
+                               onchange="updateCogEnvField('${key}', this.value)">
+                    </div>`;
             };
             // Cargo selection dropdown — picks which of the up to 5
             // cargo items (Input!AZ35:AZ39, same list as the "Generate
@@ -5515,10 +6245,10 @@
                 return `<option value="${row}" ${row === tgCogEnv.cargoRow ? 'selected' : ''}>${c.name} (${CARGO_NAME_COL}${row})</option>`;
             }).join('');
             const cargoSelectHtml = `
-                <div class="tg-cargo-field tg-cargo-field-local" style="grid-column: 1 / -1;">
-                    <label title="Selects which cargo item (Input!${CARGO_NAME_COL}35:${CARGO_NAME_COL}39) the Cargo CoG. X/Y/Z fields below pull from. Default: ${CARGO_NAME_COL}35.">🔽 Cargo Selection</label>
-                    <select onchange="updateCogEnvCargoRow(this.value)">${cargoOptions}</select>
-                </div>`;
+                    <div class="tg-cargo-field tg-cargo-field-local" style="grid-column: 1 / -1;">
+                        <label title="Selects which cargo item (Input!${CARGO_NAME_COL}35:${CARGO_NAME_COL}39) the Cargo CoG. X/Y/Z fields below pull from. Default: ${CARGO_NAME_COL}35.">🔽 Cargo Selection</label>
+                        <select onchange="updateCogEnvCargoRow(this.value)">${cargoOptions}</select>
+                    </div>`;
             // Non-editable weight readout for whichever cargo item is
             // picked above — same read-only visual style as the 📦
             // Generate Cargo card's own 🔗 W (t) field
@@ -5530,24 +6260,24 @@
             const selIdx = items.findIndex((c, i) => (CARGO_START_ROW + i) === tgCogEnv.cargoRow);
             const selectedCargo = items[selIdx >= 0 ? selIdx : 0] || defaultCargoItem(1);
             const cargoWeightHtml = `
-                <div class="tg-cargo-field tg-cargo-field-readonly">
-                    <label title="Weight of the cargo item selected above (🔽 Cargo Selection) — read-only here, edit it in 📦 Generate Cargo. Synced with Excel 'Input'!${CARGO_W_COL}${tgCogEnv.cargoRow}.">🔒 🔗 W (t)</label>
-                    <input type="number" step="any" value="${selectedCargo.weight}" disabled
-                           title="Weight of the cargo item selected above (🔽 Cargo Selection) — read-only here, edit it in 📦 Generate Cargo. Synced with Excel 'Input'!${CARGO_W_COL}${tgCogEnv.cargoRow}.">
-                </div>`;
+                    <div class="tg-cargo-field tg-cargo-field-readonly">
+                        <label title="Weight of the cargo item selected above (🔽 Cargo Selection) — read-only here, edit it in 📦 Generate Cargo. Synced with Excel 'Input'!${CARGO_W_COL}${tgCogEnv.cargoRow}.">🔒 🔗 W (t)</label>
+                        <input type="number" step="any" value="${selectedCargo.weight}" disabled
+                               title="Weight of the cargo item selected above (🔽 Cargo Selection) — read-only here, edit it in 📦 Generate Cargo. Synced with Excel 'Input'!${CARGO_W_COL}${tgCogEnv.cargoRow}.">
+                    </div>`;
             el.innerHTML = `
-                <div class="tg-cargo-field-grid">
-                    ${cargoSelectHtml}
-                    ${cargoWeightHtml}
-                    ${field('dimX', 'Cargo Dim. X', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimX}`)}
-                    ${field('dimY', 'Cargo Dim. Y', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimY}`)}
-                    ${field('dimZ', 'Cargo Dim. Z', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimZ}`)}
-                    ${field('cogX', 'Cargo CoG. X', 'm', `${COGENV_COG_SHEET}!${cogCells.cogX}`)}
-                    ${field('cogY', 'Cargo CoG. Y', 'm', `${COGENV_COG_SHEET}!${cogCells.cogY}`)}
-                    ${field('cogZ', 'Cargo CoG. Z', 'm', `${COGENV_COG_SHEET}!${cogCells.cogZ}`)}
-                    ${field('upSlope', 'Slope shift — Uphill (LC1&4)', 'm')}
-                    ${field('downSlope', 'Slope shift — Downhill (LC2&3)', 'm')}
-                </div>`;
+                    <div class="tg-cargo-field-grid">
+                        ${cargoSelectHtml}
+                        ${cargoWeightHtml}
+                        ${field('dimX', 'Cargo Dim. X', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimX}`)}
+                        ${field('dimY', 'Cargo Dim. Y', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimY}`)}
+                        ${field('dimZ', 'Cargo Dim. Z', 'm', `${COGENV_DIM_SHEET}!${dimCells.dimZ}`)}
+                        ${field('cogX', 'Cargo CoG. X', 'm', `${COGENV_COG_SHEET}!${cogCells.cogX}`)}
+                        ${field('cogY', 'Cargo CoG. Y', 'm', `${COGENV_COG_SHEET}!${cogCells.cogY}`)}
+                        ${field('cogZ', 'Cargo CoG. Z', 'm', `${COGENV_COG_SHEET}!${cogCells.cogZ}`)}
+                        ${field('upSlope', 'Slope shift — Uphill (LC1&4)', 'm')}
+                        ${field('downSlope', 'Slope shift — Downhill (LC2&3)', 'm')}
+                    </div>`;
         }
 
         // Fires when the cargo dropdown above changes — updates
@@ -5955,13 +6685,13 @@
             });
 
             el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block; min-width:520px;">
-                <defs>
-                    <marker id="tgCeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M0,0 L10,5 L0,10 z" fill="#ef4444"/>
-                    </marker>
-                </defs>
-                ${railSvg}${wedgeSvg}${hDimSvg}${vDimSvg}${rDimSvg}${envCalloutSvg}${cogMarkerSvg}${lcSvg}${groupSvg}${originSvg}
-            </svg>`;
+                    <defs>
+                        <marker id="tgCeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M0,0 L10,5 L0,10 z" fill="#ef4444"/>
+                        </marker>
+                    </defs>
+                    ${railSvg}${wedgeSvg}${hDimSvg}${vDimSvg}${rDimSvg}${envCalloutSvg}${cogMarkerSvg}${lcSvg}${groupSvg}${originSvg}
+                </svg>`;
         }
 
         // Writes X offset/Y offset for every train in the linked range
@@ -6336,36 +7066,36 @@
                 const unitLabel = unit ? ` (${unit})` : '';
                 if (readonly) {
                     return `
-                    <div class="tg-field tg-field-readonly" title="Excel-computed — read-only. '${HLOADS_SHEET_NAME}'!${cell}">
-                        <label>🔒 ${label}${unitLabel}</label>
-                        <input type="number" value="${val}" disabled>
-                    </div>`;
+                        <div class="tg-field tg-field-readonly" title="Excel-computed — read-only. '${HLOADS_SHEET_NAME}'!${cell}">
+                            <label>🔒 ${label}${unitLabel}</label>
+                            <input type="number" value="${val}" disabled>
+                        </div>`;
                 }
                 return `
-                <div class="tg-field">
-                    <label>🔗 ${label}${unitLabel} <button type="button" class="tg-xy-sync-btn" title="Pull ${label} from Excel '${HLOADS_SHEET_NAME}'!${cell}" onclick="pullHorizontalLoadsFromExcel()">⇩</button></label>
-                    <input type="number" step="any" value="${val}"
-                           title="Synced with Excel sheet '${HLOADS_SHEET_NAME}'!${cell}. Pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel' below."
-                           onchange="updateHLoadsField('${key}', this.value)">
-                </div>`;
+                    <div class="tg-field">
+                        <label>🔗 ${label}${unitLabel} <button type="button" class="tg-xy-sync-btn" title="Pull ${label} from Excel '${HLOADS_SHEET_NAME}'!${cell}" onclick="pullHorizontalLoadsFromExcel()">⇩</button></label>
+                        <input type="number" step="any" value="${val}"
+                               title="Synced with Excel sheet '${HLOADS_SHEET_NAME}'!${cell}. Pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel' below."
+                               onchange="updateHLoadsField('${key}', this.value)">
+                    </div>`;
             };
             el.innerHTML = `
-                <div class="tg-field-grid">
-                    ${field('hCow', 'Centre of Wind height (H_CoW)', 'm')}
-                    ${field('vWind', 'Operational allowable wind speed (v)', 'm/s')}
-                    ${field('cd', 'Drag coefficient (cd)', '')}
-                    ${field('vTrailer', 'Trailer speed (v)', 'km/h')}
-                    ${field('aAcc', 'Max. acceleration (a_acc)', 'm/sec\u00b2')}
-                    ${field('aDec', 'Max. deceleration (a_dec)', 'm/sec\u00b2')}
-                    ${field('transGrad', 'Transverse road gradient', '%')}
-                    ${field('transStroke', 'Transverse — inc. stroke compensation', '%')}
-                    ${field('transGrDeg', 'Transverse gradient (Gr_trans)', 'deg')}
-                    ${field('longGrad', 'Longitudinal road gradient', '%')}
-                    ${field('longStroke', 'Longitudinal — inc. stroke compensation', '%')}
-                    ${field('longGrDeg', 'Longitudinal gradient (Gr_long)', 'deg')}
-                    ${field('curveImpact', 'Curve impact (C_j)', '%')}
-                    ${field('muFriction', 'Friction Steel/Wood (M_u)', '')}
-                </div>`;
+                    <div class="tg-field-grid">
+                        ${field('hCow', 'Centre of Wind height (H_CoW)', 'm')}
+                        ${field('vWind', 'Operational allowable wind speed (v)', 'm/s')}
+                        ${field('cd', 'Drag coefficient (cd)', '')}
+                        ${field('vTrailer', 'Trailer speed (v)', 'km/h')}
+                        ${field('aAcc', 'Max. acceleration (a_acc)', 'm/sec\u00b2')}
+                        ${field('aDec', 'Max. deceleration (a_dec)', 'm/sec\u00b2')}
+                        ${field('transGrad', 'Transverse road gradient', '%')}
+                        ${field('transStroke', 'Transverse — inc. stroke compensation', '%')}
+                        ${field('transGrDeg', 'Transverse gradient (Gr_trans)', 'deg')}
+                        ${field('longGrad', 'Longitudinal road gradient', '%')}
+                        ${field('longStroke', 'Longitudinal — inc. stroke compensation', '%')}
+                        ${field('longGrDeg', 'Longitudinal gradient (Gr_long)', 'deg')}
+                        ${field('curveImpact', 'Curve impact (C_j)', '%')}
+                        ${field('muFriction', 'Friction Steel/Wood (M_u)', '')}
+                    </div>`;
         }
 
         function renderTrailerDashboard() {
@@ -6388,26 +7118,26 @@
             if (globalSettings) {
                 const currentNumGroups = trailerGenTrains[0] ? trailerGenTrains[0].groups.length : 1;
                 globalSettings.innerHTML = `
-                <div class="tg-field-grid">
-                    <div class="tg-field">
-                        <label>🔗 Number of trains <button type="button" class="tg-xy-sync-btn" title="Pull Number of trains from Excel Input!${INPUT_NUM_TRAINS_CELL}" onclick="pullNumTrainsFromExcel()">⇩</button></label>
-                        <input type="number" step="1" min="1" value="${trailerGenTrains.length}"
-                               title="How many trains the dashboard should have. Adds/removes trains to match. Synced with Excel sheet 'Input'!${INPUT_NUM_TRAINS_CELL}."
-                               onchange="setNumberOfTrains(this.value)">
-                    </div>
-                    <div class="tg-field">
-                        <label>🔗 Number of Hydraulic Groups <button type="button" class="tg-xy-sync-btn" title="Pull Number of Hydraulic Groups from Excel Input!${INPUT_NUM_GROUPS_CELL}" onclick="pullNumHydraulicGroupsFromExcel()">⇩</button></label>
-                        <input type="number" step="1" min="1" max="${TRAILER_GROUP_DEFS.length}" value="${currentNumGroups}"
-                               title="How many axle groups (1-${TRAILER_GROUP_DEFS.length}) EVERY train should have. Adds/removes groups per train to match. Synced with Excel sheet 'Input'!${INPUT_NUM_GROUPS_CELL}."
-                               onchange="setNumberOfHydraulicGroups(this.value)">
-                    </div>
-                    <div class="tg-field">
-                        <label>🔗 Z TRAILER HEIGHT (MM) <button type="button" class="tg-xy-sync-btn" title="Pull Z Trailer Height from Excel ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}" onclick="pullZTrailerHeightFromExcel()">⇩</button></label>
-                        <input type="number" id="tgZHeightInput" step="any" min="0" value="${tgZTrailerHeightMm}"
-                               title="Ground -> top of deck height (mm), shared by every train. Drives the Side + end elevation preview's deck line and the VCG value written to every axle row. Synced with Excel sheet '${ZHEIGHT_SHEET_NAME}'!${ZHEIGHT_CELL} — pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel'."
-                               onchange="updateZTrailerHeight(this.value)">
-                    </div>
-                </div>`;
+                    <div class="tg-field-grid">
+                        <div class="tg-field">
+                            <label>🔗 Number of trains <button type="button" class="tg-xy-sync-btn" title="Pull Number of trains from Excel Input!${INPUT_NUM_TRAINS_CELL}" onclick="pullNumTrainsFromExcel()">⇩</button></label>
+                            <input type="number" step="1" min="1" value="${trailerGenTrains.length}"
+                                   title="How many trains the dashboard should have. Adds/removes trains to match. Synced with Excel sheet 'Input'!${INPUT_NUM_TRAINS_CELL}."
+                                   onchange="setNumberOfTrains(this.value)">
+                        </div>
+                        <div class="tg-field">
+                            <label>🔗 Number of Hydraulic Groups <button type="button" class="tg-xy-sync-btn" title="Pull Number of Hydraulic Groups from Excel Input!${INPUT_NUM_GROUPS_CELL}" onclick="pullNumHydraulicGroupsFromExcel()">⇩</button></label>
+                            <input type="number" step="1" min="1" max="${TRAILER_GROUP_DEFS.length}" value="${currentNumGroups}"
+                                   title="How many axle groups (1-${TRAILER_GROUP_DEFS.length}) EVERY train should have. Adds/removes groups per train to match. Synced with Excel sheet 'Input'!${INPUT_NUM_GROUPS_CELL}."
+                                   onchange="setNumberOfHydraulicGroups(this.value)">
+                        </div>
+                        <div class="tg-field">
+                            <label>🔗 Z TRAILER HEIGHT (MM) <button type="button" class="tg-xy-sync-btn" title="Pull Z Trailer Height from Excel ${ZHEIGHT_SHEET_NAME}!${ZHEIGHT_CELL}" onclick="pullZTrailerHeightFromExcel()">⇩</button></label>
+                            <input type="number" id="tgZHeightInput" step="any" min="0" value="${tgZTrailerHeightMm}"
+                                   title="Ground -> top of deck height (mm), shared by every train. Drives the Side + end elevation preview's deck line and the VCG value written to every axle row. Synced with Excel sheet '${ZHEIGHT_SHEET_NAME}'!${ZHEIGHT_CELL} — pulled automatically on open/refresh, on-demand via the ⇩ button, and pushed on '📤 Push to Excel'."
+                                   onchange="updateZTrailerHeight(this.value)">
+                        </div>
+                    </div>`;
             }
 
             const list = document.getElementById('tgTrainList');
@@ -6423,150 +7153,150 @@
                     return s + (g.noLoad ? 0 : (parseFloat(g.load) || 0) * n);
                 }, 0);
                 return `
-                <div class="tg-train-card">
-                    <div class="tg-train-card-header">
-                        <input type="text" class="tg-train-name-input" value="${train.name}"
-                               onchange="updateTrailerGenField(${train.id}, 'name', this.value)">
-                        <button type="button" class="tg-remove-train" title="Remove train"
-                                onclick="removeTrailerGenTrain(${train.id})"
-                                ${trailerGenTrains.length <= 1 ? 'disabled' : ''}>✕</button>
-                    </div>
-                    <div class="tg-field-grid">
-                        <div class="tg-field">
-                            <label>Trailer type</label>
-                            <select title="Pick a fixed manufacturer preset (including its axle-line count) to auto-fill the deck footprint and axle-line layout below, or Custom / Manual to enter your own."
-                                    onchange="applyTrailerPreset(${train.id}, this.value)">
-                                <option value="custom" ${train.trailerType === 'custom' || !train.trailerType ? 'selected' : ''}>Custom / Manual</option>
-                                ${['goldhofer', 'spmt'].map(mfr => Object.keys(TRAILER_PRESETS[mfr]).map(Number).sort((a, b) => a - b).map(n => `
-                                <option value="${mfr}${n}" ${train.trailerType === mfr && train.axleLineCount === n ? 'selected' : ''}>${mfr === 'goldhofer' ? 'Goldhofer' : 'SPMT'} (${n} axle line)</option>`).join('')).join('')}
-                            </select>
+                    <div class="tg-train-card">
+                        <div class="tg-train-card-header">
+                            <input type="text" class="tg-train-name-input" value="${train.name}"
+                                   onchange="updateTrailerGenField(${train.id}, 'name', this.value)">
+                            <button type="button" class="tg-remove-train" title="Remove train"
+                                    onclick="removeTrailerGenTrain(${train.id})"
+                                    ${trailerGenTrains.length <= 1 ? 'disabled' : ''}>✕</button>
                         </div>
-                        <div class="tg-field">
-                            <label>Line spacing (mm)</label>
-                            <input type="number" step="any" value="${train.spacing}" title="Distance along X between adjacent axles: axle N = axle (N-1) X minus this spacing. Auto-filled (and may be negative) when a trailer preset is selected above."
-                                   onchange="updateTrailerGenField(${train.id}, 'spacing', this.value)">
-                        </div>
-                        <div class="tg-field">
-                            <label>${tgXCell ? '🔗 ' : ''}X offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgXCell ? `Pull X offset from Excel Input!${tgXCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'x')" ${tgXCell ? '' : 'disabled'}>⇩</button></label>
-                            <input type="number" step="any" value="${train.x}" title="Distance from origin (0,0) to the top-left corner of the trailer deck (axle #1 sits inset from this corner when a trailer preset is selected).${tgXCell ? ` Synced with Excel sheet 'Input'!${tgXCell}.` : ''}"
-                                   onchange="updateTrailerGenField(${train.id}, 'x', this.value)">
-                        </div>
-                        <div class="tg-field">
-                            <label>${tgYCell ? '🔗 ' : ''}Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgYCell ? `Pull Y offset from Excel Input!${tgYCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'y')" ${tgYCell ? '' : 'disabled'}>⇩</button></label>
-                            <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train.${tgYCell ? ` Synced with Excel sheet 'Input'!${tgYCell}.` : ''}"
-                                   onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
-                        </div>
-                    </div>
-
-                    <div class="tg-cad-split-row">
-                        <label>AutoCAD split (axle lines per physical trailer, front→back — e.g. "4,6" for a 10-line train built from a 4-line unit then a 6-line unit)</label>
-                        <div class="tg-cad-split-input-row">
-                            <input type="text" placeholder="auto — whole train as one block" value="${train.cadSplit || ''}"
-                                   title="Leave blank for one AutoCAD block covering all axle lines. Enter comma-separated axle-line counts (matching CAD_BLOCK_MAP, e.g. 4,6) to insert one block per physical unit instead."
-                                   onchange="updateTrailerGenField(${train.id}, 'cadSplit', this.value)">
-                            <button type="button" class="tg-cad-split-auto-btn"
-                                    title="Recalculate the AutoCAD split from this train's CURRENT axle line count — fills in as many 4-line modules as fit, with the final module (up to 6 lines) taking whatever's left over (e.g. 10 axle lines -> 4,6). Trailer-type presets already auto-fill this on selection; use this button after manually changing axle groups so a stale split doesn't go stale/mismatched."
-                                    onclick="applyAutoCadSplit(${train.id})">↻ Recalc Split</button>
-                        </div>
-                        <div class="tg-cad-split-status" id="tgCadSplitStatus_${train.id}">${(() => {
-                            const axleCount = maxAxle;
-                            const segments = parseCadSplitString(train.cadSplit);
-                            if (!segments) return `Auto — one AutoCAD block for all ${axleCount} axle line(s).`;
-                            const sum = segments.reduce((s, n) => s + n, 0);
-                            const unmapped = segments.filter(n => !CAD_BLOCK_MAP[n]);
-                            if (sum !== axleCount) return `${segments.join(' + ')} = ${sum}, but this train has ${axleCount} axle line(s) — fix before export.`;
-                            if (unmapped.length) return `${segments.join(' + ')} = ${sum} ✓, but ${unmapped.join('/')}-line block(s) not mapped in CAD_BLOCK_MAP.`;
-                            return `${segments.join(' + ')} = ${sum} ✓ — ${segments.length} separate AutoCAD block(s) will be inserted.`;
-                        })()}</div>
-                    </div>
-
-                    <div class="tg-field-grid">
-                        <div class="tg-field">
-                            <label>Header/Dbar block</label>
-                            <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to this trailer's deck edge, shown in the 2D/3D preview and included as an extra row in the AutoCAD split / Set Train Group export. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
-                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbar', this.value)">
-                                <option value="none" ${(!train.headerDbar || train.headerDbar === 'none') ? 'selected' : ''}>None</option>
-                                <option value="3m" ${train.headerDbar === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m</option>
-                                <option value="3m_ppu" ${train.headerDbar === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU</option>
-                            </select>
-                        </div>
-                        ${train.headerDbar && train.headerDbar !== 'none' ? `
-                        <div class="tg-field">
-                            <label>Position</label>
-                            <select title="Where the block sits and where its row appears in the AutoCAD split / Set Train Group export for this train. 'Trailer left side' = the FIRST block, mounted at the train's FRONT (just ahead of the deck's front edge) and listed BEFORE all this train's axle-group segments (e.g. 'Header&amp;Dbar 3m,4,4,6'). 'Trailer right side' = the LAST block, mounted at the train's BACK (just behind the deck's rear edge) and listed AFTER them (e.g. '4,4,6,Header&amp;Dbar 3m'). Either way the block is centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward smaller Y (above it in plan view) for 'left', toward larger Y (below it) for 'right'."
-                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbarSide', this.value)">
-                                <option value="left" ${train.headerDbarSide !== 'right' ? 'selected' : ''}>Trailer left side</option>
-                                <option value="right" ${train.headerDbarSide === 'right' ? 'selected' : ''}>Trailer right side</option>
-                            </select>
-                        </div>` : ''}
-                    </div>
-
-                    <div class="tg-groups-label">Axle groups (custom load per axle range)</div>
-                    ${train.groups.map(group => `
-                        <div class="tg-group-row">
-                            <div class="tg-group-row-header">
-                                <span class="tg-group-swatch" style="background:${group.color};" title="Color for this axle group"></span>
-                                <select class="tg-group-name-input" title="Which of the 4 fixed axle groups this axle range belongs to"
-                                        onchange="updateAxleGroupField(${train.id}, ${group.id}, 'groupNumber', this.value)">
-                                    ${TRAILER_GROUP_DEFS.map(gd => `<option value="${gd.number}" ${group.groupNumber === gd.number ? 'selected' : ''}>${gd.label}</option>`).join('')}
+                        <div class="tg-field-grid">
+                            <div class="tg-field">
+                                <label>Trailer type</label>
+                                <select title="Pick a fixed manufacturer preset (including its axle-line count) to auto-fill the deck footprint and axle-line layout below, or Custom / Manual to enter your own."
+                                        onchange="applyTrailerPreset(${train.id}, this.value)">
+                                    <option value="custom" ${train.trailerType === 'custom' || !train.trailerType ? 'selected' : ''}>Custom / Manual</option>
+                                    ${['goldhofer', 'spmt'].map(mfr => Object.keys(TRAILER_PRESETS[mfr]).map(Number).sort((a, b) => a - b).map(n => `
+                                    <option value="${mfr}${n}" ${train.trailerType === mfr && train.axleLineCount === n ? 'selected' : ''}>${mfr === 'goldhofer' ? 'Goldhofer' : 'SPMT'} (${n} axle line)</option>`).join('')).join('')}
                                 </select>
-                                <button type="button" class="tg-remove-group" title="Remove axle group"
-                                        onclick="removeAxleGroup(${train.id}, ${group.id})"
-                                        ${train.groups.length <= 1 ? 'disabled' : ''}>✕</button>
                             </div>
-                            <div class="tg-group-field-grid">
-                                <div class="tg-group-field">
-                                    <label>From axle line #</label>
-                                    <input type="number" min="1" step="1" value="${group.from}" title="First axle-line number in this group"
-                                           onchange="updateAxleGroupField(${train.id}, ${group.id}, 'from', this.value)">
-                                </div>
-                                <div class="tg-group-field">
-                                    <label>To axle line #</label>
-                                    <input type="number" min="1" step="1" value="${group.to}" title="Last axle-line number in this group"
-                                           onchange="updateAxleGroupField(${train.id}, ${group.id}, 'to', this.value)">
-                                </div>
-                                ${train.axlePairOffsetY ? `
-                                <div class="tg-group-field">
-                                    <label>Axle row</label>
-                                    <select title="Which physical axle(s) of each axle line in this range this group applies to — both the right and left axle, the right axle only, or the left axle only. e.g. for a 6-line/12-axle Goldhofer, columns 1–2 could be 'Both' while columns 3–6's right axles go to one group and their left axles to another."
-                                            onchange="updateAxleGroupField(${train.id}, ${group.id}, 'row', this.value)">
-                                        <option value="both" ${(!group.row || group.row === 'both') ? 'selected' : ''}>Both (right + left)</option>
-                                        <option value="right" ${group.row === 'right' ? 'selected' : ''}>Right axle only</option>
-                                        <option value="left" ${group.row === 'left' ? 'selected' : ''}>Left axle only</option>
-                                    </select>
-                                </div>` : ''}
-                                <div class="tg-group-field">
-                                    <label>Load type</label>
-                                    <select onchange="updateAxleGroupField(${train.id}, ${group.id}, 'loadMode', this.value)">
-                                        <option value="load" ${!group.noLoad ? 'selected' : ''}>Custom load (t)</option>
-                                        <option value="none" ${group.noLoad ? 'selected' : ''}>No line load</option>
-                                    </select>
-                                </div>
-                                <div class="tg-group-field">
-                                    <label title="Excel-calculated (moment-balance result) — pulled automatically from Display! whenever it changes there, and can't be edited on the dashboard.">📥 Load per axle (t)</label>
-                                    <input type="number" step="any" min="0" value="${group.load}" readonly ${group.noLoad ? 'disabled' : ''}
-                                           class="tg-group-field-readonly-input"
-                                           title="Pulled from Excel 'Display'! — not editable here.">
-                                </div>
+                            <div class="tg-field">
+                                <label>Line spacing (mm)</label>
+                                <input type="number" step="any" value="${train.spacing}" title="Distance along X between adjacent axles: axle N = axle (N-1) X minus this spacing. Auto-filled (and may be negative) when a trailer preset is selected above."
+                                       onchange="updateTrailerGenField(${train.id}, 'spacing', this.value)">
                             </div>
-                            <div class="tg-group-summary">
-                                ${(() => {
-                                    const n = axleCountForGroup(train, group);
-                                    const rowNote = train.axlePairOffsetY
-                                        ? (group.row === 'right' ? ', right axle only' : (group.row === 'left' ? ', left axle only' : ', both rows'))
-                                        : '';
-                                    return group.noLoad
-                                        ? `${n} axle(s) (line #${group.from}–#${group.to}${rowNote}) · no line load`
-                                        : `${n} axle(s) (line #${group.from}–#${group.to}${rowNote}) · ${group.load} t/axle · ${(n * (parseFloat(group.load)||0)).toFixed(1)} t total`;
-                                })()}
+                            <div class="tg-field">
+                                <label>${tgXCell ? '🔗 ' : ''}X offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgXCell ? `Pull X offset from Excel Input!${tgXCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'x')" ${tgXCell ? '' : 'disabled'}>⇩</button></label>
+                                <input type="number" step="any" value="${train.x}" title="Distance from origin (0,0) to the top-left corner of the trailer deck (axle #1 sits inset from this corner when a trailer preset is selected).${tgXCell ? ` Synced with Excel sheet 'Input'!${tgXCell}.` : ''}"
+                                       onchange="updateTrailerGenField(${train.id}, 'x', this.value)">
+                            </div>
+                            <div class="tg-field">
+                                <label>${tgYCell ? '🔗 ' : ''}Y offset (mm) <button type="button" class="tg-xy-sync-btn" title="${tgYCell ? `Pull Y offset from Excel Input!${tgYCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'y')" ${tgYCell ? '' : 'disabled'}>⇩</button></label>
+                                <input type="number" step="any" value="${train.y}" title="Distance from origin (0,0) to the top-left corner of the trailer deck, shared by every axle in this train.${tgYCell ? ` Synced with Excel sheet 'Input'!${tgYCell}.` : ''}"
+                                       onchange="updateTrailerGenField(${train.id}, 'y', this.value)">
                             </div>
                         </div>
-                    `).join('')}
-                    <button type="button" class="tg-add-group-btn" onclick="addAxleGroup(${train.id})">+ Add Axle Group</button>
 
-                    <div class="tg-train-summary">${maxAxle} axle line(s) (#1–#${maxAxle || 0}) · ${trainAxleCount} axle(s) total · ${totalLoad.toFixed(1)} t total for this train</div>
-                </div>
-            `;
+                        <div class="tg-cad-split-row">
+                            <label>AutoCAD split (axle lines per physical trailer, front→back — e.g. "4,6" for a 10-line train built from a 4-line unit then a 6-line unit)</label>
+                            <div class="tg-cad-split-input-row">
+                                <input type="text" placeholder="auto — whole train as one block" value="${train.cadSplit || ''}"
+                                       title="Leave blank for one AutoCAD block covering all axle lines. Enter comma-separated axle-line counts (matching CAD_BLOCK_MAP, e.g. 4,6) to insert one block per physical unit instead."
+                                       onchange="updateTrailerGenField(${train.id}, 'cadSplit', this.value)">
+                                <button type="button" class="tg-cad-split-auto-btn"
+                                        title="Recalculate the AutoCAD split from this train's CURRENT axle line count — fills in as many 4-line modules as fit, with the final module (up to 6 lines) taking whatever's left over (e.g. 10 axle lines -> 4,6). Trailer-type presets already auto-fill this on selection; use this button after manually changing axle groups so a stale split doesn't go stale/mismatched."
+                                        onclick="applyAutoCadSplit(${train.id})">↻ Recalc Split</button>
+                            </div>
+                            <div class="tg-cad-split-status" id="tgCadSplitStatus_${train.id}">${(() => {
+                        const axleCount = maxAxle;
+                        const segments = parseCadSplitString(train.cadSplit);
+                        if (!segments) return `Auto — one AutoCAD block for all ${axleCount} axle line(s).`;
+                        const sum = segments.reduce((s, n) => s + n, 0);
+                        const unmapped = segments.filter(n => !CAD_BLOCK_MAP[n]);
+                        if (sum !== axleCount) return `${segments.join(' + ')} = ${sum}, but this train has ${axleCount} axle line(s) — fix before export.`;
+                        if (unmapped.length) return `${segments.join(' + ')} = ${sum} ✓, but ${unmapped.join('/')}-line block(s) not mapped in CAD_BLOCK_MAP.`;
+                        return `${segments.join(' + ')} = ${sum} ✓ — ${segments.length} separate AutoCAD block(s) will be inserted.`;
+                    })()}</div>
+                        </div>
+
+                        <div class="tg-field-grid">
+                            <div class="tg-field">
+                                <label>Header/Dbar block</label>
+                                <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to this trailer's deck edge, shown in the 2D/3D preview and included as an extra row in the AutoCAD split / Set Train Group export. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
+                                        onchange="updateHeaderDbarField(${train.id}, 'headerDbar', this.value)">
+                                    <option value="none" ${(!train.headerDbar || train.headerDbar === 'none') ? 'selected' : ''}>None</option>
+                                    <option value="3m" ${train.headerDbar === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m</option>
+                                    <option value="3m_ppu" ${train.headerDbar === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU</option>
+                                </select>
+                            </div>
+                            ${train.headerDbar && train.headerDbar !== 'none' ? `
+                            <div class="tg-field">
+                                <label>Position</label>
+                                <select title="Where the block sits and where its row appears in the AutoCAD split / Set Train Group export for this train. 'Trailer left side' = the FIRST block, mounted at the train's FRONT (just ahead of the deck's front edge) and listed BEFORE all this train's axle-group segments (e.g. 'Header&amp;Dbar 3m,4,4,6'). 'Trailer right side' = the LAST block, mounted at the train's BACK (just behind the deck's rear edge) and listed AFTER them (e.g. '4,4,6,Header&amp;Dbar 3m'). Either way the block is centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward smaller Y (above it in plan view) for 'left', toward larger Y (below it) for 'right'."
+                                        onchange="updateHeaderDbarField(${train.id}, 'headerDbarSide', this.value)">
+                                    <option value="left" ${train.headerDbarSide !== 'right' ? 'selected' : ''}>Trailer left side</option>
+                                    <option value="right" ${train.headerDbarSide === 'right' ? 'selected' : ''}>Trailer right side</option>
+                                </select>
+                            </div>` : ''}
+                        </div>
+
+                        <div class="tg-groups-label">Axle groups (custom load per axle range)</div>
+                        ${train.groups.map(group => `
+                            <div class="tg-group-row">
+                                <div class="tg-group-row-header">
+                                    <span class="tg-group-swatch" style="background:${group.color};" title="Color for this axle group"></span>
+                                    <select class="tg-group-name-input" title="Which of the 4 fixed axle groups this axle range belongs to"
+                                            onchange="updateAxleGroupField(${train.id}, ${group.id}, 'groupNumber', this.value)">
+                                        ${TRAILER_GROUP_DEFS.map(gd => `<option value="${gd.number}" ${group.groupNumber === gd.number ? 'selected' : ''}>${gd.label}</option>`).join('')}
+                                    </select>
+                                    <button type="button" class="tg-remove-group" title="Remove axle group"
+                                            onclick="removeAxleGroup(${train.id}, ${group.id})"
+                                            ${train.groups.length <= 1 ? 'disabled' : ''}>✕</button>
+                                </div>
+                                <div class="tg-group-field-grid">
+                                    <div class="tg-group-field">
+                                        <label>From axle line #</label>
+                                        <input type="number" min="1" step="1" value="${group.from}" title="First axle-line number in this group"
+                                               onchange="updateAxleGroupField(${train.id}, ${group.id}, 'from', this.value)">
+                                    </div>
+                                    <div class="tg-group-field">
+                                        <label>To axle line #</label>
+                                        <input type="number" min="1" step="1" value="${group.to}" title="Last axle-line number in this group"
+                                               onchange="updateAxleGroupField(${train.id}, ${group.id}, 'to', this.value)">
+                                    </div>
+                                    ${train.axlePairOffsetY ? `
+                                    <div class="tg-group-field">
+                                        <label>Axle row</label>
+                                        <select title="Which physical axle(s) of each axle line in this range this group applies to — both the right and left axle, the right axle only, or the left axle only. e.g. for a 6-line/12-axle Goldhofer, columns 1–2 could be 'Both' while columns 3–6's right axles go to one group and their left axles to another."
+                                                onchange="updateAxleGroupField(${train.id}, ${group.id}, 'row', this.value)">
+                                            <option value="both" ${(!group.row || group.row === 'both') ? 'selected' : ''}>Both (right + left)</option>
+                                            <option value="right" ${group.row === 'right' ? 'selected' : ''}>Right axle only</option>
+                                            <option value="left" ${group.row === 'left' ? 'selected' : ''}>Left axle only</option>
+                                        </select>
+                                    </div>` : ''}
+                                    <div class="tg-group-field">
+                                        <label>Load type</label>
+                                        <select onchange="updateAxleGroupField(${train.id}, ${group.id}, 'loadMode', this.value)">
+                                            <option value="load" ${!group.noLoad ? 'selected' : ''}>Custom load (t)</option>
+                                            <option value="none" ${group.noLoad ? 'selected' : ''}>No line load</option>
+                                        </select>
+                                    </div>
+                                    <div class="tg-group-field">
+                                        <label title="Excel-calculated (moment-balance result) — pulled automatically from Display! whenever it changes there, and can't be edited on the dashboard.">📥 Load per axle (t)</label>
+                                        <input type="number" step="any" min="0" value="${group.load}" readonly ${group.noLoad ? 'disabled' : ''}
+                                               class="tg-group-field-readonly-input"
+                                               title="Pulled from Excel 'Display'! — not editable here.">
+                                    </div>
+                                </div>
+                                <div class="tg-group-summary">
+                                    ${(() => {
+                            const n = axleCountForGroup(train, group);
+                            const rowNote = train.axlePairOffsetY
+                                ? (group.row === 'right' ? ', right axle only' : (group.row === 'left' ? ', left axle only' : ', both rows'))
+                                : '';
+                            return group.noLoad
+                                ? `${n} axle(s) (line #${group.from}–#${group.to}${rowNote}) · no line load`
+                                : `${n} axle(s) (line #${group.from}–#${group.to}${rowNote}) · ${group.load} t/axle · ${(n * (parseFloat(group.load) || 0)).toFixed(1)} t total`;
+                        })()}
+                                </div>
+                            </div>
+                        `).join('')}
+                        <button type="button" class="tg-add-group-btn" onclick="addAxleGroup(${train.id})">+ Add Axle Group</button>
+
+                        <div class="tg-train-summary">${maxAxle} axle line(s) (#1–#${maxAxle || 0}) · ${trainAxleCount} axle(s) total · ${totalLoad.toFixed(1)} t total for this train</div>
+                    </div>
+                `;
             }).join('');
             renderCargoList();
             renderTrailerGeneratorTotals();
@@ -6863,12 +7593,12 @@
                 ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
             ];
             return `
-                <div class="tg-hloads-panel">
-                    <div class="tg-hloads-panel-title">⚠ Horizontal Loads</div>
-                    <div class="tg-hloads-panel-grid">
-                        ${hlRows.map(row => `<div class="tg-hloads-panel-row"><span class="tg-hloads-panel-icon">${row[0]}</span>${escapeHtml(row[1])}</div>`).join('')}
-                    </div>
-                </div>`;
+                    <div class="tg-hloads-panel">
+                        <div class="tg-hloads-panel-title">⚠ Horizontal Loads</div>
+                        <div class="tg-hloads-panel-grid">
+                            ${hlRows.map(row => `<div class="tg-hloads-panel-row"><span class="tg-hloads-panel-icon">${row[0]}</span>${escapeHtml(row[1])}</div>`).join('')}
+                        </div>
+                    </div>`;
         }
 
 
@@ -6910,12 +7640,12 @@
             // own independent horizontal layout.
             const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
             wrap.innerHTML = `
-                <div class="tg-view-section">${topHtml}</div>
-                <div class="tg-view-section">${elevationHtml}</div>
-                <div class="tg-view-section">${renderTrailerGenHLoadsPanel()}</div>
-                <div class="tg-orient-cube-overlay">${buildOrientationCubeSvg()}</div>
-                <div class="tg-unit-label-overlay">Unit: mm.</div>
-            `;
+                    <div class="tg-view-section">${topHtml}</div>
+                    <div class="tg-view-section">${elevationHtml}</div>
+                    <div class="tg-view-section">${renderTrailerGenHLoadsPanel()}</div>
+                    <div class="tg-orient-cube-overlay">${buildOrientationCubeSvg()}</div>
+                    <div class="tg-unit-label-overlay">Unit: mm.</div>
+                `;
             // Set the initial cube/unit-label scale for this wrap right
             // away (covers first paint, and the case where the popup's
             // root just got recreated at a size that differs from last
@@ -7478,17 +8208,17 @@
             });
 
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
-                <defs>
-                    <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                        <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-blue, #38bdf8)"/>
-                    </marker>
-                    <marker id="tgArrowY" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                        <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-green, #10b981)"/>
-                    </marker>
-                </defs>
-                <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
-            </svg>`;
+                    <defs>
+                        <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-blue, #38bdf8)"/>
+                        </marker>
+                        <marker id="tgArrowY" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-green, #10b981)"/>
+                        </marker>
+                    </defs>
+                    <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                    ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
+                </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
             // preview window) directly below the preview, per group color.
@@ -8183,11 +8913,11 @@
             }
 
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
-                <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}
-            </svg>`;
+                    <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                    <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                    <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                    ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}
+                </svg>`;
         }
 
         // ============================================================
@@ -8249,11 +8979,11 @@
         let current3DCameraTG = 'iso';
 
         const TG3D_CAM_PRESETS = {
-            iso:   { az: -40, el: 26 },
-            top:   { az: 0,   el: 89 },
-            side:  { az: 0,   el: 10 },   // viewed from world +Y (Left side)
+            iso: { az: -40, el: 26 },
+            top: { az: 0, el: 89 },
+            side: { az: 0, el: 10 },   // viewed from world +Y (Left side)
             front: { az: -90, el: 10 },   // viewed from world -X (Front)
-            rear:  { az: 90,  el: 10 },   // viewed from world +X (Rear)
+            rear: { az: 90, el: 10 },   // viewed from world +X (Rear)
         };
 
         // Floating (HTML-overlay) labels — used for the stability
@@ -8879,7 +9609,7 @@
             // reads as a CoG marker rather than a generic dot.
             const axLen = 0.22;
             const lineMat = new THREE.LineBasicMaterial({ color: hex });
-            [[axLen,0,0],[0,axLen,0],[0,0,axLen]].forEach(([dx, dy, dz]) => {
+            [[axLen, 0, 0], [0, axLen, 0], [0, 0, axLen]].forEach(([dx, dy, dz]) => {
                 const g = new THREE.BufferGeometry().setFromPoints([
                     new THREE.Vector3(mesh.position.x - dx, mesh.position.y - dy, mesh.position.z - dz),
                     new THREE.Vector3(mesh.position.x + dx, mesh.position.y + dy, mesh.position.z + dz),
@@ -9189,7 +9919,7 @@
             // and down from (topRightX, topRightY).
             const insertX = topRightX - numCols * colWidthMm;
             const insertY = topRightY;
-            const textHeight = rowHeightMm * 0.4;
+            const textHeight = rowHeightMm * 0.5;
             const marginX = colWidthMm * 0.05;
             const marginY = rowHeightMm * 0.3;
             const lines = [];
