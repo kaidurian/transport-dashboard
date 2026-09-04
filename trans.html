@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75.221)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75.23)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1747,12 +1747,12 @@
         // larger than real-world mm) before placing the table geometry
         // in Paper Space. Scale "A:B" (A drawing units per B real-world
         // units) = A / B.
-        const DRAWING_TABLE_PAPER_SCALE = 0.009 / 1;
+        const DRAWING_TABLE_PAPER_SCALE = 10 / 1;
         // Assumed Paper Space sheet size (mm) the table is anchored
         // against — adjust to match the actual Layout's paper size if
         // it differs from ISO A3 landscape.
         const CAD_PAPER_WIDTH_MM = 420;
-        const CAD_PAPER_HEIGHT_MM = 229;
+        const CAD_PAPER_HEIGHT_MM = 297;
         // Clear margin kept between the table and the sheet edge (mm).
         const CAD_PAPER_MARGIN_MM = 10;
         // Dedicated layer the table's LINE/TEXT entities are drawn on.
@@ -9119,7 +9119,7 @@
             // vla-AddTable only accepts a single height/width applied to
             // every row/column; resize individual columns in AutoCAD
             // afterward if 6 equal-width columns don't fit the content.
-            const rowHeightMm = 350 * CAD_UNIT_SCALE;
+            const rowHeightMm = 250 * CAD_UNIT_SCALE;
             const colWidthMm = 3000 * CAD_UNIT_SCALE;
             const lines = [];
             lines.push('(vl-load-com)');
@@ -9187,7 +9187,13 @@
         // description column) instead of one uniform width for all of
         // them. If the pulled table has more columns than entries here,
         // the extra columns reuse the last entry in this array.
-        const DRAWING_TABLE_COL_WIDTHS_MM = [3500, 1500, 1500, 1500, 1500, 1500];
+        const DRAWING_TABLE_COL_WIDTHS_MM = [3000, 3000, 3000, 3000, 3000, 3000];
+        // Text height as a fraction of row height. Kept as its own
+        // named constant (rather than a bare multiplier below) so it's
+        // easy to find — but however large you make it, marginY (below)
+        // is always derived from it, so the text can never spill past
+        // its row's top edge no matter what this ratio is set to.
+        const DRAWING_TABLE_TEXT_HEIGHT_RATIO = 0.5;
         function buildDrawingTableGridScript(rows, topRightX, topRightY, scale = 1) {
             const numRows = rows.length;
             const numCols = (rows[0] && rows[0].length) || 6;
@@ -9209,8 +9215,14 @@
             // and down from (topRightX, topRightY).
             const insertX = topRightX - totalWidthMm;
             const insertY = topRightY;
-            const textHeight = rowHeightMm * 0.6;
-            const marginY = rowHeightMm * 0.1;
+            // TEXT grows upward from its insertion point, so textHeight
+            // is clamped to leave at least a little headroom, and
+            // marginY (the gap below the text) is derived from it — NOT
+            // a separate fixed fraction — so text+margin always fits
+            // inside rowHeightMm and can never poke above the row's top
+            // edge (which, for row 0, is the table's anchored top edge).
+            const textHeight = rowHeightMm * Math.min(DRAWING_TABLE_TEXT_HEIGHT_RATIO, 0.8);
+            const marginY = (rowHeightMm - textHeight) / 2; // vertically centered in the row
             const lines = [];
             // Horizontal grid lines (top to bottom, row 0 at the top).
             for (let r = 0; r <= numRows; r++) {
