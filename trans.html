@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75.21)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75.22)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1752,7 +1752,7 @@
         // against — adjust to match the actual Layout's paper size if
         // it differs from ISO A3 landscape.
         const CAD_PAPER_WIDTH_MM = 420;
-        const CAD_PAPER_HEIGHT_MM = 297;
+        const CAD_PAPER_HEIGHT_MM = 350;
         // Clear margin kept between the table and the sheet edge (mm).
         const CAD_PAPER_MARGIN_MM = 10;
         // Dedicated layer the table's LINE/TEXT entities are drawn on.
@@ -9209,8 +9209,8 @@
             // and down from (topRightX, topRightY).
             const insertX = topRightX - totalWidthMm;
             const insertY = topRightY;
-            const textHeight = rowHeightMm * 0.5;
-            const marginY = rowHeightMm * 0.2;
+            const textHeight = rowHeightMm * 0.6;
+            const marginY = rowHeightMm * 0.1;
             const lines = [];
             // Horizontal grid lines (top to bottom, row 0 at the top).
             for (let r = 0; r <= numRows; r++) {
