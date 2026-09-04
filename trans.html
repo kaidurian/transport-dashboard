@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75.17)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75.18)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9119,7 +9119,7 @@
             // vla-AddTable only accepts a single height/width applied to
             // every row/column; resize individual columns in AutoCAD
             // afterward if 6 equal-width columns don't fit the content.
-            const rowHeightMm = 250 * CAD_UNIT_SCALE;
+            const rowHeightMm = 350 * CAD_UNIT_SCALE;
             const colWidthMm = 3000 * CAD_UNIT_SCALE;
             const lines = [];
             lines.push('(vl-load-com)');
@@ -9209,7 +9209,7 @@
             // and down from (topRightX, topRightY).
             const insertX = topRightX - totalWidthMm;
             const insertY = topRightY;
-            const textHeight = rowHeightMm * 0.4;
+            const textHeight = rowHeightMm * 0.5;
             const marginY = rowHeightMm * 0.3;
             const lines = [];
             // Horizontal grid lines (top to bottom, row 0 at the top).
