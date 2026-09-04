@@ -1385,7 +1385,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.75.9)</h1>
+            <h1>🚂 Transport Dashboard (Rev.75.10)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9842,8 +9842,8 @@
             // every row/column; resize individual columns in AutoCAD
             // afterward if 6 equal-width columns don't fit the content
             // AutoCAD drawing Table row height and column width in mm (before unit/scale multipliers)
-            const rowHeightMm = 500 * CAD_UNIT_SCALE;
-            const colWidthMm = 300 * CAD_UNIT_SCALE;
+            const rowHeightMm = 1 * CAD_UNIT_SCALE;
+            const colWidthMm = 1 * CAD_UNIT_SCALE;
             const lines = [];
             lines.push('(vl-load-com)');
             lines.push('(setq tgDwgTbl nil)');
