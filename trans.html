@@ -1747,7 +1747,7 @@
         // larger than real-world mm) before placing the table geometry
         // in Paper Space. Scale "A:B" (A drawing units per B real-world
         // units) = A / B.
-        const DRAWING_TABLE_PAPER_SCALE = 10 / 1;
+        const DRAWING_TABLE_PAPER_SCALE = 0.01 / 1;
         // Assumed Paper Space sheet size (mm) the table is anchored
         // against — adjust to match the actual Layout's paper size if
         // it differs from ISO A3 landscape.
@@ -9187,7 +9187,7 @@
         // description column) instead of one uniform width for all of
         // them. If the pulled table has more columns than entries here,
         // the extra columns reuse the last entry in this array.
-        const DRAWING_TABLE_COL_WIDTHS_MM = [3000, 3000, 3000, 3000, 3000, 3000];
+        const DRAWING_TABLE_COL_WIDTHS_MM = [3000, 1500, 1500, 1500, 1500, 3000];
         function buildDrawingTableGridScript(rows, topRightX, topRightY, scale = 1) {
             const numRows = rows.length;
             const numCols = (rows[0] && rows[0].length) || 6;
