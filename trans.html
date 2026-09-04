@@ -685,7 +685,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.76.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.76.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1097,7 +1097,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Drawing Table, and — once 📋 Drawing Table has been pulled — 4 full copies of it as LC1-4 tables (LC1 top-right, LC2 top-left, LC3 bottom-left, LC4 bottom-right, each header rewritten to 'TRANSPORT TABLE LC{n}') on their own new Layout tab, created automatically if it doesn't exist yet. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Drawing Table, and — once 📋 Drawing Table has been pulled — 4 full copies of it as LC1-4 tables (LC1 top-right, LC2 top-left, LC3 bottom-left, LC4 bottom-right, each header rewritten to 'TRANSPORT TABLE LC{n}') on their own new ISO A3 landscape Layout tab, created and sized automatically if it doesn't exist yet. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -9322,22 +9322,59 @@
         // Builds the full .scr/LISP line sequence for the LC1-4 quadrant
         // tables' OWN Layout tab: create it if it doesn't exist yet
         // ((layoutlist) lookup — never recreates/duplicates it on later
-        // runs), switch to it, clear any previous tables on
-        // LC_TABLE_LAYER_NAME, draw the 4 tables via the exact same
-        // plain TEXT+LINE grid function AND column widths/scale used by
-        // the Drawing Table's own .scr export
-        // (buildDrawingTableGridScript with no colWidthsOverrideMm, so
-        // it falls back to DRAWING_TABLE_COL_WIDTHS_MM — same style,
-        // same data shape), then zoom to fit. Does NOT itself touch
-        // TILEMODE — the caller (buildTrailerCADScript) is expected to
-        // already be in Paper Space (TILEMODE 0) before calling this,
-        // and switches back afterward.
+        // runs), switch to it, set that Layout's paper size to ISO A3
+        // landscape (420 x 297 mm, matching CAD_PAPER_WIDTH_MM/
+        // CAD_PAPER_HEIGHT_MM — see buildLcLayoutA3PageSetupLines()),
+        // clear any previous tables on LC_TABLE_LAYER_NAME, draw the 4
+        // tables via the exact same plain TEXT+LINE grid function AND
+        // column widths/scale used by the Drawing Table's own .scr
+        // export (buildDrawingTableGridScript with no
+        // colWidthsOverrideMm, so it falls back to
+        // DRAWING_TABLE_COL_WIDTHS_MM — same style, same data shape),
+        // then zoom to fit. Does NOT itself touch TILEMODE — the caller
+        // (buildTrailerCADScript) is expected to already be in Paper
+        // Space (TILEMODE 0) before calling this, and switches back
+        // afterward.
+        // Sets Layout {layoutName}'s plot/paper settings to ISO A3
+        // landscape (420 x 297 mm) via ActiveX properties on the Layout
+        // object — the "-LAYOUT" command itself has no paper-size
+        // option, only vla-put-CanonicalMediaName does. Uses the
+        // "DWG To PDF.pc3" driver, which ships with every AutoCAD
+        // install, so this works without depending on the user's own
+        // plotter configuration. Wrapped in vl-catch-all-apply per
+        // property (same defensive pattern as buildDrawingTableCADLisp's
+        // vla-AddTable call above) so a missing/renamed driver or an
+        // AutoCAD build with no ActiveX support (e.g. AutoCAD LT) prints
+        // an explicit command-line warning instead of silently failing
+        // or aborting the rest of the script. Re-applied on every run,
+        // not just on first creation, so the layout stays A3 even if it
+        // was previously resized by hand.
+        function buildLcLayoutA3PageSetupLines(layoutName) {
+            const lines = [];
+            lines.push(';; Set this Layout\'s paper size to ISO A3 landscape (420 x 297 mm)');
+            lines.push('(vl-load-com)');
+            lines.push(`(setq tgLcLayoutObj (vl-catch-all-apply 'vla-item (list (vla-get-Layouts (vla-get-ActiveDocument (vlax-get-acad-object))) "${layoutName}")))`);
+            lines.push('(if (vl-catch-all-error-p tgLcLayoutObj)');
+            lines.push('  (princ (strcat "\\nLC Load Cases layout A3 page setup FAILED (layout lookup): " (vl-catch-all-error-message tgLcLayoutObj) "\\n"))');
+            lines.push('  (progn');
+            lines.push('    (vl-catch-all-apply \'vla-put-ConfigName (list tgLcLayoutObj "DWG To PDF.pc3"))');
+            lines.push('    (vl-catch-all-apply \'vla-put-CanonicalMediaName (list tgLcLayoutObj "ISO_full_bleed_A3_(420.00_x_297.00_MM)"))');
+            lines.push('    (vl-catch-all-apply \'vla-put-PaperUnits (list tgLcLayoutObj acMillimeters))');
+            lines.push('    (vl-catch-all-apply \'vla-put-PlotRotation (list tgLcLayoutObj ac0degrees))');
+            lines.push('    (vl-catch-all-apply \'vla-put-CenterPlot (list tgLcLayoutObj :vlax-true))');
+            lines.push('    (vl-catch-all-apply \'vla-RefreshPlotDeviceInfo (list tgLcLayoutObj))');
+            lines.push('    (princ "\\nLC Load Cases layout page setup: ISO A3 landscape (420 x 297 mm).\\n")');
+            lines.push('  )');
+            lines.push(')');
+            return lines;
+        }
         function buildLcQuadrantLayoutLines(lcTables) {
             const lines = [];
-            lines.push(';; ---- LC1-LC4 quadrant tables: own Paper Space Layout tab ----');
+            lines.push(';; ---- LC1-LC4 quadrant tables: own Paper Space Layout tab, A3 ----');
             lines.push(';; Create the Layout tab only if it doesn\'t already exist, then switch to it');
             lines.push(`(if (not (member "${LC_TABLE_LAYOUT_NAME}" (layoutlist))) (command "._-LAYOUT" "_New" "${LC_TABLE_LAYOUT_NAME}"))`);
             lines.push(`(command "._-LAYOUT" "_Set" "${LC_TABLE_LAYOUT_NAME}")`);
+            buildLcLayoutA3PageSetupLines(LC_TABLE_LAYOUT_NAME).forEach(l => lines.push(l));
             lines.push(';; Create/select the LC table layer and clear any previous tables on it');
             lines.push('-LAYER');
             lines.push('Make');
@@ -9347,8 +9384,10 @@
             // Quadrant anchors — each is the TOP-RIGHT corner of that
             // table (buildDrawingTableGridScript always anchors from its
             // own top-right corner and extends left/down from there),
-            // split from the assumed sheet's own center lines so all 4
-            // tables sit clear of each other and of the sheet edges.
+            // split from the A3 sheet's own center lines (now actually
+            // enforced on this Layout by buildLcLayoutA3PageSetupLines()
+            // above, not just assumed) so all 4 tables sit clear of each
+            // other and of the sheet edges.
             const halfW = CAD_PAPER_WIDTH_MM / 2;
             const halfH = CAD_PAPER_HEIGHT_MM / 2;
             const m = CAD_PAPER_MARGIN_MM;
@@ -9612,7 +9651,7 @@
             if (inserts.length) parts.push(`${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')})`);
             if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
             if (drawingTableLispLines.length) parts.push(`1 Drawing Table (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) text/line grid`);
-            if (lcTables) parts.push(`4 LC1-4 tables (new "${LC_TABLE_LAYOUT_NAME}" Layout)`);
+            if (lcTables) parts.push(`4 LC1-4 tables (new "${LC_TABLE_LAYOUT_NAME}" Layout, ISO A3 landscape)`);
             let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
             if (!lcTables) msg += ' (LC1-4 tables skipped — pull 📋 Drawing Table first to include them.)';
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
