@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.78.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.78.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1132,7 +1132,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-7 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -1825,15 +1825,15 @@
         // Excel row numbers (1-indexed, inclusive ranges) to omit from
         // the LC1-4 quadrant tables ONLY when exported to AutoCAD —
         // rows 1-2 (blank banner rows above the title), the "TRAILER
-        // ARRANGEMENT" section (row 4's merged banner + rows 5-7,
+        // ARRANGEMENT" section (row 4's merged banner + rows 5-8,
         // identical across every load case), and row 63 (trailing blank
-        // row) are all cut, so row 8 slides up to close the gap right
+        // row) are all cut, so row 9 slides up to close the gap right
         // below the title (TRANSPORT TABLE LC{n}, row 3) and every
         // exported quadrant table is shorter. Purely a CAD-export trim:
         // never applied to the on-screen 🚚 Transport Data w/ CoG Env
         // card, the main 📋 Transport Data table, or Excel itself — see
         // stripExportRows()/computeLcQuadrantTables().
-        const LC_EXPORT_HIDDEN_ROWS = [{ from: 1, to: 2 }, { from: 4, to: 7 }, { from: 63, to: 63 }];
+        const LC_EXPORT_HIDDEN_ROWS = [{ from: 1, to: 2 }, { from: 4, to: 8 }, { from: 63, to: 63 }];
         // Excel row numbers (1-indexed, inclusive ranges) to omit from
         // the main 📋 Transport Data (Drawing Table) ONLY when exported
         // to AutoCAD — row 2 (blank banner row above the title) and row
