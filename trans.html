@@ -164,7 +164,7 @@
         .tg-help-btn {
             padding: 5px 10px; font-size: 11px; font-weight: 700; border-radius: 6px;
             border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
-            cursor: pointer; white-space: nowrap;
+            cursor: pointer; white-space: nowrap; flex-shrink: 0; overflow: visible;
         }
         .tg-help-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
         .tg-modal-sub {
@@ -218,7 +218,7 @@
         .tg-minimize-btn {
             padding: 5px 8px; font-size: 11px; font-weight: 700; border-radius: 6px;
             border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
-            cursor: pointer; white-space: nowrap; line-height: 1;
+            cursor: pointer; white-space: nowrap; line-height: 1; flex-shrink: 0; overflow: visible;
         }
         .tg-minimize-btn:hover { border-color: var(--accent-blue); color: var(--text-main); }
         .tg-card-cargo {
@@ -248,7 +248,11 @@
            right edge of every .tg-train-card-header (title takes only
            its natural width, buttons get the rest) — see the "move
            Minimize/Expand to right end" card-header layout request. */
-        .tg-cargo-title { flex: 1 1 auto; }
+        .tg-cargo-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        /* Header row itself may wrap onto a second line in a narrow
+           Excel task pane rather than letting flexbox squeeze the
+           ❓ Help / — Minimize buttons down to icon-only. */
+        .tg-train-card-header { flex-wrap: wrap; row-gap: 4px; }
         /* Cards using toggleTgCardMinimize()'s header-click-to-expand
            behavior (see handleTgCardHeaderClick()) get a pointer
            cursor over the whole header, not just the button, since
@@ -685,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.76.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.77)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -694,7 +698,7 @@
                 <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
                 ⬌ Show preview beside input data
             </label>
-            <label style="font-size:11px; color:var(--text-muted); display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="When on, every dashboard edit is pushed to Excel automatically (no button press needed), and a small set of read-only values (Z Trailer Height, Horizontal Loads, CoG signs, Stability, Drawing Table) are pulled back automatically too. Turn off to go back to manual 📤 Push / ⇩ Refresh buttons only.">
+            <label style="font-size:11px; color:var(--text-muted); display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="When on, every dashboard edit is pushed to Excel automatically (no button press needed), and a small set of read-only values (Z Trailer Height, Horizontal Loads, CoG signs, Stability, Transport Data) are pulled back automatically too. Turn off to go back to manual 📤 Push / ⇩ Refresh buttons only.">
                 <input type="checkbox" id="autoSyncToggle" checked onchange="toggleAutoSync(this.checked)"> Auto-sync
             </label>
             <span id="autoSyncStatus"><span style="color:var(--accent-green);">✓ Synced</span></span>
@@ -900,7 +904,7 @@
                             editable here. <strong>Slope shift</strong> (uphill LC1&amp;4 / downhill LC2&amp;3,
                             workbook C18/C19) stays a local-only input — no Excel source given for those, so
                             type them in directly; Y/Z have no slope-shift input, matching the workbook's
-                            "N/A" there. The table further down (📊 CoG Envelope Table, below 📋 Drawing Table)
+                            "N/A" there. The table further down (📊 CoG Envelope Table, below 📋 Transport Data)
                             is every downstream formula from that sheet (<strong>CoG envelope (5%)</strong>,
                             load cases <strong>LC1&ndash;LC4</strong>, and the same again with the
                             uphill/downhill slope shift folded in), computed here in the dashboard's own code
@@ -986,7 +990,7 @@
 
                     <div class="tg-cargo-card" id="tgDrawingTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📋 Drawing Table</h2>
+                            <h2 class="tg-cargo-title">📋 Transport Data</h2>
                             <button type="button" class="tg-help-btn" id="tgDrawingTableHelpToggleBtn" onclick="toggleTgDrawingTableHelp()">❓ Help</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
                         </div>
@@ -1003,8 +1007,35 @@
                         </p>
                         <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the Drawing Table from Excel 'Drawing_table'!A1:F63"
+                            <button type="button" class="tg-add-train-btn" title="Pull the Transport Data from Excel 'Drawing_table'!A1:F63"
                                     onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-cogenv-bg" id="tgTransportLcCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚚 Transport Data w/ CoG Env</h2>
+                            <button type="button" class="tg-help-btn" id="tgTransportLcHelpToggleBtn" onclick="toggleTgTransportLcHelp()">❓ Help</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgTransportLcHelpPanel">
+                            4 read-only tables — <strong>TRANSPORT TABLE LC1</strong> through
+                            <strong>TRANSPORT TABLE LC4</strong> — in the exact same style as
+                            📋 Transport Data above. Each one is pulled from its own column block in Excel
+                            sheet <strong>"Drawing_table_LC"</strong> (LC1 at column AA, LC2 at BA, LC3 at
+                            CA, LC4 at DA — the same blocks a 📤 button in 📊 CoG Envelope Table writes to),
+                            so once every load case has been pushed at least once, all 4 tables here show
+                            their own permanent snapshot side by side. Pull-only, never pushed. This is
+                            also exactly what the 📐 AutoCAD export below now uses for its own LC1-4
+                            quadrant tables, so the exported .scr matches what's shown here.
+                        </p>
+                        <div id="tgTransportLC1" class="tg-drawing-table-wrap"></div>
+                        <div id="tgTransportLC2" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
+                        <div id="tgTransportLC3" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
+                        <div id="tgTransportLC4" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull all 4 TRANSPORT TABLE LC1-4 tables from Excel 'Drawing_table_LC'"
+                                    onclick="pullAllTransportLcTables()">⇩ Refresh All from Excel</button>
                         </div>
                     </div>
 
@@ -1037,9 +1068,9 @@
                             NOT the plain local Z — to <strong>"Input"!BB35:BD35</strong> —
                             the same cells the rest of the workbook's transport table calculates the active
                             cargo CoG from — updates the <strong>TRANSPORT TABLE</strong> header in
-                            📋 Drawing Table above to name that load case (e.g. <strong>TRANSPORT TABLE
+                            📋 Transport Data above to name that load case (e.g. <strong>TRANSPORT TABLE
                             LC1</strong> or <strong>TRANSPORT TABLE LC1-Slope</strong>), refreshes
-                            📋 Drawing Table so that load case's transport table shows immediately, and
+                            📋 Transport Data so that load case's transport table shows immediately, and
                             mirrors the same data to Excel — kept STRICTLY separate by section:
                             <strong>CARGO CoG. In Axis-LC0</strong> and plain <strong>LC1&ndash;LC4</strong>
                             rows mirror to sheet <strong>"Drawing_table_LC"</strong>, in that load case's own
@@ -1070,9 +1101,9 @@
                             <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
                             MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
                             Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
-                            this pulls independently, the same way 📋 Drawing Table does. Any <strong>UNITY
+                            this pulls independently, the same way 📋 Transport Data does. Any <strong>UNITY
                             CHECK</strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
-                            same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Drawing Table
+                            same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Transport Data
                             above — but for the <strong>STABILITY</strong> rows it's the opposite: those are
                             flagged red when they fall <strong>under</strong> 1, since a smaller stability
                             angle means less margin. The <strong>Static</strong> column itself is shown
@@ -1097,7 +1128,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Drawing Table, and — once 📋 Drawing Table has been pulled — 4 full copies of it as LC1-4 tables (LC1 top-right, LC2 top-left, LC3 bottom-left, LC4 bottom-right, each header rewritten to 'TRANSPORT TABLE LC{n}') on their own new ISO A3 landscape Layout tab, created and sized automatically if it doesn't exist yet. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Transport Data table, and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (LC1 top-right, LC2 top-left, LC3 bottom-left, LC4 bottom-right) on their own new ISO A3 landscape Layout tab, created and sized automatically if it doesn't exist yet. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -1107,7 +1138,7 @@
 
     <script>
         // ============================================================
-        // HELP PANEL (collapsed by default — was a permanently-visible
+        // HELP PANEL (collapsed by default — was a permanently-visible Sayarm Tan
         // description block, now shown on demand via the ❓ Help button)
         // ============================================================
         function toggleTgHelp() {
@@ -1607,7 +1638,7 @@
         // individually.
         function toggleAllTgMinimize(btn) {
             const cardEls = document.querySelectorAll(
-                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, #tgCogEnvTableCard, #tgDrawingTableCard, #tgCogEnvSummaryCard'
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
             );
             const previewEls = document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap');
             const anyExpanded =
@@ -1667,7 +1698,7 @@
                 const btn = card.querySelector('.tg-minimize-btn');
                 if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this card'; }
             });
-            ['tgCogEnvTableCard', 'tgDrawingTableCard'].forEach(id => {
+            ['tgCogEnvTableCard', 'tgDrawingTableCard', 'tgTransportLcCard'].forEach(id => {
                 const card = document.getElementById(id);
                 if (!card) return;
                 card.classList.add('tg-card-minimized');
@@ -1984,10 +2015,19 @@
         // which single row is the big merged title banner.
         const DRAWING_TABLE_SHEET_NAME = "Drawing_table";
         const DRAWING_TABLE_RANGE = "A1:F63";
+        const DRAWING_TABLE_NUM_ROWS = 63; // row count of DRAWING_TABLE_RANGE — used to build LC-block A1 ranges
         const DRAWING_TABLE_TITLE_ROW = 3;   // 1-indexed — "TRANSPORT TABLE" banner, merged across all columns
         const DRAWING_TABLE_MERGE_BC_ROW = 4; // 1-indexed — B holds the value, spans B:C ("TRAILER ARRANGEMENT" value)
         const DRAWING_TABLE_BOLD_ROWS = new Set([1, 4, 9, 17, 23, 30, 38, 46, 55]); // 1-indexed section-header rows
         let tgDrawingTableRows = []; // raw 2D array of pulled cell values, row-major, same shape as DRAWING_TABLE_RANGE
+        // 🚚 Transport Data w/ CoG Env — 4 read-only tables (TRANSPORT
+        // TABLE LC1-LC4), each pulled straight from its own block in
+        // "Drawing_table_LC" (see drawingTableLcColStart()). Keyed 1-4
+        // (not 0-4 — there's no LC0 block shown here, only LC1-LC4).
+        // Same A1:F63 row shape as tgDrawingTableRows. This is also the
+        // data source the AutoCAD export's LC1-4 quadrant tables now
+        // read from — see computeLcQuadrantTables().
+        let tgTransportLcRows = { 1: [], 2: [], 3: [], 4: [] };
         // Which load case's transport table is currently shown in
         // 📋 Drawing Table — 0-4, set by whichever 📤 button was last
         // pressed in the 📊 CoG Envelope Table (pushLoadCaseToExcel),
@@ -4790,13 +4830,17 @@
         // cell whose value is a recognized pass/fail "sign" (OK/NOT OK/
         // PASS/FAIL/etc. — see cellStatusClass()) is colored green or
         // red so a failing check is immediately visible.
-        function renderTgDrawingTable() {
-            const el = document.getElementById('tgDrawingTable');
-            if (!el) return;
-            if (!tgDrawingTableRows.length) {
-                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${DRAWING_TABLE_SHEET_NAME}'.</div>`;
-                return;
-            }
+        // Shared renderer for any A1:F63-shaped Drawing Table grid — used
+        // by both 📋 Transport Data (tgDrawingTableRows) and each of the
+        // 4 🚚 Transport Data w/ CoG Env tables (tgTransportLcRows[1-4]).
+        // forcedLcLabel, if given (e.g. "LC1"), is appended to the pulled
+        // "TRANSPORT TABLE" title banner UNLESS that exact label is
+        // already present in it (so a title already baked in by
+        // pushDrawingTableRowsToLCSheet() isn't doubled up). When
+        // forcedLcLabel is null/undefined, falls back to the original
+        // 📋 Transport Data behavior of appending tgActiveDrawingLC
+        // instead. Display-only; never written back to Excel.
+        function buildDrawingTableHtml(rows, forcedLcLabel) {
             const fmt = v => {
                 if (v === null || v === undefined || v === '') return '';
                 if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
@@ -4807,18 +4851,22 @@
                 return `<td${cls ? ` class="${cls}"` : ''}>${fmt(v)}</td>`;
             };
             let html = '<table class="tg-drawing-table">';
-            tgDrawingTableRows.forEach((row, i) => {
+            rows.forEach((row, i) => {
                 const rowNum = i + 1; // 1-indexed, matching Excel row numbers
                 const isEmpty = row.every(v => v === null || v === undefined || v === '');
                 if (isEmpty) { html += `<tr class="tg-dt-spacer"><td colspan="6"></td></tr>`; return; }
                 if (rowNum === DRAWING_TABLE_TITLE_ROW) {
                     let rawTitle = row[0];
-                    // Append " LC{n}" to the pulled "TRANSPORT TABLE"
-                    // banner once a 📤 button in the 📊 CoG Envelope Table
-                    // has been pressed (tgActiveDrawingLC set) — see that
-                    // flag's own comment above. Display-only; never
-                    // written back to Excel.
-                    if (tgActiveDrawingLC !== null && typeof rawTitle === 'string' && /transport table/i.test(rawTitle)) {
+                    if (forcedLcLabel) {
+                        if (typeof rawTitle === 'string' && /transport table/i.test(rawTitle) &&
+                            !new RegExp(`\\b${forcedLcLabel}\\b`, 'i').test(rawTitle)) {
+                            rawTitle = `${rawTitle.trim()} ${forcedLcLabel}`;
+                        }
+                    } else if (tgActiveDrawingLC !== null && typeof rawTitle === 'string' && /transport table/i.test(rawTitle)) {
+                        // Append " LC{n}" to the pulled "TRANSPORT TABLE"
+                        // banner once a 📤 button in the 📊 CoG Envelope
+                        // Table has been pressed (tgActiveDrawingLC set)
+                        // — see that flag's own comment above.
                         rawTitle = `${rawTitle.trim()} LC${tgActiveDrawingLC}`;
                     }
                     html += `<tr class="tg-dt-title"><td colspan="6">${fmt(rawTitle)}</td></tr>`;
@@ -4833,7 +4881,74 @@
                 html += `<tr${boldClass}>` + row.map(cell).join('') + `</tr>`;
             });
             html += '</table>';
-            el.innerHTML = html;
+            return html;
+        }
+        function renderTgDrawingTable() {
+            const el = document.getElementById('tgDrawingTable');
+            if (!el) return;
+            if (!tgDrawingTableRows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${DRAWING_TABLE_SHEET_NAME}'.</div>`;
+                return;
+            }
+            el.innerHTML = buildDrawingTableHtml(tgDrawingTableRows, null);
+        }
+
+        // ---- 🚚 Transport Data w/ CoG Env — 4 read-only tables (LC1-4),
+        // each pulled straight from its own block in "Drawing_table_LC"
+        // (see drawingTableLcColStart()/DRAWING_TABLE_LC_SHEET_NAME).
+        // Same pull-only pattern as 📋 Transport Data above — nothing here
+        // is ever pushed, since these blocks are only ever written by
+        // pushDrawingTableRowsToLCSheet() from the 📊 CoG Envelope Table's
+        // own 📤 buttons. ----
+        function renderTransportLcTable(lcIndex) {
+            const el = document.getElementById(`tgTransportLC${lcIndex}`);
+            if (!el) return;
+            const rows = tgTransportLcRows[lcIndex];
+            if (!rows || !rows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">TRANSPORT TABLE LC${lcIndex}: no data pulled yet — click "⇩ Refresh All from Excel" below (or open this add-in inside Excel) to load it from '${DRAWING_TABLE_LC_SHEET_NAME}'.</div>`;
+                return;
+            }
+            el.innerHTML = buildDrawingTableHtml(rows, `LC${lcIndex}`);
+        }
+        async function pullTransportTableLC(lcIndex, opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert(`Not connected to Excel — open this add-in inside an Excel workbook to pull TRANSPORT TABLE LC${lcIndex}.`);
+                return;
+            }
+            const colStart = drawingTableLcColStart(lcIndex);
+            const colEnd = colStart + 5; // A:F — 6 columns wide, same as DRAWING_TABLE_RANGE
+            const a1 = `${colLetter(colStart)}1:${colLetter(colEnd)}${DRAWING_TABLE_NUM_ROWS}`;
+            try {
+                let values = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SHEET_NAME);
+                    const range = sheet.getRange(a1);
+                    range.load('values');
+                    await context.sync();
+                    values = range.values;
+                });
+                tgTransportLcRows[lcIndex] = values || [];
+                renderTransportLcTable(lcIndex);
+                if (!silent) logMsg(`↺ Pulled TRANSPORT TABLE LC${lcIndex} from '${DRAWING_TABLE_LC_SHEET_NAME}'!${a1}.`);
+            } catch (e) {
+                console.warn(`Could not read '${DRAWING_TABLE_LC_SHEET_NAME}' LC${lcIndex} block (${a1})`, e);
+                if (!silent) alert(`Could not read sheet "${DRAWING_TABLE_LC_SHEET_NAME}". Make sure it exists.`);
+            }
+        }
+        async function pullAllTransportLcTables(opts = {}) {
+            const silent = opts.silent === true;
+            for (const lcIndex of [1, 2, 3, 4]) {
+                await pullTransportTableLC(lcIndex, { silent: true });
+            }
+            if (!silent) logMsg(`↺ Pulled all 4 TRANSPORT TABLE LC1-4 tables from '${DRAWING_TABLE_LC_SHEET_NAME}'.`);
+        }
+        function toggleTgTransportLcHelp() {
+            const panel = document.getElementById('tgTransportLcHelpPanel');
+            const btn = document.getElementById('tgTransportLcHelpToggleBtn');
+            if (!panel || !btn) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
         }
 
         // ---- CoG Envelope Summary — a NEW, separate read-only table
@@ -6105,7 +6220,8 @@
                 await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside
                 await pullHorizontalLoadsFromExcel({ silent: true }); // Horizontal Loads — own try/catch inside
                 await pullCogEnvFromExcel({ silent: true }); // CoG Envelope dim/CoG inputs — own try/catch inside
-                await pullDrawingTableFromExcel({ silent: true }); // Drawing Table — own try/catch inside
+                await pullDrawingTableFromExcel({ silent: true }); // Transport Data — own try/catch inside
+                await pullAllTransportLcTables({ silent: true }); // Transport Data w/ CoG Env (LC1-4) — own try/catch inside
                 await pullCogEnvSummaryFromExcel({ silent: true }); // CoG Envelope Summary — own try/catch inside
                 renderTrailerDashboard();
                 logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
@@ -9285,39 +9401,44 @@
         }
 
         // ---- LC1-LC4 quadrant tables (.scr export) — 4 full copies of
-        // 📋 Drawing Table (tgDrawingTableRows, same A1:F63 shape/style
-        // as DRAWING_TABLE_RANGE — same 6 columns, same
-        // DRAWING_TABLE_COL_WIDTHS_MM/DRAWING_TABLE_PAPER_SCALE as the
-        // Drawing Table's own .scr export below), one per
+        // the 🚚 Transport Data w/ CoG Env tables (tgTransportLcRows[1-4],
+        // same A1:F63 shape/style as DRAWING_TABLE_RANGE — same 6
+        // columns, same DRAWING_TABLE_COL_WIDTHS_MM/DRAWING_TABLE_PAPER_SCALE
+        // as the Transport Data table's own .scr export below), one per
         // COGENV_LC_MAIN_NAMES load case, laid out in their own new
         // Paper Space Layout tab: LC1 top-right, LC2 top-left, LC3
         // bottom-left, LC4 bottom-right (per KKai's spec). Each copy's
         // title row (DRAWING_TABLE_TITLE_ROW) is rewritten to
-        // "TRANSPORT TABLE LC{n}" — the exact same title-rewrite
-        // convention pushDrawingTableRowsToLCSheet() already uses when
-        // mirroring 📋 Drawing Table into Excel "Drawing_table_LC" — so
-        // the 4 CAD tables read the same way the Excel mirror sheet
-        // does. Returns null (nothing to export) until the Drawing
-        // Table has been pulled at least once. ----
+        // "TRANSPORT TABLE LC{n}" (unless already present — the blocks
+        // are usually already labelled that way by
+        // pushDrawingTableRowsToLCSheet()), so this export always
+        // matches exactly what's shown in the 🚚 Transport Data w/ CoG
+        // Env card, not a re-labelled copy of the current/LC0 table.
+        // Returns null (nothing to export) until at least one of the 4
+        // LC tables has been pulled. ----
         function lcDrawingTableTitleRows(rows, lcLabel) {
             return rows.map((r, i) => {
                 if (i !== DRAWING_TABLE_TITLE_ROW - 1) return r;
                 const titleRow = r.slice();
                 let rawTitle = titleRow[0];
-                if (typeof rawTitle === 'string' && /transport table/i.test(rawTitle)) {
+                if (typeof rawTitle === 'string' && /transport table/i.test(rawTitle) &&
+                    !new RegExp(`\\b${lcLabel}\\b`, 'i').test(rawTitle)) {
                     titleRow[0] = `${rawTitle.trim()} ${lcLabel}`;
                 }
                 return titleRow;
             });
         }
         function computeLcQuadrantTables() {
-            if (!tgDrawingTableRows || !tgDrawingTableRows.length) return null;
             const tables = {};
+            let any = false;
             COGENV_LC_MAIN_NAMES.forEach((name, i) => {
-                const lcLabel = `LC${i + 1}`; // COGENV_LC_MAIN_NAMES[i] === lcLabel already, kept explicit for clarity
-                tables[name] = lcDrawingTableTitleRows(tgDrawingTableRows, lcLabel);
+                const lcIndex = i + 1; // COGENV_LC_MAIN_NAMES[i] === `LC${lcIndex}` already
+                const rows = tgTransportLcRows[lcIndex];
+                if (!rows || !rows.length) return;
+                any = true;
+                tables[name] = lcDrawingTableTitleRows(rows, `LC${lcIndex}`);
             });
-            return tables;
+            return any ? tables : null;
         }
         // Builds the full .scr/LISP line sequence for the LC1-4 quadrant
         // tables' OWN Layout tab: create it if it doesn't exist yet
@@ -9628,14 +9749,15 @@
                 drawingTableLispLines = buildDrawingTableGridScript(tgDrawingTableRows, topRightX, topRightY, DRAWING_TABLE_PAPER_SCALE);
             }
             // LC1-4 quadrant tables — own new Layout tab, each a full
-            // mirror of 📋 Drawing Table with its title row rewritten to
-            // "TRANSPORT TABLE LC{n}" — see computeLcQuadrantTables()/
-            // buildLcQuadrantLayoutLines() above. null until the Drawing
-            // Table itself has been pulled at least once.
+            // mirror of the 🚚 Transport Data w/ CoG Env LC1-4 tables,
+            // title row rewritten to "TRANSPORT TABLE LC{n}" if not
+            // already — see computeLcQuadrantTables()/
+            // buildLcQuadrantLayoutLines() above. null until at least
+            // one of those 4 tables has been pulled.
             const lcTables = computeLcQuadrantTables();
 
             if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0 && !lcTables) {
-                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, and no Drawing Table data has been pulled (needed for both the Drawing Table and the LC1-4 tables).');
+                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, no Transport Data has been pulled, and no 🚚 Transport Data w/ CoG Env LC1-4 table has been pulled.');
                 return;
             }
             const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables);
@@ -9650,10 +9772,10 @@
             const parts = [];
             if (inserts.length) parts.push(`${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')})`);
             if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
-            if (drawingTableLispLines.length) parts.push(`1 Drawing Table (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) text/line grid`);
-            if (lcTables) parts.push(`4 LC1-4 tables (new "${LC_TABLE_LAYOUT_NAME}" Layout, ISO A3 landscape)`);
+            if (drawingTableLispLines.length) parts.push(`1 Transport Data (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) text/line grid`);
+            if (lcTables) parts.push(`${Object.keys(lcTables).length} LC1-4 table(s) (new "${LC_TABLE_LAYOUT_NAME}" Layout, ISO A3 landscape)`);
             let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
-            if (!lcTables) msg += ' (LC1-4 tables skipped — pull 📋 Drawing Table first to include them.)';
+            if (!lcTables) msg += ' (LC1-4 tables skipped — pull 🚚 Transport Data w/ CoG Env first to include them.)';
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
             logMsg(msg);
             if (warnings.length) console.warn('Trailer CAD export warnings:\n' + warnings.join('\n'));
