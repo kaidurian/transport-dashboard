@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.79.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.79.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10115,7 +10115,16 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `trailer-layout-${new Date().toISOString().slice(0, 10)}.scr`;
+            // Downloaded as .txt, NOT .scr — ".scr" is also the extension
+            // Windows uses for screensaver EXECUTABLES, a well-known
+            // malware disguise, so Windows Defender / browser SmartScreen /
+            // most corporate AV silently quarantine or delete a downloaded
+            // .scr the instant it lands, even though this one is plain
+            // text. Downloading as .txt sidesteps that false-positive —
+            // rename the file to .scr (or just type its .txt name when
+            // AutoCAD's SCRIPT/-SCRIPT command prompts for a filename;
+            // both work) before running it.
+            a.download = `trailer-layout-${new Date().toISOString().slice(0, 10)}.txt`;
             document.body.appendChild(a); a.click(); a.remove();
             URL.revokeObjectURL(url);
 
@@ -10125,7 +10134,7 @@
             if (cogWeightInserts.length) parts.push(`${cogWeightInserts.length} "${COG_WEIGHT_BLOCK_NAME}" CoG/CCoG block(s)`);
             if (drawingTableLispLines.length) parts.push(`1 Transport Data (${drawingTableExportRows.length}×${(drawingTableExportRows[0] || []).length}) text/line grid`);
             if (lcTables) parts.push(`${Object.keys(lcTables).length} LC1-4 table(s) (new "${LC_TABLE_LAYOUT_NAME}" Layout, ISO A3 landscape)`);
-            let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
+            let msg = `📐 Exported ${parts.join(', ')} to .txt (downloaded as .txt, not .scr, so Windows/your browser/AV doesn't quarantine it — rename it to .scr before running it in AutoCAD).`;
             if (!lcTables) msg += ' (LC1-4 tables skipped — pull 🚚 Transport Data w/ CoG Env first to include them.)';
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
             logMsg(msg);
