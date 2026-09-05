@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.79.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.79.4)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9952,13 +9952,28 @@
             lines.push(';; Force Model Space — keep trailer/cargo geometry out of any Layout');
             lines.push('TILEMODE');
             lines.push('1');
+            // Each insert is guarded: tblsearch checks the block is
+            // actually DEFINED in this drawing before touching it, and
+            // the insert itself goes through (command "_.-insert" ...)
+            // rather than raw command-line text tokens. This matters a
+            // lot more than it looks: a raw "-Insert"/name/point/scale/
+            // scale/rotation sequence has NO fallback if that block
+            // name doesn't exist — AutoCAD just re-prompts for a valid
+            // block name, and every subsequent line in the .scr (cargo
+            // outlines, COG markers, both tables) gets silently consumed
+            // as answers to THAT wrong prompt instead of the commands
+            // they were meant to be, i.e. one missing block anywhere in
+            // this list can swallow everything after it. The guarded
+            // form below can never desync the rest of the script — a
+            // missing block just prints a warning to the command line
+            // and moves on to the next line.
+            lines.push('(vl-load-com)');
             inserts.forEach(ins => {
-                lines.push('-Insert');
-                lines.push(ins.blockName);
-                lines.push(`${ins.x.toFixed(3)},${ins.y.toFixed(3)},0`);
-                lines.push('1');
-                lines.push('1');
-                lines.push(`${ins.rotationDeg}`);
+                lines.push(`;; ${ins.trainName || ins.blockName}${ins.view ? ` — ${ins.view} view` : ''}`);
+                lines.push(`(if (tblsearch "BLOCK" "${escapeLispString(ins.blockName)}")`);
+                lines.push(`  (command "_.-insert" "${escapeLispString(ins.blockName)}" (list ${ins.x.toFixed(3)} ${ins.y.toFixed(3)} 0.0) 1 1 ${ins.rotationDeg})`);
+                lines.push(`  (princ (strcat "\\nWarning: block \\"${escapeLispString(ins.blockName)}\\" is not defined in this drawing — \\"${escapeLispString(ins.trainName || ins.blockName)}\\"${ins.view ? ` (${ins.view} view)` : ''} skipped.\\n"))`);
+                lines.push(`)`);
             });
             if (cargoOutlines && cargoOutlines.length) {
                 lines.push(';; Cargo footprint outlines — one rectangle per');
