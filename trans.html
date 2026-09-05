@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.79.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.79.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1132,7 +1132,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, one &quot;COG&quot; block per cargo item's own CoG point plus one for the combined CCoG point (ITEM/WEIGHT attributes filled in from that item's name/weight, or 'CCoG'/the combined weight — requires a block named &quot;COG&quot; with ITEM and WEIGHT attributes already defined in the drawing), the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks (and the &quot;COG&quot; block) defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts, per train, a top/plan + front/side + end block (e.g. KAMAG_K25_4L_top_view_AFT/side_view_AFT/end_view_AFT — front view shares a row lined up under the plan view, end view sits in its own column further right — offsets are CAD_FRONT_VIEW_Y_OFFSET_MM/CAD_END_VIEW_X_OFFSET_MM/CAD_END_VIEW_ROW_SPACING_MM, adjust to taste), plus a &quot;COG&quot; block in EACH of those 3 views per cargo item's own CoG point and one more per view for the combined CCoG point (ITEM/WEIGHT attributes filled in from that item's name/weight, or 'CCoG'/the combined weight — requires a block named &quot;COG&quot; with ITEM and WEIGHT attributes already defined in the drawing), the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks (and the &quot;COG&quot; block) defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -1764,14 +1764,49 @@
         // AutoCAD side has whole-unit blocks (not per-axle-line blocks),
         // and the block itself differs by load direction (AFT = Load In,
         // FWD = Load Out — a single global setting applies to every
-        // train in the export, not per-train).
+        // train in the export, not per-train) AND by view — top (plan),
+        // side (front elevation), end (end elevation) — each its own
+        // pre-drawn block, one insert per view per segment (see
+        // computeTrailerCADInserts()).
         const CAD_BLOCK_MAP = {
-            4: { in: 'KAMAG_K25_4L_top_view_AFT', out: 'KAMAG_K25_4L_top_view_FWD' },
-            6: { in: 'KAMAG_K25_6L_top_view_AFT', out: 'KAMAG_K25_6L_top_view_FWD' }
+            4: {
+                in:  { top: 'KAMAG_K25_4L_top_view_AFT', side: 'KAMAG_K25_4L_side_view_AFT', end: 'KAMAG_K25_4L_end_view_AFT' },
+                out: { top: 'KAMAG_K25_4L_top_view_FWD', side: 'KAMAG_K25_4L_side_view_FWD', end: 'KAMAG_K25_4L_end_view_FWD' }
+            },
+            6: {
+                in:  { top: 'KAMAG_K25_6L_top_view_AFT', side: 'KAMAG_K25_6L_side_view_AFT', end: 'KAMAG_K25_6L_end_view_AFT' },
+                out: { top: 'KAMAG_K25_6L_top_view_FWD', side: 'KAMAG_K25_6L_side_view_FWD', end: 'KAMAG_K25_6L_end_view_FWD' }
+            }
         };
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
         const CAD_UNIT_SCALE = 1;
+
+        // ---- Front/end view placement (.scr export) ----
+        // All 3 views are laid out flat, side by side, in the SAME
+        // Model Space XY plane (same technique already used for the
+        // top/plan view) — nothing is actually projected in 3D, each
+        // view is just its own pre-drawn 2D block placed in its own
+        // area of the drawing:
+        //   • top (plan)  — unchanged: train's own real X/Y.
+        //   • front (side elevation) — ONE shared row for the whole
+        //     convoy at Y = CAD_FRONT_VIEW_Y_OFFSET_MM (below the plan
+        //     view), each segment placed at its OWN X so it lines up
+        //     directly under its plan-view block (standard GA-drawing
+        //     convention — elevation shares the plan's X-axis).
+        //   • end view — its own column at X = CAD_END_VIEW_X_OFFSET_MM
+        //     (to the right of the plan/front views); its horizontal
+        //     axis is world Y (width), not X, so segments can't share a
+        //     row without overlapping — each segment gets its own row,
+        //     stacked down every CAD_END_VIEW_ROW_SPACING_MM starting
+        //     from the front-view row (row 0 = same Y as the front row).
+        // These are plain constants, not derived from any block's real
+        // drawn extents (this tool has no way to know a block's actual
+        // footprint ahead of time) — adjust to taste once the blocks
+        // are in place so nothing overlaps.
+        const CAD_FRONT_VIEW_Y_OFFSET_MM = 15000;
+        const CAD_END_VIEW_X_OFFSET_MM = 20000;
+        const CAD_END_VIEW_ROW_SPACING_MM = 6000;
 
         // ---- Drawing Table placement in Paper Space (.scr export) ----
         // The Drawing Table's row/column dimensions (see
@@ -9225,30 +9260,45 @@
         // with), mirroring the ">0" weight gating already used
         // elsewhere for these same signs.
         const COG_WEIGHT_BLOCK_NAME = 'COG';
+        // Each CoG point gets ONE "COG" block insert per view (top,
+        // front, end — 3 total per point), placed in that view's own
+        // area of the drawing (see the CAD_FRONT_VIEW_Y_OFFSET_MM /
+        // CAD_END_VIEW_X_OFFSET_MM comment above computeTrailerCADInserts):
+        //   • top   — real X/Y, unchanged from before.
+        //   • front — real X, front-view row + real (world) Z folded
+        //     into the row's own Y so the marker sits at the right
+        //     height in that elevation.
+        //   • end   — front-view row (row 0 of the end-view column,
+        //     since a CoG marker isn't tied to any one train/segment) +
+        //     real Z folded into Y the same way, real Y folded into the
+        //     column's own X (end view's horizontal axis is world Y).
         function computeCogWeightCADInserts() {
             const inserts = [];
+            const frontRowY = -CAD_FRONT_VIEW_Y_OFFSET_MM;
+            const pushPoint = (item, weight, xMm, yMm, zMm) => {
+                inserts.push({ item, weight, view: 'top', x: xMm * CAD_UNIT_SCALE, y: yMm * CAD_UNIT_SCALE });
+                inserts.push({ item, weight, view: 'front', x: xMm * CAD_UNIT_SCALE, y: (frontRowY + zMm) * CAD_UNIT_SCALE });
+                inserts.push({ item, weight, view: 'end', x: (CAD_END_VIEW_X_OFFSET_MM + yMm) * CAD_UNIT_SCALE, y: (frontRowY + zMm) * CAD_UNIT_SCALE });
+            };
             cargoItems.forEach(c => {
                 const w = parseFloat(c.weight) || 0;
                 if (w <= 0) return;
                 const xMm = (parseFloat(c.x) || 0) * 1000;
                 const yMm = (parseFloat(c.y) || 0) * 1000;
-                inserts.push({
-                    item: c.name || 'Cargo',
-                    weight: w,
-                    x: xMm * CAD_UNIT_SCALE,
-                    y: yMm * CAD_UNIT_SCALE
-                });
+                // Cargo item CoGz is meters ABOVE the deck (same
+                // convention as cogWorldZ elsewhere) — fold in
+                // tgZTrailerHeightMm to get the real absolute world Z.
+                const zMm = tgZTrailerHeightMm + (parseFloat(c.z) || 0) * 1000;
+                pushPoint(c.name || 'Cargo', w, xMm, yMm, zMm);
             });
             if (cogCombinedSignLoaded && cargoTotal && (parseFloat(cargoTotal.weight) || 0) > 0) {
-                inserts.push({
-                    item: 'CCoG',
-                    weight: parseFloat(cargoTotal.weight) || 0,
-                    // cogCombinedSign.x/y are already world mm (see its
-                    // own comment above) — no *1000 conversion, unlike
-                    // the per-item cargo x/y fields (meters) above.
-                    x: (parseFloat(cogCombinedSign.x) || 0) * CAD_UNIT_SCALE,
-                    y: (parseFloat(cogCombinedSign.y) || 0) * CAD_UNIT_SCALE
-                });
+                // cogCombinedSign.x/y/z are already absolute world mm
+                // (Display!B16:D16 — see its own comment above), unlike
+                // the per-item cargo x/y/z fields (meters) above.
+                const xMm = parseFloat(cogCombinedSign.x) || 0;
+                const yMm = parseFloat(cogCombinedSign.y) || 0;
+                const zMm = parseFloat(cogCombinedSign.z) || 0;
+                pushPoint('CCoG', parseFloat(cargoTotal.weight) || 0, xMm, yMm, zMm);
             }
             return inserts;
         }
@@ -9770,6 +9820,10 @@
             const inserts = [];
             const warnings = [];
             const loadDirection = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
+            // One row per physical segment (shared across all trains),
+            // used to stack each segment's end view into its own row —
+            // see the CAD_END_VIEW_ROW_SPACING_MM comment above.
+            let viewRowIndex = 0;
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9786,25 +9840,60 @@
                 let axleOffset = 0;
                 segments.forEach((segCount, segIdx) => {
                     const segLabel = segments.length > 1 ? `${train.name} (#${axleOffset + 1}-#${axleOffset + segCount})` : train.name;
-                    const blockNames = CAD_BLOCK_MAP[segCount];
-                    if (!blockNames) {
+                    const rowIndex = viewRowIndex++;
+                    const blockSet = CAD_BLOCK_MAP[segCount];
+                    if (!blockSet) {
                         warnings.push(`Train "${segLabel}" has ${segCount} axle line(s) — no AutoCAD block mapped (only ${Object.keys(CAD_BLOCK_MAP).join('/')} configured). Skipped.`);
                         axleOffset += segCount;
                         return;
                     }
-                    const blockName = blockNames[loadDirection];
+                    const blockNames = blockSet[loadDirection];
                     const segAxle1X = axle1X - axleOffset * spacing;
                     const insertionXm = segAxle1X;
                     const rotationDeg = (loadDirection === 'out') ? 180 : 0;
+                    const frontRowY = -CAD_FRONT_VIEW_Y_OFFSET_MM;
+                    const endRowY = frontRowY - rowIndex * CAD_END_VIEW_ROW_SPACING_MM;
+                    // Top (plan) view — unchanged position/behavior.
                     inserts.push({
                         trainName: segLabel,
-                        blockName,
+                        view: 'top',
+                        blockName: blockNames.top,
                         axleCount: segCount,
                         loadDirection,
                         x: insertionXm * CAD_UNIT_SCALE,
                         y: (parseFloat(train.y) || 0) * CAD_UNIT_SCALE,
                         rotationDeg
                     });
+                    // Front (side elevation) view — same X as the plan
+                    // block above so it lines up directly underneath it;
+                    // shared row (frontRowY) for the whole convoy.
+                    if (blockNames.side) {
+                        inserts.push({
+                            trainName: segLabel,
+                            view: 'front',
+                            blockName: blockNames.side,
+                            axleCount: segCount,
+                            loadDirection,
+                            x: insertionXm * CAD_UNIT_SCALE,
+                            y: frontRowY * CAD_UNIT_SCALE,
+                            rotationDeg
+                        });
+                    }
+                    // End view — own column (CAD_END_VIEW_X_OFFSET_MM),
+                    // this segment's own row (endRowY) stacked down from
+                    // the front row.
+                    if (blockNames.end) {
+                        inserts.push({
+                            trainName: segLabel,
+                            view: 'end',
+                            blockName: blockNames.end,
+                            axleCount: segCount,
+                            loadDirection,
+                            x: CAD_END_VIEW_X_OFFSET_MM * CAD_UNIT_SCALE,
+                            y: endRowY * CAD_UNIT_SCALE,
+                            rotationDeg
+                        });
+                    }
                     axleOffset += segCount;
                 });
 
