@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.78)</h1>
+            <h1>🚂 Transport Dashboard (Rev.78.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1132,7 +1132,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Transport Data table, and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 4-7 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 2 Layout tabs, the Transport Data table and the LC1-4 tables reuse the first two as-is (no new layout, no resize); otherwise a new ISO A3 landscape (420 x 297 mm) layout is created for each. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-7 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -1822,16 +1822,25 @@
         // for the Transport Data table instead and this name is never
         // referenced.
         const TRANSPORT_DATA_LAYOUT_NAME = "Transport Data";
-        // Excel row numbers (1-indexed) to omit from the LC1-4 quadrant
-        // tables ONLY when exported to AutoCAD — the "TRAILER
-        // ARRANGEMENT" section (row 4's merged banner + rows 5-7) is
-        // identical across every load case, so cutting it out of the 4
-        // exported copies (row 8 slides up to close the gap right below
-        // the title) keeps each quadrant table shorter. Purely a CAD-
-        // export trim: never applied to the on-screen 🚚 Transport Data
-        // w/ CoG Env card, the main 📋 Transport Data table, or Excel
-        // itself — see stripLcExportRows()/computeLcQuadrantTables().
-        const LC_EXPORT_HIDDEN_ROWS = { from: 4, to: 7 };
+        // Excel row numbers (1-indexed, inclusive ranges) to omit from
+        // the LC1-4 quadrant tables ONLY when exported to AutoCAD —
+        // rows 1-2 (blank banner rows above the title), the "TRAILER
+        // ARRANGEMENT" section (row 4's merged banner + rows 5-7,
+        // identical across every load case), and row 63 (trailing blank
+        // row) are all cut, so row 8 slides up to close the gap right
+        // below the title (TRANSPORT TABLE LC{n}, row 3) and every
+        // exported quadrant table is shorter. Purely a CAD-export trim:
+        // never applied to the on-screen 🚚 Transport Data w/ CoG Env
+        // card, the main 📋 Transport Data table, or Excel itself — see
+        // stripExportRows()/computeLcQuadrantTables().
+        const LC_EXPORT_HIDDEN_ROWS = [{ from: 1, to: 2 }, { from: 4, to: 7 }, { from: 63, to: 63 }];
+        // Excel row numbers (1-indexed, inclusive ranges) to omit from
+        // the main 📋 Transport Data (Drawing Table) ONLY when exported
+        // to AutoCAD — row 2 (blank banner row above the title) and row
+        // 63 (trailing blank row). Same CAD-export-only trim as
+        // LC_EXPORT_HIDDEN_ROWS above: never applied to the on-screen
+        // table or to Excel itself — see stripExportRows().
+        const DRAWING_TABLE_EXPORT_HIDDEN_ROWS = [{ from: 2, to: 2 }, { from: 63, to: 63 }];
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
         // kept in sync with. B5 = X offset, B6 = Y offset. B1 = Number
@@ -9476,20 +9485,27 @@
                 return titleRow;
             });
         }
-        // Cuts Excel rows LC_EXPORT_HIDDEN_ROWS.from-to (1-indexed,
-        // inclusive) out of a pulled A1:F63-shaped grid — see that
-        // constant's own comment for why. Purely positional (array
-        // splice), so whatever row used to be row 8 becomes the new row
-        // 4 in the returned array; buildDrawingTableGridScript() draws
-        // whatever rows it's handed with no absolute-row-number
-        // assumptions of its own, so the shortened grid just prints
-        // shorter — nothing else needs to change.
-        function stripLcExportRows(rows) {
-            const { from, to } = LC_EXPORT_HIDDEN_ROWS;
+        // Cuts the given 1-indexed inclusive row ranges (an array of
+        // {from,to} objects, e.g. LC_EXPORT_HIDDEN_ROWS /
+        // DRAWING_TABLE_EXPORT_HIDDEN_ROWS) out of a pulled
+        // A1:F63-shaped grid — see those constants' own comments for
+        // why. Purely positional (array filter), so whatever row used
+        // to be, say, row 8 slides up to become the new row 4 in the
+        // returned array once the rows above it are cut;
+        // buildDrawingTableGridScript() draws whatever rows it's handed
+        // with no absolute-row-number assumptions of its own, so the
+        // shortened grid just prints shorter — nothing else needs to
+        // change. A row is cut if it falls inside ANY of the supplied
+        // ranges.
+        function stripExportRows(rows, ranges) {
             return rows.filter((_, i) => {
                 const rowNum = i + 1; // 1-indexed, matching Excel row numbers
-                return rowNum < from || rowNum > to;
+                return !ranges.some(({ from, to }) => rowNum >= from && rowNum <= to);
             });
+        }
+        // Back-compat alias — LC1-4 quadrant tables' own hidden-row set.
+        function stripLcExportRows(rows) {
+            return stripExportRows(rows, LC_EXPORT_HIDDEN_ROWS);
         }
         function computeLcQuadrantTables() {
             const tables = {};
@@ -9560,31 +9576,49 @@
             return lines;
         }
         // ---- Resolves which 2 Layout tabs the Transport Data table and
-        // the LC1-4 quadrant tables land on (per KKai's spec): if the
-        // drawing already has 2 (or more) Layout tabs, REUSE the first
-        // two AS-IS — no new layout created, existing paper size left
-        // alone — tgTransportLayoutName gets the first, tgLcLayoutName
-        // the second. Otherwise (fewer than 2 layouts exist), each one
-        // is created fresh (if missing) as an ISO A3 landscape (420 x
-        // 297 mm) layout named TRANSPORT_DATA_LAYOUT_NAME /
-        // LC_TABLE_LAYOUT_NAME. Sets 3 LISP variables everything below
-        // reads: tgUseExistingLayouts (T/nil), tgTransportLayoutName,
+        // the LC1-4 quadrant tables land on (per KKai's spec), covering
+        // 3 cases based on how many Layout tabs the drawing already has:
+        //   >= 2 existing layouts: REUSE the first two AS-IS — no new
+        //     layout created, existing paper size left alone —
+        //     tgTransportLayoutName gets the first, tgLcLayoutName the
+        //     second.
+        //   exactly 1 existing layout: that one is reused AS-IS for
+        //     tgTransportLayoutName, and tgLcLayoutName is created by
+        //     COPYING it ("-LAYOUT" "_Copy") — so the new layout starts
+        //     out with the same paper/plot setup as the drawing's own
+        //     existing layout, rather than a from-scratch ISO A3 sheet.
+        //   0 existing layouts: both are created fresh (if missing) as
+        //     an ISO A3 landscape (420 x 297 mm) layout named
+        //     TRANSPORT_DATA_LAYOUT_NAME / LC_TABLE_LAYOUT_NAME.
+        // Sets the LISP variables everything below reads:
+        // tgNeedsA3Setup (T only in the 0-existing-layouts case — the
+        // A3 page setup is only ever forced on a from-scratch layout,
+        // never on a reused or copied one), tgTransportLayoutName,
         // tgLcLayoutName. Called once, before switching to either. ----
         function buildLayoutResolutionLines() {
             const lines = [];
             lines.push(';; ---- Resolve the 2 Layout tabs for Transport Data + LC1-4 ----');
             lines.push('(setq tgExistingLayouts (layoutlist))');
-            lines.push('(setq tgUseExistingLayouts (>= (length tgExistingLayouts) 2))');
-            lines.push('(if tgUseExistingLayouts');
-            lines.push('  (progn');
+            lines.push('(setq tgExistingLayoutCount (length tgExistingLayouts))');
+            lines.push('(cond');
+            lines.push('  ((>= tgExistingLayoutCount 2)');
             lines.push('    (setq tgTransportLayoutName (nth 0 tgExistingLayouts))');
             lines.push('    (setq tgLcLayoutName (nth 1 tgExistingLayouts))');
-            lines.push('    (princ (strcat "\\nDrawing already has " (itoa (length tgExistingLayouts)) " layout(s) — reusing \\"" tgTransportLayoutName "\\" for Transport Data and \\"" tgLcLayoutName "\\" for LC1-4 (no new layout created, existing paper size left as-is).\\n"))');
+            lines.push('    (setq tgNeedsA3Setup nil)');
+            lines.push('    (princ (strcat "\\nDrawing already has " (itoa tgExistingLayoutCount) " layout(s) — reusing \\"" tgTransportLayoutName "\\" for Transport Data and \\"" tgLcLayoutName "\\" for LC1-4 (no new layout created, existing paper size left as-is).\\n"))');
             lines.push('  )');
-            lines.push('  (progn');
+            lines.push('  ((= tgExistingLayoutCount 1)');
+            lines.push('    (setq tgTransportLayoutName (nth 0 tgExistingLayouts))');
+            lines.push(`    (setq tgLcLayoutName "${LC_TABLE_LAYOUT_NAME}")`);
+            lines.push('    (if (not (member tgLcLayoutName (layoutlist))) (command "._-LAYOUT" "_Copy" tgTransportLayoutName tgLcLayoutName))');
+            lines.push('    (setq tgNeedsA3Setup nil)');
+            lines.push('    (princ (strcat "\\nDrawing has exactly 1 layout — reusing \\"" tgTransportLayoutName "\\" for Transport Data and copying it to create \\"" tgLcLayoutName "\\" for LC1-4 (same paper size as the copied layout, left as-is).\\n"))');
+            lines.push('  )');
+            lines.push('  (t');
             lines.push(`    (setq tgTransportLayoutName "${TRANSPORT_DATA_LAYOUT_NAME}")`);
             lines.push(`    (setq tgLcLayoutName "${LC_TABLE_LAYOUT_NAME}")`);
-            lines.push('    (princ "\\nDrawing has fewer than 2 layouts — creating new ISO A3 landscape (420 x 297 mm) layout(s) as needed.\\n")');
+            lines.push('    (setq tgNeedsA3Setup T)');
+            lines.push('    (princ "\\nDrawing has no layouts — creating new ISO A3 landscape (420 x 297 mm) layout(s) for Transport Data and LC1-4.\\n")');
             lines.push('  )');
             lines.push(')');
             return lines;
@@ -9592,10 +9626,10 @@
         function buildLcQuadrantLayoutLines(lcTables) {
             const lines = [];
             lines.push(';; ---- LC1-LC4 quadrant tables: own Paper Space Layout tab, A3 ----');
-            lines.push(';; Create the Layout tab only if resolution above decided to (tgUseExistingLayouts nil), then switch to it');
+            lines.push(';; Create the Layout tab only if resolution above didn\'t already (0-existing-layouts case — 1-existing-layout case already created it via Copy), then switch to it');
             lines.push('(if (not (member tgLcLayoutName (layoutlist))) (command "._-LAYOUT" "_New" tgLcLayoutName))');
             lines.push('(command "._-LAYOUT" "_Set" tgLcLayoutName)');
-            lines.push('(if (not tgUseExistingLayouts) (progn');
+            lines.push('(if tgNeedsA3Setup (progn');
             buildLayoutA3PageSetupLinesVar('tgLcLayoutName', 'LC1-4 layout').forEach(l => lines.push('  ' + l));
             lines.push('))');
             lines.push(';; Create/select the LC table layer and clear any previous tables on it');
@@ -9785,28 +9819,32 @@
                 // Resolve which 2 layouts to use ONCE, before switching
                 // to either — see buildLayoutResolutionLines(). Per
                 // KKai's spec: reuse the drawing's own first 2 existing
-                // Layout tabs as-is if it already has 2+ of them; only
-                // create new ISO A3 landscape (420 x 297 mm) layouts
-                // when it has fewer than that.
+                // Layout tabs as-is if it already has 2+ of them; if it
+                // has exactly 1, that one is reused and the 2nd is
+                // created by COPYING it; if it has none, both are
+                // created fresh as new ISO A3 landscape (420 x 297 mm)
+                // layouts.
                 buildLayoutResolutionLines().forEach(l => lines.push(l));
                 if (hasDrawingTable) {
                     // Transport Data table lands on tgTransportLayoutName
                     // (from the resolution above) — created fresh as A3
-                    // landscape only if the drawing didn't already have
-                    // 2+ layouts to reuse. Put it on its own dedicated
-                    // layer, and erase whatever already exists on that
-                    // layer (i.e. the table from a previous run of this
-                    // same script) before redrawing it — otherwise
-                    // SCRIPT just keeps adding new LINE/TEXT entities on
-                    // top of the old ones every time it's re-run on the
-                    // same drawing, and since the table is always
-                    // anchored to the same fixed top-right corner, a
-                    // smaller re-export looks like nothing changed (it's
-                    // hidden inside the old, larger leftover grid).
+                    // landscape only if the drawing had NO existing
+                    // layouts at all (tgNeedsA3Setup); reused as-is
+                    // otherwise (1 or 2+ existing layouts). Put it on
+                    // its own dedicated layer, and erase whatever
+                    // already exists on that layer (i.e. the table from
+                    // a previous run of this same script) before
+                    // redrawing it — otherwise SCRIPT just keeps adding
+                    // new LINE/TEXT entities on top of the old ones
+                    // every time it's re-run on the same drawing, and
+                    // since the table is always anchored to the same
+                    // fixed top-right corner, a smaller re-export looks
+                    // like nothing changed (it's hidden inside the old,
+                    // larger leftover grid).
                     lines.push(';; Create the Transport Data Layout tab only if resolution above decided to, then switch to it');
                     lines.push('(if (not (member tgTransportLayoutName (layoutlist))) (command "._-LAYOUT" "_New" tgTransportLayoutName))');
                     lines.push('(command "._-LAYOUT" "_Set" tgTransportLayoutName)');
-                    lines.push('(if (not tgUseExistingLayouts) (progn');
+                    lines.push('(if tgNeedsA3Setup (progn');
                     buildLayoutA3PageSetupLinesVar('tgTransportLayoutName', 'Transport Data layout').forEach(l => lines.push('  ' + l));
                     lines.push('))');
                     lines.push(';; Create/select the Transport Data layer and clear any previous table on it');
@@ -9865,10 +9903,16 @@
             // currently 10:1) so its real-world-mm dimensions print at
             // the right size.
             let drawingTableLispLines = [];
-            if (tgDrawingTableRows.length) {
+            // CAD-export-only trim: row 2 and row 63 hidden, per
+            // DRAWING_TABLE_EXPORT_HIDDEN_ROWS — never applied to the
+            // on-screen 📋 Transport Data table or to Excel itself.
+            const drawingTableExportRows = tgDrawingTableRows.length
+                ? stripExportRows(tgDrawingTableRows, DRAWING_TABLE_EXPORT_HIDDEN_ROWS)
+                : [];
+            if (drawingTableExportRows.length) {
                 const topRightX = CAD_PAPER_WIDTH_MM - CAD_PAPER_MARGIN_MM;
                 const topRightY = CAD_PAPER_HEIGHT_MM - CAD_PAPER_MARGIN_MM;
-                drawingTableLispLines = buildDrawingTableGridScript(tgDrawingTableRows, topRightX, topRightY, DRAWING_TABLE_PAPER_SCALE);
+                drawingTableLispLines = buildDrawingTableGridScript(drawingTableExportRows, topRightX, topRightY, DRAWING_TABLE_PAPER_SCALE);
             }
             // LC1-4 quadrant tables — own new Layout tab, each a full
             // mirror of the 🚚 Transport Data w/ CoG Env LC1-4 tables,
@@ -9894,7 +9938,7 @@
             const parts = [];
             if (inserts.length) parts.push(`${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')})`);
             if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
-            if (drawingTableLispLines.length) parts.push(`1 Transport Data (${tgDrawingTableRows.length}×${(tgDrawingTableRows[0] || []).length}) text/line grid`);
+            if (drawingTableLispLines.length) parts.push(`1 Transport Data (${drawingTableExportRows.length}×${(drawingTableExportRows[0] || []).length}) text/line grid`);
             if (lcTables) parts.push(`${Object.keys(lcTables).length} LC1-4 table(s) (new "${LC_TABLE_LAYOUT_NAME}" Layout, ISO A3 landscape)`);
             let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
             if (!lcTables) msg += ' (LC1-4 tables skipped — pull 🚚 Transport Data w/ CoG Env first to include them.)';
