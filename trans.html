@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.77)</h1>
+            <h1>🚂 Transport Dashboard (Rev.78)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -705,7 +705,7 @@
             <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, Z Trailer Height, and other settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
             <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
             <input type="file" id="appImportFileInput" accept=".json,application/json" style="display:none" onchange="importAppState(event)">
-            <button type="button" id="appMinimizeAllBtn" title="Minimize all cards and previews (show only their headers)" onclick="toggleAllTgMinimize(this)">▢ Expand All</button>
+            <button type="button" id="appMinimizeAllBtn" title="Minimize all cards and previews (show only their headers)" onclick="toggleAllTgMinimize(this)">▢</button>
             <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
         </div>
     </header>
@@ -718,8 +718,8 @@
                     <div class="tg-trailer-card">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🚂 Generate Trailer</h2>
-                            <button type="button" class="tg-help-btn" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgHelpToggleBtn" onclick="toggleTgHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgHelpPanel">
                 Set <strong>Number of trains</strong> and <strong>Number of Hydraulic Groups</strong>
@@ -807,8 +807,8 @@
                     <div class="tg-cargo-card tg-card-cargo">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
-                            <button type="button" class="tg-help-btn" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCargoHelpPanel">
                             Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
@@ -853,8 +853,8 @@
                     <div class="tg-cargo-card tg-card-hloads">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
-                            <button type="button" class="tg-help-btn" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgHLoadsHelpPanel">
                             Wind, speed/acceleration, road-gradient, curve, and friction inputs used for the
@@ -887,8 +887,8 @@
                     <div class="tg-cargo-card tg-card-cogenv">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📐 CoG Envelope</h2>
-                            <button type="button" class="tg-help-btn" id="tgCogEnvHelpToggleBtn" onclick="toggleTgCogEnvHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvHelpToggleBtn" onclick="toggleTgCogEnvHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvHelpPanel">
                             Reproduces the <strong>"CoG_Envelope"</strong> reference workbook's Cargo CoG
@@ -924,7 +924,7 @@
                     <div class="tg-preview-wrap">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
-                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <div class="tg-preview-toolbar">
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
@@ -955,7 +955,7 @@
                     <div class="tg-3d-wrap">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🧊 3D Drawing</h2>
-                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <div class="tg-3d-toolbar">
                             <div class="tg-3d-cam-btns">
@@ -991,8 +991,8 @@
                     <div class="tg-cargo-card" id="tgDrawingTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📋 Transport Data</h2>
-                            <button type="button" class="tg-help-btn" id="tgDrawingTableHelpToggleBtn" onclick="toggleTgDrawingTableHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgDrawingTableHelpToggleBtn" onclick="toggleTgDrawingTableHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgDrawingTableHelpPanel">
                             Read-only mirror of Excel sheet <strong>"Drawing_table"</strong> — pulled, never
@@ -1012,38 +1012,11 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-cogenv-bg" id="tgTransportLcCard">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚚 Transport Data w/ CoG Env</h2>
-                            <button type="button" class="tg-help-btn" id="tgTransportLcHelpToggleBtn" onclick="toggleTgTransportLcHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgTransportLcHelpPanel">
-                            4 read-only tables — <strong>TRANSPORT TABLE LC1</strong> through
-                            <strong>TRANSPORT TABLE LC4</strong> — in the exact same style as
-                            📋 Transport Data above. Each one is pulled from its own column block in Excel
-                            sheet <strong>"Drawing_table_LC"</strong> (LC1 at column AA, LC2 at BA, LC3 at
-                            CA, LC4 at DA — the same blocks a 📤 button in 📊 CoG Envelope Table writes to),
-                            so once every load case has been pushed at least once, all 4 tables here show
-                            their own permanent snapshot side by side. Pull-only, never pushed. This is
-                            also exactly what the 📐 AutoCAD export below now uses for its own LC1-4
-                            quadrant tables, so the exported .scr matches what's shown here.
-                        </p>
-                        <div id="tgTransportLC1" class="tg-drawing-table-wrap"></div>
-                        <div id="tgTransportLC2" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
-                        <div id="tgTransportLC3" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
-                        <div id="tgTransportLC4" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull all 4 TRANSPORT TABLE LC1-4 tables from Excel 'Drawing_table_LC'"
-                                    onclick="pullAllTransportLcTables()">⇩ Refresh All from Excel</button>
-                        </div>
-                    </div>
-
                     <div class="tg-cargo-card tg-card-cogenv-bg" id="tgCogEnvTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2>
-                            <button type="button" class="tg-help-btn" id="tgCogEnvTableHelpToggleBtn" onclick="toggleTgCogEnvTableHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">— Minimize</button>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvTableHelpToggleBtn" onclick="toggleTgCogEnvTableHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvTableHelpPanel">
                             Same layout as the <strong>"CoG_Envelope"</strong> reference workbook (sheet
@@ -1085,8 +1058,8 @@
                     <div class="tg-cargo-card tg-card-minimized tg-card-cogenv-bg" id="tgCogEnvSummaryCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
-                            <button type="button" class="tg-help-btn" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓ Help</button>
-                            <button type="button" class="tg-minimize-btn" title="Expand this card">▢ Expand</button>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Expand this card">▢</button>
                         </div>
                         <p class="tg-modal-sub" id="tgCogEnvSummaryHelpPanel">
                             Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
@@ -1116,6 +1089,37 @@
                         </div>
                     </div>
 
+                    <div class="tg-cargo-card tg-card-cogenv-bg" id="tgTransportLcCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚚 Transport Data w/ CoG Env</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgTransportLcHelpToggleBtn" onclick="toggleTgTransportLcHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgTransportLcHelpPanel">
+                            4 read-only tables — <strong>TRANSPORT TABLE LC1</strong> through
+                            <strong>TRANSPORT TABLE LC4</strong> — in the exact same style as
+                            📋 Transport Data above. Each one is pulled from its own column block in Excel
+                            sheet <strong>"Drawing_table_LC"</strong> (LC1 at column AA, LC2 at BA, LC3 at
+                            CA, LC4 at DA — the same blocks a 📤 button in 📊 CoG Envelope Table writes to),
+                            so once every load case has been pushed at least once, all 4 tables here show
+                            their own permanent snapshot side by side. Pull-only, never pushed. Auto-refreshes
+                            right after <strong>🧮 Calculate CoG Envelope</strong> finishes its full
+                            push/refresh sequence (📊 CoG Envelope Table push, then 📈 CoG Envelope Summary
+                            refresh, then every load case's own mirror into <strong>"Drawing_table_LC"</strong>)
+                            — no need to press its own refresh button separately after that. This is
+                            also exactly what the 📐 AutoCAD export below uses for its own LC1-4
+                            quadrant tables, so the exported .scr matches what's shown here.
+                        </p>
+                        <div id="tgTransportLC1" class="tg-drawing-table-wrap"></div>
+                        <div id="tgTransportLC2" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
+                        <div id="tgTransportLC3" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
+                        <div id="tgTransportLC4" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull all 4 TRANSPORT TABLE LC1-4 tables from Excel 'Drawing_table_LC'"
+                                    onclick="pullAllTransportLcTables()">⇩ Refresh All from Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-totals" id="tgTotals"></div>
                 </div>
             </div>
@@ -1128,7 +1132,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Transport Data table, and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (LC1 top-right, LC2 top-left, LC3 bottom-left, LC4 bottom-right) on their own new ISO A3 landscape Layout tab, created and sized automatically if it doesn't exist yet. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, the Transport Data table, and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 4-7 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 2 Layout tabs, the Transport Data table and the LC1-4 tables reuse the first two as-is (no new layout, no resize); otherwise a new ISO A3 landscape (420 x 297 mm) layout is created for each. Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -1146,7 +1150,7 @@
             const btn = document.getElementById('tgHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
@@ -1156,7 +1160,7 @@
             const btn = document.getElementById('tgHLoadsHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
@@ -1166,7 +1170,7 @@
             const btn = document.getElementById('tgCargoHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
@@ -1176,7 +1180,7 @@
             const btn = document.getElementById('tgCogEnvHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
@@ -1186,7 +1190,7 @@
             const btn = document.getElementById('tgCogEnvTableHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
@@ -1196,7 +1200,7 @@
             const btn = document.getElementById('tgDrawingTableHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
@@ -1206,7 +1210,7 @@
             const btn = document.getElementById('tgCogEnvSummaryHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            if (btn) btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // ============================================================
@@ -1547,7 +1551,7 @@
             const card = btn.closest('.tg-trailer-card, .tg-cargo-card');
             if (!card) return;
             const minimized = card.classList.toggle('tg-card-minimized');
-            btn.textContent = minimized ? '▢ Expand' : '— Minimize';
+            btn.textContent = minimized ? '▢' : '—';
             btn.title = minimized ? 'Expand this card' : 'Minimize this card (show only the header)';
         }
 
@@ -1564,7 +1568,7 @@
             card.classList.remove('tg-card-minimized');
             const btn = card.querySelector('.tg-minimize-btn');
             if (btn) {
-                btn.textContent = '— Minimize';
+                btn.textContent = '—';
                 btn.title = 'Minimize this card (show only the header)';
             }
         }
@@ -1620,7 +1624,7 @@
             const wrap = btn.closest('.tg-preview-wrap, .tg-3d-wrap');
             if (!wrap) return;
             const minimized = wrap.classList.toggle('tg-preview-minimized');
-            btn.textContent = minimized ? '▢ Expand' : '— Minimize';
+            btn.textContent = minimized ? '▢' : '—';
             btn.title = minimized ? 'Expand this card' : 'Minimize this card (show only the header)';
         }
 
@@ -1649,7 +1653,7 @@
                 card.classList.toggle('tg-card-minimized', minimize);
                 const b = card.querySelector('.tg-minimize-btn');
                 if (b) {
-                    b.textContent = minimize ? '▢ Expand' : '— Minimize';
+                    b.textContent = minimize ? '▢' : '—';
                     b.title = minimize ? 'Expand this card' : 'Minimize this card (show only the header)';
                 }
             });
@@ -1657,12 +1661,12 @@
                 wrap.classList.toggle('tg-preview-minimized', minimize);
                 const b = wrap.querySelector('.tg-preview-minimize-btn');
                 if (b) {
-                    b.textContent = minimize ? '▢ Expand' : '— Minimize';
+                    b.textContent = minimize ? '▢' : '—';
                     b.title = minimize ? 'Expand this card' : 'Minimize this card (show only the header)';
                 }
             });
             if (btn) {
-                btn.textContent = minimize ? '▢ Expand All' : '— Minimize All';
+                btn.textContent = minimize ? '▢' : '—';
                 btn.title = minimize ? 'Expand all cards and previews' : 'Minimize all cards and previews (show only their headers)';
             }
         }
@@ -1685,7 +1689,7 @@
             document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap').forEach(wrap => {
                 wrap.classList.add('tg-preview-minimized');
                 const btn = wrap.querySelector('.tg-preview-minimize-btn');
-                if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this preview'; }
+                if (btn) { btn.textContent = '▢'; btn.title = 'Expand this preview'; }
             });
             // The 4 top-level input cards (by their own distinguishing
             // classes — .tg-trailer-card for Generate Trailer,
@@ -1696,21 +1700,21 @@
             document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv').forEach(card => {
                 card.classList.add('tg-card-minimized');
                 const btn = card.querySelector('.tg-minimize-btn');
-                if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this card'; }
+                if (btn) { btn.textContent = '▢'; btn.title = 'Expand this card'; }
             });
             ['tgCogEnvTableCard', 'tgDrawingTableCard', 'tgTransportLcCard'].forEach(id => {
                 const card = document.getElementById(id);
                 if (!card) return;
                 card.classList.add('tg-card-minimized');
                 const btn = card.querySelector('.tg-minimize-btn');
-                if (btn) { btn.textContent = '▢ Expand'; btn.title = 'Expand this card'; }
+                if (btn) { btn.textContent = '▢'; btn.title = 'Expand this card'; }
             });
             // Everything above starts minimized, so the header's
             // ▢ Expand All / — Minimize All button should open on
             // "▢ Expand All" too, matching every individual card's own
             // button — see toggleAllTgMinimize().
             const allBtn = document.getElementById('appMinimizeAllBtn');
-            if (allBtn) { allBtn.textContent = '▢ Expand All'; allBtn.title = 'Expand all cards and previews'; }
+            if (allBtn) { allBtn.textContent = '▢'; allBtn.title = 'Expand all cards and previews'; }
         }
 
 
@@ -1811,6 +1815,23 @@
         // computeLcQuadrantTables()/lcDrawingTableTitleRows().
         const LC_TABLE_LAYOUT_NAME = "LC Load Cases";
         const LC_TABLE_LAYER_NAME = "LC_TABLES";
+        // Fallback name for the Transport Data table's OWN Layout tab —
+        // only ever used when the drawing has fewer than 2 existing
+        // Layout tabs (see buildLayoutResolutionLines()). When the
+        // drawing already has 2+, the first existing layout is reused
+        // for the Transport Data table instead and this name is never
+        // referenced.
+        const TRANSPORT_DATA_LAYOUT_NAME = "Transport Data";
+        // Excel row numbers (1-indexed) to omit from the LC1-4 quadrant
+        // tables ONLY when exported to AutoCAD — the "TRAILER
+        // ARRANGEMENT" section (row 4's merged banner + rows 5-7) is
+        // identical across every load case, so cutting it out of the 4
+        // exported copies (row 8 slides up to close the gap right below
+        // the title) keeps each quadrant table shorter. Purely a CAD-
+        // export trim: never applied to the on-screen 🚚 Transport Data
+        // w/ CoG Env card, the main 📋 Transport Data table, or Excel
+        // itself — see stripLcExportRows()/computeLcQuadrantTables().
+        const LC_EXPORT_HIDDEN_ROWS = { from: 4, to: 7 };
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
         // kept in sync with. B5 = X offset, B6 = Y offset. B1 = Number
@@ -4948,7 +4969,7 @@
             const btn = document.getElementById('tgTransportLcHelpToggleBtn');
             if (!panel || !btn) return;
             const isOpen = panel.classList.toggle('tg-help-open');
-            btn.textContent = isOpen ? '✕ Close help' : '❓ Help';
+            btn.textContent = isOpen ? '✕' : '❓';
         }
 
         // ---- CoG Envelope Summary — a NEW, separate read-only table
@@ -5396,6 +5417,14 @@
                     await pushLoadCaseToExcel(null, lc.name, lc.x, lc.y, lc.z, { silent: true });
                 }
                 logMsg(`📤 Auto-pushed CoG-LC0, LC1-LC4, and LC1-Slope-LC4-Slope to '${INPUT_SHEET_NAME}'!BB35:BD35 in sequence (refreshing each load case's Drawing Table mirror along the way), then landed back on CoG-LC0 as the default.`);
+                // Auto-continue (per KKKai's spec): once 📈 CoG Envelope
+                // Summary has refreshed AND every load case above has
+                // mirrored its own block into "Drawing_table_LC", pull
+                // the 🚚 Transport Data w/ CoG Env LC1-4 tables too — no
+                // need to press its own "⇩ Refresh All from Excel"
+                // button separately after a "🧮 Calculate CoG Envelope"
+                // press.
+                await pullAllTransportLcTables({ silent: true });
             } else {
                 const failedRanges = [mainErr ? COGENV_TABLE_RANGE_MAIN : null, slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
                 const okRanges = [!mainErr ? COGENV_TABLE_RANGE_MAIN : null, !slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
@@ -9327,6 +9356,25 @@
         // is always derived from it, so the text can never spill past
         // its row's top edge no matter what this ratio is set to.
         const DRAWING_TABLE_TEXT_HEIGHT_RATIO = 0.6;
+        // Computes just the overall footprint (total width/height, in
+        // export mm) of an A1:F63-shaped grid at the given scale — the
+        // same size math buildDrawingTableGridScript() does internally,
+        // exposed on its own so a caller can work out where a table's
+        // TOP-RIGHT anchor needs to be to make some OTHER corner of it
+        // land on a specific point (see buildLcQuadrantLayoutLines()'s
+        // corner-anchoring for LC1-4).
+        function computeDrawingTableSizeMm(rows, scale = 1, colWidthsOverrideMm = null) {
+            const numRows = rows.length;
+            const numCols = (rows[0] && rows[0].length) || 6;
+            const rowHeightMm = 250 * CAD_UNIT_SCALE * scale;
+            const colWidthsBaseMm = colWidthsOverrideMm || DRAWING_TABLE_COL_WIDTHS_MM;
+            let totalWidthMm = 0;
+            for (let c = 0; c < numCols; c++) {
+                const base = colWidthsBaseMm[c] ?? colWidthsBaseMm[colWidthsBaseMm.length - 1] ?? 3000;
+                totalWidthMm += base * CAD_UNIT_SCALE * scale;
+            }
+            return { totalWidthMm, totalHeightMm: numRows * rowHeightMm };
+        }
         function buildDrawingTableGridScript(rows, topRightX, topRightY, scale = 1, colWidthsOverrideMm = null) {
             const numRows = rows.length;
             const numCols = (rows[0] && rows[0].length) || 6;
@@ -9428,6 +9476,21 @@
                 return titleRow;
             });
         }
+        // Cuts Excel rows LC_EXPORT_HIDDEN_ROWS.from-to (1-indexed,
+        // inclusive) out of a pulled A1:F63-shaped grid — see that
+        // constant's own comment for why. Purely positional (array
+        // splice), so whatever row used to be row 8 becomes the new row
+        // 4 in the returned array; buildDrawingTableGridScript() draws
+        // whatever rows it's handed with no absolute-row-number
+        // assumptions of its own, so the shortened grid just prints
+        // shorter — nothing else needs to change.
+        function stripLcExportRows(rows) {
+            const { from, to } = LC_EXPORT_HIDDEN_ROWS;
+            return rows.filter((_, i) => {
+                const rowNum = i + 1; // 1-indexed, matching Excel row numbers
+                return rowNum < from || rowNum > to;
+            });
+        }
         function computeLcQuadrantTables() {
             const tables = {};
             let any = false;
@@ -9436,7 +9499,7 @@
                 const rows = tgTransportLcRows[lcIndex];
                 if (!rows || !rows.length) return;
                 any = true;
-                tables[name] = lcDrawingTableTitleRows(rows, `LC${lcIndex}`);
+                tables[name] = stripLcExportRows(lcDrawingTableTitleRows(rows, `LC${lcIndex}`));
             });
             return any ? tables : null;
         }
@@ -9445,7 +9508,7 @@
         // ((layoutlist) lookup — never recreates/duplicates it on later
         // runs), switch to it, set that Layout's paper size to ISO A3
         // landscape (420 x 297 mm, matching CAD_PAPER_WIDTH_MM/
-        // CAD_PAPER_HEIGHT_MM — see buildLcLayoutA3PageSetupLines()),
+        // CAD_PAPER_HEIGHT_MM — see buildLayoutA3PageSetupLinesVar()),
         // clear any previous tables on LC_TABLE_LAYER_NAME, draw the 4
         // tables via the exact same plain TEXT+LINE grid function AND
         // column widths/scale used by the Drawing Table's own .scr
@@ -9470,13 +9533,20 @@
         // or aborting the rest of the script. Re-applied on every run,
         // not just on first creation, so the layout stays A3 even if it
         // was previously resized by hand.
-        function buildLcLayoutA3PageSetupLines(layoutName) {
+        // Same idea as before, but layoutVarRef is a raw (unquoted)
+        // AutoLISP expression that already EVALUATES to the layout name
+        // — a LISP variable like "tgTransportLayoutName", not a literal
+        // JS string — so this same function works whether that name
+        // came from a freshly-created layout or an existing one picked
+        // by buildLayoutResolutionLines(). princLabel is just the
+        // human-readable text used in the command-line status messages.
+        function buildLayoutA3PageSetupLinesVar(layoutVarRef, princLabel) {
             const lines = [];
-            lines.push(';; Set this Layout\'s paper size to ISO A3 landscape (420 x 297 mm)');
+            lines.push(`;; Set ${princLabel}'s paper size to ISO A3 landscape (420 x 297 mm)`);
             lines.push('(vl-load-com)');
-            lines.push(`(setq tgLcLayoutObj (vl-catch-all-apply 'vla-item (list (vla-get-Layouts (vla-get-ActiveDocument (vlax-get-acad-object))) "${layoutName}")))`);
+            lines.push(`(setq tgLcLayoutObj (vl-catch-all-apply 'vla-item (list (vla-get-Layouts (vla-get-ActiveDocument (vlax-get-acad-object))) ${layoutVarRef})))`);
             lines.push('(if (vl-catch-all-error-p tgLcLayoutObj)');
-            lines.push('  (princ (strcat "\\nLC Load Cases layout A3 page setup FAILED (layout lookup): " (vl-catch-all-error-message tgLcLayoutObj) "\\n"))');
+            lines.push(`  (princ (strcat "\\n${princLabel} A3 page setup FAILED (layout lookup): " (vl-catch-all-error-message tgLcLayoutObj) "\\n"))`);
             lines.push('  (progn');
             lines.push('    (vl-catch-all-apply \'vla-put-ConfigName (list tgLcLayoutObj "DWG To PDF.pc3"))');
             lines.push('    (vl-catch-all-apply \'vla-put-CanonicalMediaName (list tgLcLayoutObj "ISO_full_bleed_A3_(420.00_x_297.00_MM)"))');
@@ -9484,7 +9554,37 @@
             lines.push('    (vl-catch-all-apply \'vla-put-PlotRotation (list tgLcLayoutObj ac0degrees))');
             lines.push('    (vl-catch-all-apply \'vla-put-CenterPlot (list tgLcLayoutObj :vlax-true))');
             lines.push('    (vl-catch-all-apply \'vla-RefreshPlotDeviceInfo (list tgLcLayoutObj))');
-            lines.push('    (princ "\\nLC Load Cases layout page setup: ISO A3 landscape (420 x 297 mm).\\n")');
+            lines.push(`    (princ "\\n${princLabel} page setup: ISO A3 landscape (420 x 297 mm).\\n")`);
+            lines.push('  )');
+            lines.push(')');
+            return lines;
+        }
+        // ---- Resolves which 2 Layout tabs the Transport Data table and
+        // the LC1-4 quadrant tables land on (per KKai's spec): if the
+        // drawing already has 2 (or more) Layout tabs, REUSE the first
+        // two AS-IS — no new layout created, existing paper size left
+        // alone — tgTransportLayoutName gets the first, tgLcLayoutName
+        // the second. Otherwise (fewer than 2 layouts exist), each one
+        // is created fresh (if missing) as an ISO A3 landscape (420 x
+        // 297 mm) layout named TRANSPORT_DATA_LAYOUT_NAME /
+        // LC_TABLE_LAYOUT_NAME. Sets 3 LISP variables everything below
+        // reads: tgUseExistingLayouts (T/nil), tgTransportLayoutName,
+        // tgLcLayoutName. Called once, before switching to either. ----
+        function buildLayoutResolutionLines() {
+            const lines = [];
+            lines.push(';; ---- Resolve the 2 Layout tabs for Transport Data + LC1-4 ----');
+            lines.push('(setq tgExistingLayouts (layoutlist))');
+            lines.push('(setq tgUseExistingLayouts (>= (length tgExistingLayouts) 2))');
+            lines.push('(if tgUseExistingLayouts');
+            lines.push('  (progn');
+            lines.push('    (setq tgTransportLayoutName (nth 0 tgExistingLayouts))');
+            lines.push('    (setq tgLcLayoutName (nth 1 tgExistingLayouts))');
+            lines.push('    (princ (strcat "\\nDrawing already has " (itoa (length tgExistingLayouts)) " layout(s) — reusing \\"" tgTransportLayoutName "\\" for Transport Data and \\"" tgLcLayoutName "\\" for LC1-4 (no new layout created, existing paper size left as-is).\\n"))');
+            lines.push('  )');
+            lines.push('  (progn');
+            lines.push(`    (setq tgTransportLayoutName "${TRANSPORT_DATA_LAYOUT_NAME}")`);
+            lines.push(`    (setq tgLcLayoutName "${LC_TABLE_LAYOUT_NAME}")`);
+            lines.push('    (princ "\\nDrawing has fewer than 2 layouts — creating new ISO A3 landscape (420 x 297 mm) layout(s) as needed.\\n")');
             lines.push('  )');
             lines.push(')');
             return lines;
@@ -9492,31 +9592,43 @@
         function buildLcQuadrantLayoutLines(lcTables) {
             const lines = [];
             lines.push(';; ---- LC1-LC4 quadrant tables: own Paper Space Layout tab, A3 ----');
-            lines.push(';; Create the Layout tab only if it doesn\'t already exist, then switch to it');
-            lines.push(`(if (not (member "${LC_TABLE_LAYOUT_NAME}" (layoutlist))) (command "._-LAYOUT" "_New" "${LC_TABLE_LAYOUT_NAME}"))`);
-            lines.push(`(command "._-LAYOUT" "_Set" "${LC_TABLE_LAYOUT_NAME}")`);
-            buildLcLayoutA3PageSetupLines(LC_TABLE_LAYOUT_NAME).forEach(l => lines.push(l));
+            lines.push(';; Create the Layout tab only if resolution above decided to (tgUseExistingLayouts nil), then switch to it');
+            lines.push('(if (not (member tgLcLayoutName (layoutlist))) (command "._-LAYOUT" "_New" tgLcLayoutName))');
+            lines.push('(command "._-LAYOUT" "_Set" tgLcLayoutName)');
+            lines.push('(if (not tgUseExistingLayouts) (progn');
+            buildLayoutA3PageSetupLinesVar('tgLcLayoutName', 'LC1-4 layout').forEach(l => lines.push('  ' + l));
+            lines.push('))');
             lines.push(';; Create/select the LC table layer and clear any previous tables on it');
             lines.push('-LAYER');
             lines.push('Make');
             lines.push(LC_TABLE_LAYER_NAME);
             lines.push('');
             lines.push(`(if (setq tgOldLcTbl (ssget "_X" (list (cons 8 "${LC_TABLE_LAYER_NAME}")))) (command "._ERASE" tgOldLcTbl ""))`);
-            // Quadrant anchors — each is the TOP-RIGHT corner of that
-            // table (buildDrawingTableGridScript always anchors from its
-            // own top-right corner and extends left/down from there),
-            // split from the A3 sheet's own center lines (now actually
-            // enforced on this Layout by buildLcLayoutA3PageSetupLines()
-            // above, not just assumed) so all 4 tables sit clear of each
-            // other and of the sheet edges.
-            const halfW = CAD_PAPER_WIDTH_MM / 2;
-            const halfH = CAD_PAPER_HEIGHT_MM / 2;
+            // Corner anchors (per KKai's spec): LC1's table hugs the
+            // Layout's own top-right corner, LC2's hugs top-left, LC3's
+            // hugs bottom-left, LC4's hugs bottom-right — not a 2x2
+            // split down the sheet's center lines. buildDrawingTableGridScript
+            // always anchors from a table's OWN top-right corner and
+            // extends left/down from there, so for LC2/LC3 (whose
+            // target corner is on the LEFT) the anchor x has to be
+            // offset in by the table's own width (m + totalWidthMm) so
+            // its LEFT edge — not its right — ends up flush with the
+            // sheet's left margin; same idea for LC3/LC4's BOTTOM edge
+            // via totalHeightMm. All 4 LC tables share the same rows/
+            // cols shape (post row-strip — see stripLcExportRows()), so
+            // one size computation covers all of them.
+            const anyLcRows = lcTables.LC1 || lcTables.LC2 || lcTables.LC3 || lcTables.LC4;
+            const { totalWidthMm, totalHeightMm } = computeDrawingTableSizeMm(anyLcRows, DRAWING_TABLE_PAPER_SCALE);
             const m = CAD_PAPER_MARGIN_MM;
+            const rightX = CAD_PAPER_WIDTH_MM - m;   // table's right edge flush with the sheet's right margin
+            const leftAnchorX = m + totalWidthMm;    // table's left edge flush with the sheet's left margin
+            const topY = CAD_PAPER_HEIGHT_MM - m;    // table's top edge flush with the sheet's top margin
+            const bottomAnchorY = m + totalHeightMm; // table's bottom edge flush with the sheet's bottom margin
             const quadrants = [
-                { name: 'LC1', label: 'top-right quadrant', x: CAD_PAPER_WIDTH_MM - m, y: CAD_PAPER_HEIGHT_MM - m },
-                { name: 'LC2', label: 'top-left quadrant', x: halfW - m, y: CAD_PAPER_HEIGHT_MM - m },
-                { name: 'LC3', label: 'bottom-left quadrant', x: halfW - m, y: halfH - m },
-                { name: 'LC4', label: 'bottom-right quadrant', x: CAD_PAPER_WIDTH_MM - m, y: halfH - m },
+                { name: 'LC1', label: 'top-right corner', x: rightX, y: topY },
+                { name: 'LC2', label: 'top-left corner', x: leftAnchorX, y: topY },
+                { name: 'LC3', label: 'bottom-left corner', x: leftAnchorX, y: bottomAnchorY },
+                { name: 'LC4', label: 'bottom-right corner', x: rightX, y: bottomAnchorY },
             ];
             quadrants.forEach(q => {
                 const rows = lcTables[q.name];
@@ -9666,34 +9778,44 @@
             if (hasDrawingTable || hasLcTables) {
                 // Switch to Paper Space — TILEMODE 0 puts everything
                 // below on a Layout tab instead of Model Space alongside
-                // the trailer/cargo geometry. (If no Layout tab has ever
-                // been activated in this drawing, AutoCAD creates
-                // "Layout1" automatically.)
-                lines.push(';; Switch to Paper Space for the Drawing Table / LC1-4 tables');
+                // the trailer/cargo geometry.
+                lines.push(';; Switch to Paper Space for the Transport Data / LC1-4 tables');
                 lines.push('TILEMODE');
                 lines.push('0');
+                // Resolve which 2 layouts to use ONCE, before switching
+                // to either — see buildLayoutResolutionLines(). Per
+                // KKai's spec: reuse the drawing's own first 2 existing
+                // Layout tabs as-is if it already has 2+ of them; only
+                // create new ISO A3 landscape (420 x 297 mm) layouts
+                // when it has fewer than that.
+                buildLayoutResolutionLines().forEach(l => lines.push(l));
                 if (hasDrawingTable) {
-                    // Drawing Table lands on the current/last-active
-                    // Layout tab (whatever that is at script-run time —
-                    // unlike the LC1-4 tables below, this one doesn't
-                    // switch to a Layout of its own). Put it on its own
-                    // dedicated layer, and erase whatever already exists
-                    // on that layer (i.e. the table from a previous run
-                    // of this same script) before redrawing it —
-                    // otherwise SCRIPT just keeps adding new LINE/TEXT
-                    // entities on top of the old ones every time it's
-                    // re-run on the same drawing, and since the table is
-                    // always anchored to the same fixed top-right
-                    // corner, a smaller re-export looks like nothing
-                    // changed (it's hidden inside the old, larger
-                    // leftover grid).
-                    lines.push(';; Create/select the Drawing Table layer and clear any previous table on it');
+                    // Transport Data table lands on tgTransportLayoutName
+                    // (from the resolution above) — created fresh as A3
+                    // landscape only if the drawing didn't already have
+                    // 2+ layouts to reuse. Put it on its own dedicated
+                    // layer, and erase whatever already exists on that
+                    // layer (i.e. the table from a previous run of this
+                    // same script) before redrawing it — otherwise
+                    // SCRIPT just keeps adding new LINE/TEXT entities on
+                    // top of the old ones every time it's re-run on the
+                    // same drawing, and since the table is always
+                    // anchored to the same fixed top-right corner, a
+                    // smaller re-export looks like nothing changed (it's
+                    // hidden inside the old, larger leftover grid).
+                    lines.push(';; Create the Transport Data Layout tab only if resolution above decided to, then switch to it');
+                    lines.push('(if (not (member tgTransportLayoutName (layoutlist))) (command "._-LAYOUT" "_New" tgTransportLayoutName))');
+                    lines.push('(command "._-LAYOUT" "_Set" tgTransportLayoutName)');
+                    lines.push('(if (not tgUseExistingLayouts) (progn');
+                    buildLayoutA3PageSetupLinesVar('tgTransportLayoutName', 'Transport Data layout').forEach(l => lines.push('  ' + l));
+                    lines.push('))');
+                    lines.push(';; Create/select the Transport Data layer and clear any previous table on it');
                     lines.push('-LAYER');
                     lines.push('Make');
                     lines.push(DRAWING_TABLE_LAYER_NAME);
                     lines.push('');
                     lines.push(`(if (setq tgOldDwgTbl (ssget "_X" (list (cons 8 "${DRAWING_TABLE_LAYER_NAME}")))) (command "._ERASE" tgOldDwgTbl ""))`);
-                    lines.push(';; 📋 Drawing Table, as a plain TEXT + LINE grid');
+                    lines.push(';; 📋 Transport Data table, as a plain TEXT + LINE grid');
                     lines.push(';; (no ActiveX/TABLE object — see buildDrawingTableGridScript)');
                     drawingTableLispLines.forEach(l => lines.push(l));
                     lines.push(';; Fit the table in the Paper Space view');
@@ -9702,12 +9824,12 @@
                     lines.push('E');
                 }
                 if (hasLcTables) {
-                    // LC1-4 tables get their OWN new Layout tab (created
-                    // once, reused on later runs) — see
-                    // buildLcQuadrantLayoutLines(). This switches the
-                    // active Layout away from whatever the Drawing Table
-                    // used above, which is fine since we're about to
-                    // switch back to Model Space entirely below anyway.
+                    // LC1-4 tables land on tgLcLayoutName (from the
+                    // resolution above) — see buildLcQuadrantLayoutLines().
+                    // This switches the active Layout away from whatever
+                    // the Transport Data table used above, which is fine
+                    // since we're about to switch back to Model Space
+                    // entirely below anyway.
                     buildLcQuadrantLayoutLines(lcTables).forEach(l => lines.push(l));
                 }
                 // Return to the Model Space tab so the trailer/cargo
