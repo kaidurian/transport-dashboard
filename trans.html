@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.79)</h1>
+            <h1>🚂 Transport Dashboard (Rev.79.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1132,7 +1132,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, one &quot;COG Weight&quot; block per cargo item's own CoG point plus one for the combined CCoG point (ITEM/WEIGHT attributes filled in from that item's name/weight, or 'CCoG'/the combined weight — requires a block named &quot;COG Weight&quot; with ITEM and WEIGHT attributes already defined in the drawing), the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks (and the &quot;COG Weight&quot; block) defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts one block per train, one &quot;COG&quot; block per cargo item's own CoG point plus one for the combined CCoG point (ITEM/WEIGHT attributes filled in from that item's name/weight, or 'CCoG'/the combined weight — requires a block named &quot;COG&quot; with ITEM and WEIGHT attributes already defined in the drawing), the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks (and the &quot;COG&quot; block) defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -9213,7 +9213,7 @@
         // same convention as computeTrailerCADInserts(). Zero/negative
         // footprints (blank Length or Width) are skipped.
         // ---- CoG (per-cargo-item) + CCoG (combined) markers as
-        // "COG Weight" AutoCAD block inserts — one insert per cargo
+        // "COG" AutoCAD block inserts — one insert per cargo
         // item's own CoG point (same X — CoG/Y — CoG the 📐 2D plan
         // view draws its "CoG" sign at — see cogSymbolSvg/'CoG' label
         // around cargoSvg above), plus one more at the combined CCoG
@@ -9224,7 +9224,7 @@
         // 0/blank weight is skipped (nothing meaningful to tag it
         // with), mirroring the ">0" weight gating already used
         // elsewhere for these same signs.
-        const COG_WEIGHT_BLOCK_NAME = 'COG Weight';
+        const COG_WEIGHT_BLOCK_NAME = 'COG';
         function computeCogWeightCADInserts() {
             const inserts = [];
             cargoItems.forEach(c => {
@@ -9258,7 +9258,7 @@
         // Uses vla-InsertBlock (ActiveX) + GetAttributes rather than the
         // interactive "-INSERT" command-line attribute prompts, because
         // the latter would require knowing the exact order ITEM/WEIGHT
-        // were defined in on the "COG Weight" block — GetAttributes +
+        // were defined in on the "COG" block — GetAttributes +
         // matching by TagString works no matter what order they're in,
         // or whether the block has other attributes besides these two.
         // Inserted into Model Space (vla-get-ModelSpace) — same space
@@ -9268,7 +9268,7 @@
         function buildCogWeightCADLisp(inserts) {
             const lines = [];
             if (!inserts.length) return lines;
-            lines.push(';; ---- CoG/CCoG markers as "COG Weight" block inserts ----');
+            lines.push(';; ---- CoG/CCoG markers as "COG" block inserts ----');
             lines.push(';; One insert per cargo item\'s own CoG point (ITEM/WEIGHT');
             lines.push(';; attributes set to that item\'s name/weight), plus one for');
             lines.push(';; the combined CCoG point (ITEM "CCoG", WEIGHT = combined');
@@ -9282,9 +9282,9 @@
                 lines.push(`;; ${ins.item}`);
                 lines.push(`(setq ${v} (vl-catch-all-apply 'vla-InsertBlock (list (vla-get-ModelSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${ins.x.toFixed(3)} ${ins.y.toFixed(3)} 0) "${COG_WEIGHT_BLOCK_NAME}" 1.0 1.0 1.0 0.0)))`);
                 lines.push(`(if (or (not ${v}) (vl-catch-all-error-p ${v}))`);
-                lines.push(`  (princ (strcat "\\nCOG Weight: could not insert block for \\"${escapeLispString(ins.item)}\\" — is a block named \\"${COG_WEIGHT_BLOCK_NAME}\\" defined in this drawing?\\n"))`);
+                lines.push(`  (princ (strcat "\\n${COG_WEIGHT_BLOCK_NAME}: could not insert block for \\"${escapeLispString(ins.item)}\\" — is a block named \\"${COG_WEIGHT_BLOCK_NAME}\\" defined in this drawing?\\n"))`);
                 lines.push(`  (if (/= (vla-get-HasAttributes ${v}) :vlax-true)`);
-                lines.push(`    (princ (strcat "\\nCOG Weight: block for \\"${escapeLispString(ins.item)}\\" has no attributes — ITEM/WEIGHT not set.\\n"))`);
+                lines.push(`    (princ (strcat "\\n${COG_WEIGHT_BLOCK_NAME}: block for \\"${escapeLispString(ins.item)}\\" has no attributes — ITEM/WEIGHT not set.\\n"))`);
                 lines.push(`    (progn`);
                 lines.push(`      (setq ${attsVar} (vlax-invoke ${v} 'GetAttributes))`);
                 lines.push(`      (foreach ${attVar} ${attsVar}`);
@@ -9985,7 +9985,7 @@
             const { inserts, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
             // CoG (per cargo item) + CCoG (combined) markers, exported
-            // as "COG Weight" block inserts with ITEM/WEIGHT attributes
+            // as "COG" block inserts with ITEM/WEIGHT attributes
             // — see computeCogWeightCADInserts()/buildCogWeightCADLisp().
             const cogWeightInserts = computeCogWeightCADInserts();
 
