@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.79.4)</h1>
+            <h1>🚂 Transport Dashboard (Rev.80)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1132,7 +1132,7 @@
                         <option value="out">Load Out</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts, per train, a top/plan + front/side + end block (e.g. KAMAG_K25_4L_top_view_AFT/side_view_AFT/end_view_AFT — front view shares a row lined up under the plan view, end view sits in its own column further right — offsets are CAD_FRONT_VIEW_Y_OFFSET_MM/CAD_END_VIEW_X_OFFSET_MM/CAD_END_VIEW_ROW_SPACING_MM, adjust to taste), plus a &quot;COG&quot; block in EACH of those 3 views per cargo item's own CoG point and one more per view for the combined CCoG point (ITEM/WEIGHT attributes filled in from that item's name/weight, or 'CCoG'/the combined weight — requires a block named &quot;COG&quot; with ITEM and WEIGHT attributes already defined in the drawing), the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks (and the &quot;COG&quot; block) defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts top/side/end view blocks per train (offset in Y so the 3 views don't overlap), the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -1764,49 +1764,39 @@
         // AutoCAD side has whole-unit blocks (not per-axle-line blocks),
         // and the block itself differs by load direction (AFT = Load In,
         // FWD = Load Out — a single global setting applies to every
-        // train in the export, not per-train) AND by view — top (plan),
-        // side (front elevation), end (end elevation) — each its own
-        // pre-drawn block, one insert per view per segment (see
-        // computeTrailerCADInserts()).
+        // train in the export, not per-train). Each axle-line count now
+        // maps to THREE views — top, side ("front" elevation) and end —
+        // each with its own AFT/FWD block pair, e.g. for 4-line:
+        // KAMAG_K25_4L_top_view_AFT/FWD, KAMAG_K25_4L_side_view_AFT/FWD,
+        // KAMAG_K25_4L_end_view_AFT/FWD. Only the *_AFT names were given
+        // for side/end — the *_FWD names are assumed to follow the same
+        // naming convention as the existing top_view pair; update here
+        // if the actual FWD block names differ.
         const CAD_BLOCK_MAP = {
             4: {
-                in:  { top: 'KAMAG_K25_4L_top_view_AFT', side: 'KAMAG_K25_4L_side_view_AFT', end: 'KAMAG_K25_4L_end_view_AFT' },
-                out: { top: 'KAMAG_K25_4L_top_view_FWD', side: 'KAMAG_K25_4L_side_view_FWD', end: 'KAMAG_K25_4L_end_view_FWD' }
+                top: { in: 'KAMAG_K25_4L_top_view_AFT', out: 'KAMAG_K25_4L_top_view_FWD' },
+                side: { in: 'KAMAG_K25_4L_side_view_AFT', out: 'KAMAG_K25_4L_side_view_FWD' },
+                end: { in: 'KAMAG_K25_4L_end_view_AFT', out: 'KAMAG_K25_4L_end_view_FWD' }
             },
             6: {
-                in:  { top: 'KAMAG_K25_6L_top_view_AFT', side: 'KAMAG_K25_6L_side_view_AFT', end: 'KAMAG_K25_6L_end_view_AFT' },
-                out: { top: 'KAMAG_K25_6L_top_view_FWD', side: 'KAMAG_K25_6L_side_view_FWD', end: 'KAMAG_K25_6L_end_view_FWD' }
+                top: { in: 'KAMAG_K25_6L_top_view_AFT', out: 'KAMAG_K25_6L_top_view_FWD' },
+                side: { in: 'KAMAG_K25_6L_side_view_AFT', out: 'KAMAG_K25_6L_side_view_FWD' },
+                end: { in: 'KAMAG_K25_6L_end_view_AFT', out: 'KAMAG_K25_6L_end_view_FWD' }
             }
         };
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
         const CAD_UNIT_SCALE = 1;
-
-        // ---- Front/end view placement (.scr export) ----
-        // All 3 views are laid out flat, side by side, in the SAME
-        // Model Space XY plane (same technique already used for the
-        // top/plan view) — nothing is actually projected in 3D, each
-        // view is just its own pre-drawn 2D block placed in its own
-        // area of the drawing:
-        //   • top (plan)  — unchanged: train's own real X/Y.
-        //   • front (side elevation) — ONE shared row for the whole
-        //     convoy at Y = CAD_FRONT_VIEW_Y_OFFSET_MM (below the plan
-        //     view), each segment placed at its OWN X so it lines up
-        //     directly under its plan-view block (standard GA-drawing
-        //     convention — elevation shares the plan's X-axis).
-        //   • end view — its own column at X = CAD_END_VIEW_X_OFFSET_MM
-        //     (to the right of the plan/front views); its horizontal
-        //     axis is world Y (width), not X, so segments can't share a
-        //     row without overlapping — each segment gets its own row,
-        //     stacked down every CAD_END_VIEW_ROW_SPACING_MM starting
-        //     from the front-view row (row 0 = same Y as the front row).
-        // These are plain constants, not derived from any block's real
-        // drawn extents (this tool has no way to know a block's actual
-        // footprint ahead of time) — adjust to taste once the blocks
-        // are in place so nothing overlaps.
-        const CAD_FRONT_VIEW_Y_OFFSET_MM = 15000;
-        const CAD_END_VIEW_X_OFFSET_MM = 20000;
-        const CAD_END_VIEW_ROW_SPACING_MM = 6000;
+        // Side/end view block inserts sit in Model Space alongside the
+        // top view, offset in -Y so they don't overlap it or each other
+        // (classic plan-above / elevation-below drawing layout): side
+        // view keeps the segment's own X (same "length" axis as the top
+        // view) and drops straight down by CAD_SIDE_VIEW_Y_OFFSET_MM;
+        // end view sits further down again by CAD_END_VIEW_Y_OFFSET_MM.
+        // Purely a starting layout — adjust these two constants (mm) if
+        // a different placement is wanted.
+        const CAD_SIDE_VIEW_Y_OFFSET_MM = -15000;
+        const CAD_END_VIEW_Y_OFFSET_MM = -30000;
 
         // ---- Drawing Table placement in Paper Space (.scr export) ----
         // The Drawing Table's row/column dimensions (see
@@ -9247,109 +9237,6 @@
         // marker and isn't drawn here. mm world coords * CAD_UNIT_SCALE,
         // same convention as computeTrailerCADInserts(). Zero/negative
         // footprints (blank Length or Width) are skipped.
-        // ---- CoG (per-cargo-item) + CCoG (combined) markers as
-        // "COG" AutoCAD block inserts — one insert per cargo
-        // item's own CoG point (same X — CoG/Y — CoG the 📐 2D plan
-        // view draws its "CoG" sign at — see cogSymbolSvg/'CoG' label
-        // around cargoSvg above), plus one more at the combined CCoG
-        // point (cogCombinedSign, the same "CCoG" sign drawn there —
-        // see cogCombinedSignLoaded above). ITEM/WEIGHT are filled in
-        // afterward via buildCogWeightCADLisp(), matched by attribute
-        // TagString rather than assumed prompt order. A cargo item with
-        // 0/blank weight is skipped (nothing meaningful to tag it
-        // with), mirroring the ">0" weight gating already used
-        // elsewhere for these same signs.
-        const COG_WEIGHT_BLOCK_NAME = 'COG';
-        // Each CoG point gets ONE "COG" block insert per view (top,
-        // front, end — 3 total per point), placed in that view's own
-        // area of the drawing (see the CAD_FRONT_VIEW_Y_OFFSET_MM /
-        // CAD_END_VIEW_X_OFFSET_MM comment above computeTrailerCADInserts):
-        //   • top   — real X/Y, unchanged from before.
-        //   • front — real X, front-view row + real (world) Z folded
-        //     into the row's own Y so the marker sits at the right
-        //     height in that elevation.
-        //   • end   — front-view row (row 0 of the end-view column,
-        //     since a CoG marker isn't tied to any one train/segment) +
-        //     real Z folded into Y the same way, real Y folded into the
-        //     column's own X (end view's horizontal axis is world Y).
-        function computeCogWeightCADInserts() {
-            const inserts = [];
-            const frontRowY = -CAD_FRONT_VIEW_Y_OFFSET_MM;
-            const pushPoint = (item, weight, xMm, yMm, zMm) => {
-                inserts.push({ item, weight, view: 'top', x: xMm * CAD_UNIT_SCALE, y: yMm * CAD_UNIT_SCALE });
-                inserts.push({ item, weight, view: 'front', x: xMm * CAD_UNIT_SCALE, y: (frontRowY + zMm) * CAD_UNIT_SCALE });
-                inserts.push({ item, weight, view: 'end', x: (CAD_END_VIEW_X_OFFSET_MM + yMm) * CAD_UNIT_SCALE, y: (frontRowY + zMm) * CAD_UNIT_SCALE });
-            };
-            cargoItems.forEach(c => {
-                const w = parseFloat(c.weight) || 0;
-                if (w <= 0) return;
-                const xMm = (parseFloat(c.x) || 0) * 1000;
-                const yMm = (parseFloat(c.y) || 0) * 1000;
-                // Cargo item CoGz is meters ABOVE the deck (same
-                // convention as cogWorldZ elsewhere) — fold in
-                // tgZTrailerHeightMm to get the real absolute world Z.
-                const zMm = tgZTrailerHeightMm + (parseFloat(c.z) || 0) * 1000;
-                pushPoint(c.name || 'Cargo', w, xMm, yMm, zMm);
-            });
-            if (cogCombinedSignLoaded && cargoTotal && (parseFloat(cargoTotal.weight) || 0) > 0) {
-                // cogCombinedSign.x/y/z are already absolute world mm
-                // (Display!B16:D16 — see its own comment above), unlike
-                // the per-item cargo x/y/z fields (meters) above.
-                const xMm = parseFloat(cogCombinedSign.x) || 0;
-                const yMm = parseFloat(cogCombinedSign.y) || 0;
-                const zMm = parseFloat(cogCombinedSign.z) || 0;
-                pushPoint('CCoG', parseFloat(cargoTotal.weight) || 0, xMm, yMm, zMm);
-            }
-            return inserts;
-        }
-        function formatCogWeightForCAD(w) {
-            return (Math.round(w * 100) / 100).toString();
-        }
-        // Uses vla-InsertBlock (ActiveX) + GetAttributes rather than the
-        // interactive "-INSERT" command-line attribute prompts, because
-        // the latter would require knowing the exact order ITEM/WEIGHT
-        // were defined in on the "COG" block — GetAttributes +
-        // matching by TagString works no matter what order they're in,
-        // or whether the block has other attributes besides these two.
-        // Inserted into Model Space (vla-get-ModelSpace) — same space
-        // as the trailer blocks/cargo outlines above, since these are
-        // real-world-position markers, not paper-space annotation like
-        // the Transport Data/LC1-4 tables.
-        function buildCogWeightCADLisp(inserts) {
-            const lines = [];
-            if (!inserts.length) return lines;
-            lines.push(';; ---- CoG/CCoG markers as "COG" block inserts ----');
-            lines.push(';; One insert per cargo item\'s own CoG point (ITEM/WEIGHT');
-            lines.push(';; attributes set to that item\'s name/weight), plus one for');
-            lines.push(';; the combined CCoG point (ITEM "CCoG", WEIGHT = combined');
-            lines.push(';; cargo weight) — the same points the on-screen 📐 2D plan');
-            lines.push(';; view draws its CoG/CCoG signs at.');
-            lines.push('(vl-load-com)');
-            inserts.forEach((ins, i) => {
-                const v = `tgCogBlk${i}`;
-                const attsVar = `tgCogAtts${i}`;
-                const attVar = `tgCogAtt${i}`;
-                lines.push(`;; ${ins.item}`);
-                lines.push(`(setq ${v} (vl-catch-all-apply 'vla-InsertBlock (list (vla-get-ModelSpace (vla-get-ActiveDocument (vlax-get-acad-object))) (vlax-3d-point ${ins.x.toFixed(3)} ${ins.y.toFixed(3)} 0) "${COG_WEIGHT_BLOCK_NAME}" 1.0 1.0 1.0 0.0)))`);
-                lines.push(`(if (or (not ${v}) (vl-catch-all-error-p ${v}))`);
-                lines.push(`  (princ (strcat "\\n${COG_WEIGHT_BLOCK_NAME}: could not insert block for \\"${escapeLispString(ins.item)}\\" — is a block named \\"${COG_WEIGHT_BLOCK_NAME}\\" defined in this drawing?\\n"))`);
-                lines.push(`  (if (/= (vla-get-HasAttributes ${v}) :vlax-true)`);
-                lines.push(`    (princ (strcat "\\n${COG_WEIGHT_BLOCK_NAME}: block for \\"${escapeLispString(ins.item)}\\" has no attributes — ITEM/WEIGHT not set.\\n"))`);
-                lines.push(`    (progn`);
-                lines.push(`      (setq ${attsVar} (vlax-invoke ${v} 'GetAttributes))`);
-                lines.push(`      (foreach ${attVar} ${attsVar}`);
-                lines.push(`        (cond`);
-                lines.push(`          ((= (strcase (vla-get-TagString ${attVar})) "ITEM") (vla-put-TextString ${attVar} "${escapeLispString(ins.item)}"))`);
-                lines.push(`          ((= (strcase (vla-get-TagString ${attVar})) "WEIGHT") (vla-put-TextString ${attVar} "${formatCogWeightForCAD(ins.weight)}"))`);
-                lines.push(`        )`);
-                lines.push(`      )`);
-                lines.push(`    )`);
-                lines.push(`  )`);
-                lines.push(`)`);
-            });
-            return lines;
-        }
-
         function computeCargoCADOutlines() {
             return cargoItems.map(c => {
                 const halfLenMm = ((parseFloat(c.length) || 0) * 1000) / 2;
@@ -9820,10 +9707,6 @@
             const inserts = [];
             const warnings = [];
             const loadDirection = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
-            // One row per physical segment (shared across all trains),
-            // used to stack each segment's end view into its own row —
-            // see the CAD_END_VIEW_ROW_SPACING_MM comment above.
-            let viewRowIndex = 0;
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9840,60 +9723,33 @@
                 let axleOffset = 0;
                 segments.forEach((segCount, segIdx) => {
                     const segLabel = segments.length > 1 ? `${train.name} (#${axleOffset + 1}-#${axleOffset + segCount})` : train.name;
-                    const rowIndex = viewRowIndex++;
-                    const blockSet = CAD_BLOCK_MAP[segCount];
-                    if (!blockSet) {
+                    const viewBlocks = CAD_BLOCK_MAP[segCount];
+                    if (!viewBlocks) {
                         warnings.push(`Train "${segLabel}" has ${segCount} axle line(s) — no AutoCAD block mapped (only ${Object.keys(CAD_BLOCK_MAP).join('/')} configured). Skipped.`);
                         axleOffset += segCount;
                         return;
                     }
-                    const blockNames = blockSet[loadDirection];
                     const segAxle1X = axle1X - axleOffset * spacing;
                     const insertionXm = segAxle1X;
+                    const baseYm = parseFloat(train.y) || 0;
                     const rotationDeg = (loadDirection === 'out') ? 180 : 0;
-                    const frontRowY = -CAD_FRONT_VIEW_Y_OFFSET_MM;
-                    const endRowY = frontRowY - rowIndex * CAD_END_VIEW_ROW_SPACING_MM;
-                    // Top (plan) view — unchanged position/behavior.
-                    inserts.push({
-                        trainName: segLabel,
-                        view: 'top',
-                        blockName: blockNames.top,
-                        axleCount: segCount,
-                        loadDirection,
-                        x: insertionXm * CAD_UNIT_SCALE,
-                        y: (parseFloat(train.y) || 0) * CAD_UNIT_SCALE,
-                        rotationDeg
-                    });
-                    // Front (side elevation) view — same X as the plan
-                    // block above so it lines up directly underneath it;
-                    // shared row (frontRowY) for the whole convoy.
-                    if (blockNames.side) {
+                    // One insert per view (top/side/end), same X, each
+                    // view offset in Y — see CAD_SIDE_VIEW_Y_OFFSET_MM/
+                    // CAD_END_VIEW_Y_OFFSET_MM above.
+                    const VIEW_Y_OFFSETS_MM = { top: 0, side: CAD_SIDE_VIEW_Y_OFFSET_MM, end: CAD_END_VIEW_Y_OFFSET_MM };
+                    ['top', 'side', 'end'].forEach(view => {
+                        const blockName = viewBlocks[view][loadDirection];
                         inserts.push({
                             trainName: segLabel,
-                            view: 'front',
-                            blockName: blockNames.side,
+                            view,
+                            blockName,
                             axleCount: segCount,
                             loadDirection,
                             x: insertionXm * CAD_UNIT_SCALE,
-                            y: frontRowY * CAD_UNIT_SCALE,
+                            y: (baseYm * CAD_UNIT_SCALE) + VIEW_Y_OFFSETS_MM[view],
                             rotationDeg
                         });
-                    }
-                    // End view — own column (CAD_END_VIEW_X_OFFSET_MM),
-                    // this segment's own row (endRowY) stacked down from
-                    // the front row.
-                    if (blockNames.end) {
-                        inserts.push({
-                            trainName: segLabel,
-                            view: 'end',
-                            blockName: blockNames.end,
-                            axleCount: segCount,
-                            loadDirection,
-                            x: CAD_END_VIEW_X_OFFSET_MM * CAD_UNIT_SCALE,
-                            y: endRowY * CAD_UNIT_SCALE,
-                            rotationDeg
-                        });
-                    }
+                    });
                     axleOffset += segCount;
                 });
 
@@ -9938,7 +9794,7 @@
             trailerGenLoadDirection = (value === 'out') ? 'out' : 'in';
         }
 
-        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogWeightInserts) {
+        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables) {
             const lines = [];
             lines.push(';; Disable snaps');
             lines.push('OSMODE 0');
@@ -9952,28 +9808,13 @@
             lines.push(';; Force Model Space — keep trailer/cargo geometry out of any Layout');
             lines.push('TILEMODE');
             lines.push('1');
-            // Each insert is guarded: tblsearch checks the block is
-            // actually DEFINED in this drawing before touching it, and
-            // the insert itself goes through (command "_.-insert" ...)
-            // rather than raw command-line text tokens. This matters a
-            // lot more than it looks: a raw "-Insert"/name/point/scale/
-            // scale/rotation sequence has NO fallback if that block
-            // name doesn't exist — AutoCAD just re-prompts for a valid
-            // block name, and every subsequent line in the .scr (cargo
-            // outlines, COG markers, both tables) gets silently consumed
-            // as answers to THAT wrong prompt instead of the commands
-            // they were meant to be, i.e. one missing block anywhere in
-            // this list can swallow everything after it. The guarded
-            // form below can never desync the rest of the script — a
-            // missing block just prints a warning to the command line
-            // and moves on to the next line.
-            lines.push('(vl-load-com)');
             inserts.forEach(ins => {
-                lines.push(`;; ${ins.trainName || ins.blockName}${ins.view ? ` — ${ins.view} view` : ''}`);
-                lines.push(`(if (tblsearch "BLOCK" "${escapeLispString(ins.blockName)}")`);
-                lines.push(`  (command "_.-insert" "${escapeLispString(ins.blockName)}" (list ${ins.x.toFixed(3)} ${ins.y.toFixed(3)} 0.0) 1 1 ${ins.rotationDeg})`);
-                lines.push(`  (princ (strcat "\\nWarning: block \\"${escapeLispString(ins.blockName)}\\" is not defined in this drawing — \\"${escapeLispString(ins.trainName || ins.blockName)}\\"${ins.view ? ` (${ins.view} view)` : ''} skipped.\\n"))`);
-                lines.push(`)`);
+                lines.push('-Insert');
+                lines.push(ins.blockName);
+                lines.push(`${ins.x.toFixed(3)},${ins.y.toFixed(3)},0`);
+                lines.push('1');
+                lines.push('1');
+                lines.push(`${ins.rotationDeg}`);
             });
             if (cargoOutlines && cargoOutlines.length) {
                 lines.push(';; Cargo footprint outlines — one rectangle per');
@@ -9989,9 +9830,6 @@
                     lines.push(`${o.x1.toFixed(3)},${o.y1.toFixed(3)},0`);
                     lines.push(`${o.x2.toFixed(3)},${o.y2.toFixed(3)},0`);
                 });
-            }
-            if (cogWeightInserts && cogWeightInserts.length) {
-                buildCogWeightCADLisp(cogWeightInserts).forEach(l => lines.push(l));
             }
             // Bring the Model Space content (trailer inserts + cargo
             // outlines) into view before switching spaces — once
@@ -10088,10 +9926,6 @@
         function exportTrailerLayoutToCADScript() {
             const { inserts, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
-            // CoG (per cargo item) + CCoG (combined) markers, exported
-            // as "COG" block inserts with ITEM/WEIGHT attributes
-            // — see computeCogWeightCADInserts()/buildCogWeightCADLisp().
-            const cogWeightInserts = computeCogWeightCADInserts();
 
             // Drawing Table grid (TEXT + LINE entities) — placed in
             // Paper Space (see buildTrailerCADScript's TILEMODE 0
@@ -10121,35 +9955,28 @@
             // one of those 4 tables has been pulled.
             const lcTables = computeLcQuadrantTables();
 
-            if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0 && !lcTables && cogWeightInserts.length === 0) {
-                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint or weight, no Transport Data has been pulled, and no 🚚 Transport Data w/ CoG Env LC1-4 table has been pulled.');
+            if (inserts.length === 0 && cargoOutlines.length === 0 && drawingTableLispLines.length === 0 && !lcTables) {
+                alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, no Transport Data has been pulled, and no 🚚 Transport Data w/ CoG Env LC1-4 table has been pulled.');
                 return;
             }
-            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogWeightInserts);
+            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables);
             const blob = new Blob([scriptText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // Downloaded as .txt, NOT .scr — ".scr" is also the extension
-            // Windows uses for screensaver EXECUTABLES, a well-known
-            // malware disguise, so Windows Defender / browser SmartScreen /
-            // most corporate AV silently quarantine or delete a downloaded
-            // .scr the instant it lands, even though this one is plain
-            // text. Downloading as .txt sidesteps that false-positive —
-            // rename the file to .scr (or just type its .txt name when
-            // AutoCAD's SCRIPT/-SCRIPT command prompts for a filename;
-            // both work) before running it.
-            a.download = `trailer-layout-${new Date().toISOString().slice(0, 10)}.txt`;
+            a.download = `trailer-layout-${new Date().toISOString().slice(0, 10)}.scr`;
             document.body.appendChild(a); a.click(); a.remove();
             URL.revokeObjectURL(url);
 
             const parts = [];
-            if (inserts.length) parts.push(`${inserts.length} trailer block insert(s) (${inserts.map(i => i.blockName).join(', ')})`);
+            if (inserts.length) {
+                const uniqueBlocks = [...new Set(inserts.map(i => i.blockName))];
+                parts.push(`${inserts.length} trailer block insert(s) — top/side/end views (${uniqueBlocks.join(', ')})`);
+            }
             if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
-            if (cogWeightInserts.length) parts.push(`${cogWeightInserts.length} "${COG_WEIGHT_BLOCK_NAME}" CoG/CCoG block(s)`);
             if (drawingTableLispLines.length) parts.push(`1 Transport Data (${drawingTableExportRows.length}×${(drawingTableExportRows[0] || []).length}) text/line grid`);
             if (lcTables) parts.push(`${Object.keys(lcTables).length} LC1-4 table(s) (new "${LC_TABLE_LAYOUT_NAME}" Layout, ISO A3 landscape)`);
-            let msg = `📐 Exported ${parts.join(', ')} to .txt (downloaded as .txt, not .scr, so Windows/your browser/AV doesn't quarantine it — rename it to .scr before running it in AutoCAD).`;
+            let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
             if (!lcTables) msg += ' (LC1-4 tables skipped — pull 🚚 Transport Data w/ CoG Env first to include them.)';
             if (warnings.length) msg += ` ${warnings.length} train(s) skipped — see console.`;
             logMsg(msg);
