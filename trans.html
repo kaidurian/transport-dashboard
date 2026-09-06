@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.83.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.83.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9727,8 +9727,17 @@
             // it does NOT follow each train's own (possibly different)
             // Y position the way the top view does. Anchored off the
             // FIRST train's Y so a single-train export is unchanged.
+            //
+            // Dashboard Y+ is AutoCAD Y- for train arrangement: every
+            // train-position Y (top view, and the shared reference Y
+            // the side view is built from) is NEGATED going into the
+            // .scr export. The fixed distance between the top view and
+            // the end view (CAD_SIDE_VIEW_Y_OFFSET_MM / CAD_END_VIEW_Y_
+            // ADJUST_MM below) is a drawing-layout offset, not a train
+            // position, so it stays as-is — the gap is preserved exactly
+            // regardless of this sign flip.
             const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].y) || 0) : 0;
-            const sharedSideYm = (referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
+            const sharedSideYm = (-referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9762,9 +9771,10 @@
                     const insertionXm = segAxle1X;
                     const baseYm = parseFloat(train.y) || 0;
                     const rotationDeg = (loadDirection === 'out') ? 180 : 0;
-                    // Top view keeps this train's own Y. Side (front)
-                    // view instead uses sharedSideYm — the SAME Y value
-                    // for every train — see comment above sharedSideYm.
+                    // Top view keeps this train's own Y, NEGATED (dashboard
+                    // Y+ = AutoCAD Y- for train arrangement — see comment
+                    // above sharedSideYm). Side (front) view instead uses
+                    // sharedSideYm — the SAME Y value for every train.
                     ['top', 'side'].forEach(view => {
                         const blockName = viewBlocks[view][loadDirection];
                         inserts.push({
@@ -9774,7 +9784,7 @@
                             axleCount: segCount,
                             loadDirection,
                             x: insertionXm * CAD_UNIT_SCALE,
-                            y: (view === 'top') ? (baseYm * CAD_UNIT_SCALE) : sharedSideYm,
+                            y: (view === 'top') ? (-baseYm * CAD_UNIT_SCALE) : sharedSideYm,
                             rotationDeg
                         });
                     });
@@ -9830,10 +9840,13 @@
                 // drawn in the preview), using
                 // HEADER_DBAR_TYPES[train.headerDbar].cadBlockName.
                 // Anchor point = the accessory's first sub-block center,
-                // same X/Y computeHeaderDbarBlocks() positions it at for
+                // same X computeHeaderDbarBlocks() positions it at for
                 // the 2D/3D preview (see that function's own comments for
-                // the left/right + PPU-offset geometry). Only meaningful
-                // for trains with a known deck footprint (Goldhofer/SPMT
+                // the left/right + PPU-offset geometry) — its Y is
+                // NEGATED for the same dashboard-Y+ = AutoCAD-Y- reason
+                // as the top view above, since this accessory travels
+                // with its train's own position. Only meaningful for
+                // trains with a known deck footprint (Goldhofer/SPMT
                 // preset) — computeHeaderDbarBlocks() returns [] otherwise,
                 // same guard the preview itself uses. Rotation follows the
                 // same load-direction convention as the trailer's own
@@ -9851,7 +9864,7 @@
                             axleCount: null,
                             loadDirection,
                             x: anchor.xCenter * CAD_UNIT_SCALE,
-                            y: anchor.yCenter * CAD_UNIT_SCALE,
+                            y: -anchor.yCenter * CAD_UNIT_SCALE,
                             rotationDeg: (loadDirection === 'out') ? 180 : 0
                         });
                     } else {
