@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.83)</h1>
+            <h1>🚂 Transport Dashboard (Rev.83.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9722,6 +9722,13 @@
             const inserts = [];
             const warnings = [];
             const loadDirection = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
+            // Per KKai's spec: with more than one train, every train's
+            // front (side) view insert shares the exact same Y value —
+            // it does NOT follow each train's own (possibly different)
+            // Y position the way the top view does. Anchored off the
+            // FIRST train's Y so a single-train export is unchanged.
+            const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].y) || 0) : 0;
+            const sharedSideYm = (referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9735,13 +9742,12 @@
                     return;
                 }
 
-                // Whole-trailer anchor/length/Y — used for this train's
+                // Whole-trailer anchor/length — used for this train's
                 // own end-view placement below, independent of how it's
                 // split into AutoCAD block segments for the top/side
                 // view inserts.
                 const trainAnchorXm = axle1X;
                 const trainLengthMm = parseFloat(train.deckLength) || Math.max((axleCount - 1) * spacing, 0);
-                const trainBaseYm = parseFloat(train.y) || 0;
 
                 let axleOffset = 0;
                 segments.forEach((segCount, segIdx) => {
@@ -9756,10 +9762,9 @@
                     const insertionXm = segAxle1X;
                     const baseYm = parseFloat(train.y) || 0;
                     const rotationDeg = (loadDirection === 'out') ? 180 : 0;
-                    // One front (side) view per train — every train's
-                    // front view sits at the SAME Y offset direction
-                    // below its own top view: CAD_SIDE_VIEW_Y_OFFSET_MM.
-                    const VIEW_Y_OFFSETS_MM = { top: 0, side: CAD_SIDE_VIEW_Y_OFFSET_MM };
+                    // Top view keeps this train's own Y. Side (front)
+                    // view instead uses sharedSideYm — the SAME Y value
+                    // for every train — see comment above sharedSideYm.
                     ['top', 'side'].forEach(view => {
                         const blockName = viewBlocks[view][loadDirection];
                         inserts.push({
@@ -9769,7 +9774,7 @@
                             axleCount: segCount,
                             loadDirection,
                             x: insertionXm * CAD_UNIT_SCALE,
-                            y: (baseYm * CAD_UNIT_SCALE) + VIEW_Y_OFFSETS_MM[view],
+                            y: (view === 'top') ? (baseYm * CAD_UNIT_SCALE) : sharedSideYm,
                             rotationDeg
                         });
                     });
@@ -9780,19 +9785,18 @@
                 // ---- One end view per train (per KKai's spec) ----
                 // Every train gets its own single end view — same block
                 // (CAD_END_VIEW_BLOCK_NAME) regardless of axle count or
-                // load direction — sitting at the SAME Y offset
-                // direction as that train's own front(side) view above
-                // (baseYm + CAD_SIDE_VIEW_Y_OFFSET_MM), plus the small
-                // fixed CAD_END_VIEW_Y_ADJUST_MM correction so the two
-                // blocks' trailer top decks line up exactly. Which side
-                // it sits on, and its X gap from the train's own anchor,
-                // follows the global Load direction:
+                // load direction — sitting at the SAME shared Y as every
+                // train's front(side) view above (sharedSideYm), plus
+                // the small fixed CAD_END_VIEW_Y_ADJUST_MM correction so
+                // the two blocks' trailer top decks line up exactly.
+                // Which side it sits on, and its X gap from the train's
+                // own anchor, follows the global Load direction:
                 //   - Load In  -> RIGHT of the train, gap = trailer
                 //     length + 10000mm beyond its own right edge.
                 //   - Load Out -> LEFT of the train, gap = trailer
                 //     length - 10000mm before its own anchor, in -X.
                 const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
-                const endYm = (trainBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM;
+                const endYm = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
                 if (loadDirection === 'in') {
                     const gapMm = trainLengthMm + 10000;
                     inserts.push({
