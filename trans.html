@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.80)</h1>
+            <h1>🚂 Transport Dashboard (Rev.81)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -705,8 +705,8 @@
             <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, Z Trailer Height, and other settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
             <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
             <input type="file" id="appImportFileInput" accept=".json,application/json" style="display:none" onchange="importAppState(event)">
-            <button type="button" id="appMinimizeAllBtn" title="Minimize all cards and previews (show only their headers)" onclick="toggleAllTgMinimize(this)">▢</button>
             <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
+            <button type="button" id="appMinimizeAllBtn" title="Minimize all cards and previews (show only their headers)" onclick="toggleAllTgMinimize(this)">▢</button>
         </div>
     </header>
 
@@ -1765,38 +1765,47 @@
         // and the block itself differs by load direction (AFT = Load In,
         // FWD = Load Out — a single global setting applies to every
         // train in the export, not per-train). Each axle-line count now
-        // maps to THREE views — top, side ("front" elevation) and end —
-        // each with its own AFT/FWD block pair, e.g. for 4-line:
-        // KAMAG_K25_4L_top_view_AFT/FWD, KAMAG_K25_4L_side_view_AFT/FWD,
-        // KAMAG_K25_4L_end_view_AFT/FWD. Only the *_AFT names were given
-        // for side/end — the *_FWD names are assumed to follow the same
-        // naming convention as the existing top_view pair; update here
-        // if the actual FWD block names differ.
+        // maps to TWO views — top and side ("front" elevation) — each
+        // with its own AFT/FWD block pair, e.g. for 4-line:
+        // KAMAG_K25_4L_top_view_AFT/FWD, KAMAG_K25_4L_side_view_AFT/FWD.
+        // The end view is NOT axle-count/direction dependent — per
+        // KKai's spec every end view (both the left and right end view
+        // inserted beside each front/side view — see
+        // CAD_END_VIEW_BLOCK_NAME below) always uses the single block
+        // KAMAG_K25_6L_end_view_AFT, regardless of the segment's own
+        // axle-line count or load direction.
         const CAD_BLOCK_MAP = {
             4: {
                 top: { in: 'KAMAG_K25_4L_top_view_AFT', out: 'KAMAG_K25_4L_top_view_FWD' },
-                side: { in: 'KAMAG_K25_4L_side_view_AFT', out: 'KAMAG_K25_4L_side_view_FWD' },
-                end: { in: 'KAMAG_K25_4L_end_view_AFT', out: 'KAMAG_K25_4L_end_view_FWD' }
+                side: { in: 'KAMAG_K25_4L_side_view_AFT', out: 'KAMAG_K25_4L_side_view_FWD' }
             },
             6: {
                 top: { in: 'KAMAG_K25_6L_top_view_AFT', out: 'KAMAG_K25_6L_top_view_FWD' },
-                side: { in: 'KAMAG_K25_6L_side_view_AFT', out: 'KAMAG_K25_6L_side_view_FWD' },
-                end: { in: 'KAMAG_K25_6L_end_view_AFT', out: 'KAMAG_K25_6L_end_view_FWD' }
+                side: { in: 'KAMAG_K25_6L_side_view_AFT', out: 'KAMAG_K25_6L_side_view_FWD' }
             }
         };
+        // Single AutoCAD block used for EVERY end view insert — left and
+        // right, any axle-line count, either load direction. Per KKai's
+        // spec this name never changes, unlike the top/side blocks above.
+        const CAD_END_VIEW_BLOCK_NAME = 'KAMAG_K25_6L_end_view_AFT';
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
         const CAD_UNIT_SCALE = 1;
-        // Side/end view block inserts sit in Model Space alongside the
-        // top view, offset in -Y so they don't overlap it or each other
-        // (classic plan-above / elevation-below drawing layout): side
-        // view keeps the segment's own X (same "length" axis as the top
-        // view) and drops straight down by CAD_SIDE_VIEW_Y_OFFSET_MM;
-        // end view sits further down again by CAD_END_VIEW_Y_OFFSET_MM.
-        // Purely a starting layout — adjust these two constants (mm) if
-        // a different placement is wanted.
+        // Side (front) view block inserts sit in Model Space alongside
+        // the top view, offset in -Y so they don't overlap it (classic
+        // plan-above / elevation-below drawing layout): the side view
+        // keeps the segment's own X (same "length" axis as the top view)
+        // and drops straight down by CAD_SIDE_VIEW_Y_OFFSET_MM. Per
+        // KKai's spec the two end views no longer stack further below
+        // the side view — instead they sit BESIDE it, left and right,
+        // at that SAME Y offset, so the front view's and both end
+        // views' trailer top decks line up on one shared horizontal
+        // level. CAD_END_VIEW_X_GAP_MM is the clearance kept between
+        // the front view's own axle span and each end view block.
+        // Purely a starting layout — adjust these constants (mm) if a
+        // different placement is wanted.
         const CAD_SIDE_VIEW_Y_OFFSET_MM = -15000;
-        const CAD_END_VIEW_Y_OFFSET_MM = -30000;
+        const CAD_END_VIEW_X_GAP_MM = 3000;
 
         // ---- Drawing Table placement in Paper Space (.scr export) ----
         // The Drawing Table's row/column dimensions (see
@@ -9733,11 +9742,11 @@
                     const insertionXm = segAxle1X;
                     const baseYm = parseFloat(train.y) || 0;
                     const rotationDeg = (loadDirection === 'out') ? 180 : 0;
-                    // One insert per view (top/side/end), same X, each
-                    // view offset in Y — see CAD_SIDE_VIEW_Y_OFFSET_MM/
-                    // CAD_END_VIEW_Y_OFFSET_MM above.
-                    const VIEW_Y_OFFSETS_MM = { top: 0, side: CAD_SIDE_VIEW_Y_OFFSET_MM, end: CAD_END_VIEW_Y_OFFSET_MM };
-                    ['top', 'side', 'end'].forEach(view => {
+                    // Top view stays at the train's own Y; side (front)
+                    // view drops to CAD_SIDE_VIEW_Y_OFFSET_MM — see
+                    // comments above CAD_SIDE_VIEW_Y_OFFSET_MM.
+                    const VIEW_Y_OFFSETS_MM = { top: 0, side: CAD_SIDE_VIEW_Y_OFFSET_MM };
+                    ['top', 'side'].forEach(view => {
                         const blockName = viewBlocks[view][loadDirection];
                         inserts.push({
                             trainName: segLabel,
@@ -9747,6 +9756,36 @@
                             loadDirection,
                             x: insertionXm * CAD_UNIT_SCALE,
                             y: (baseYm * CAD_UNIT_SCALE) + VIEW_Y_OFFSETS_MM[view],
+                            rotationDeg
+                        });
+                    });
+
+                    // Left/right end view inserts — same single
+                    // CAD_END_VIEW_BLOCK_NAME block for every segment
+                    // (see comments above it), placed beside the side
+                    // (front) view rather than stacked below it: the
+                    // left end view sits CAD_END_VIEW_X_GAP_MM to the
+                    // left of the segment's own first axle line, the
+                    // right end view the same distance beyond its last
+                    // axle line, and BOTH sit at the exact same Y as the
+                    // side view above so the front view's and both end
+                    // views' trailer top decks share one horizontal
+                    // level.
+                    const segSpanMm = (segCount - 1) * spacing;
+                    const endYm = (baseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
+                    [
+                        { endSide: 'left', xm: insertionXm * CAD_UNIT_SCALE - CAD_END_VIEW_X_GAP_MM },
+                        { endSide: 'right', xm: (insertionXm + segSpanMm) * CAD_UNIT_SCALE + CAD_END_VIEW_X_GAP_MM }
+                    ].forEach(end => {
+                        inserts.push({
+                            trainName: segLabel,
+                            view: 'end',
+                            endSide: end.endSide,
+                            blockName: CAD_END_VIEW_BLOCK_NAME,
+                            axleCount: segCount,
+                            loadDirection,
+                            x: end.xm,
+                            y: endYm,
                             rotationDeg
                         });
                     });
