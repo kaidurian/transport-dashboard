@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.83.4)</h1>
+            <h1>🚂 Transport Dashboard (Rev.83.5)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9796,31 +9796,26 @@
                 // ---- One end view per train (per KKai's spec) ----
                 // Every train gets its own single end view — same block
                 // (CAD_END_VIEW_BLOCK_NAME) regardless of axle count or
-                // load direction. Its Y keeps the SAME fixed distance
-                // from THIS TRAIN'S OWN top view as the side view's
-                // offset (CAD_SIDE_VIEW_Y_OFFSET_MM) plus the small
-                // CAD_END_VIEW_Y_ADJUST_MM correction — i.e. it's
-                // anchored off this train's own top view Y (like the
-                // top view, negated per dashboard-Y+ = AutoCAD-Y-),
-                // NOT the shared sharedSideYm used for the side view,
-                // so each train's own top-view-to-end-view distance
-                // stays constant no matter how many trains are in the
-                // export or what the shared side-view Y works out to.
+                // load direction. ALL trains' end views share the SAME
+                // Y value (sharedEndYm below) — just like the side view
+                // does — anchored off the REFERENCE train's (train[0])
+                // own top view Y, keeping that same fixed distance
+                // (CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM)
+                // from the top view.
                 //
                 // Trains separated in Y in the TOP view (e.g. parallel
-                // trailers side by side) must stay separated by that
-                // SAME distance in the END view — but along its X axis,
-                // since the end view looks along the trailer's length
-                // (its horizontal axis is world Y/width, not world X).
+                // trailers side by side) instead show up as an X
+                // difference between their end views, not a Y one —
+                // since the end view looks along the trailer's length,
+                // its horizontal axis is world Y/width, not world X.
                 // Example: two trains 3300mm apart in Y in the top view
-                // end up with end views 3300mm apart in X. So each
-                // train's Y difference from the reference train
-                // (train[0], same reference sharedSideYm uses) is added
-                // as an EXTRA X offset here, on top of that train's own
-                // X-anchor + length-based gap below — this is what keeps
-                // same-X/same-length parallel trains from overlapping.
+                // end up with end views 3300mm apart in X, both still at
+                // the one shared Y. Each train's Y difference from the
+                // reference train (train[0]) is added as an EXTRA X
+                // offset here, on top of that train's own X-anchor +
+                // length-based gap below.
                 const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
-                const endYm = (-trainBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM;
+                const sharedEndYm = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
                 const endViewYDeltaMm = (trainBaseYm - referenceBaseYm) * CAD_UNIT_SCALE;
                 if (loadDirection === 'in') {
                     const gapMm = trainLengthMm + 10000;
@@ -9832,7 +9827,7 @@
                         axleCount: null,
                         loadDirection,
                         x: (trainAnchorXm * CAD_UNIT_SCALE) + gapMm + endViewYDeltaMm,
-                        y: endYm,
+                        y: sharedEndYm,
                         rotationDeg: endRotationDeg
                     });
                 } else {
@@ -9845,7 +9840,7 @@
                         axleCount: null,
                         loadDirection,
                         x: (trainAnchorXm * CAD_UNIT_SCALE) - gapMm + endViewYDeltaMm,
-                        y: endYm,
+                        y: sharedEndYm,
                         rotationDeg: endRotationDeg
                     });
                 }
