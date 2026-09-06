@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.82.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.83)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9722,15 +9722,6 @@
             const inserts = [];
             const warnings = [];
             const loadDirection = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
-            // Tracks the overall assembly's left-most and right-most
-            // WHOLE TRAILER (train) — not per axle-split segment — each
-            // paired with its own anchor X (train.x), physical length
-            // (train.deckLength, falling back to its axle span if the
-            // deck footprint isn't known) and baseYm. Used below to
-            // place the SINGLE end view this export shows (see comments
-            // by the end-view insert further down).
-            let leftmostTrain = null;   // { anchorXm, lengthMm, baseYm } — smallest anchor X seen
-            let rightmostTrain = null;  // { anchorXm, lengthMm, baseYm } — largest (anchor + length) seen
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9744,20 +9735,13 @@
                     return;
                 }
 
-                // Whole-trailer anchor/length/Y — used only for the
-                // single end-view placement below, independent of how
-                // this train is split into AutoCAD block segments.
+                // Whole-trailer anchor/length/Y — used for this train's
+                // own end-view placement below, independent of how it's
+                // split into AutoCAD block segments for the top/side
+                // view inserts.
                 const trainAnchorXm = axle1X;
                 const trainLengthMm = parseFloat(train.deckLength) || Math.max((axleCount - 1) * spacing, 0);
                 const trainBaseYm = parseFloat(train.y) || 0;
-                if (!leftmostTrain || trainAnchorXm < leftmostTrain.anchorXm) {
-                    leftmostTrain = { anchorXm: trainAnchorXm, lengthMm: trainLengthMm, baseYm: trainBaseYm };
-                }
-                const trainRightEdgeXm = trainAnchorXm + trainLengthMm;
-                const rightmostEdgeXmSoFar = rightmostTrain ? rightmostTrain.anchorXm + rightmostTrain.lengthMm : null;
-                if (!rightmostTrain || trainRightEdgeXm > rightmostEdgeXmSoFar) {
-                    rightmostTrain = { anchorXm: trainAnchorXm, lengthMm: trainLengthMm, baseYm: trainBaseYm };
-                }
 
                 let axleOffset = 0;
                 segments.forEach((segCount, segIdx) => {
@@ -9772,9 +9756,9 @@
                     const insertionXm = segAxle1X;
                     const baseYm = parseFloat(train.y) || 0;
                     const rotationDeg = (loadDirection === 'out') ? 180 : 0;
-                    // Top view stays at the train's own Y; side (front)
-                    // view drops to CAD_SIDE_VIEW_Y_OFFSET_MM — see
-                    // comments above CAD_SIDE_VIEW_Y_OFFSET_MM.
+                    // One front (side) view per train — every train's
+                    // front view sits at the SAME Y offset direction
+                    // below its own top view: CAD_SIDE_VIEW_Y_OFFSET_MM.
                     const VIEW_Y_OFFSETS_MM = { top: 0, side: CAD_SIDE_VIEW_Y_OFFSET_MM };
                     ['top', 'side'].forEach(view => {
                         const blockName = viewBlocks[view][loadDirection];
@@ -9792,6 +9776,50 @@
 
                     axleOffset += segCount;
                 });
+
+                // ---- One end view per train (per KKai's spec) ----
+                // Every train gets its own single end view — same block
+                // (CAD_END_VIEW_BLOCK_NAME) regardless of axle count or
+                // load direction — sitting at the SAME Y offset
+                // direction as that train's own front(side) view above
+                // (baseYm + CAD_SIDE_VIEW_Y_OFFSET_MM), plus the small
+                // fixed CAD_END_VIEW_Y_ADJUST_MM correction so the two
+                // blocks' trailer top decks line up exactly. Which side
+                // it sits on, and its X gap from the train's own anchor,
+                // follows the global Load direction:
+                //   - Load In  -> RIGHT of the train, gap = trailer
+                //     length + 10000mm beyond its own right edge.
+                //   - Load Out -> LEFT of the train, gap = trailer
+                //     length - 10000mm before its own anchor, in -X.
+                const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
+                const endYm = (trainBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM;
+                if (loadDirection === 'in') {
+                    const gapMm = trainLengthMm + 10000;
+                    inserts.push({
+                        trainName: `${train.name} — Right End View`,
+                        view: 'end',
+                        endSide: 'right',
+                        blockName: CAD_END_VIEW_BLOCK_NAME,
+                        axleCount: null,
+                        loadDirection,
+                        x: (trainAnchorXm * CAD_UNIT_SCALE) + gapMm,
+                        y: endYm,
+                        rotationDeg: endRotationDeg
+                    });
+                } else {
+                    const gapMm = trainLengthMm - 10000;
+                    inserts.push({
+                        trainName: `${train.name} — Left End View`,
+                        view: 'end',
+                        endSide: 'left',
+                        blockName: CAD_END_VIEW_BLOCK_NAME,
+                        axleCount: null,
+                        loadDirection,
+                        x: (trainAnchorXm * CAD_UNIT_SCALE) - gapMm,
+                        y: endYm,
+                        rotationDeg: endRotationDeg
+                    });
+                }
 
                 // Header/Dbar accessory (if any) — ONE AutoCAD block
                 // insert per accessory instance (not per sub-block piece
@@ -9827,54 +9855,6 @@
                     }
                 }
             });
-
-            // ---- Single end view (per KKai's spec) ----
-            // Only ONE end view is inserted for the whole export, its
-            // side (left/right) and which trailer it belongs to both
-            // driven by the global Load direction setting:
-            //   - Load In  -> RIGHT end view, anchored off the LAST
-            //     (right-most) trailer, placed to the right of the
-            //     front(side) view. X gap beyond that trailer's own
-            //     anchor = trailer length + 10000mm (i.e. 10000mm
-            //     beyond its own right edge).
-            //   - Load Out -> LEFT end view, anchored off the FIRST
-            //     (left-most) trailer, placed to the left of the front
-            //     (side) view. X gap before that trailer's own anchor,
-            //     in -X = trailer length - 10000mm.
-            // The end view's Y is the front(side) view's own Y
-            // (baseYm + CAD_SIDE_VIEW_Y_OFFSET_MM) plus a small fixed
-            // CAD_END_VIEW_Y_ADJUST_MM correction so the two blocks'
-            // trailer top decks line up exactly — e.g. front(side) view
-            // Y = -14427.000 -> end view Y = -14911.000 (a -484mm
-            // difference).
-            const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
-            if (loadDirection === 'in' && rightmostTrain) {
-                const gapMm = rightmostTrain.lengthMm + 10000;
-                inserts.push({
-                    trainName: 'Right End View (last trailer)',
-                    view: 'end',
-                    endSide: 'right',
-                    blockName: CAD_END_VIEW_BLOCK_NAME,
-                    axleCount: null,
-                    loadDirection,
-                    x: (rightmostTrain.anchorXm * CAD_UNIT_SCALE) + gapMm,
-                    y: (rightmostTrain.baseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM,
-                    rotationDeg: endRotationDeg
-                });
-            } else if (loadDirection === 'out' && leftmostTrain) {
-                const gapMm = leftmostTrain.lengthMm - 10000;
-                inserts.push({
-                    trainName: 'Left End View (first trailer)',
-                    view: 'end',
-                    endSide: 'left',
-                    blockName: CAD_END_VIEW_BLOCK_NAME,
-                    axleCount: null,
-                    loadDirection,
-                    x: (leftmostTrain.anchorXm * CAD_UNIT_SCALE) - gapMm,
-                    y: (leftmostTrain.baseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM,
-                    rotationDeg: endRotationDeg
-                });
-            }
 
             return { inserts, warnings };
         }
