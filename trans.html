@@ -9723,12 +9723,14 @@
             const warnings = [];
             const loadDirection = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
             // Tracks the overall assembly's left-most and right-most
-            // segment edge (across ALL trains/segments), each paired
-            // with that segment's own baseYm — used below to place the
-            // SINGLE end view this export now shows (see comments by
-            // the end-view insert further down).
-            let leftmostSeg = null;   // { edgeXm, baseYm } — smallest edge X seen
-            let rightmostSeg = null;  // { edgeXm, baseYm } — largest edge X seen
+            // WHOLE TRAILER (train) — not per axle-split segment — each
+            // paired with its own anchor X (train.x), physical length
+            // (train.deckLength, falling back to its axle span if the
+            // deck footprint isn't known) and baseYm. Used below to
+            // place the SINGLE end view this export shows (see comments
+            // by the end-view insert further down).
+            let leftmostTrain = null;   // { anchorXm, lengthMm, baseYm } — smallest anchor X seen
+            let rightmostTrain = null;  // { anchorXm, lengthMm, baseYm } — largest (anchor + length) seen
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9740,6 +9742,21 @@
                 if (customSegments && segSum !== axleCount) {
                     warnings.push(`Train "${train.name}" AutoCAD split (${segments.join('+')} = ${segSum}) doesn't match its ${axleCount} axle line(s). Skipped.`);
                     return;
+                }
+
+                // Whole-trailer anchor/length/Y — used only for the
+                // single end-view placement below, independent of how
+                // this train is split into AutoCAD block segments.
+                const trainAnchorXm = axle1X;
+                const trainLengthMm = parseFloat(train.deckLength) || Math.max((axleCount - 1) * spacing, 0);
+                const trainBaseYm = parseFloat(train.y) || 0;
+                if (!leftmostTrain || trainAnchorXm < leftmostTrain.anchorXm) {
+                    leftmostTrain = { anchorXm: trainAnchorXm, lengthMm: trainLengthMm, baseYm: trainBaseYm };
+                }
+                const trainRightEdgeXm = trainAnchorXm + trainLengthMm;
+                const rightmostEdgeXmSoFar = rightmostTrain ? rightmostTrain.anchorXm + rightmostTrain.lengthMm : null;
+                if (!rightmostTrain || trainRightEdgeXm > rightmostEdgeXmSoFar) {
+                    rightmostTrain = { anchorXm: trainAnchorXm, lengthMm: trainLengthMm, baseYm: trainBaseYm };
                 }
 
                 let axleOffset = 0;
@@ -9772,16 +9789,6 @@
                             rotationDeg
                         });
                     });
-
-                    // Track this segment's left/right edge (in the same
-                    // pre-CAD_UNIT_SCALE "world" units as insertionXm)
-                    // against the running overall-assembly extremes —
-                    // feeds the single end-view placement below.
-                    const segSpanMm = (segCount - 1) * spacing;
-                    const segLeftXm = insertionXm;
-                    const segRightXm = insertionXm + segSpanMm;
-                    if (!leftmostSeg || segLeftXm < leftmostSeg.edgeXm) leftmostSeg = { edgeXm: segLeftXm, baseYm };
-                    if (!rightmostSeg || segRightXm > rightmostSeg.edgeXm) rightmostSeg = { edgeXm: segRightXm, baseYm };
 
                     axleOffset += segCount;
                 });
@@ -9827,21 +9834,22 @@
             // driven by the global Load direction setting:
             //   - Load In  -> RIGHT end view, anchored off the LAST
             //     (right-most) trailer, placed to the right of the
-            //     front(side) view, beyond that trailer's own right edge.
+            //     front(side) view. X gap beyond that trailer's own
+            //     anchor = trailer length + 10000mm (i.e. 10000mm
+            //     beyond its own right edge).
             //   - Load Out -> LEFT end view, anchored off the FIRST
             //     (left-most) trailer, placed to the left of the front
-            //     (side) view, beyond that trailer's own left edge.
-            // X gap from that edge = the same distance as the Y gap
-            // between the top view and the front(side) view, i.e.
-            // abs(CAD_SIDE_VIEW_Y_OFFSET_MM). The end view's Y is the
-            // front(side) view's own Y (baseYm + CAD_SIDE_VIEW_Y_OFFSET_MM)
-            // plus a small fixed CAD_END_VIEW_Y_ADJUST_MM correction so
-            // the two blocks' trailer top decks line up exactly — e.g.
-            // front(side) view Y = -14427.000 -> end view Y = -14911.000
-            // (a -484mm difference).
-            const endViewGapMm = Math.abs(CAD_SIDE_VIEW_Y_OFFSET_MM);
+            //     (side) view. X gap before that trailer's own anchor,
+            //     in -X = trailer length - 10000mm.
+            // The end view's Y is the front(side) view's own Y
+            // (baseYm + CAD_SIDE_VIEW_Y_OFFSET_MM) plus a small fixed
+            // CAD_END_VIEW_Y_ADJUST_MM correction so the two blocks'
+            // trailer top decks line up exactly — e.g. front(side) view
+            // Y = -14427.000 -> end view Y = -14911.000 (a -484mm
+            // difference).
             const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
-            if (loadDirection === 'in' && rightmostSeg) {
+            if (loadDirection === 'in' && rightmostTrain) {
+                const gapMm = rightmostTrain.lengthMm + 10000;
                 inserts.push({
                     trainName: 'Right End View (last trailer)',
                     view: 'end',
@@ -9849,11 +9857,12 @@
                     blockName: CAD_END_VIEW_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: (rightmostSeg.edgeXm * CAD_UNIT_SCALE) + endViewGapMm,
-                    y: (rightmostSeg.baseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM,
+                    x: (rightmostTrain.anchorXm * CAD_UNIT_SCALE) + gapMm,
+                    y: (rightmostTrain.baseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM,
                     rotationDeg: endRotationDeg
                 });
-            } else if (loadDirection === 'out' && leftmostSeg) {
+            } else if (loadDirection === 'out' && leftmostTrain) {
+                const gapMm = leftmostTrain.lengthMm - 10000;
                 inserts.push({
                     trainName: 'Left End View (first trailer)',
                     view: 'end',
@@ -9861,8 +9870,8 @@
                     blockName: CAD_END_VIEW_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: (leftmostSeg.edgeXm * CAD_UNIT_SCALE) - endViewGapMm,
-                    y: (leftmostSeg.baseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM,
+                    x: (leftmostTrain.anchorXm * CAD_UNIT_SCALE) - gapMm,
+                    y: (leftmostTrain.baseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM,
                     rotationDeg: endRotationDeg
                 });
             }
