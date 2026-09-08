@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.83.7)</h1>
+            <h1>🚂 Transport Dashboard (Rev.83.8)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9802,23 +9802,28 @@
                 // own top view Y, keeping that same fixed distance
                 // (CAD_SIDE_VIEW_Y_OFFSET_MM + CAD_END_VIEW_Y_ADJUST_MM)
                 // from the top view.
-                //
                 // Trains separated in Y in the TOP view (e.g. parallel
                 // trailers side by side) instead show up as an X
                 // difference between their end views, not a Y one —
                 // since the end view looks along the trailer's length,
                 // its horizontal axis is world Y/width, not world X.
                 // That X separation = this train's own top deck width
-                // (train.deckWidth) PLUS its Y difference from the
-                // reference train (train[0]) — e.g. two trains 3300mm
-                // apart in Y in the top view, each with a 3000mm deck
-                // width, end up with end views (3000 + 3300 = 6300mm)
-                // apart in X, both still at the one shared Y. This is
-                // added as an EXTRA X offset here, on top of that
+                // PLUS its Y difference from the reference train
+                // (train[0]) — e.g. two trains 3300mm apart in Y with a
+                // 3300mm deck width end up 3300mm apart in X when the Y
+                // difference is 0mm (deck width only), both still at the
+                // one shared Y. Deck width comes from train.deckWidth
+                // (preset SPMT/Goldhofer trailers only); custom/manual
+                // trailers don't carry that field, so it falls back to
+                // train.axlePairOffsetY — the left/right axle row
+                // spacing, which stands in for "trailer width" the same
+                // way it already does elsewhere (dimension lines, 2D/3D
+                // preview) for trailers without a deck rectangle. This
+                // is added as an EXTRA X offset here, on top of that
                 // train's own X-anchor + length-based gap below.
                 const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
                 const sharedEndYm = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
-                const trainDeckWidthMm = parseFloat(train.deckWidth) || 0;
+                const trainDeckWidthMm = parseFloat(train.deckWidth) || parseFloat(train.axlePairOffsetY) || 0;
                 const endViewYDeltaMm = trainDeckWidthMm + (trainBaseYm - referenceBaseYm) * CAD_UNIT_SCALE;
                 if (loadDirection === 'in') {
                     const gapMm = trainLengthMm + 10000;
