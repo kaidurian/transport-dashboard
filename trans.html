@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.84.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.84.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9732,7 +9732,11 @@
             // front (side) view insert shares the exact same Y value —
             // it does NOT follow each train's own (possibly different)
             // Y position the way the top view does. Anchored off the
-            // FIRST train's Y so a single-train export is unchanged.
+            // LAST train's Y so a single-train export is unchanged (with
+            // one train, "first" and "last" are the same train anyway).
+            // The end view's shared Y (sharedEndYm, built off
+            // sharedSideYm further down) inherits this same anchor
+            // automatically — no separate change needed there.
             //
             // Dashboard Y+ is AutoCAD Y- for train arrangement: every
             // train-position Y (top view, and the shared reference Y
@@ -9742,7 +9746,7 @@
             // ADJUST_MM below) is a drawing-layout offset, not a train
             // position, so it stays as-is — the gap is preserved exactly
             // regardless of this sign flip.
-            const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].y) || 0) : 0;
+            const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[trailerGenTrains.length - 1].y) || 0) : 0;
             const sharedSideYm = (-referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
             // Running total of PRECEDING trains' own (deck width +
             // CAD_END_VIEW_GAP_MM) — each train's end view is pushed out
