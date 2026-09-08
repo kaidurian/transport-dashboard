@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.83.9)</h1>
+            <h1>🚂 Transport Dashboard (Rev.83.10)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7791,10 +7791,39 @@
             // ---- Y extents (end view / width) — independent of the
             // plan view's X mapping, since the end view isn't required
             // to align horizontally with it. ----
-            const ys = rows.map(r => r.y);
+            //
+            // Trains separated in Y in the plan/top view (e.g. parallel
+            // trailers side by side) need that same separation to show
+            // up as a clear gap in the END view too — but the end view
+            // draws each train's deck using its own real deckWidth, so
+            // using each train's raw world Y directly can leave decks
+            // overlapping (or nearly on top of each other) whenever two
+            // trains' Y positions are closer together than their own
+            // widths. endViewYShiftByTrain pushes each train's END VIEW
+            // position out by the CUMULATIVE width of every train before
+            // it (same "stacking" logic as the AutoCAD .scr export's own
+            // end-view placement — see computeTrailerCADInserts) — train
+            // 1 keeps its real Y, train 2 is shifted out by train 1's
+            // width, train 3 by train 1's + train 2's width, and so on —
+            // so the END VIEW always shows every train clearly side by
+            // side regardless of how close their real Y positions are.
+            // Only used for the END VIEW drawing below (ys, wheel/deck
+            // rects, header/dbar blocks); the plan (top) and side views
+            // keep using each train's real, unshifted Y/deckWidth.
+            const endViewYShiftByTrain = {};
+            (function () {
+                let cumWidthMm = 0;
+                trailerGenTrains.forEach(t => {
+                    endViewYShiftByTrain[t.name] = cumWidthMm;
+                    cumWidthMm += parseFloat(t.deckWidth) || parseFloat(t.axlePairOffsetY) || 0;
+                });
+            })();
+            const endViewShiftFor = trainName => endViewYShiftByTrain[trainName] || 0;
+            const ys = rows.map(r => r.y + endViewShiftFor(r.trainName));
             trailerGenTrains.forEach(t => {
-                if (t.deckWidth) ys.push((parseFloat(t.y) || 0), (parseFloat(t.y) || 0) + t.deckWidth);
-                computeHeaderDbarBlocks(t).forEach(b => ys.push(b.yCenter - b.widthMm / 2, b.yCenter + b.widthMm / 2));
+                const shift = endViewShiftFor(t.name);
+                if (t.deckWidth) ys.push((parseFloat(t.y) || 0) + shift, (parseFloat(t.y) || 0) + t.deckWidth + shift);
+                computeHeaderDbarBlocks(t).forEach(b => ys.push(b.yCenter - b.widthMm / 2 + shift, b.yCenter + b.widthMm / 2 + shift));
             });
             cargoItems.forEach(c => {
                 const tlYMm = (parseFloat(c.tlY) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
@@ -8038,13 +8067,13 @@
                     const groupCount = groupsAtY[yKey].size;
                     const groupIdx = [...groupsAtY[yKey]].indexOf(r.groupNumber);
                     const nudge = groupCount > 1 ? (groupIdx - (groupCount - 1) / 2) * (tireW * 0.6) : 0;
-                    const cx = syFn(r.y) + nudge;
+                    const cx = syFn(r.y + endViewShiftFor(r.trainName)) + nudge;
                     const w = groupCount > 1 ? tireW * 0.55 : tireW;
                     wheels += `<rect x="${cx - w / 2}" y="${szEnd(TG_ELEV_WHEEL_DIAM)}" width="${w}" height="${TG_ELEV_WHEEL_DIAM * scale}" rx="3" fill="${r.color}" opacity="0.85" stroke="${r.color}" stroke-width="1"/>`;
                 });
                 trailerGenTrains.forEach(t => {
                     if (!t.deckWidth) return;
-                    const oy = parseFloat(t.y) || 0;
+                    const oy = (parseFloat(t.y) || 0) + endViewShiftFor(t.name);
                     const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
                     decks += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
                     decks += `<text x="${(dx1 + dx2) / 2}" y="${deckTopYEnd - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
@@ -8114,8 +8143,9 @@
                     const hsy1 = sz(b.zTop), hsy2 = sz(b.zBase);
                     cargoElevSvg += `<rect x="${Math.min(hsx1, hsx2)}" y="${Math.min(hsy1, hsy2)}" width="${Math.abs(hsx2 - hsx1)}" height="${Math.abs(hsy2 - hsy1)}" fill="${TG_HEADER_DBAR_ELEV_COLOR}" fill-opacity="0.25" stroke="${TG_HEADER_DBAR_ELEV_COLOR}" stroke-width="1.5"/>`;
                     // End views (left panel via sy1, right panel mirrored via sy2).
+                    const hdShift = endViewShiftFor(t.name);
                     [sy1, sy2].forEach(syFn => {
-                        const hex1 = syFn(b.yCenter - b.widthMm / 2), hex2 = syFn(b.yCenter + b.widthMm / 2);
+                        const hex1 = syFn(b.yCenter - b.widthMm / 2 + hdShift), hex2 = syFn(b.yCenter + b.widthMm / 2 + hdShift);
                         const hey1 = szEnd(b.zTop), hey2 = szEnd(b.zBase);
                         cargoElevSvg += `<rect x="${Math.min(hex1, hex2)}" y="${Math.min(hey1, hey2)}" width="${Math.abs(hex2 - hex1)}" height="${Math.abs(hey2 - hey1)}" fill="${TG_HEADER_DBAR_ELEV_COLOR}" fill-opacity="0.25" stroke="${TG_HEADER_DBAR_ELEV_COLOR}" stroke-width="1.5"/>`;
                     });
@@ -9738,6 +9768,15 @@
             // regardless of this sign flip.
             const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].y) || 0) : 0;
             const sharedSideYm = (-referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
+            // Running total of PRECEDING trains' own deck widths — each
+            // train's end view is pushed out in X past every earlier
+            // train's width, not just its own (using its own width here
+            // instead would CANCEL OUT between two same-width trains:
+            // train2.x - train1.x = (train2's own width + gap) -
+            // (train1's own width + 0) = just the gap when the widths
+            // match). See the comment where this feeds endViewYDeltaMm
+            // below for the full picture.
+            let cumulativeWidthMm = 0;
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9807,24 +9846,27 @@
                 // difference between their end views, not a Y one —
                 // since the end view looks along the trailer's length,
                 // its horizontal axis is world Y/width, not world X.
-                // That X separation = this train's own top deck width
-                // PLUS its Y difference from the reference train
-                // (train[0]) — e.g. two trains 3300mm apart in Y with a
-                // 3300mm deck width end up 3300mm apart in X when the Y
-                // difference is 0mm (deck width only), both still at the
-                // one shared Y. Deck width comes from train.deckWidth
-                // (preset SPMT/Goldhofer trailers only); custom/manual
-                // trailers don't carry that field, so it falls back to
-                // train.axlePairOffsetY — the left/right axle row
-                // spacing, which stands in for "trailer width" the same
-                // way it already does elsewhere (dimension lines, 2D/3D
-                // preview) for trailers without a deck rectangle. This
-                // is added as an EXTRA X offset here, on top of that
-                // train's own X-anchor + length-based gap below.
+                // Each train's end view is pushed out by the CUMULATIVE
+                // width of every train before it (cumulativeWidthMm,
+                // tracked above the forEach) PLUS its own Y difference
+                // from the reference train (train[0]) — e.g. train[0]
+                // sits at delta 0; train[1], 3000mm wide, 300mm further
+                // in Y, sits at delta 3000+300=3300mm; train[2] would add
+                // train[1]'s width on top of that, and so on. Width comes
+                // from train.deckWidth (preset SPMT/Goldhofer trailers
+                // only); custom/manual trailers don't carry that field,
+                // so it falls back to train.axlePairOffsetY — the
+                // left/right axle row spacing, which stands in for
+                // "trailer width" the same way it already does elsewhere
+                // (dimension lines, 2D/3D preview) for trailers without a
+                // deck rectangle. This is added as an EXTRA X offset
+                // here, on top of that train's own X-anchor +
+                // length-based gap below.
                 const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
                 const sharedEndYm = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
                 const trainDeckWidthMm = parseFloat(train.deckWidth) || parseFloat(train.axlePairOffsetY) || 0;
-                const endViewYDeltaMm = trainDeckWidthMm + (trainBaseYm - referenceBaseYm) * CAD_UNIT_SCALE;
+                const endViewYDeltaMm = cumulativeWidthMm + (trainBaseYm - referenceBaseYm) * CAD_UNIT_SCALE;
+                cumulativeWidthMm += trainDeckWidthMm;
                 if (loadDirection === 'in') {
                     const gapMm = trainLengthMm + 10000;
                     inserts.push({
