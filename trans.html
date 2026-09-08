@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.84)</h1>
+            <h1>🚂 Transport Dashboard (Rev.84.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1812,6 +1812,12 @@
         // different placement is wanted.
         const CAD_SIDE_VIEW_Y_OFFSET_MM = -15000;
         const CAD_END_VIEW_Y_ADJUST_MM = -484;
+        // Fixed gap (mm) between one train's end view and the next one's,
+        // on top of that train's own deck width — per KKai's spec each
+        // end view steps over from the previous one by exactly
+        // (that train's own width + this gap), e.g. a 3000mm-wide train
+        // steps 3300mm. Same constant regardless of trailer type/width.
+        const CAD_END_VIEW_GAP_MM = 300;
 
         // ---- Drawing Table placement in Paper Space (.scr export) ----
         // The Drawing Table's row/column dimensions (see
@@ -9738,15 +9744,25 @@
             // regardless of this sign flip.
             const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].y) || 0) : 0;
             const sharedSideYm = (-referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
-            // Running total of PRECEDING trains' own deck widths — each
-            // train's end view is pushed out in X past every earlier
-            // train's width, not just its own (using its own width here
-            // instead would CANCEL OUT between two same-width trains:
-            // train2.x - train1.x = (train2's own width + gap) -
-            // (train1's own width + 0) = just the gap when the widths
-            // match). See the comment where this feeds endViewYDeltaMm
-            // below for the full picture.
+            // Running total of PRECEDING trains' own (deck width +
+            // CAD_END_VIEW_GAP_MM) — each train's end view is pushed out
+            // in X past every earlier train's (width+gap), not just its
+            // own, so consecutive end views land exactly one
+            // (width+gap) step apart. See the comment where this feeds
+            // endViewYDeltaMm below for the full picture.
             let cumulativeWidthMm = 0;
+            // Longest trailer's own deck length (mm) across ALL trains —
+            // per KKai's spec every train's end view uses THIS shared
+            // value (not its own trainLengthMm) as the base of its X
+            // gap from the top/side view, so every end view sits the
+            // same "depth" out along X regardless of which train is
+            // shorter/longer.
+            const longestTrailerLengthMm = trailerGenTrains.reduce((maxLen, t) => {
+                const ac = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+                const sp = parseFloat(t.spacing) || 0;
+                const len = parseFloat(t.deckLength) || Math.max((ac - 1) * sp, 0);
+                return Math.max(maxLen, len);
+            }, 0);
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -9760,12 +9776,13 @@
                     return;
                 }
 
-                // Whole-trailer anchor/length/Y — used for this train's
-                // own end-view placement below, independent of how it's
+                // Whole-trailer anchor/Y — used for this train's own
+                // end-view placement below, independent of how it's
                 // split into AutoCAD block segments for the top/side
-                // view inserts.
+                // view inserts. (The end view's X gap uses the shared
+                // longestTrailerLengthMm computed above, not this
+                // train's own length.)
                 const trainAnchorXm = axle1X;
-                const trainLengthMm = parseFloat(train.deckLength) || Math.max((axleCount - 1) * spacing, 0);
                 const trainBaseYm = parseFloat(train.y) || 0;
                 // Trailer width — deckWidth for preset SPMT/Goldhofer
                 // trailers, else axlePairOffsetY (left/right axle row
@@ -9860,10 +9877,18 @@
                 // length-based gap below.
                 const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
                 const sharedEndYm = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
-                const endViewYDeltaMm = cumulativeWidthMm + (trainBaseYm - referenceBaseYm) * CAD_UNIT_SCALE;
-                cumulativeWidthMm += trainDeckWidthMm;
+                // Single increment: this train's end view sits at the
+                // running total of every EARLIER train's own
+                // (width + CAD_END_VIEW_GAP_MM) — train[0] at delta 0,
+                // train[1] at train[0]'s (width+gap), train[2] at
+                // train[0]'s + train[1]'s (width+gap), and so on. No
+                // longer derived from the trains' own Y offsets, so the
+                // step is exact and predictable regardless of how the
+                // trains are actually arranged in Y.
+                const endViewYDeltaMm = cumulativeWidthMm;
+                cumulativeWidthMm += trainDeckWidthMm + CAD_END_VIEW_GAP_MM;
                 if (loadDirection === 'in') {
-                    const gapMm = trainLengthMm + 10000;
+                    const gapMm = longestTrailerLengthMm + 10000;
                     inserts.push({
                         trainName: `${train.name} — Right End View`,
                         view: 'end',
@@ -9876,7 +9901,7 @@
                         rotationDeg: endRotationDeg
                     });
                 } else {
-                    const gapMm = trainLengthMm - 10000;
+                    const gapMm = longestTrailerLengthMm - 10000;
                     inserts.push({
                         trainName: `${train.name} — Left End View`,
                         view: 'end',
