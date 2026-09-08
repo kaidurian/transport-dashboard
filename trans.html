@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.84.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.85)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1789,6 +1789,13 @@
         // regardless of axle-line count or load direction. Per KKai's
         // spec this name never changes, unlike the top/side blocks above.
         const CAD_END_VIEW_BLOCK_NAME = 'KAMAG_K25_6L_end_view_AFT';
+        // Per-cargo-item CoG marker block, and the single Combined CoG
+        // marker block — both independent of axle-line count/load
+        // direction, same one-block-per-purpose pattern as
+        // CAD_END_VIEW_BLOCK_NAME above. See the CoG/CCOG insert block
+        // at the end of computeTrailerCADInserts for the placement math.
+        const CAD_COG_BLOCK_NAME = 'COG';
+        const CAD_CCOG_BLOCK_NAME = 'CCOG';
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
         const CAD_UNIT_SCALE = 1;
@@ -9956,6 +9963,86 @@
                     }
                 }
             });
+
+            // ---- Cargo CoG (COG) + Combined CoG (CCOG) markers ----
+            // One COG block per cargo item, positioned from that item's
+            // own Dashboard 🔗 CoGx/CoGy/CoGz (cargo.x/y/z — meters,
+            // world origin shared with the trains' own X/Y offset, Z
+            // "height above the trailer deck" per that field's own
+            // tooltip):
+            //   TOP view:   x = CoGx*1000, y = -(CoGy*1000)   (same
+            //               dashboard-Y+ = AutoCAD-Y- convention as
+            //               every top-view insert above)
+            //   FRONT view: x = CoGx*1000 (same X axis as the top view),
+            //               y = deckTopFrontYm + CoGz*1000, where
+            //               deckTopFrontYm is the shared front view's
+            //               own top-deck line — sharedSideYm (that
+            //               view's ground line) + tgZTrailerHeightMm
+            //               (Ground -> top of deck height, ZHEIGHT_CELL)
+            // Both views' Z coordinate stay 0 — AutoCAD's Z axis isn't
+            // used here, height is carried entirely by the FRONT view's
+            // Y position (elevation-view convention, same as every other
+            // block insert above).
+            const deckTopFrontYm = sharedSideYm + tgZTrailerHeightMm;
+            cargoItems.forEach(cargo => {
+                const cogXMm = (parseFloat(cargo.x) || 0) * 1000;
+                const cogYMm = (parseFloat(cargo.y) || 0) * 1000;
+                const cogZMm = (parseFloat(cargo.z) || 0) * 1000;
+                inserts.push({
+                    trainName: `${cargo.name || 'Cargo'} — CoG (Top)`,
+                    view: 'top',
+                    blockName: CAD_COG_BLOCK_NAME,
+                    axleCount: null,
+                    loadDirection,
+                    x: cogXMm * CAD_UNIT_SCALE,
+                    y: -cogYMm * CAD_UNIT_SCALE,
+                    rotationDeg: 0
+                });
+                inserts.push({
+                    trainName: `${cargo.name || 'Cargo'} — CoG (Front)`,
+                    view: 'side',
+                    blockName: CAD_COG_BLOCK_NAME,
+                    axleCount: null,
+                    loadDirection,
+                    x: cogXMm * CAD_UNIT_SCALE,
+                    y: (deckTopFrontYm + cogZMm) * CAD_UNIT_SCALE,
+                    rotationDeg: 0
+                });
+            });
+
+            // Combined CoG (CCOG) — single marker, Excel Display!B16:D16
+            // (cogCombinedSign). Unlike per-item CoG above, this is
+            // already world mm (no *1000) and, per its own comment
+            // elsewhere in this file (tgCogZDims), its Z is already
+            // measured from GROUND, not the deck — so its FRONT view Y
+            // sits directly on sharedSideYm (the shared front view's own
+            // ground line) plus its own Z, skipping the
+            // tgZTrailerHeightMm add the per-item CoG uses above.
+            if (cogCombinedSignLoaded) {
+                const ccogXMm = parseFloat(cogCombinedSign.x) || 0;
+                const ccogYMm = parseFloat(cogCombinedSign.y) || 0;
+                const ccogZMm = parseFloat(cogCombinedSign.z) || 0;
+                inserts.push({
+                    trainName: 'Combined CoG (Top)',
+                    view: 'top',
+                    blockName: CAD_CCOG_BLOCK_NAME,
+                    axleCount: null,
+                    loadDirection,
+                    x: ccogXMm * CAD_UNIT_SCALE,
+                    y: -ccogYMm * CAD_UNIT_SCALE,
+                    rotationDeg: 0
+                });
+                inserts.push({
+                    trainName: 'Combined CoG (Front)',
+                    view: 'side',
+                    blockName: CAD_CCOG_BLOCK_NAME,
+                    axleCount: null,
+                    loadDirection,
+                    x: ccogXMm * CAD_UNIT_SCALE,
+                    y: (sharedSideYm + ccogZMm) * CAD_UNIT_SCALE,
+                    rotationDeg: 0
+                });
+            }
 
             return { inserts, warnings };
         }
