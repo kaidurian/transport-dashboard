@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.83.12)</h1>
+            <h1>🚂 Transport Dashboard (Rev.84)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9767,6 +9767,18 @@
                 const trainAnchorXm = axle1X;
                 const trainLengthMm = parseFloat(train.deckLength) || Math.max((axleCount - 1) * spacing, 0);
                 const trainBaseYm = parseFloat(train.y) || 0;
+                // Trailer width — deckWidth for preset SPMT/Goldhofer
+                // trailers, else axlePairOffsetY (left/right axle row
+                // spacing) as the stand-in, same fallback used for the
+                // end view's cumulativeWidthMm below. Needed here too:
+                // "Y offset (mm)" (train.y) is the deck's TOP-LEFT edge,
+                // not its centerline (see the comment above
+                // pullWheelDataFromExcelImpl), but the top-view AutoCAD
+                // block is centered on the trailer — so the block's
+                // insertion Y must be the edge PLUS half the width to
+                // land on that centerline. E.g. a 3000mm-wide trailer
+                // with Y offset 573mm inserts at -(1500+573)=-2073.
+                const trainDeckWidthMm = parseFloat(train.deckWidth) || parseFloat(train.axlePairOffsetY) || 0;
 
                 let axleOffset = 0;
                 let anySegmentMapped = false;
@@ -9781,12 +9793,14 @@
                     anySegmentMapped = true;
                     const segAxle1X = axle1X - axleOffset * spacing;
                     const insertionXm = segAxle1X;
-                    const baseYm = parseFloat(train.y) || 0;
+                    const baseYm = trainBaseYm + (trainDeckWidthMm / 2) / CAD_UNIT_SCALE;
                     const rotationDeg = (loadDirection === 'out') ? 180 : 0;
-                    // Top view keeps this train's own Y, NEGATED (dashboard
-                    // Y+ = AutoCAD Y- for train arrangement — see comment
-                    // above sharedSideYm). Side (front) view instead uses
-                    // sharedSideYm — the SAME Y value for every train.
+                    // Top view keeps this train's own Y (deck centerline —
+                    // see trainDeckWidthMm comment above), NEGATED
+                    // (dashboard Y+ = AutoCAD Y- for train arrangement —
+                    // see comment above sharedSideYm). Side (front) view
+                    // instead uses sharedSideYm — the SAME Y value for
+                    // every train.
                     ['top', 'side'].forEach(view => {
                         const blockName = viewBlocks[view][loadDirection];
                         inserts.push({
@@ -9846,7 +9860,6 @@
                 // length-based gap below.
                 const endRotationDeg = (loadDirection === 'out') ? 180 : 0;
                 const sharedEndYm = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
-                const trainDeckWidthMm = parseFloat(train.deckWidth) || parseFloat(train.axlePairOffsetY) || 0;
                 const endViewYDeltaMm = cumulativeWidthMm + (trainBaseYm - referenceBaseYm) * CAD_UNIT_SCALE;
                 cumulativeWidthMm += trainDeckWidthMm;
                 if (loadDirection === 'in') {
