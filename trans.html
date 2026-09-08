@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.83.11)</h1>
+            <h1>🚂 Transport Dashboard (Rev.83.12)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9769,6 +9769,7 @@
                 const trainBaseYm = parseFloat(train.y) || 0;
 
                 let axleOffset = 0;
+                let anySegmentMapped = false;
                 segments.forEach((segCount, segIdx) => {
                     const segLabel = segments.length > 1 ? `${train.name} (#${axleOffset + 1}-#${axleOffset + segCount})` : train.name;
                     const viewBlocks = CAD_BLOCK_MAP[segCount];
@@ -9777,6 +9778,7 @@
                         axleOffset += segCount;
                         return;
                     }
+                    anySegmentMapped = true;
                     const segAxle1X = axle1X - axleOffset * spacing;
                     const insertionXm = segAxle1X;
                     const baseYm = parseFloat(train.y) || 0;
@@ -9801,6 +9803,16 @@
 
                     axleOffset += segCount;
                 });
+
+                // A train whose axle count(s) never mapped to a known
+                // AutoCAD block above (anySegmentMapped stays false — see
+                // the warning already pushed inside the loop) gets NO end
+                // view either — it has nothing to place one next to, and
+                // silently adding one anyway was producing more end
+                // views than there are trains that actually exported.
+                if (!anySegmentMapped) {
+                    return;
+                }
 
                 // ---- One end view per train (per KKai's spec) ----
                 // Every train gets its own single end view — same block
