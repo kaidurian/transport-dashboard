@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.86.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.86.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1804,6 +1804,18 @@
         // (COG_COMBINED_WEIGHT_CELL — cogCombinedSign.weight) at insert
         // time (see computeTrailerCADInserts).
         const CAD_CCOG_ITEM_ATTRIB_DEFAULT = 'CCoG';
+        // Per KKai's spec: rather than filling the CCOG block's own
+        // ITEM/WEIGHT attributes (which required the ATTDIA/ATTREQ
+        // prompt-answering dance below and only ever applied to CCOG,
+        // never COG_CARGO), both marker types instead get a plain
+        // free-standing TEXT entity placed beside them, carrying the
+        // same Excel-synced name/weight values. CAD_COG_LABEL_OFFSET_MM
+        // is the gap (world mm, along that view's own local +X/
+        // horizontal axis) between a marker's insertion point and its
+        // label's insertion point; CAD_COG_LABEL_TEXT_HEIGHT_MM is that
+        // label TEXT's height.
+        const CAD_COG_LABEL_OFFSET_MM = 300;
+        const CAD_COG_LABEL_TEXT_HEIGHT_MM = 200;
         // Dedicated layer for COG_CARGO + CCOG marker inserts only (see
         // buildTrailerCADScript) — erased and redrawn fresh on every
         // export so re-running the script on the same drawing replaces
@@ -10043,18 +10055,36 @@
             const cogEndRefTrainXm = (trailerGenTrains.length ? (parseFloat(trailerGenTrains[trailerGenTrains.length - 1].x) || 0) : 0) * CAD_UNIT_SCALE;
             const cogEndGapMm = (loadDirection === 'in') ? (longestTrailerLengthMm + 10000) : (longestTrailerLengthMm - 10000);
             const cogEndAnchorXm = (loadDirection === 'in') ? (cogEndRefTrainXm + cogEndGapMm) : (cogEndRefTrainXm - cogEndGapMm);
+            // texts — free-standing TEXT labels placed beside each
+            // COG_CARGO/CCOG marker below (see CAD_COG_LABEL_OFFSET_MM/
+            // CAD_COG_LABEL_TEXT_HEIGHT_MM), instead of filling those
+            // blocks' own attributes. Same {view, x, y} convention as
+            // inserts above — buildTrailerCADScript places the label's
+            // insertion point at x + offset, y (offset along that
+            // view's own local +X/horizontal axis, marker's own y
+            // unchanged) and draws it on the same CARGO_COG_MARKERS
+            // layer as the markers themselves.
+            const texts = [];
             cargoItems.forEach(cargo => {
                 const cogXMm = (parseFloat(cargo.x) || 0) * 1000;
                 const cogYMm = (parseFloat(cargo.y) || 0) * 1000;
                 const cogZMm = (parseFloat(cargo.z) || 0) * 1000;
+                const cogWeightVal = parseFloat(cargo.weight) || 0;
+                const cogLabelText = `${cargo.name || 'Cargo'} ${cogWeightVal.toFixed(2)}t`;
+                const cogTopX = cogXMm * CAD_UNIT_SCALE;
+                const cogTopY = -cogYMm * CAD_UNIT_SCALE;
+                const cogFrontX = cogXMm * CAD_UNIT_SCALE;
+                const cogFrontY = (deckTopFrontYm + cogZMm) * CAD_UNIT_SCALE;
+                const cogEndX = (cogEndAnchorXm - cogYMm) * CAD_UNIT_SCALE;
+                const cogEndY = (deckTopEndYm + cogZMm) * CAD_UNIT_SCALE;
                 inserts.push({
                     trainName: `${cargo.name || 'Cargo'} — CoG (Top)`,
                     view: 'top',
                     blockName: CAD_COG_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: cogXMm * CAD_UNIT_SCALE,
-                    y: -cogYMm * CAD_UNIT_SCALE,
+                    x: cogTopX,
+                    y: cogTopY,
                     rotationDeg: 0
                 });
                 inserts.push({
@@ -10063,8 +10093,8 @@
                     blockName: CAD_COG_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: cogXMm * CAD_UNIT_SCALE,
-                    y: (deckTopFrontYm + cogZMm) * CAD_UNIT_SCALE,
+                    x: cogFrontX,
+                    y: cogFrontY,
                     rotationDeg: 0
                 });
                 inserts.push({
@@ -10073,10 +10103,13 @@
                     blockName: CAD_COG_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: (cogEndAnchorXm - cogYMm) * CAD_UNIT_SCALE,
-                    y: (deckTopEndYm + cogZMm) * CAD_UNIT_SCALE,
+                    x: cogEndX,
+                    y: cogEndY,
                     rotationDeg: 0
                 });
+                texts.push({ view: 'top', x: cogTopX, y: cogTopY, text: cogLabelText });
+                texts.push({ view: 'side', x: cogFrontX, y: cogFrontY, text: cogLabelText });
+                texts.push({ view: 'end', x: cogEndX, y: cogEndY, text: cogLabelText });
             });
 
             // Combined CoG (CCOG) — single marker, Excel Display!B16:D16
@@ -10087,29 +10120,38 @@
             // Y each sit directly on that view's own ground line
             // (sharedSideYm / sharedEndYmForCog) plus its own Z,
             // skipping the tgZTrailerHeightMm add the per-item CoG uses
-            // above. Also carries ITEM/WEIGHT block attributes (see
-            // CAD_CCOG_ITEM_ATTRIB_DEFAULT / buildTrailerCADScript's
-            // ATTDIA/ATTREQ handling) — ITEM defaults to "CCoG", WEIGHT
-            // is pulled fresh from Excel Display!E16
-            // (COG_COMBINED_WEIGHT_CELL — cogCombinedSign.weight) right
-            // before export (same pullCargoFromExcelImpl call refreshes
-            // it via pullCogSignsFromExcel).
+            // above. Per KKai's spec, ITEM/WEIGHT are no longer fed in
+            // as this block's own attributes (that required the
+            // ATTDIA/ATTREQ prompt-answering dance) — instead a plain
+            // TEXT label carrying the same values sits beside the block
+            // (see the texts.push() calls below), same as COG_CARGO
+            // above. ITEM still defaults to CAD_CCOG_ITEM_ATTRIB_DEFAULT
+            // ("CCoG"); WEIGHT is still pulled fresh from Excel
+            // Display!E16 (COG_COMBINED_WEIGHT_CELL —
+            // cogCombinedSign.weight) right before export (same
+            // pullCargoFromExcelImpl call refreshes it via
+            // pullCogSignsFromExcel).
             if (cogCombinedSignLoaded) {
                 const ccogXMm = parseFloat(cogCombinedSign.x) || 0;
                 const ccogYMm = parseFloat(cogCombinedSign.y) || 0;
                 const ccogZMm = parseFloat(cogCombinedSign.z) || 0;
                 const ccogWeightVal = parseFloat(cogCombinedSign.weight) || 0;
-                const ccogAttribs = [CAD_CCOG_ITEM_ATTRIB_DEFAULT, ccogWeightVal.toFixed(2)];
+                const ccogLabelText = `${CAD_CCOG_ITEM_ATTRIB_DEFAULT} ${ccogWeightVal.toFixed(2)}t`;
+                const ccogTopX = ccogXMm * CAD_UNIT_SCALE;
+                const ccogTopY = -ccogYMm * CAD_UNIT_SCALE;
+                const ccogFrontX = ccogXMm * CAD_UNIT_SCALE;
+                const ccogFrontY = (sharedSideYm + ccogZMm) * CAD_UNIT_SCALE;
+                const ccogEndX = (cogEndAnchorXm - ccogYMm) * CAD_UNIT_SCALE;
+                const ccogEndY = (sharedEndYmForCog + ccogZMm) * CAD_UNIT_SCALE;
                 inserts.push({
                     trainName: 'Combined CoG (Top)',
                     view: 'top',
                     blockName: CAD_CCOG_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: ccogXMm * CAD_UNIT_SCALE,
-                    y: -ccogYMm * CAD_UNIT_SCALE,
-                    rotationDeg: 0,
-                    attribs: ccogAttribs
+                    x: ccogTopX,
+                    y: ccogTopY,
+                    rotationDeg: 0
                 });
                 inserts.push({
                     trainName: 'Combined CoG (Front)',
@@ -10117,10 +10159,9 @@
                     blockName: CAD_CCOG_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: ccogXMm * CAD_UNIT_SCALE,
-                    y: (sharedSideYm + ccogZMm) * CAD_UNIT_SCALE,
-                    rotationDeg: 0,
-                    attribs: ccogAttribs
+                    x: ccogFrontX,
+                    y: ccogFrontY,
+                    rotationDeg: 0
                 });
                 inserts.push({
                     trainName: 'Combined CoG (End)',
@@ -10128,21 +10169,23 @@
                     blockName: CAD_CCOG_BLOCK_NAME,
                     axleCount: null,
                     loadDirection,
-                    x: (cogEndAnchorXm - ccogYMm) * CAD_UNIT_SCALE,
-                    y: (sharedEndYmForCog + ccogZMm) * CAD_UNIT_SCALE,
-                    rotationDeg: 0,
-                    attribs: ccogAttribs
+                    x: ccogEndX,
+                    y: ccogEndY,
+                    rotationDeg: 0
                 });
+                texts.push({ view: 'top', x: ccogTopX, y: ccogTopY, text: ccogLabelText });
+                texts.push({ view: 'side', x: ccogFrontX, y: ccogFrontY, text: ccogLabelText });
+                texts.push({ view: 'end', x: ccogEndX, y: ccogEndY, text: ccogLabelText });
             }
 
-            return { inserts, warnings };
+            return { inserts, texts, warnings };
         }
 
         function setTrailerGenLoadDirection(value) {
             trailerGenLoadDirection = (value === 'out') ? 'out' : 'in';
         }
 
-        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables) {
+        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts) {
             const lines = [];
             lines.push(';; Disable snaps');
             lines.push('OSMODE 0');
@@ -10156,22 +10199,20 @@
             lines.push(';; Force Model Space — keep trailer/cargo geometry out of any Layout');
             lines.push('TILEMODE');
             lines.push('1');
-            // ATTDIA 0 forces attribute values (CCOG's ITEM/WEIGHT — see
-            // ins.attribs below) to be answered as plain command-line
-            // prompts in sequence, same as every other -Insert prompt
-            // here, instead of popping an attribute-entry dialog box
-            // that a .scr script can't fill in. ATTREQ 1 additionally
-            // guarantees -Insert actually PAUSES to prompt for those
-            // values instead of silently taking the block's own defaults
-            // (which is what ATTREQ 0 does) — without it, the WEIGHT
-            // attribute would never update to match Excel regardless of
-            // what's fed into the script. Both restored at the very end
-            // alongside FILEDIA/CMDDIA.
-            lines.push(';; Answer block-attribute prompts on the command line, not a dialog box, and make sure they\'re actually prompted for');
-            lines.push('ATTDIA');
-            lines.push('0');
+            // Per KKai's spec, COG_CARGO/CCOG no longer have their own
+            // block attributes filled in via the script (that used to
+            // need ATTDIA 0 / ATTREQ 1 here to force -Insert to pause
+            // and answer ITEM/WEIGHT on the command line — see the
+            // cogLabelTexts TEXT entities drawn alongside the markers
+            // below instead). ATTREQ 0 makes sure that if either block
+            // still happens to carry its own attribute definitions,
+            // -Insert silently takes their built-in defaults instead of
+            // pausing to prompt for values this script no longer
+            // provides — without this, the same block-insert desync
+            // failure mode as an unmapped block name would hit here.
+            lines.push(';; Insert any remaining block attributes silently (no script-fed values, no prompts)');
             lines.push('ATTREQ');
-            lines.push('1');
+            lines.push('0');
             // Cargo/Combined CoG markers (COG_CARGO, CCOG) are split out
             // from every other insert below and drawn on their OWN
             // dedicated layer (CAD_COG_MARKER_LAYER_NAME), which is
@@ -10193,16 +10234,10 @@
                 lines.push('1');
                 lines.push('1');
                 lines.push(`${ins.rotationDeg}`);
-                // Block-attribute values (currently only CCOG's ITEM +
-                // WEIGHT — see computeTrailerCADInserts), answered in the
-                // exact order the attributes were defined on the block.
-                if (ins.attribs && ins.attribs.length) {
-                    ins.attribs.forEach(v => lines.push(String(v)));
-                }
             };
             otherInserts.forEach(insertLines);
-            if (cogMarkerInserts.length) {
-                lines.push(';; Cargo/Combined CoG markers — own dedicated layer, cleared before redrawing so re-running this script replaces them instead of stacking duplicates');
+            if (cogMarkerInserts.length || (cogLabelTexts && cogLabelTexts.length)) {
+                lines.push(';; Cargo/Combined CoG markers + their beside-block labels — own dedicated layer, cleared before redrawing so re-running this script replaces them instead of stacking duplicates');
                 lines.push('-LAYER');
                 lines.push('Make');
                 lines.push(CAD_COG_MARKER_LAYER_NAME);
@@ -10213,6 +10248,21 @@
                 lines.push(CAD_COG_MARKER_LAYER_NAME);
                 lines.push('');
                 cogMarkerInserts.forEach(insertLines);
+                // Labels — one TEXT entity per marker, offset
+                // CAD_COG_LABEL_OFFSET_MM to the right of that marker's
+                // own insertion point (that view's local +X/horizontal
+                // axis), same Y, carrying the same name/weight values
+                // that used to be pushed into the block's own
+                // attributes (see computeTrailerCADInserts).
+                (cogLabelTexts || []).forEach(t => {
+                    const text = escapeScriptText(t.text);
+                    if (text === '') return;
+                    lines.push('TEXT');
+                    lines.push(`${(t.x + CAD_COG_LABEL_OFFSET_MM).toFixed(3)},${t.y.toFixed(3)},0`);
+                    lines.push(`${CAD_COG_LABEL_TEXT_HEIGHT_MM.toFixed(3)}`);
+                    lines.push('0');
+                    lines.push(text);
+                });
                 lines.push('-LAYER');
                 lines.push('Set');
                 lines.push('0');
@@ -10322,7 +10372,6 @@
             lines.push(';; Restores UI dialog boxes at the end of the script');
             lines.push('FILEDIA 1');
             lines.push('CMDDIA 1');
-            lines.push('ATTDIA 1');
             return lines.join('\n') + '\n';
         }
 
@@ -10337,7 +10386,7 @@
             // as-is) when not connected to Excel, e.g. standalone webpage
             // use — the export still proceeds with whatever's in memory.
             await pullCargoFromExcelImpl({ silent: true });
-            const { inserts, warnings } = computeTrailerCADInserts();
+            const { inserts, texts: cogLabelTexts, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
 
             // Drawing Table grid (TEXT + LINE entities) — placed in
@@ -10372,7 +10421,7 @@
                 alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, no Transport Data has been pulled, and no 🚚 Transport Data w/ CoG Env LC1-4 table has been pulled.');
                 return;
             }
-            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables);
+            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts);
             const blob = new Blob([scriptText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
