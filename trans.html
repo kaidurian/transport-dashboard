@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.86.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.86.4)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1826,6 +1826,21 @@
         // fixed 693mm reference). See the CoG/CCOG insert block at the
         // end of computeTrailerCADInserts for the full math.
         const CAD_COG_MARKER_Y_OFFSET_MM = 693;
+        // "0,0" origin reference sign — front (side) view gets exactly
+        // one (world X=0, that view's own ground line); each train's
+        // own end view gets one too, at that SAME end view's own
+        // insertion X (which, since every end-view block's local (0,0)
+        // IS the world-Y=0/ground point it was inserted at — see
+        // computeTrailerCADInserts — already IS the right spot). Drawn
+        // as a small crosshair + "0,0" label rather than the dashboard
+        // preview's X/Y axis arrows, since front/end are elevations
+        // (world X or Y doesn't run "across the page" there the way it
+        // does in the top/plan view) — a plain ground-reference point is
+        // the equivalent that actually applies to those views.
+        const CAD_ORIGIN_SIGN_LAYER_NAME = 'ORIGIN_SIGN';
+        const CAD_ORIGIN_SIGN_ARROW_LEN_MM = 500;
+        const CAD_ORIGIN_SIGN_TEXT_HEIGHT_MM = 200;
+        const CAD_ORIGIN_SIGN_TEXT_OFFSET_MM = 80;
         // Dedicated layer for COG_CARGO + CCOG marker inserts only (see
         // buildTrailerCADScript) — erased and redrawn fresh on every
         // export so re-running the script on the same drawing replaces
@@ -9815,6 +9830,14 @@
             // regardless of this sign flip.
             const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[trailerGenTrains.length - 1].y) || 0) : 0;
             const sharedSideYm = (-referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
+            // "0,0" origin signs — see CAD_ORIGIN_SIGN_* comment above.
+            // Front (side) view: world X=0 is the SAME X for every
+            // train's side-view insert (side view never shifts X the
+            // way the end view does), so a single sign at (0, that
+            // view's own ground line) covers all of them. Each train's
+            // own end-view sign is pushed further down, right where
+            // that train's end-view block itself gets inserted.
+            const originSigns = [{ view: 'side', x: 0, y: sharedSideYm }];
             // Running total of PRECEDING trains' own (deck width +
             // CAD_END_VIEW_GAP_MM) — each train's end view is pushed out
             // in X past every earlier train's (width+gap), not just its
@@ -9960,6 +9983,7 @@
                 cumulativeWidthMm += trainDeckWidthMm + CAD_END_VIEW_GAP_MM;
                 if (loadDirection === 'in') {
                     const gapMm = longestTrailerLengthMm + 10000;
+                    const endX = (trainAnchorXm * CAD_UNIT_SCALE) + gapMm + endViewYDeltaMm;
                     inserts.push({
                         trainName: `${train.name} — Right End View`,
                         view: 'end',
@@ -9967,12 +9991,14 @@
                         blockName: CAD_END_VIEW_BLOCK_NAME,
                         axleCount: null,
                         loadDirection,
-                        x: (trainAnchorXm * CAD_UNIT_SCALE) + gapMm + endViewYDeltaMm,
+                        x: endX,
                         y: sharedEndYm,
                         rotationDeg: endRotationDeg
                     });
+                    originSigns.push({ view: 'end', x: endX, y: sharedEndYm });
                 } else {
                     const gapMm = longestTrailerLengthMm - 10000;
+                    const endX = (trainAnchorXm * CAD_UNIT_SCALE) - gapMm + endViewYDeltaMm;
                     inserts.push({
                         trainName: `${train.name} — Left End View`,
                         view: 'end',
@@ -9980,10 +10006,11 @@
                         blockName: CAD_END_VIEW_BLOCK_NAME,
                         axleCount: null,
                         loadDirection,
-                        x: (trainAnchorXm * CAD_UNIT_SCALE) - gapMm + endViewYDeltaMm,
+                        x: endX,
                         y: sharedEndYm,
                         rotationDeg: endRotationDeg
                     });
+                    originSigns.push({ view: 'end', x: endX, y: sharedEndYm });
                 }
 
                 // Header/Dbar accessory (if any) — ONE AutoCAD block
@@ -10191,14 +10218,14 @@
                 texts.push({ view: 'end', x: ccogEndX, y: ccogEndY, text: ccogLabelText });
             }
 
-            return { inserts, texts, warnings };
+            return { inserts, texts, originSigns, warnings };
         }
 
         function setTrailerGenLoadDirection(value) {
             trailerGenLoadDirection = (value === 'out') ? 'out' : 'in';
         }
 
-        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts) {
+        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts, originSigns) {
             const lines = [];
             lines.push(';; Disable snaps');
             lines.push('OSMODE 0');
@@ -10275,6 +10302,45 @@
                     lines.push(`${CAD_COG_LABEL_TEXT_HEIGHT_MM.toFixed(3)}`);
                     lines.push('0');
                     lines.push(text);
+                });
+                lines.push('-LAYER');
+                lines.push('Set');
+                lines.push('0');
+                lines.push('');
+            }
+            if (originSigns && originSigns.length) {
+                // "0,0" origin reference signs (front/end views — see
+                // CAD_ORIGIN_SIGN_* comment in computeTrailerCADInserts).
+                // Own dedicated layer, same erase-then-redraw pattern as
+                // the CoG markers above.
+                lines.push(';; World-origin (0,0) reference signs — own dedicated layer, cleared before redrawing');
+                lines.push('-LAYER');
+                lines.push('Make');
+                lines.push(CAD_ORIGIN_SIGN_LAYER_NAME);
+                lines.push('');
+                lines.push(`(if (setq tgOldOriginSigns (ssget "_X" (list (cons 8 "${CAD_ORIGIN_SIGN_LAYER_NAME}")))) (command "._ERASE" tgOldOriginSigns ""))`);
+                lines.push('-LAYER');
+                lines.push('Set');
+                lines.push(CAD_ORIGIN_SIGN_LAYER_NAME);
+                lines.push('');
+                const half = CAD_ORIGIN_SIGN_ARROW_LEN_MM / 2;
+                originSigns.forEach(o => {
+                    // Small crosshair (horizontal + vertical LINE)
+                    // centered on the origin point, plus a "0,0" TEXT
+                    // label offset up-right from it.
+                    lines.push('LINE');
+                    lines.push(`${(o.x - half).toFixed(3)},${o.y.toFixed(3)},0`);
+                    lines.push(`${(o.x + half).toFixed(3)},${o.y.toFixed(3)},0`);
+                    lines.push('');
+                    lines.push('LINE');
+                    lines.push(`${o.x.toFixed(3)},${(o.y - half).toFixed(3)},0`);
+                    lines.push(`${o.x.toFixed(3)},${(o.y + half).toFixed(3)},0`);
+                    lines.push('');
+                    lines.push('TEXT');
+                    lines.push(`${(o.x + CAD_ORIGIN_SIGN_TEXT_OFFSET_MM).toFixed(3)},${(o.y + CAD_ORIGIN_SIGN_TEXT_OFFSET_MM).toFixed(3)},0`);
+                    lines.push(`${CAD_ORIGIN_SIGN_TEXT_HEIGHT_MM.toFixed(3)}`);
+                    lines.push('0');
+                    lines.push('0,0');
                 });
                 lines.push('-LAYER');
                 lines.push('Set');
@@ -10399,7 +10465,7 @@
             // as-is) when not connected to Excel, e.g. standalone webpage
             // use — the export still proceeds with whatever's in memory.
             await pullCargoFromExcelImpl({ silent: true });
-            const { inserts, texts: cogLabelTexts, warnings } = computeTrailerCADInserts();
+            const { inserts, texts: cogLabelTexts, originSigns, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
 
             // Drawing Table grid (TEXT + LINE entities) — placed in
@@ -10434,7 +10500,7 @@
                 alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, no Transport Data has been pulled, and no 🚚 Transport Data w/ CoG Env LC1-4 table has been pulled.');
                 return;
             }
-            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts);
+            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts, originSigns);
             const blob = new Blob([scriptText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
