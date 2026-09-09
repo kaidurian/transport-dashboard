@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.86.4)</h1>
+            <h1>🚂 Transport Dashboard (Rev.88)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1826,21 +1826,6 @@
         // fixed 693mm reference). See the CoG/CCOG insert block at the
         // end of computeTrailerCADInserts for the full math.
         const CAD_COG_MARKER_Y_OFFSET_MM = 693;
-        // "0,0" origin reference sign — front (side) view gets exactly
-        // one (world X=0, that view's own ground line); each train's
-        // own end view gets one too, at that SAME end view's own
-        // insertion X (which, since every end-view block's local (0,0)
-        // IS the world-Y=0/ground point it was inserted at — see
-        // computeTrailerCADInserts — already IS the right spot). Drawn
-        // as a small crosshair + "0,0" label rather than the dashboard
-        // preview's X/Y axis arrows, since front/end are elevations
-        // (world X or Y doesn't run "across the page" there the way it
-        // does in the top/plan view) — a plain ground-reference point is
-        // the equivalent that actually applies to those views.
-        const CAD_ORIGIN_SIGN_LAYER_NAME = 'ORIGIN_SIGN';
-        const CAD_ORIGIN_SIGN_ARROW_LEN_MM = 500;
-        const CAD_ORIGIN_SIGN_TEXT_HEIGHT_MM = 200;
-        const CAD_ORIGIN_SIGN_TEXT_OFFSET_MM = 80;
         // Dedicated layer for COG_CARGO + CCOG marker inserts only (see
         // buildTrailerCADScript) — erased and redrawn fresh on every
         // export so re-running the script on the same drawing replaces
@@ -9830,14 +9815,6 @@
             // regardless of this sign flip.
             const referenceBaseYm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[trailerGenTrains.length - 1].y) || 0) : 0;
             const sharedSideYm = (-referenceBaseYm * CAD_UNIT_SCALE) + CAD_SIDE_VIEW_Y_OFFSET_MM;
-            // "0,0" origin signs — see CAD_ORIGIN_SIGN_* comment above.
-            // Front (side) view: world X=0 is the SAME X for every
-            // train's side-view insert (side view never shifts X the
-            // way the end view does), so a single sign at (0, that
-            // view's own ground line) covers all of them. Each train's
-            // own end-view sign is pushed further down, right where
-            // that train's end-view block itself gets inserted.
-            const originSigns = [{ view: 'side', x: 0, y: sharedSideYm }];
             // Running total of PRECEDING trains' own (deck width +
             // CAD_END_VIEW_GAP_MM) — each train's end view is pushed out
             // in X past every earlier train's (width+gap), not just its
@@ -9845,6 +9822,17 @@
             // (width+gap) step apart. See the comment where this feeds
             // endViewYDeltaMm below for the full picture.
             let cumulativeWidthMm = 0;
+            // First/last MAPPED train's own end-view X anchor + deck
+            // width — captured while the per-train loop below builds
+            // each train's own end view insert. Feeds the COG_CARGO/
+            // CCOG end-view horizontal-anchor formula further down
+            // (KKai's spec: right/in end view anchors off the LAST
+            // trailer, left/out end view off the FIRST trailer) — see
+            // the capture right after each end-view insert push below.
+            let firstMappedTrainEndViewXm = null;
+            let firstMappedTrainWidthMm = null;
+            let lastMappedTrainEndViewXm = null;
+            let lastMappedTrainWidthMm = null;
             // Longest trailer's own deck length (mm) across ALL trains —
             // per KKai's spec every train's end view uses THIS shared
             // value (not its own trainLengthMm) as the base of its X
@@ -9981,9 +9969,10 @@
                 // trains are actually arranged in Y.
                 const endViewYDeltaMm = cumulativeWidthMm;
                 cumulativeWidthMm += trainDeckWidthMm + CAD_END_VIEW_GAP_MM;
+                let endViewXm;
                 if (loadDirection === 'in') {
                     const gapMm = longestTrailerLengthMm + 10000;
-                    const endX = (trainAnchorXm * CAD_UNIT_SCALE) + gapMm + endViewYDeltaMm;
+                    endViewXm = (trainAnchorXm * CAD_UNIT_SCALE) + gapMm + endViewYDeltaMm;
                     inserts.push({
                         trainName: `${train.name} — Right End View`,
                         view: 'end',
@@ -9991,14 +9980,13 @@
                         blockName: CAD_END_VIEW_BLOCK_NAME,
                         axleCount: null,
                         loadDirection,
-                        x: endX,
+                        x: endViewXm,
                         y: sharedEndYm,
                         rotationDeg: endRotationDeg
                     });
-                    originSigns.push({ view: 'end', x: endX, y: sharedEndYm });
                 } else {
                     const gapMm = longestTrailerLengthMm - 10000;
-                    const endX = (trainAnchorXm * CAD_UNIT_SCALE) - gapMm + endViewYDeltaMm;
+                    endViewXm = (trainAnchorXm * CAD_UNIT_SCALE) - gapMm + endViewYDeltaMm;
                     inserts.push({
                         trainName: `${train.name} — Left End View`,
                         view: 'end',
@@ -10006,12 +9994,21 @@
                         blockName: CAD_END_VIEW_BLOCK_NAME,
                         axleCount: null,
                         loadDirection,
-                        x: endX,
+                        x: endViewXm,
                         y: sharedEndYm,
                         rotationDeg: endRotationDeg
                     });
-                    originSigns.push({ view: 'end', x: endX, y: sharedEndYm });
                 }
+                // Track first/last MAPPED train's own end-view X +
+                // deck width for the COG_CARGO/CCOG anchor formula
+                // further down (see firstMappedTrainEndViewXm/
+                // lastMappedTrainEndViewXm declared above the forEach).
+                if (firstMappedTrainEndViewXm === null) {
+                    firstMappedTrainEndViewXm = endViewXm;
+                    firstMappedTrainWidthMm = trainDeckWidthMm;
+                }
+                lastMappedTrainEndViewXm = endViewXm;
+                lastMappedTrainWidthMm = trainDeckWidthMm;
 
                 // Header/Dbar accessory (if any) — ONE AutoCAD block
                 // insert per accessory instance (not per sub-block piece
@@ -10068,20 +10065,35 @@
             //               ground line) + CAD_COG_MARKER_Y_OFFSET_MM
             //               (fixed 693mm reference — per KKai's spec,
             //               NOT tgZTrailerHeightMm/ZHEIGHT_CELL)
-            //   END view:   horizontal = cogEndAnchorXm - CoGy*1000 (End
+            //   END view:   horizontal = cogEndAnchorXm ± CoGy*1000 (End
             //               view's own horizontal axis is world Y/width,
             //               not X/length — same dashboard-Y+ = AutoCAD-
-            //               negative convention as the top view's Y),
+            //               negative convention as the top view's Y —
+            //               sign is cogEndYSign below: MINUS for the
+            //               right/in end view, PLUS for the left/out
+            //               one, per KKai's spec),
             //               vertical = deckTopEndYm + CoGz*1000, mirroring
             //               the FRONT view's height handling but anchored
             //               to the END view's own ground line (sharedEndYm)
             //               instead of the FRONT view's (sharedSideYm).
-            //               cogEndAnchorXm reuses the SAME per-train end-
-            //               view X anchor built for the reference (last)
-            //               train's own end view above (gapMm off
-            //               longestTrailerLengthMm, sign per loadDirection),
-            //               since these markers aren't tied to one
-            //               specific train.
+            //               Per KKai's spec, cogEndAnchorXm is built from
+            //               the REFERENCE trailer's own already-placed
+            //               end-view X (right/in end view → the LAST
+            //               mapped trailer's end view; left/out end view
+            //               → the FIRST mapped trailer's — see
+            //               firstMappedTrainEndViewXm/
+            //               lastMappedTrainEndViewXm captured in the
+            //               per-train loop above), PLUS that same
+            //               trailer's own half deck-width, PLUS Excel
+            //               Input!B6 (Train 1's "Y offset (mm)" —
+            //               trailerGenTrains[0].y, kept in sync with
+            //               Input!B6 — see INPUT_X/Y_OFFSET_CELL comment
+            //               near the top of this file) for the right/in
+            //               end view, or MINUS both of those for the
+            //               left/out end view. These markers aren't tied
+            //               to one specific train, hence anchoring off
+            //               whichever trailer is the reference one for
+            //               the current load direction.
             // All three views' Z coordinate stay 0 — AutoCAD's Z axis
             // isn't used here, height is carried entirely by each
             // elevation view's own Y position (same convention as every
@@ -10089,9 +10101,20 @@
             const deckTopFrontYm = sharedSideYm + CAD_COG_MARKER_Y_OFFSET_MM;
             const sharedEndYmForCog = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
             const deckTopEndYm = sharedEndYmForCog + CAD_COG_MARKER_Y_OFFSET_MM;
-            const cogEndRefTrainXm = (trailerGenTrains.length ? (parseFloat(trailerGenTrains[trailerGenTrains.length - 1].x) || 0) : 0) * CAD_UNIT_SCALE;
-            const cogEndGapMm = (loadDirection === 'in') ? (longestTrailerLengthMm + 10000) : (longestTrailerLengthMm - 10000);
-            const cogEndAnchorXm = (loadDirection === 'in') ? (cogEndRefTrainXm + cogEndGapMm) : (cogEndRefTrainXm - cogEndGapMm);
+            // Input!B6 — Train 1's "Y offset (mm)" (deck top-left corner),
+            // kept in sync with trailerGenTrains[0].y (see
+            // INPUT_X_OFFSET_CELL / "B6 = Y offset" comment near the top
+            // of this file) — read straight from dashboard state here,
+            // same as every other train.y usage in this function, rather
+            // than a fresh Excel round-trip.
+            const inputB6Ym = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].y) || 0) : 0;
+            const cogEndAnchorXm = (loadDirection === 'in')
+                ? ((lastMappedTrainEndViewXm || 0) + ((lastMappedTrainWidthMm || 0) / 2) + inputB6Ym)
+                : ((firstMappedTrainEndViewXm || 0) - ((firstMappedTrainWidthMm || 0) / 2) - inputB6Ym);
+            // Right/in end view SUBTRACTS the marker's own Y (cargo CoGy
+            // or the combined CoG's Y) from the anchor above; left/out
+            // end view ADDS it — per KKai's spec.
+            const cogEndYSign = (loadDirection === 'in') ? -1 : 1;
             // texts — free-standing TEXT labels placed beside each
             // COG_CARGO/CCOG marker below (see CAD_COG_LABEL_OFFSET_MM/
             // CAD_COG_LABEL_TEXT_HEIGHT_MM), instead of filling those
@@ -10112,7 +10135,7 @@
                 const cogTopY = -cogYMm * CAD_UNIT_SCALE;
                 const cogFrontX = cogXMm * CAD_UNIT_SCALE;
                 const cogFrontY = (deckTopFrontYm + cogZMm) * CAD_UNIT_SCALE;
-                const cogEndX = (cogEndAnchorXm - cogYMm) * CAD_UNIT_SCALE;
+                const cogEndX = (cogEndAnchorXm + cogEndYSign * cogYMm) * CAD_UNIT_SCALE;
                 const cogEndY = (deckTopEndYm + cogZMm) * CAD_UNIT_SCALE;
                 inserts.push({
                     trainName: `${cargo.name || 'Cargo'} — CoG (Top)`,
@@ -10181,7 +10204,7 @@
                 const ccogTopY = -ccogYMm * CAD_UNIT_SCALE;
                 const ccogFrontX = ccogXMm * CAD_UNIT_SCALE;
                 const ccogFrontY = (sharedSideYm + ccogYAdjustMm) * CAD_UNIT_SCALE;
-                const ccogEndX = (cogEndAnchorXm - ccogYMm) * CAD_UNIT_SCALE;
+                const ccogEndX = (cogEndAnchorXm + cogEndYSign * ccogYMm) * CAD_UNIT_SCALE;
                 const ccogEndY = (sharedEndYmForCog + ccogYAdjustMm) * CAD_UNIT_SCALE;
                 inserts.push({
                     trainName: 'Combined CoG (Top)',
@@ -10218,14 +10241,14 @@
                 texts.push({ view: 'end', x: ccogEndX, y: ccogEndY, text: ccogLabelText });
             }
 
-            return { inserts, texts, originSigns, warnings };
+            return { inserts, texts, warnings };
         }
 
         function setTrailerGenLoadDirection(value) {
             trailerGenLoadDirection = (value === 'out') ? 'out' : 'in';
         }
 
-        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts, originSigns) {
+        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts) {
             const lines = [];
             lines.push(';; Disable snaps');
             lines.push('OSMODE 0');
@@ -10302,45 +10325,6 @@
                     lines.push(`${CAD_COG_LABEL_TEXT_HEIGHT_MM.toFixed(3)}`);
                     lines.push('0');
                     lines.push(text);
-                });
-                lines.push('-LAYER');
-                lines.push('Set');
-                lines.push('0');
-                lines.push('');
-            }
-            if (originSigns && originSigns.length) {
-                // "0,0" origin reference signs (front/end views — see
-                // CAD_ORIGIN_SIGN_* comment in computeTrailerCADInserts).
-                // Own dedicated layer, same erase-then-redraw pattern as
-                // the CoG markers above.
-                lines.push(';; World-origin (0,0) reference signs — own dedicated layer, cleared before redrawing');
-                lines.push('-LAYER');
-                lines.push('Make');
-                lines.push(CAD_ORIGIN_SIGN_LAYER_NAME);
-                lines.push('');
-                lines.push(`(if (setq tgOldOriginSigns (ssget "_X" (list (cons 8 "${CAD_ORIGIN_SIGN_LAYER_NAME}")))) (command "._ERASE" tgOldOriginSigns ""))`);
-                lines.push('-LAYER');
-                lines.push('Set');
-                lines.push(CAD_ORIGIN_SIGN_LAYER_NAME);
-                lines.push('');
-                const half = CAD_ORIGIN_SIGN_ARROW_LEN_MM / 2;
-                originSigns.forEach(o => {
-                    // Small crosshair (horizontal + vertical LINE)
-                    // centered on the origin point, plus a "0,0" TEXT
-                    // label offset up-right from it.
-                    lines.push('LINE');
-                    lines.push(`${(o.x - half).toFixed(3)},${o.y.toFixed(3)},0`);
-                    lines.push(`${(o.x + half).toFixed(3)},${o.y.toFixed(3)},0`);
-                    lines.push('');
-                    lines.push('LINE');
-                    lines.push(`${o.x.toFixed(3)},${(o.y - half).toFixed(3)},0`);
-                    lines.push(`${o.x.toFixed(3)},${(o.y + half).toFixed(3)},0`);
-                    lines.push('');
-                    lines.push('TEXT');
-                    lines.push(`${(o.x + CAD_ORIGIN_SIGN_TEXT_OFFSET_MM).toFixed(3)},${(o.y + CAD_ORIGIN_SIGN_TEXT_OFFSET_MM).toFixed(3)},0`);
-                    lines.push(`${CAD_ORIGIN_SIGN_TEXT_HEIGHT_MM.toFixed(3)}`);
-                    lines.push('0');
-                    lines.push('0,0');
                 });
                 lines.push('-LAYER');
                 lines.push('Set');
@@ -10465,7 +10449,7 @@
             // as-is) when not connected to Excel, e.g. standalone webpage
             // use — the export still proceeds with whatever's in memory.
             await pullCargoFromExcelImpl({ silent: true });
-            const { inserts, texts: cogLabelTexts, originSigns, warnings } = computeTrailerCADInserts();
+            const { inserts, texts: cogLabelTexts, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
 
             // Drawing Table grid (TEXT + LINE entities) — placed in
@@ -10500,7 +10484,7 @@
                 alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, no Transport Data has been pulled, and no 🚚 Transport Data w/ CoG Env LC1-4 table has been pulled.');
                 return;
             }
-            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts, originSigns);
+            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts);
             const blob = new Blob([scriptText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
