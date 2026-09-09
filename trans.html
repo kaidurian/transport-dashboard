@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.85)</h1>
+            <h1>🚂 Transport Dashboard (Rev.86)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1794,8 +1794,17 @@
         // direction, same one-block-per-purpose pattern as
         // CAD_END_VIEW_BLOCK_NAME above. See the CoG/CCOG insert block
         // at the end of computeTrailerCADInserts for the placement math.
-        const CAD_COG_BLOCK_NAME = 'COG';
+        const CAD_COG_BLOCK_NAME = 'COG_CARGO';
         const CAD_CCOG_BLOCK_NAME = 'CCOG';
+        // CCOG block attributes — order matters: AutoCAD's -INSERT
+        // script prompts for attribute VALUES in the order they were
+        // defined on the block itself (ITEM, then WEIGHT), immediately
+        // after the rotation-angle prompt. ITEM always defaults to the
+        // literal text below; WEIGHT is filled from Excel Display!B16
+        // at insert time (see computeTrailerCADInserts) — same cell
+        // this file already reads as the Combined CoG X coordinate via
+        // cogCombinedSign.x/COG_SIGNS_RANGE, per KKai's confirmation.
+        const CAD_CCOG_ITEM_ATTRIB_DEFAULT = 'CCoG';
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
         const CAD_UNIT_SCALE = 1;
@@ -9964,12 +9973,14 @@
                 }
             });
 
-            // ---- Cargo CoG (COG) + Combined CoG (CCOG) markers ----
-            // One COG block per cargo item, positioned from that item's
-            // own Dashboard 🔗 CoGx/CoGy/CoGz (cargo.x/y/z — meters,
-            // world origin shared with the trains' own X/Y offset, Z
-            // "height above the trailer deck" per that field's own
-            // tooltip):
+            // ---- Cargo CoG (COG_CARGO) + Combined CoG (CCOG) markers ----
+            // One COG_CARGO block per cargo item, positioned from that
+            // item's own Dashboard 🔗 CoGx/CoGy/CoGz (cargo.x/y/z —
+            // meters, pulled fresh from Excel Input!BB35:BD39 right
+            // before export — see pullCargoFromExcelImpl call in
+            // exportTrailerLayoutToCADScript — world origin shared with
+            // the trains' own X/Y offset, Z "height above the trailer
+            // deck" per that field's own tooltip):
             //   TOP view:   x = CoGx*1000, y = -(CoGy*1000)   (same
             //               dashboard-Y+ = AutoCAD-Y- convention as
             //               every top-view insert above)
@@ -9979,11 +9990,30 @@
             //               own top-deck line — sharedSideYm (that
             //               view's ground line) + tgZTrailerHeightMm
             //               (Ground -> top of deck height, ZHEIGHT_CELL)
-            // Both views' Z coordinate stay 0 — AutoCAD's Z axis isn't
-            // used here, height is carried entirely by the FRONT view's
-            // Y position (elevation-view convention, same as every other
-            // block insert above).
+            //   END view:   horizontal = cogEndAnchorXm - CoGy*1000 (End
+            //               view's own horizontal axis is world Y/width,
+            //               not X/length — same dashboard-Y+ = AutoCAD-
+            //               negative convention as the top view's Y),
+            //               vertical = deckTopEndYm + CoGz*1000, mirroring
+            //               the FRONT view's height handling but anchored
+            //               to the END view's own ground line (sharedEndYm)
+            //               instead of the FRONT view's (sharedSideYm).
+            //               cogEndAnchorXm reuses the SAME per-train end-
+            //               view X anchor built for the reference (last)
+            //               train's own end view above (gapMm off
+            //               longestTrailerLengthMm, sign per loadDirection),
+            //               since these markers aren't tied to one
+            //               specific train.
+            // All three views' Z coordinate stay 0 — AutoCAD's Z axis
+            // isn't used here, height is carried entirely by each
+            // elevation view's own Y position (same convention as every
+            // other block insert above).
             const deckTopFrontYm = sharedSideYm + tgZTrailerHeightMm;
+            const sharedEndYmForCog = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
+            const deckTopEndYm = sharedEndYmForCog + tgZTrailerHeightMm;
+            const cogEndRefTrainXm = (trailerGenTrains.length ? (parseFloat(trailerGenTrains[trailerGenTrains.length - 1].x) || 0) : 0) * CAD_UNIT_SCALE;
+            const cogEndGapMm = (loadDirection === 'in') ? (longestTrailerLengthMm + 10000) : (longestTrailerLengthMm - 10000);
+            const cogEndAnchorXm = (loadDirection === 'in') ? (cogEndRefTrainXm + cogEndGapMm) : (cogEndRefTrainXm - cogEndGapMm);
             cargoItems.forEach(cargo => {
                 const cogXMm = (parseFloat(cargo.x) || 0) * 1000;
                 const cogYMm = (parseFloat(cargo.y) || 0) * 1000;
@@ -10008,20 +10038,46 @@
                     y: (deckTopFrontYm + cogZMm) * CAD_UNIT_SCALE,
                     rotationDeg: 0
                 });
+                inserts.push({
+                    trainName: `${cargo.name || 'Cargo'} — CoG (End)`,
+                    view: 'end',
+                    blockName: CAD_COG_BLOCK_NAME,
+                    axleCount: null,
+                    loadDirection,
+                    x: (cogEndAnchorXm - cogYMm) * CAD_UNIT_SCALE,
+                    y: (deckTopEndYm + cogZMm) * CAD_UNIT_SCALE,
+                    rotationDeg: 0
+                });
             });
 
             // Combined CoG (CCOG) — single marker, Excel Display!B16:D16
             // (cogCombinedSign). Unlike per-item CoG above, this is
             // already world mm (no *1000) and, per its own comment
             // elsewhere in this file (tgCogZDims), its Z is already
-            // measured from GROUND, not the deck — so its FRONT view Y
-            // sits directly on sharedSideYm (the shared front view's own
-            // ground line) plus its own Z, skipping the
-            // tgZTrailerHeightMm add the per-item CoG uses above.
+            // measured from GROUND, not the deck — so its FRONT/END view
+            // Y each sit directly on that view's own ground line
+            // (sharedSideYm / sharedEndYmForCog) plus its own Z,
+            // skipping the tgZTrailerHeightMm add the per-item CoG uses
+            // above. Also carries ITEM/WEIGHT block attributes (see
+            // CAD_CCOG_ITEM_ATTRIB_DEFAULT / buildTrailerCADScript's
+            // ATTDIA handling) — ITEM defaults to "CCoG", WEIGHT is
+            // pulled fresh from Excel Display!B16 right before export
+            // (same pullCargoFromExcelImpl call refreshes cogCombinedSign
+            // via pullCogSignsFromExcel — B16 is cogCombinedSign.x, per
+            // KKai's confirmation that this cell holds the combined
+            // weight).
             if (cogCombinedSignLoaded) {
                 const ccogXMm = parseFloat(cogCombinedSign.x) || 0;
                 const ccogYMm = parseFloat(cogCombinedSign.y) || 0;
                 const ccogZMm = parseFloat(cogCombinedSign.z) || 0;
+                // WEIGHT attribute value — Excel Display!B16, i.e. the
+                // SAME cell as ccogXMm above (cogCombinedSign.x), per
+                // KKai's confirmation. Kept as its own named value here
+                // so the attribute's meaning (weight) is clear even
+                // though it's numerically identical to the Top/Front/End
+                // view X position above.
+                const ccogWeightVal = ccogXMm;
+                const ccogAttribs = [CAD_CCOG_ITEM_ATTRIB_DEFAULT, ccogWeightVal.toFixed(2)];
                 inserts.push({
                     trainName: 'Combined CoG (Top)',
                     view: 'top',
@@ -10030,7 +10086,8 @@
                     loadDirection,
                     x: ccogXMm * CAD_UNIT_SCALE,
                     y: -ccogYMm * CAD_UNIT_SCALE,
-                    rotationDeg: 0
+                    rotationDeg: 0,
+                    attribs: ccogAttribs
                 });
                 inserts.push({
                     trainName: 'Combined CoG (Front)',
@@ -10040,7 +10097,19 @@
                     loadDirection,
                     x: ccogXMm * CAD_UNIT_SCALE,
                     y: (sharedSideYm + ccogZMm) * CAD_UNIT_SCALE,
-                    rotationDeg: 0
+                    rotationDeg: 0,
+                    attribs: ccogAttribs
+                });
+                inserts.push({
+                    trainName: 'Combined CoG (End)',
+                    view: 'end',
+                    blockName: CAD_CCOG_BLOCK_NAME,
+                    axleCount: null,
+                    loadDirection,
+                    x: (cogEndAnchorXm - ccogYMm) * CAD_UNIT_SCALE,
+                    y: (sharedEndYmForCog + ccogZMm) * CAD_UNIT_SCALE,
+                    rotationDeg: 0,
+                    attribs: ccogAttribs
                 });
             }
 
@@ -10065,6 +10134,15 @@
             lines.push(';; Force Model Space — keep trailer/cargo geometry out of any Layout');
             lines.push('TILEMODE');
             lines.push('1');
+            // ATTDIA 0 forces attribute values (CCOG's ITEM/WEIGHT — see
+            // ins.attribs below) to be answered as plain command-line
+            // prompts in sequence, same as every other -Insert prompt
+            // here, instead of popping an attribute-entry dialog box
+            // that a .scr script can't fill in. Restored to 1 at the
+            // very end alongside FILEDIA/CMDDIA.
+            lines.push(';; Answer block-attribute prompts on the command line, not a dialog box');
+            lines.push('ATTDIA');
+            lines.push('0');
             inserts.forEach(ins => {
                 lines.push('-Insert');
                 lines.push(ins.blockName);
@@ -10072,6 +10150,12 @@
                 lines.push('1');
                 lines.push('1');
                 lines.push(`${ins.rotationDeg}`);
+                // Block-attribute values (currently only CCOG's ITEM +
+                // WEIGHT — see computeTrailerCADInserts), answered in the
+                // exact order the attributes were defined on the block.
+                if (ins.attribs && ins.attribs.length) {
+                    ins.attribs.forEach(v => lines.push(String(v)));
+                }
             });
             if (cargoOutlines && cargoOutlines.length) {
                 lines.push(';; Cargo footprint outlines — one rectangle per');
@@ -10177,10 +10261,21 @@
             lines.push(';; Restores UI dialog boxes at the end of the script');
             lines.push('FILEDIA 1');
             lines.push('CMDDIA 1');
+            lines.push('ATTDIA 1');
             return lines.join('\n') + '\n';
         }
 
-        function exportTrailerLayoutToCADScript() {
+        async function exportTrailerLayoutToCADScript() {
+            // Per KKai's spec: re-read cargo CoG X/Y/Z live from Excel
+            // 'Input'!BB35:BD39 (CARGO_X/Y/Z_COL) — and, along the way,
+            // the Combined CoG sign/weight from 'Display'!B15:D16 (see
+            // pullCogSignsFromExcel, called internally by this) — right
+            // before building the export, instead of trusting whatever
+            // the Dashboard's cargoItems/cogCombinedSign already held in
+            // memory. Silently no-ops (leaving cargoItems/cogCombinedSign
+            // as-is) when not connected to Excel, e.g. standalone webpage
+            // use — the export still proceeds with whatever's in memory.
+            await pullCargoFromExcelImpl({ silent: true });
             const { inserts, warnings } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines();
 
