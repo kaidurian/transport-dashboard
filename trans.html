@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.86.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.86.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1816,6 +1816,16 @@
         // label TEXT's height.
         const CAD_COG_LABEL_OFFSET_MM = 300;
         const CAD_COG_LABEL_TEXT_HEIGHT_MM = 200;
+        // Per KKai's spec: the FRONT/END view Y position of the two CoG
+        // marker blocks is no longer built from the actual (variable)
+        // trailer height (tgZTrailerHeightMm) — it's a fixed 693mm
+        // reference instead. COG_CARGO's Y = ground line + 693 + its
+        // own Excel-synced Z; CCOG's Y = ground line + its own
+        // Excel-synced Z − (trailer height − 693) (i.e. CCOG shifts
+        // down by however much the real trailer height exceeds this
+        // fixed 693mm reference). See the CoG/CCOG insert block at the
+        // end of computeTrailerCADInserts for the full math.
+        const CAD_COG_MARKER_Y_OFFSET_MM = 693;
         // Dedicated layer for COG_CARGO + CCOG marker inserts only (see
         // buildTrailerCADScript) — erased and redrawn fresh on every
         // export so re-running the script on the same drawing replaces
@@ -10027,10 +10037,10 @@
             //               every top-view insert above)
             //   FRONT view: x = CoGx*1000 (same X axis as the top view),
             //               y = deckTopFrontYm + CoGz*1000, where
-            //               deckTopFrontYm is the shared front view's
-            //               own top-deck line — sharedSideYm (that
-            //               view's ground line) + tgZTrailerHeightMm
-            //               (Ground -> top of deck height, ZHEIGHT_CELL)
+            //               deckTopFrontYm is sharedSideYm (that view's
+            //               ground line) + CAD_COG_MARKER_Y_OFFSET_MM
+            //               (fixed 693mm reference — per KKai's spec,
+            //               NOT tgZTrailerHeightMm/ZHEIGHT_CELL)
             //   END view:   horizontal = cogEndAnchorXm - CoGy*1000 (End
             //               view's own horizontal axis is world Y/width,
             //               not X/length — same dashboard-Y+ = AutoCAD-
@@ -10049,9 +10059,9 @@
             // isn't used here, height is carried entirely by each
             // elevation view's own Y position (same convention as every
             // other block insert above).
-            const deckTopFrontYm = sharedSideYm + tgZTrailerHeightMm;
+            const deckTopFrontYm = sharedSideYm + CAD_COG_MARKER_Y_OFFSET_MM;
             const sharedEndYmForCog = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
-            const deckTopEndYm = sharedEndYmForCog + tgZTrailerHeightMm;
+            const deckTopEndYm = sharedEndYmForCog + CAD_COG_MARKER_Y_OFFSET_MM;
             const cogEndRefTrainXm = (trailerGenTrains.length ? (parseFloat(trailerGenTrains[trailerGenTrains.length - 1].x) || 0) : 0) * CAD_UNIT_SCALE;
             const cogEndGapMm = (loadDirection === 'in') ? (longestTrailerLengthMm + 10000) : (longestTrailerLengthMm - 10000);
             const cogEndAnchorXm = (loadDirection === 'in') ? (cogEndRefTrainXm + cogEndGapMm) : (cogEndRefTrainXm - cogEndGapMm);
@@ -10116,33 +10126,36 @@
             // (cogCombinedSign). Unlike per-item CoG above, this is
             // already world mm (no *1000) and, per its own comment
             // elsewhere in this file (tgCogZDims), its Z is already
-            // measured from GROUND, not the deck — so its FRONT/END view
-            // Y each sit directly on that view's own ground line
-            // (sharedSideYm / sharedEndYmForCog) plus its own Z,
-            // skipping the tgZTrailerHeightMm add the per-item CoG uses
-            // above. Per KKai's spec, ITEM/WEIGHT are no longer fed in
-            // as this block's own attributes (that required the
-            // ATTDIA/ATTREQ prompt-answering dance) — instead a plain
-            // TEXT label carrying the same values sits beside the block
-            // (see the texts.push() calls below), same as COG_CARGO
-            // above. ITEM still defaults to CAD_CCOG_ITEM_ATTRIB_DEFAULT
-            // ("CCoG"); WEIGHT is still pulled fresh from Excel
-            // Display!E16 (COG_COMBINED_WEIGHT_CELL —
-            // cogCombinedSign.weight) right before export (same
-            // pullCargoFromExcelImpl call refreshes it via
-            // pullCogSignsFromExcel).
+            // measured from GROUND, not the deck. Per KKai's spec, its
+            // FRONT/END view Y is that view's own ground line
+            // (sharedSideYm / sharedEndYmForCog) + its own Excel-synced
+            // Z − (tgZTrailerHeightMm − CAD_COG_MARKER_Y_OFFSET_MM) —
+            // i.e. shifted down from the plain ground+Z position by
+            // however much the real trailer height exceeds the fixed
+            // 693mm reference COG_CARGO uses above. ITEM/WEIGHT are no
+            // longer fed in as this block's own attributes (that
+            // required the ATTDIA/ATTREQ prompt-answering dance) —
+            // instead a plain TEXT label carrying the same values sits
+            // beside the block (see the texts.push() calls below), same
+            // as COG_CARGO above. ITEM still defaults to
+            // CAD_CCOG_ITEM_ATTRIB_DEFAULT ("CCoG"); WEIGHT is still
+            // pulled fresh from Excel Display!E16
+            // (COG_COMBINED_WEIGHT_CELL — cogCombinedSign.weight) right
+            // before export (same pullCargoFromExcelImpl call refreshes
+            // it via pullCogSignsFromExcel).
             if (cogCombinedSignLoaded) {
                 const ccogXMm = parseFloat(cogCombinedSign.x) || 0;
                 const ccogYMm = parseFloat(cogCombinedSign.y) || 0;
                 const ccogZMm = parseFloat(cogCombinedSign.z) || 0;
                 const ccogWeightVal = parseFloat(cogCombinedSign.weight) || 0;
                 const ccogLabelText = `${CAD_CCOG_ITEM_ATTRIB_DEFAULT} ${ccogWeightVal.toFixed(2)}t`;
+                const ccogYAdjustMm = ccogZMm - (tgZTrailerHeightMm - CAD_COG_MARKER_Y_OFFSET_MM);
                 const ccogTopX = ccogXMm * CAD_UNIT_SCALE;
                 const ccogTopY = -ccogYMm * CAD_UNIT_SCALE;
                 const ccogFrontX = ccogXMm * CAD_UNIT_SCALE;
-                const ccogFrontY = (sharedSideYm + ccogZMm) * CAD_UNIT_SCALE;
+                const ccogFrontY = (sharedSideYm + ccogYAdjustMm) * CAD_UNIT_SCALE;
                 const ccogEndX = (cogEndAnchorXm - ccogYMm) * CAD_UNIT_SCALE;
-                const ccogEndY = (sharedEndYmForCog + ccogZMm) * CAD_UNIT_SCALE;
+                const ccogEndY = (sharedEndYmForCog + ccogYAdjustMm) * CAD_UNIT_SCALE;
                 inserts.push({
                     trainName: 'Combined CoG (Top)',
                     view: 'top',
