@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.88)</h1>
+            <h1>🚂 Transport Dashboard (Rev.89)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10072,10 +10072,13 @@
             //               sign is cogEndYSign below: MINUS for the
             //               right/in end view, PLUS for the left/out
             //               one, per KKai's spec),
-            //               vertical = deckTopEndYm + CoGz*1000, mirroring
-            //               the FRONT view's height handling but anchored
-            //               to the END view's own ground line (sharedEndYm)
-            //               instead of the FRONT view's (sharedSideYm).
+            //               vertical = deckTopEndYm + CoGz*1000, where
+            //               deckTopEndYm is sharedEndYmForCog (that
+            //               view's own ground line) + tgZTrailerHeightMm
+            //               (Excel Input!BD26 — ZHEIGHT_CELL, the REAL
+            //               trailer height, unlike the FRONT view's fixed
+            //               693mm reference above — per KKai's latest
+            //               spec).
             //               Per KKai's spec, cogEndAnchorXm is built from
             //               the REFERENCE trailer's own already-placed
             //               end-view X (right/in end view → the LAST
@@ -10100,7 +10103,16 @@
             // other block insert above).
             const deckTopFrontYm = sharedSideYm + CAD_COG_MARKER_Y_OFFSET_MM;
             const sharedEndYmForCog = sharedSideYm + CAD_END_VIEW_Y_ADJUST_MM;
-            const deckTopEndYm = sharedEndYmForCog + CAD_COG_MARKER_Y_OFFSET_MM;
+            // Per KKai's spec, the End view's own vertical anchor
+            // (deckTopEndYm, COG_CARGO only — see CCOG below) uses the
+            // REAL trailer height (tgZTrailerHeightMm, Excel Input!BD26
+            // — ZHEIGHT_CELL) instead of the fixed 693mm reference the
+            // FRONT view above still uses (deckTopFrontYm, unchanged,
+            // per KKai's earlier spec) — ground line + actual deck
+            // height + the cargo's own height-above-deck (Excel
+            // Input!BD35:BD39, cogZMm below) lands the marker at the
+            // cargo's true height off the ground in the End view.
+            const deckTopEndYm = sharedEndYmForCog + tgZTrailerHeightMm;
             // Input!B6 — Train 1's "Y offset (mm)" (deck top-left corner),
             // kept in sync with trailerGenTrains[0].y (see
             // INPUT_X_OFFSET_CELL / "B6 = Y offset" comment near the top
@@ -10177,14 +10189,18 @@
             // already world mm (no *1000) and, per its own comment
             // elsewhere in this file (tgCogZDims), its Z is already
             // measured from GROUND, not the deck. Per KKai's spec, its
-            // FRONT/END view Y is that view's own ground line
-            // (sharedSideYm / sharedEndYmForCog) + its own Excel-synced
-            // Z − (tgZTrailerHeightMm − CAD_COG_MARKER_Y_OFFSET_MM) —
-            // i.e. shifted down from the plain ground+Z position by
-            // however much the real trailer height exceeds the fixed
-            // 693mm reference COG_CARGO uses above. ITEM/WEIGHT are no
-            // longer fed in as this block's own attributes (that
-            // required the ATTDIA/ATTREQ prompt-answering dance) —
+            // FRONT view Y is that view's own ground line (sharedSideYm)
+            // + its own Excel-synced Z − (tgZTrailerHeightMm −
+            // CAD_COG_MARKER_Y_OFFSET_MM) — i.e. shifted down from the
+            // plain ground+Z position by however much the real trailer
+            // height exceeds the fixed 693mm reference COG_CARGO's FRONT
+            // view uses above (ccogYAdjustMm below, FRONT view only).
+            // The END view instead uses the plain ground+Z position
+            // directly — sharedEndYmForCog + its own Excel-synced Z
+            // (Excel Display!D16), no adjustment — since that Z is
+            // already ground-referenced (per KKai's latest spec). ITEM/
+            // WEIGHT are no longer fed in as this block's own attributes
+            // (that required the ATTDIA/ATTREQ prompt-answering dance) —
             // instead a plain TEXT label carrying the same values sits
             // beside the block (see the texts.push() calls below), same
             // as COG_CARGO above. ITEM still defaults to
@@ -10205,7 +10221,7 @@
                 const ccogFrontX = ccogXMm * CAD_UNIT_SCALE;
                 const ccogFrontY = (sharedSideYm + ccogYAdjustMm) * CAD_UNIT_SCALE;
                 const ccogEndX = (cogEndAnchorXm + cogEndYSign * ccogYMm) * CAD_UNIT_SCALE;
-                const ccogEndY = (sharedEndYmForCog + ccogYAdjustMm) * CAD_UNIT_SCALE;
+                const ccogEndY = (sharedEndYmForCog + ccogZMm) * CAD_UNIT_SCALE;
                 inserts.push({
                     trainName: 'Combined CoG (Top)',
                     view: 'top',
