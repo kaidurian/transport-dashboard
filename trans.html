@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.86)</h1>
+            <h1>🚂 Transport Dashboard (Rev.86.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1800,11 +1800,15 @@
         // script prompts for attribute VALUES in the order they were
         // defined on the block itself (ITEM, then WEIGHT), immediately
         // after the rotation-angle prompt. ITEM always defaults to the
-        // literal text below; WEIGHT is filled from Excel Display!B16
-        // at insert time (see computeTrailerCADInserts) — same cell
-        // this file already reads as the Combined CoG X coordinate via
-        // cogCombinedSign.x/COG_SIGNS_RANGE, per KKai's confirmation.
+        // literal text below; WEIGHT is filled from Excel Display!E16
+        // (COG_COMBINED_WEIGHT_CELL — cogCombinedSign.weight) at insert
+        // time (see computeTrailerCADInserts).
         const CAD_CCOG_ITEM_ATTRIB_DEFAULT = 'CCoG';
+        // Dedicated layer for COG_CARGO + CCOG marker inserts only (see
+        // buildTrailerCADScript) — erased and redrawn fresh on every
+        // export so re-running the script on the same drawing replaces
+        // these markers instead of piling up duplicates alongside them.
+        const CAD_COG_MARKER_LAYER_NAME = 'CARGO_COG_MARKERS';
         // Excel/dashboard values are in millimetres; set to 1000 if the
         // target AutoCAD drawing's units are metres instead of mm.
         const CAD_UNIT_SCALE = 1;
@@ -2230,14 +2234,27 @@
         //     trailer + cargo CoG. Replaces the old cargo-only "TOTAL
         //     CoG" sign, which was sourced from the cargo weighted
         //     average (Input!AZ40:BD40) instead.
+        //   • Combined CoG weight — Display!E16 — read alongside the
+        //     row above (same Excel.run/range) for the CCOG AutoCAD
+        //     block's WEIGHT attribute (see computeTrailerCADInserts /
+        //     CAD_CCOG_ITEM_ATTRIB_DEFAULT). Independent of the X/Y/Z
+        //     columns above — this is the combined cargo+trailer
+        //     weight, not a position.
         const COG_TRAILER_ROW = 15;
         const COG_COMBINED_ROW = 16;
         const COG_SIGN_X_COL = 'B';
         const COG_SIGN_Y_COL = 'C';
         const COG_SIGN_Z_COL = 'D';
+        const COG_COMBINED_WEIGHT_COL = 'E';
+        const COG_COMBINED_WEIGHT_CELL = `${COG_COMBINED_WEIGHT_COL}${COG_COMBINED_ROW}`; // E16
         const COG_TRAILER_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_SIGN_Z_COL}${COG_TRAILER_ROW}`;   // B15:D15
         const COG_COMBINED_RANGE = `${COG_SIGN_X_COL}${COG_COMBINED_ROW}:${COG_SIGN_Z_COL}${COG_COMBINED_ROW}`; // B16:D16
-        const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_SIGN_Z_COL}${COG_COMBINED_ROW}`;     // B15:D16 — both rows in one read
+        // Extends across to column E (vs. just D) ONLY on this combined
+        // read, so the same single Excel.run/sync in pullCogSignsFromExcel
+        // also picks up E16 (COG_COMBINED_WEIGHT_CELL) alongside B16:D16 —
+        // the Trailer CoG row (15) simply has an unused E-column value in
+        // that same read, which is fine since it's never referenced.
+        const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIGHT_COL}${COG_COMBINED_ROW}`; // B15:E16 — both rows + weight in one read
         const TG_COG_TRAILER_COLOR = 'var(--accent-purple, #a855f7)'; // Trailer CoG sign — distinct from Combined CoG (red) and per-item cargo colors
 
         // ---- Stability angle triangles (right end view only) — Excel
@@ -2444,7 +2461,11 @@
         // position, so weight-style ">0" gating doesn't apply here).
         let cogTrailerSign = { x: 0, y: 0, z: 0 };
         let cogTrailerSignLoaded = false;
-        let cogCombinedSign = { x: 0, y: 0, z: 0 };
+        // weight: Display!E16 (COG_COMBINED_WEIGHT_CELL) — combined
+        // cargo+trailer weight, used for the CCOG AutoCAD block's
+        // WEIGHT attribute (see computeTrailerCADInserts). Independent
+        // of x/y/z above; not a position.
+        let cogCombinedSign = { x: 0, y: 0, z: 0, weight: 0 };
         let cogCombinedSignLoaded = false;
 
         // Stability angle triangles — see STAB_* constants above.
@@ -4381,8 +4402,16 @@
                     cogTrailerSignLoaded = true;
                 }
                 if (rows && rows[1]) {
-                    const [cx, cy, cz] = rows[1].map(v => parseFloat(v));
-                    cogCombinedSign = { x: Number.isFinite(cx) ? cx : 0, y: Number.isFinite(cy) ? cy : 0, z: Number.isFinite(cz) ? cz : 0 };
+                    // Row 16: B/C/D = X/Y/Z position, E = combined weight
+                    // (COG_COMBINED_WEIGHT_CELL) — independent value, see
+                    // cogCombinedSign.weight comment at its declaration.
+                    const [cx, cy, cz, cw] = rows[1].map(v => parseFloat(v));
+                    cogCombinedSign = {
+                        x: Number.isFinite(cx) ? cx : 0,
+                        y: Number.isFinite(cy) ? cy : 0,
+                        z: Number.isFinite(cz) ? cz : 0,
+                        weight: Number.isFinite(cw) ? cw : 0
+                    };
                     cogCombinedSignLoaded = true;
                 }
             } catch (e) {
@@ -10060,23 +10089,16 @@
             // skipping the tgZTrailerHeightMm add the per-item CoG uses
             // above. Also carries ITEM/WEIGHT block attributes (see
             // CAD_CCOG_ITEM_ATTRIB_DEFAULT / buildTrailerCADScript's
-            // ATTDIA handling) — ITEM defaults to "CCoG", WEIGHT is
-            // pulled fresh from Excel Display!B16 right before export
-            // (same pullCargoFromExcelImpl call refreshes cogCombinedSign
-            // via pullCogSignsFromExcel — B16 is cogCombinedSign.x, per
-            // KKai's confirmation that this cell holds the combined
-            // weight).
+            // ATTDIA/ATTREQ handling) — ITEM defaults to "CCoG", WEIGHT
+            // is pulled fresh from Excel Display!E16
+            // (COG_COMBINED_WEIGHT_CELL — cogCombinedSign.weight) right
+            // before export (same pullCargoFromExcelImpl call refreshes
+            // it via pullCogSignsFromExcel).
             if (cogCombinedSignLoaded) {
                 const ccogXMm = parseFloat(cogCombinedSign.x) || 0;
                 const ccogYMm = parseFloat(cogCombinedSign.y) || 0;
                 const ccogZMm = parseFloat(cogCombinedSign.z) || 0;
-                // WEIGHT attribute value — Excel Display!B16, i.e. the
-                // SAME cell as ccogXMm above (cogCombinedSign.x), per
-                // KKai's confirmation. Kept as its own named value here
-                // so the attribute's meaning (weight) is clear even
-                // though it's numerically identical to the Top/Front/End
-                // view X position above.
-                const ccogWeightVal = ccogXMm;
+                const ccogWeightVal = parseFloat(cogCombinedSign.weight) || 0;
                 const ccogAttribs = [CAD_CCOG_ITEM_ATTRIB_DEFAULT, ccogWeightVal.toFixed(2)];
                 inserts.push({
                     trainName: 'Combined CoG (Top)',
@@ -10138,12 +10160,33 @@
             // ins.attribs below) to be answered as plain command-line
             // prompts in sequence, same as every other -Insert prompt
             // here, instead of popping an attribute-entry dialog box
-            // that a .scr script can't fill in. Restored to 1 at the
-            // very end alongside FILEDIA/CMDDIA.
-            lines.push(';; Answer block-attribute prompts on the command line, not a dialog box');
+            // that a .scr script can't fill in. ATTREQ 1 additionally
+            // guarantees -Insert actually PAUSES to prompt for those
+            // values instead of silently taking the block's own defaults
+            // (which is what ATTREQ 0 does) — without it, the WEIGHT
+            // attribute would never update to match Excel regardless of
+            // what's fed into the script. Both restored at the very end
+            // alongside FILEDIA/CMDDIA.
+            lines.push(';; Answer block-attribute prompts on the command line, not a dialog box, and make sure they\'re actually prompted for');
             lines.push('ATTDIA');
             lines.push('0');
-            inserts.forEach(ins => {
+            lines.push('ATTREQ');
+            lines.push('1');
+            // Cargo/Combined CoG markers (COG_CARGO, CCOG) are split out
+            // from every other insert below and drawn on their OWN
+            // dedicated layer (CAD_COG_MARKER_LAYER_NAME), which is
+            // erased first — same "erase whatever's already on that
+            // layer, then redraw" pattern already used for the Transport
+            // Data table further down. Without this, re-running this
+            // script on the same drawing (e.g. after tweaking cargo/CoG
+            // values) just piles up a fresh set of COG_CARGO/CCOG blocks
+            // on top of the old ones every time, instead of replacing
+            // them — this is what caused the doubled-up COG_CARGO
+            // markers KKai saw.
+            const cogMarkerBlockNames = new Set([CAD_COG_BLOCK_NAME, CAD_CCOG_BLOCK_NAME]);
+            const cogMarkerInserts = inserts.filter(ins => cogMarkerBlockNames.has(ins.blockName));
+            const otherInserts = inserts.filter(ins => !cogMarkerBlockNames.has(ins.blockName));
+            const insertLines = (ins) => {
                 lines.push('-Insert');
                 lines.push(ins.blockName);
                 lines.push(`${ins.x.toFixed(3)},${ins.y.toFixed(3)},0`);
@@ -10156,7 +10199,25 @@
                 if (ins.attribs && ins.attribs.length) {
                     ins.attribs.forEach(v => lines.push(String(v)));
                 }
-            });
+            };
+            otherInserts.forEach(insertLines);
+            if (cogMarkerInserts.length) {
+                lines.push(';; Cargo/Combined CoG markers — own dedicated layer, cleared before redrawing so re-running this script replaces them instead of stacking duplicates');
+                lines.push('-LAYER');
+                lines.push('Make');
+                lines.push(CAD_COG_MARKER_LAYER_NAME);
+                lines.push('');
+                lines.push(`(if (setq tgOldCogMarkers (ssget "_X" (list (cons 8 "${CAD_COG_MARKER_LAYER_NAME}")))) (command "._ERASE" tgOldCogMarkers ""))`);
+                lines.push('-LAYER');
+                lines.push('Set');
+                lines.push(CAD_COG_MARKER_LAYER_NAME);
+                lines.push('');
+                cogMarkerInserts.forEach(insertLines);
+                lines.push('-LAYER');
+                lines.push('Set');
+                lines.push('0');
+                lines.push('');
+            }
             if (cargoOutlines && cargoOutlines.length) {
                 lines.push(';; Cargo footprint outlines — one rectangle per');
                 lines.push(';; item, at its own X — Middle/Y — Middle position');
@@ -10493,7 +10554,7 @@
                     }
                     if (typeof state.cogTrailerSignLoaded === 'boolean') cogTrailerSignLoaded = state.cogTrailerSignLoaded;
                     if (state.cogCombinedSign && typeof state.cogCombinedSign === 'object') {
-                        ['x', 'y', 'z'].forEach(k => {
+                        ['x', 'y', 'z', 'weight'].forEach(k => {
                             const v = parseFloat(state.cogCombinedSign[k]);
                             if (Number.isFinite(v)) cogCombinedSign[k] = v;
                         });
