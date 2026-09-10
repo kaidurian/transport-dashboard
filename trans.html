@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.93)</h1>
+            <h1>🚂 Transport Dashboard (Rev.94)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2756,7 +2756,7 @@
                 // In and Load Out — direction is conveyed purely by
                 // rotation/mirror (see computeTrailerCADInserts).
                 cadBlockName: 'KAMAG_K25_YOKE_2F_top_view',
-                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view',
+                cadSideViewBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_side_view',
                 blocks: [
                     { length: 955, width: 860, height: 473 }
                 ]
@@ -2766,7 +2766,7 @@
                 totalWeightT: 1.29,
                 secondBlockOffsetY: 1069,
                 cadBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_top_view',
-                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view',
+                cadSideViewBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_side_view',
                 blocks: [
                     { length: 955, width: 860, height: 473 },
                     { length: 909, width: 1034, height: 710 }
@@ -9870,6 +9870,13 @@
                 const len = parseFloat(t.deckLength) || Math.max((ac - 1) * sp, 0);
                 return Math.max(maxLen, len);
             }, 0);
+            // First train's own axle1X (train.x — Excel Input!B5) — per
+            // KKai's spec, on Load In the Header/Dbar accessory block(s)
+            // insert at the 1ST TRAILER's X position (this value) rather
+            // than the accessory's own train-edge anchor. Load Out is
+            // unaffected (keeps the flush-at-edge anchor — see the hdX
+            // assignment inside the per-train loop below).
+            const firstTrainAxle1Xm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].x) || 0) : 0;
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -10093,13 +10100,20 @@
                     const hdBlocks = computeHeaderDbarBlocks(train, { flushAtEdge: true });
                     if (hdBlocks.length) {
                         const anchor = hdBlocks[0];
-                        const hdX = anchor.xCenter * CAD_UNIT_SCALE;
+                        // X per KKai's updated spec:
+                        // Load Out — keeps the flush-at-edge anchor.xCenter
+                        // (this accessory's own train-edge position), unchanged.
+                        // Load In — inserted at the 1ST TRAILER's X instead,
+                        // using firstTrainAxle1Xm (Input!B5) computed above.
+                        const hdX = (loadDirection === 'in')
+                            ? (firstTrainAxle1Xm * CAD_UNIT_SCALE)
+                            : (anchor.xCenter * CAD_UNIT_SCALE);
                         const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
-                        // Per KKai's spec the block name no longer
-                        // changes by load direction (no _AFT/_FWD
-                        // suffix) — Load In rotates the top view 180°
+                        // Per KKai's updated spec the block name still
+                        // doesn't change by load direction (no _AFT/_FWD
+                        // suffix) — Load Out rotates the top view 180°
                         // and mirrors the side view (X scale -1); Load
-                        // Out does neither, same block both ways.
+                        // In does neither, same block both ways.
                         inserts.push({
                             trainName: `${train.name} — ${hdDef.label}`,
                             view: 'top',
@@ -10108,7 +10122,7 @@
                             loadDirection,
                             x: hdX,
                             y: hdY,
-                            rotationDeg: (loadDirection === 'in') ? 180 : 0
+                            rotationDeg: (loadDirection === 'out') ? 180 : 0
                         });
                         if (hdDef.cadSideViewBlockName) {
                             // Front (side) view — shares this accessory's
@@ -10126,7 +10140,7 @@
                                 x: hdX,
                                 y: sharedSideYm,
                                 rotationDeg: 0,
-                                xScale: (loadDirection === 'in') ? -1 : 1
+                                xScale: (loadDirection === 'out') ? -1 : 1
                             });
                         }
                     } else {
