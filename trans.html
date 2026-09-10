@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.91)</h1>
+            <h1>🚂 Transport Dashboard (Rev.92)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1768,6 +1768,10 @@
         // maps to TWO views — top and side ("front" elevation) — each
         // with its own AFT/FWD block pair, e.g. for 4-line:
         // KAMAG_K25_4L_top_view_AFT/FWD, KAMAG_K25_4L_side_view_AFT/FWD.
+        // lengthMm = that block's own fixed real-world length (module
+        // length for this axle-line count), used ONLY to build the
+        // cumulative Load Out X offset below (see the segments.forEach
+        // loop in computeTrailerCADInserts) — Load In doesn't use it.
         // The end view is NOT axle-count/direction dependent — per
         // KKai's spec every end view (both the left and right end view
         // inserted beside each front/side view — see
@@ -1777,11 +1781,13 @@
         const CAD_BLOCK_MAP = {
             4: {
                 top: { in: 'KAMAG_K25_4L_top_view_AFT', out: 'KAMAG_K25_4L_top_view_FWD' },
-                side: { in: 'KAMAG_K25_4L_side_view_AFT', out: 'KAMAG_K25_4L_side_view_FWD' }
+                side: { in: 'KAMAG_K25_4L_side_view_AFT', out: 'KAMAG_K25_4L_side_view_FWD' },
+                lengthMm: 6000
             },
             6: {
                 top: { in: 'KAMAG_K25_6L_top_view_AFT', out: 'KAMAG_K25_6L_top_view_FWD' },
-                side: { in: 'KAMAG_K25_6L_side_view_AFT', out: 'KAMAG_K25_6L_side_view_FWD' }
+                side: { in: 'KAMAG_K25_6L_side_view_AFT', out: 'KAMAG_K25_6L_side_view_FWD' },
+                lengthMm: 9000
             }
         };
         // Single AutoCAD block used for the export's one end view
@@ -9905,6 +9911,16 @@
                 const trainDeckWidthMm = parseFloat(train.deckWidth) || parseFloat(train.axlePairOffsetY) || 0;
 
                 let axleOffset = 0;
+                // Running total of segment block lengths (CAD_BLOCK_MAP
+                // [segCount].lengthMm) for every segment processed SO
+                // FAR (including the current one) — Load Out ONLY. Per
+                // KKai's spec each successive segment's FWD block X is
+                // axle1X (train.x/Input!B5) PLUS this cumulative total,
+                // not each segment's own length in isolation — e.g. a
+                // train split 4+4+6 (lengths 6000/6000/9000mm) with
+                // axle1X=-2900 places its 3 segments at -2900+6000=3100,
+                // -2900+6000+6000=9100, -2900+6000+6000+9000=18100.
+                let cumulativeOutLenMm = 0;
                 let anySegmentMapped = false;
                 segments.forEach((segCount, segIdx) => {
                     const segLabel = segments.length > 1 ? `${train.name} (#${axleOffset + 1}-#${axleOffset + segCount})` : train.name;
@@ -9918,20 +9934,15 @@
                     const segAxle1X = axle1X - axleOffset * spacing;
                     // Load Out X shift — per KKai's spec, the FWD block's
                     // own insertion basepoint sits at the OPPOSITE end of
-                    // the block from the AFT block's, so the anchor X
-                    // needs shifting by this segment's own physical
-                    // length to land in the same world position. Single-
-                    // segment (unsplit) trains use train.deckLength
-                    // directly — e.g. Input!B5 (segAxle1X here) + that
-                    // trailer's own length; a split train's individual
-                    // segment instead falls back to its own axle-line
-                    // span (segCount-1)*spacing, since deckLength
-                    // describes the whole train, not one segment of it.
-                    // Load In is unaffected — same segAxle1X as before.
-                    const segLenMm = segments.length === 1
-                        ? (parseFloat(train.deckLength) || Math.max((segCount - 1) * spacing, 0))
-                        : Math.max((segCount - 1) * spacing, 0);
-                    const insertionXm = (loadDirection === 'out') ? (segAxle1X + segLenMm) : segAxle1X;
+                    // the block from the AFT block's, so the anchor X is
+                    // axle1X (train.x/Input!B5) plus the cumulative
+                    // length of every segment up to and including this
+                    // one (see cumulativeOutLenMm comment above) — NOT
+                    // this segment's own axle-spacing position. Load In
+                    // is unaffected — still segAxle1X as before.
+                    const segLenMm = viewBlocks.lengthMm || Math.max((segCount - 1) * spacing, 0);
+                    cumulativeOutLenMm += segLenMm;
+                    const insertionXm = (loadDirection === 'out') ? (axle1X + cumulativeOutLenMm) : segAxle1X;
                     const baseYm = trainBaseYm + (trainDeckWidthMm / 2) / CAD_UNIT_SCALE;
                     // Top/side rotation + mirror — per KKai's spec:
                     // Load In: neither view rotates or mirrors (0 / xScale 1).
