@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.89)</h1>
+            <h1>🚂 Transport Dashboard (Rev.90)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2737,12 +2737,17 @@
             '3m': {
                 label: 'GHF 2F Header&Dbar 3m',
                 totalWeightT: 0.74,
-                // AutoCAD block inserted for this accessory in the 📐
+                // AutoCAD block(s) inserted for this accessory in the 📐
                 // Export AutoCAD Script (.scr) — see
-                // computeTrailerCADInserts(). One insert per accessory
-                // instance, regardless of how many sub-blocks[] this
-                // type draws in the 2D/3D preview.
+                // computeTrailerCADInserts(). One TOP view insert + one
+                // FRONT (side) view insert per accessory instance,
+                // regardless of how many sub-blocks[] this type draws in
+                // the 2D/3D preview. Both names are the "_AFT" variant —
+                // Load Out instead uses the "_FWD" variant, derived via
+                // cadFwdBlockName() (see computeTrailerCADInserts for the
+                // Load In/Out rotation+mirror rules).
                 cadBlockName: 'KAMAG_K25_YOKE_2F_top_view_AFT',
+                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view_AFT',
                 blocks: [
                     { length: 955, width: 860, height: 473 }
                 ]
@@ -2752,12 +2757,22 @@
                 totalWeightT: 1.29,
                 secondBlockOffsetY: 1069,
                 cadBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_top_view_AFT',
+                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view_AFT',
                 blocks: [
                     { length: 955, width: 860, height: 473 },
                     { length: 909, width: 1034, height: 710 }
                 ]
             }
         };
+
+        // Derives the "_FWD" variant of an "_AFT"-suffixed Header/Dbar
+        // AutoCAD block name (cadBlockName / cadSideViewBlockName above)
+        // — Load In inserts the "_AFT" block (rotated 180° in top view /
+        // mirrored in front view); Load Out inserts this "_FWD" block
+        // instead, unrotated/unmirrored, per KKai's spec.
+        function cadFwdBlockName(aftName) {
+            return (aftName || '').replace(/_AFT$/, '_FWD');
+        }
 
         // World-space blocks for a train's selected header/dbar
         // accessory (or [] when none/not applicable). Only meaningful for
@@ -2788,7 +2803,17 @@
         // larger Y ("below" it).
         // Z: "top of block same trailer top deck" — the block hangs BELOW
         // the deck-top line by its own height.
-        function computeHeaderDbarBlocks(train) {
+        // opts.flushAtEdge (default false): 2D/3D preview callers omit
+        // this and keep the original "flush against, extending outward
+        // from, the deck edge" xCenter (edgeX ± half block length — see
+        // comments above). The 📐 Export AutoCAD Script path passes
+        // { flushAtEdge: true } instead, per KKai's spec, so the
+        // AutoCAD block's own insertion point lands exactly on the deck
+        // edge (xCenter = edgeX) rather than offset outward by the
+        // block's own half-length — the AFT/FWD block artwork itself
+        // already carries that outward extension.
+        function computeHeaderDbarBlocks(train, opts) {
+            const flushAtEdge = !!(opts && opts.flushAtEdge);
             const def = HEADER_DBAR_TYPES[train.headerDbar];
             if (!def) return [];
             const deckLen = parseFloat(train.deckLength) || 0;
@@ -2808,7 +2833,7 @@
                 lengthMm: b.length,
                 widthMm: b.width,
                 heightMm: b.height,
-                xCenter: edgeX + outwardSign * (b.length / 2),
+                xCenter: flushAtEdge ? edgeX : (edgeX + outwardSign * (b.length / 2)),
                 yCenter: i === 0 ? yCenter0 : yCenter0 + secondSign * (def.secondBlockOffsetY || 0),
                 zTop: deckTopZ,
                 zBase: deckTopZ - b.height,
@@ -10030,18 +10055,50 @@
                 // same for both directions — only its rotation flips).
                 const hdDef = HEADER_DBAR_TYPES[train.headerDbar];
                 if (hdDef && hdDef.cadBlockName) {
-                    const hdBlocks = computeHeaderDbarBlocks(train);
+                    // flushAtEdge: true — per KKai's spec, xCenter =
+                    // edgeX (no more ± half-block-length outward
+                    // extension) for this export path only; the 2D/3D
+                    // preview keeps its own xCenter formula unchanged.
+                    const hdBlocks = computeHeaderDbarBlocks(train, { flushAtEdge: true });
                     if (hdBlocks.length) {
                         const anchor = hdBlocks[0];
+                        const hdX = anchor.xCenter * CAD_UNIT_SCALE;
+                        const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
+                        // Load In: "_AFT" top-view block, rotated 180°;
+                        // "_AFT" side-view block, MIRRORED (X scale -1).
+                        // Load Out: "_FWD" variant of each block instead,
+                        // unrotated/unmirrored — per KKai's spec.
+                        const topBlockName = (loadDirection === 'in') ? hdDef.cadBlockName : cadFwdBlockName(hdDef.cadBlockName);
                         inserts.push({
                             trainName: `${train.name} — ${hdDef.label}`,
-                            blockName: hdDef.cadBlockName,
+                            view: 'top',
+                            blockName: topBlockName,
                             axleCount: null,
                             loadDirection,
-                            x: anchor.xCenter * CAD_UNIT_SCALE,
-                            y: -anchor.yCenter * CAD_UNIT_SCALE,
-                            rotationDeg: (loadDirection === 'out') ? 180 : 0
+                            x: hdX,
+                            y: hdY,
+                            rotationDeg: (loadDirection === 'in') ? 180 : 0
                         });
+                        if (hdDef.cadSideViewBlockName) {
+                            // Front (side) view — shares this accessory's
+                            // own X (top/side views share X across this
+                            // whole export — see the trailer's own
+                            // ['top','side'].forEach insert above), Y on
+                            // the same sharedSideYm ground line every
+                            // other train's front-view insert uses.
+                            const sideBlockName = (loadDirection === 'in') ? hdDef.cadSideViewBlockName : cadFwdBlockName(hdDef.cadSideViewBlockName);
+                            inserts.push({
+                                trainName: `${train.name} — ${hdDef.label} (front view)`,
+                                view: 'side',
+                                blockName: sideBlockName,
+                                axleCount: null,
+                                loadDirection,
+                                x: hdX,
+                                y: sharedSideYm,
+                                rotationDeg: 0,
+                                xScale: (loadDirection === 'in') ? -1 : 1
+                            });
+                        }
                     } else {
                         warnings.push(`Train "${train.name}" has a Header/Dbar accessory (${hdDef.label}) selected but no deck footprint (pick a Goldhofer/SPMT trailer-type preset) — skipped from .scr export.`);
                     }
@@ -10307,10 +10364,14 @@
             const cogMarkerInserts = inserts.filter(ins => cogMarkerBlockNames.has(ins.blockName));
             const otherInserts = inserts.filter(ins => !cogMarkerBlockNames.has(ins.blockName));
             const insertLines = (ins) => {
+                // xScale defaults to 1 for every ordinary insert; the
+                // Header/Dbar front-view accessory block passes -1 to
+                // mirror it (Load In only — see computeTrailerCADInserts).
+                const xScale = (ins.xScale !== undefined) ? ins.xScale : 1;
                 lines.push('-Insert');
                 lines.push(ins.blockName);
                 lines.push(`${ins.x.toFixed(3)},${ins.y.toFixed(3)},0`);
-                lines.push('1');
+                lines.push(`${xScale}`);
                 lines.push('1');
                 lines.push(`${ins.rotationDeg}`);
             };
