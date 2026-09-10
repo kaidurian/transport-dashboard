@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.92)</h1>
+            <h1>🚂 Transport Dashboard (Rev.93)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1125,7 +1125,7 @@
             </div>
 
             <div class="tg-footer">
-                <label class="tg-preview-toggle" title="Applies to every train in the AutoCAD export. Load In: *_AFT block, 0° rotation. Load Out: *_FWD block, 180° rotation.">
+                <label class="tg-preview-toggle" title="Applies to every train in the AutoCAD export. Load In: 0° rotation. Load Out: top view rotated 180°, front view mirrored instead.">
                     AutoCAD Load direction:
                     <select id="tgLoadDirectionSelect" onchange="setTrailerGenLoadDirection(this.value)">
                         <option value="in">Load In</option>
@@ -1761,13 +1761,16 @@
         const AXLE_MAX_ROWS = 60;
 
         // Each trailerGenTrains[] entry = one physical SPMT unit. The
-        // AutoCAD side has whole-unit blocks (not per-axle-line blocks),
-        // and the block itself differs by load direction (AFT = Load In,
-        // FWD = Load Out — a single global setting applies to every
-        // train in the export, not per-train). Each axle-line count now
-        // maps to TWO views — top and side ("front" elevation) — each
-        // with its own AFT/FWD block pair, e.g. for 4-line:
-        // KAMAG_K25_4L_top_view_AFT/FWD, KAMAG_K25_4L_side_view_AFT/FWD.
+        // AutoCAD side has whole-unit blocks (not per-axle-line blocks).
+        // Per KKai's spec block names no longer carry an _AFT/_FWD
+        // suffix — ONE block name per axle-line-count/view, used for
+        // both Load In and Load Out; the load direction is instead
+        // conveyed purely by rotation/mirror (see the segments.forEach
+        // loop in computeTrailerCADInserts: Load In = 0° both views;
+        // Load Out = top view rotated 180°, side view mirrored/xScale
+        // -1 instead). Each axle-line count maps to TWO views — top and
+        // side ("front" elevation), e.g. for 4-line:
+        // KAMAG_K25_4L_top_view, KAMAG_K25_4L_side_view.
         // lengthMm = that block's own fixed real-world length (module
         // length for this axle-line count), used ONLY to build the
         // cumulative Load Out X offset below (see the segments.forEach
@@ -1776,17 +1779,17 @@
         // KKai's spec every end view (both the left and right end view
         // inserted beside each front/side view — see
         // CAD_END_VIEW_BLOCK_NAME below) always uses the single block
-        // KAMAG_K25_6L_end_view_AFT, regardless of the segment's own
+        // KAMAG_K25_6L_end_view, regardless of the segment's own
         // axle-line count or load direction.
         const CAD_BLOCK_MAP = {
             4: {
-                top: { in: 'KAMAG_K25_4L_top_view_AFT', out: 'KAMAG_K25_4L_top_view_FWD' },
-                side: { in: 'KAMAG_K25_4L_side_view_AFT', out: 'KAMAG_K25_4L_side_view_FWD' },
+                top: 'KAMAG_K25_4L_top_view',
+                side: 'KAMAG_K25_4L_side_view',
                 lengthMm: 6000
             },
             6: {
-                top: { in: 'KAMAG_K25_6L_top_view_AFT', out: 'KAMAG_K25_6L_top_view_FWD' },
-                side: { in: 'KAMAG_K25_6L_side_view_AFT', out: 'KAMAG_K25_6L_side_view_FWD' },
+                top: 'KAMAG_K25_6L_top_view',
+                side: 'KAMAG_K25_6L_side_view',
                 lengthMm: 9000
             }
         };
@@ -1794,7 +1797,7 @@
         // insert (see comments at the end of computeTrailerCADInserts),
         // regardless of axle-line count or load direction. Per KKai's
         // spec this name never changes, unlike the top/side blocks above.
-        const CAD_END_VIEW_BLOCK_NAME = 'KAMAG_K25_6L_end_view_AFT';
+        const CAD_END_VIEW_BLOCK_NAME = 'KAMAG_K25_6L_end_view';
         // Per-cargo-item CoG marker block, and the single Combined CoG
         // marker block — both independent of axle-line count/load
         // direction, same one-block-per-purpose pattern as
@@ -2748,12 +2751,12 @@
                 // computeTrailerCADInserts(). One TOP view insert + one
                 // FRONT (side) view insert per accessory instance,
                 // regardless of how many sub-blocks[] this type draws in
-                // the 2D/3D preview. Both names are the "_AFT" variant —
-                // Load Out instead uses the "_FWD" variant, derived via
-                // cadFwdBlockName() (see computeTrailerCADInserts for the
-                // Load In/Out rotation+mirror rules).
-                cadBlockName: 'KAMAG_K25_YOKE_2F_top_view_AFT',
-                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view_AFT',
+                // the 2D/3D preview. Per KKai's spec these block names
+                // carry no _AFT/_FWD suffix and are used for both Load
+                // In and Load Out — direction is conveyed purely by
+                // rotation/mirror (see computeTrailerCADInserts).
+                cadBlockName: 'KAMAG_K25_YOKE_2F_top_view',
+                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view',
                 blocks: [
                     { length: 955, width: 860, height: 473 }
                 ]
@@ -2762,23 +2765,14 @@
                 label: 'GHF 2F Header&Dbar 3m&PPU',
                 totalWeightT: 1.29,
                 secondBlockOffsetY: 1069,
-                cadBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_top_view_AFT',
-                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view_AFT',
+                cadBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_top_view',
+                cadSideViewBlockName: 'KAMAG_K25_YOKE_2F_side_view',
                 blocks: [
                     { length: 955, width: 860, height: 473 },
                     { length: 909, width: 1034, height: 710 }
                 ]
             }
         };
-
-        // Derives the "_FWD" variant of an "_AFT"-suffixed Header/Dbar
-        // AutoCAD block name (cadBlockName / cadSideViewBlockName above)
-        // — Load In inserts the "_AFT" block (rotated 180° in top view /
-        // mirrored in front view); Load Out inserts this "_FWD" block
-        // instead, unrotated/unmirrored, per KKai's spec.
-        function cadFwdBlockName(aftName) {
-            return (aftName || '').replace(/_AFT$/, '_FWD');
-        }
 
         // World-space blocks for a train's selected header/dbar
         // accessory (or [] when none/not applicable). Only meaningful for
@@ -9957,7 +9951,7 @@
                     // instead uses sharedSideYm — the SAME Y value for
                     // every train.
                     ['top', 'side'].forEach(view => {
-                        const blockName = viewBlocks[view][loadDirection];
+                        const blockName = viewBlocks[view];
                         const isSide = view === 'side';
                         const rotationDeg = (loadDirection === 'out' && !isSide) ? 180 : 0;
                         inserts.push({
@@ -10101,15 +10095,15 @@
                         const anchor = hdBlocks[0];
                         const hdX = anchor.xCenter * CAD_UNIT_SCALE;
                         const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
-                        // Load In: "_AFT" top-view block, rotated 180°;
-                        // "_AFT" side-view block, MIRRORED (X scale -1).
-                        // Load Out: "_FWD" variant of each block instead,
-                        // unrotated/unmirrored — per KKai's spec.
-                        const topBlockName = (loadDirection === 'in') ? hdDef.cadBlockName : cadFwdBlockName(hdDef.cadBlockName);
+                        // Per KKai's spec the block name no longer
+                        // changes by load direction (no _AFT/_FWD
+                        // suffix) — Load In rotates the top view 180°
+                        // and mirrors the side view (X scale -1); Load
+                        // Out does neither, same block both ways.
                         inserts.push({
                             trainName: `${train.name} — ${hdDef.label}`,
                             view: 'top',
-                            blockName: topBlockName,
+                            blockName: hdDef.cadBlockName,
                             axleCount: null,
                             loadDirection,
                             x: hdX,
@@ -10123,11 +10117,10 @@
                             // ['top','side'].forEach insert above), Y on
                             // the same sharedSideYm ground line every
                             // other train's front-view insert uses.
-                            const sideBlockName = (loadDirection === 'in') ? hdDef.cadSideViewBlockName : cadFwdBlockName(hdDef.cadSideViewBlockName);
                             inserts.push({
                                 trainName: `${train.name} — ${hdDef.label} (front view)`,
                                 view: 'side',
-                                blockName: sideBlockName,
+                                blockName: hdDef.cadSideViewBlockName,
                                 axleCount: null,
                                 loadDirection,
                                 x: hdX,
