@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.96.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.97)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -4140,7 +4140,15 @@
             let v = parseFloat(rawValue);
             if (isNaN(v)) v = 0;
             const halfLen = (parseFloat(cargo.length) || 0) / 2;
-            cargo.tlX = round3((parseFloat(cargo.x) || 0) - v + halfLen);
+            // NOT rounded here — tlX is an internal-only value; rounding
+            // it now and then reversing the same formula in
+            // cargoOffsetLeft() (y - tlX + halfLen) double-rounds and can
+            // drift the displayed/pushed offset by ±0.001 whenever
+            // halfLen isn't a clean 3-decimal number (e.g. length/2 =
+            // x.xxx5). Storing full precision and rounding only once, at
+            // display/push time in cargoOffsetLeft(), reproduces exactly
+            // what the user typed.
+            cargo.tlX = (parseFloat(cargo.x) || 0) - v + halfLen;
             renderTrailerGenPreview();
             scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
@@ -4150,7 +4158,9 @@
             let v = parseFloat(rawValue);
             if (isNaN(v)) v = 0;
             const halfWid = (parseFloat(cargo.width) || 0) / 2;
-            cargo.tlY = round3((parseFloat(cargo.y) || 0) + halfWid - v);
+            // See note in updateCargoOffsetLeft above — kept at full
+            // precision to avoid double-rounding against cargoOffsetRear().
+            cargo.tlY = (parseFloat(cargo.y) || 0) + halfWid - v;
             renderTrailerGenPreview();
             scheduleAutoPush('pushCargoToExcel', pushCargoToExcel);
         }
@@ -4701,8 +4711,15 @@
                     // Independent of X/Y — CoG: pulling one never changes
                     // the other.
                     if (geomOffLeft !== null || geomOffRear !== null) {
-                        item.tlX = geomOffLeft !== null ? round3(item.x - geomOffLeft + dimLength / 2) : (existing ? existing.tlX : item.x);
-                        item.tlY = geomOffRear !== null ? round3(item.y + dimWidth / 2 - geomOffRear) : (existing ? existing.tlY : item.y);
+                        // NOT rounded here — see the matching note in
+                        // updateCargoOffsetLeft/Rear above. Rounding tlX/
+                        // tlY at this intermediate step and then reversing
+                        // the same formula in cargoOffsetLeft/Rear() for
+                        // display double-rounds and can drift the value
+                        // shown on the dashboard by ±0.001 from what's
+                        // actually in the Excel cell.
+                        item.tlX = geomOffLeft !== null ? (item.x - geomOffLeft + dimLength / 2) : (existing ? existing.tlX : item.x);
+                        item.tlY = geomOffRear !== null ? (item.y + dimWidth / 2 - geomOffRear) : (existing ? existing.tlY : item.y);
                     } else {
                         syncCargoGeometry(item, 'cog');
                     }
