@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.96)</h1>
+            <h1>🚂 Transport Dashboard (Rev.96.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2560,7 +2560,7 @@
         // number shown/edited in the Cargo panel changes, from an
         // absolute world coordinate to a distance measured from this
         // item's own CoG (X — CoG/Y — CoG/Z — CoG). "Left" = the box's
-        // -X edge, "Rear" = the box's +Y edge (Y renders downward, same
+        // -X edge, "Rear" = the box's +Y edge (Y renders upward, same
         // convention as the rest of the drawing), "Bottom" = the box's
         // base (its Height-start reference + Gap).
         function cargoOffsetLeft(cargo) {
@@ -4303,7 +4303,7 @@
                             <input type="number" step="any" id="cargoTlY_${cargo.id}" value="${cargoOffsetRear(cargo)}" ${cargo.groupCog ? 'disabled' : ''}
                                    title="${cargo.groupCog
                                        ? 'Disabled while grouped (🧲 Group toggle above) — the box follows CoGy at a fixed offset. Untick Group to edit this directly again.'
-                                       : `Distance from this item's CoG (CoGy) to the REAR edge of its footprint, in meters (Y renders downward, same convention as the rest of the drawing). Editing this moves the drawn cargo BOX only — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFREAR_COL}${cell} — this distance is the value pushed/pulled.`}"
+                                       : `Distance from this item's CoG (CoGy) to the REAR edge of its footprint, in meters (Y renders upward, same convention as the rest of the drawing). Editing this moves the drawn cargo BOX only — the CoG sign is unaffected. Synced with Excel '${INPUT_SHEET_NAME}'!${CARGO_OFFREAR_COL}${cell} — this distance is the value pushed/pulled.`}"
                                    onchange="updateCargoOffsetRear(${cargo.id}, this.value)">
                         </div>
                         <div class="tg-cargo-field ${cargo.groupCog ? 'tg-cargo-field-readonly' : ''}">
@@ -7211,13 +7211,32 @@
             // above, elevation below with the end view projected off the
             // side view at a shared height scale).
             const topResult = renderTrailerGenTopView(rows);
-            const topHtml = topResult.svg;
             // Side view reuses the top view's own X mapping (scale +
             // offset + canvas width) so every axle line's horizontal
             // position sits directly below its position in the plan
             // view above, instead of the elevation panel picking its
             // own independent horizontal layout.
-            const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
+            const elevResult = renderTrailerGenElevationCombined(rows, topResult);
+            // Both SVGs render at width="100%" of the SAME container, so
+            // if their viewBox widths differ, the browser scales each
+            // one to a DIFFERENT true mm-per-pixel value even though the
+            // internal "scale" they share is identical — the plan and
+            // elevation drawings would then visually appear at
+            // different ratios. renderTrailerGenElevationCombined's own
+            // svgW is never smaller than the plan view's fixed 680 (see
+            // its Math.max), so only the plan view ever needs padding:
+            // widen its viewBox (content re-centered, nothing rescaled)
+            // to match, which uniformly shrinks its on-screen size to
+            // line up with the (now unavoidably wider) elevation view.
+            let topHtml = topResult.svg;
+            if (elevResult.svgW > topResult.svgW) {
+                const deltaW = elevResult.svgW - topResult.svgW;
+                topHtml = topHtml.replace(
+                    `viewBox="0 0 ${topResult.svgW} ${topResult.svgH}"`,
+                    `viewBox="${(-deltaW / 2).toFixed(2)} 0 ${elevResult.svgW} ${topResult.svgH}"`
+                );
+            }
+            const elevationHtml = elevResult.svg;
             wrap.innerHTML = `
                 <div class="tg-view-section">${topHtml}</div>
                 <div class="tg-view-section">${elevationHtml}</div>
@@ -7247,19 +7266,18 @@
         // directly) so all three views can be stacked together.
         function renderTrailerGenTopView(rows) {
             const svgW = 680;
-            // padT/padB grow with the number of stacked dimension tiers so
-            // those callouts never get clipped off the canvas. Dimensions
-            // are now split into a FRONT stack (drawn above the assembly,
-            // out past its top edge) and a BACK stack (drawn below, out
-            // past its bottom edge) — see the tgShowDimensions block below
-            // — so both edges need room, roughly half the total tier
-            // count each (a safe over-estimate; the exact front/back split
-            // isn't known until the geometry below is computed).
+            // padB grows with the number of stacked dimension tiers so
+            // those callouts never get clipped off the canvas. Unlike the
+            // side/end elevation view (where dimensions DO separate into
+            // independent stacks per panel/purpose), the top (plan) view
+            // keeps every call-out in a SINGLE stack below the assembly —
+            // dimension separation only happens in the side and end view
+            // — so all tiers stack into one column and only padB needs to
+            // grow; padT stays at its fixed minimum.
             const dimTierCount = 2 + trailerGenTrains.length + cargoItems.length;
-            const dimTierHalf = Math.ceil(dimTierCount / 2);
-            const padT = Math.max(34, 24 + dimTierHalf * 13);
-            const padB0 = Math.max(30, 24 + dimTierHalf * 13);
-            const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30);
+            const padT = 34;
+            const padB0 = Math.max(30, 24 + dimTierCount * 13);
+            const svgH = 220 + Math.max(0, padB0 - 30);
             const padL = 55, padR = 50, padB = padB0;
             const plotW = svgW - padL - padR, plotH = svgH - padT - padB;
 
@@ -7312,11 +7330,14 @@
             const offsetX = padL + (plotW - usedW) / 2;
             const offsetY = padT + (plotH - usedH) / 2;
             const sx = x => offsetX + (x - minX) * scale;
-            // No vertical flip: +Y renders DOWNWARD on screen, matching
-            // the origin sign (X-axis arrow points right, Y-axis arrow
-            // points down) and the "top-left corner, +X / +Y" convention
-            // used to describe trailer decks and axle offsets.
-            const sy = y => offsetY + (y - minY) * scale;
+            // Vertical flip: +Y renders UPWARD on screen — i.e. "Rear"
+            // (the box's +Y edge, see cargoOffsetRear) is treated as the
+            // edge that renders toward the TOP of the drawing, not the
+            // bottom. The origin sign's Y-axis arrow (below) is flipped
+            // to match. World coordinates / Excel-synced offsets are
+            // untouched — this only changes which direction is "up" on
+            // screen.
+            const sy = y => offsetY + (maxY - y) * scale;
             // Generic "leader line" label placement — used to pull every
             // plan-view label (CoG signs, cargo tags, header/dbar tag)
             // OUT away from the trailer/cargo shapes instead of sitting
@@ -7528,31 +7549,27 @@
                 const dimColorPair = 'var(--accent-green, #10b981)';
                 const dimColorSpacing = 'var(--text-muted, #94a3b8)';
 
-                // ---- Front/back dimension stacks ----
-                // Every call-out is assigned to a ZONE — 'front' (the -X
-                // end of the whole trailer+cargo assembly) or 'back' (the
-                // +X end) — based on where the thing it measures actually
-                // sits, so the two stacks separate naturally instead of
-                // all piling up in one ever-growing column near a single
-                // shared reference row/column. Each stack is anchored
-                // fully OUTSIDE the assembly's own bounding box (rawMinY/
-                // rawMaxY for the horizontal-line stack, rawMinX/rawMaxX
-                // for the vertical-line stack) rather than at each
-                // measurement's own local yWorld/xWorld, which could sit
-                // right on top of the deck/cargo — AutoCAD-style: front
-                // call-outs cluster above/left, back call-outs cluster
-                // below/right, both pulled clear of the drawing.
+                // ---- Single dimension stack ----
+                // Dimension separation (splitting call-outs into
+                // independent stacks) only happens in the side/end
+                // elevation view now — the top (plan) view keeps every
+                // call-out in ONE stack, anchored fully OUTSIDE the
+                // assembly's own bounding box (below it, for the
+                // horizontal-line stack; to its right, for the
+                // vertical-line stack) rather than at each measurement's
+                // own local yWorld/xWorld, which could sit right on top
+                // of the deck/cargo. dimBottomY/dimRightX are computed
+                // via sx()/sy() (not raw world min/max) so the stack
+                // lands below/right of the assembly on SCREEN regardless
+                // of the sy() Y-flip above.
                 const dimOutMargin = 20;
-                const frontTopY = sy(rawMinY) - dimOutMargin;
-                const backBottomY = sy(rawMaxY) + dimOutMargin;
-                const frontLeftX = sx(rawMinX) - dimOutMargin;
-                const backRightX = sx(rawMaxX) + dimOutMargin;
-                const zoneOf = xWorld => xWorld < (rawMinX + rawMaxX) / 2 ? 'front' : 'back';
+                const dimBottomY = Math.max(sy(rawMinY), sy(rawMaxY)) + dimOutMargin;
+                const dimRightX = Math.max(sx(rawMinX), sx(rawMaxX)) + dimOutMargin;
 
-                const dimH = (xa, xb, zone, tier, label, color) => {
+                const dimH = (xa, xb, tier, label, color) => {
                     const x1 = sx(xa), x2 = sx(xb);
                     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
-                    const y = zone === 'front' ? frontTopY - tier * 13 : backBottomY + tier * 13;
+                    const y = dimBottomY + tier * 13;
                     const boxW = Math.max(20, label.length * 5.4);
                     return `<g opacity="0.9">` +
                         `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
@@ -7562,16 +7579,15 @@
                         `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="8" text-anchor="middle" fill="${color}">${escapeHtml(label)}</text>` +
                         `</g>`;
                 };
-                const dimV = (ya, yb, zone, tier, label, color) => {
+                const dimV = (ya, yb, tier, label, color) => {
                     const y1 = sy(ya), y2 = sy(yb);
                     const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
-                    const x = zone === 'front' ? frontLeftX - tier * 12 : backRightX + tier * 12;
-                    const dir = zone === 'front' ? -1 : 1;
+                    const x = dimRightX + tier * 12;
                     // Text runs vertically (reading bottom-to-top), centered
                     // along the dimension line, so it stays readable
                     // without widening the callout the way horizontal text
                     // would for a tall/narrow Y-dimension.
-                    const textX = x + (dir === 1 ? 9 : -9);
+                    const textX = x + 9;
                     const textY = (lo + hi) / 2;
                     return `<g opacity="0.9">` +
                         `<line x1="${x}" y1="${lo}" x2="${x}" y2="${hi}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
@@ -7582,12 +7598,11 @@
                 };
 
                 const dimColorOffset = '#f59e0b'; // amber — distinct from the corner→axle1 blue
-                let frontTier = 0, backTier = 0; // separate running tier counters per zone
+                let dimTier = 0; // single running tier counter, shared by every call-out below
 
                 trailerGenTrains.forEach((t) => {
                     const ox = parseFloat(t.x) || 0, oy = parseFloat(t.y) || 0;
-                    const zone = zoneOf(ox);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
+                    const tier = dimTier++;
 
                     // World origin (0,0) → deck top-left corner (train.x,
                     // train.y) — i.e. "X offset (mm)" / "Y offset (mm)" as
@@ -7596,8 +7611,8 @@
                     // custom/manual), since this offset always applies —
                     // unlike the corner→axle1 inset below, which only
                     // exists for preset trailers.
-                    dimensionsSvg += dimH(0, ox, zone, tier, `${Math.round(ox)}`, dimColorOffset);
-                    dimensionsSvg += dimV(0, oy, zone, tier, `${Math.round(oy)}`, dimColorOffset);
+                    dimensionsSvg += dimH(0, ox, tier, `${Math.round(ox)}`, dimColorOffset);
+                    dimensionsSvg += dimV(0, oy, tier, `${Math.round(oy)}`, dimColorOffset);
 
                     if (t.axle1OffsetX == null || t.axle1OffsetY == null) return; // custom/manual trailer — no deck reference corner
                     const axle1OffsetX = parseFloat(t.axle1OffsetX) || 0;
@@ -7605,70 +7620,66 @@
                     const axle1X = ox + axle1OffsetX, axle1Y = oy + axle1OffsetY;
                     const spacing = parseFloat(t.spacing) || 0;
                     const maxAxleForTrain = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
-                    const tier2 = zone === 'front' ? frontTier++ : backTier++;
+                    const tier2 = dimTier++;
 
                     // Corner → axle line 1, X.
-                    dimensionsSvg += dimH(ox, axle1X, zone, tier2, `${Math.round(axle1OffsetX)}`, dimColorCorner);
+                    dimensionsSvg += dimH(ox, axle1X, tier2, `${Math.round(axle1OffsetX)}`, dimColorCorner);
                     // Corner → axle line 1, Y.
-                    dimensionsSvg += dimV(oy, axle1Y, zone, tier2, `${Math.round(axle1OffsetY)}`, dimColorCorner);
+                    dimensionsSvg += dimV(oy, axle1Y, tier2, `${Math.round(axle1OffsetY)}`, dimColorCorner);
                     // Axle line 1 → axle line 2, X (line spacing).
                     if (maxAxleForTrain >= 2 && spacing) {
                         const axle2X = axle1X - spacing;
-                        const tier3 = zone === 'front' ? frontTier++ : backTier++;
-                        dimensionsSvg += dimH(axle1X, axle2X, zone, tier3, `${Math.abs(Math.round(spacing))}`, dimColorSpacing);
+                        const tier3 = dimTier++;
+                        dimensionsSvg += dimH(axle1X, axle2X, tier3, `${Math.abs(Math.round(spacing))}`, dimColorSpacing);
                     }
                     // Right axle → left axle, Y (axle pair offset).
                     if (t.axlePairOffsetY) {
                         const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
-                        const tier4 = zone === 'front' ? frontTier++ : backTier++;
-                        dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, zone, tier4, `${Math.round(axlePairOffsetY)}`, dimColorPair);
+                        const tier4 = dimTier++;
+                        dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, tier4, `${Math.round(axlePairOffsetY)}`, dimColorPair);
                     }
                 });
 
                 // World origin (0,0) → each cargo item's CoG, in X and Y
                 // — mirrors the trailer's own origin→corner dimension
                 // lines above, just in meters (converted to mm) and in
-                // the cargo's own color. Zoned front/back the same way as
-                // every other call-out, by the cargo's own X position.
+                // the cargo's own color.
                 cargoItems.forEach((c) => {
                     const cargoColor = cargoColorFor(cargoItems.indexOf(c));
                     const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
-                    const zone = zoneOf(cxMm);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, cxMm, zone, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m`, cargoColor);
-                    dimensionsSvg += dimV(0, cyMm, zone, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m`, cargoColor);
+                    const tier = dimTier++;
+                    dimensionsSvg += dimH(0, cxMm, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m`, cargoColor);
+                    dimensionsSvg += dimV(0, cyMm, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m`, cargoColor);
                 });
 
                 // World origin (0,0) → Trailer CoG and → Combined CoG,
-                // same style as the per-item cargo dimension lines above,
-                // zoned the same way by their own X position.
+                // same style as the per-item cargo dimension lines above.
                 if (cogTrailerSignLoaded) {
                     const tCxMm = parseFloat(cogTrailerSign.x) || 0, tCyMm = parseFloat(cogTrailerSign.y) || 0;
-                    const zone = zoneOf(tCxMm);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, tCxMm, zone, tier, `${Math.round(tCxMm)}`, TG_COG_TRAILER_COLOR);
-                    dimensionsSvg += dimV(0, tCyMm, zone, tier, `${Math.round(tCyMm)}`, TG_COG_TRAILER_COLOR);
+                    const tier = dimTier++;
+                    dimensionsSvg += dimH(0, tCxMm, tier, `${Math.round(tCxMm)}`, TG_COG_TRAILER_COLOR);
+                    dimensionsSvg += dimV(0, tCyMm, tier, `${Math.round(tCyMm)}`, TG_COG_TRAILER_COLOR);
                 }
                 if (cogCombinedSignLoaded) {
                     const cCxMm = parseFloat(cogCombinedSign.x) || 0, cCyMm = parseFloat(cogCombinedSign.y) || 0;
-                    const zone = zoneOf(cCxMm);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, cCxMm, zone, tier, `${Math.round(cCxMm)}`, TG_CARGO_TOTAL_COLOR);
-                    dimensionsSvg += dimV(0, cCyMm, zone, tier, `${Math.round(cCyMm)}`, TG_CARGO_TOTAL_COLOR);
+                    const tier = dimTier++;
+                    dimensionsSvg += dimH(0, cCxMm, tier, `${Math.round(cCxMm)}`, TG_CARGO_TOTAL_COLOR);
+                    dimensionsSvg += dimV(0, cCyMm, tier, `${Math.round(cCyMm)}`, TG_CARGO_TOTAL_COLOR);
                 }
             }
 
             // Origin sign at world (0,0): X-axis arrow pointing right
-            // (+X), Y-axis arrow pointing down (+Y).
+            // (+X), Y-axis arrow pointing UP (+Y = Rear renders upward —
+            // see sy() above).
             const ox0 = sx(0), oy0 = sy(0);
             const axisLen = 32;
             let originSvg = `<g>` +
                 `<line x1="${ox0}" y1="${oy0}" x2="${ox0 + axisLen}" y2="${oy0}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1.75" marker-end="url(#tgArrowX)"/>` +
-                `<line x1="${ox0}" y1="${oy0}" x2="${ox0}" y2="${oy0 + axisLen}" stroke="var(--accent-green, #10b981)" stroke-width="1.75" marker-end="url(#tgArrowY)"/>` +
+                `<line x1="${ox0}" y1="${oy0}" x2="${ox0}" y2="${oy0 - axisLen}" stroke="var(--accent-green, #10b981)" stroke-width="1.75" marker-end="url(#tgArrowY)"/>` +
                 `<circle cx="${ox0}" cy="${oy0}" r="2.5" fill="var(--text-main, #e2e8f0)"/>` +
                 `<text x="${ox0 + axisLen + 4}" y="${oy0 + 3}" font-size="9" fill="var(--accent-blue, #38bdf8)">X</text>` +
-                `<text x="${ox0 - 3}" y="${oy0 + axisLen + 11}" font-size="9" fill="var(--accent-green, #10b981)" text-anchor="middle">Y</text>` +
-                `<text x="${ox0 + 4}" y="${oy0 - 5}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
+                `<text x="${ox0 - 3}" y="${oy0 - axisLen - 6}" font-size="9" fill="var(--accent-green, #10b981)" text-anchor="middle">Y</text>` +
+                `<text x="${ox0 + 4}" y="${oy0 + 13}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
                 `</g>`;
 
             // ---- Horizontal Loads readout — no longer drawn in any of
@@ -7814,7 +7825,14 @@
                 // X mapping (offsetX + (x - minX) * scale) and canvas
                 // width, so axle positions line up vertically between
                 // the two stacked drawings.
-                minX, offsetX, padL, padR, plotW, svgW
+                minX, offsetX, padL, padR, plotW, svgW,
+                // Exposed so the end view below can reuse this exact
+                // Y range (same minY/maxY, same scale) — so an axle's
+                // or cargo edge's position along the top view's own
+                // vertical (Y) extent lines up with its position along
+                // the end view's horizontal (Y) extent, the same way
+                // minX/offsetX line up the top and side view's X axis.
+                minY, maxY, svgH
             };
         }
 
@@ -7886,23 +7904,35 @@
             const minX = (topView && topView.minX) || 0;
             const panelH = zSpanMm * scale;  // ground→deck-top height, derived from the shared scale
 
-            // ---- Y extents (end view / width) — independent of the
-            // plan view's X mapping, since the end view isn't required
-            // to align horizontally with it. ----
-            const ys = rows.map(r => r.y);
-            trailerGenTrains.forEach(t => {
-                if (t.deckWidth) ys.push((parseFloat(t.y) || 0), (parseFloat(t.y) || 0) + t.deckWidth);
-                computeHeaderDbarBlocks(t).forEach(b => ys.push(b.yCenter - b.widthMm / 2, b.yCenter + b.widthMm / 2));
-            });
-            cargoItems.forEach(c => {
-                const tlYMm = (parseFloat(c.tlY) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
-                ys.push(tlYMm - halfWMm, tlYMm + halfWMm);
-                ys.push((parseFloat(c.y) || 0) * 1000);
-            });
-            ys.push(0);
-            const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
-            const marginY = Math.max((rawMaxY - rawMinY) * 0.10, 350);
-            const minY = rawMinY - marginY, maxY = rawMaxY + marginY;
+            // ---- Y extents (end view / width) — reuses the plan (top)
+            // view's own minY/maxY wholesale (same world Y range, same
+            // shared scale), instead of recomputing an independent
+            // bounding box with its own margin. This keeps an axle's or
+            // cargo edge's Y position at the exact same relative spot
+            // along the end view's horizontal extent as it is along the
+            // top view's vertical extent — the same alignment guarantee
+            // the X mapping above already gives between the top and
+            // side view. Falls back to a standalone bounding box only
+            // if no top-view mapping was supplied. ----
+            let minY, maxY;
+            if (topView && topView.minY !== undefined && topView.maxY !== undefined) {
+                minY = topView.minY; maxY = topView.maxY;
+            } else {
+                const ys = rows.map(r => r.y);
+                trailerGenTrains.forEach(t => {
+                    if (t.deckWidth) ys.push((parseFloat(t.y) || 0), (parseFloat(t.y) || 0) + t.deckWidth);
+                    computeHeaderDbarBlocks(t).forEach(b => ys.push(b.yCenter - b.widthMm / 2, b.yCenter + b.widthMm / 2));
+                });
+                cargoItems.forEach(c => {
+                    const tlYMm = (parseFloat(c.tlY) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
+                    ys.push(tlYMm - halfWMm, tlYMm + halfWMm);
+                    ys.push((parseFloat(c.y) || 0) * 1000);
+                });
+                ys.push(0);
+                const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
+                const marginY = Math.max((rawMaxY - rawMinY) * 0.10, 350);
+                minY = rawMinY - marginY; maxY = rawMaxY + marginY;
+            }
             const spanY = Math.max(maxY - minY, 1);
             const endW = spanY * scale;
 
@@ -8491,12 +8521,22 @@
                 });
             }
 
-            return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
+            const svgMarkupElev = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}
             </svg>`;
+            // svgW/svgH exposed so the caller can reconcile the plan
+            // (top) view's own fixed-680 viewBox against this one — see
+            // "reconcileViewScale" in renderTrailerGenPreview. Without
+            // this, whenever the two end-view panels push this drawing
+            // wider than the plan view's own 680, the two SVGs (each
+            // independently scaled to fill 100% of the SAME container
+            // width) end up at a DIFFERENT true on-screen mm-per-pixel
+            // scale, even though they share the exact same internal
+            // "scale" (px-per-mm) value computed above.
+            return { svg: svgMarkupElev, svgW, svgH };
         }
 
         // ============================================================
@@ -9349,37 +9389,36 @@
         // (anchors passed in as `anchors`, its own `cogAnchors` return
         // value), so the cargo box lines up with those views exactly.
         //
-        // Per KKai's spec, every edge is built directly off this item's
-        // own CoG (Input!BB35:BD39 — cargo.x/y/z) plus/minus its
-        // CoG-to-edge distance (cargoOffsetLeft/Rear/Bottom() — the
-        // exact same meters values pushed/pulled at Input!BH35:BH39/
-        // BI35:BI39/BJ35:BJ39), with the sign of each offset given
-        // explicitly rather than derived from tlX/tlY/Gap (which bakes
-        // in the OPPOSITE sign for CoG-to-Bottom — see the "+Y" bottom
-        // note below):
-        //   TOP view:   left edge  = CoG-X-view − CoG-to-Left  (BH, −X)
-        //               rear edge  = CoG-Y-view − CoG-to-Rear  (BI, −Y)
-        //               (CoG-X/Y-view are this view's own CoG position,
-        //               i.e. cogTopX/cogTopY below — Y already carries
-        //               the usual dashboard-Y+ = AutoCAD-Y- flip);
-        //               the opposite edges are Length/Width further out.
-        //   FRONT view: left edge   = CoG-X-view − CoG-to-Left (BH, −X)
-        //               bottom edge = CoG-Y-view + CoG-to-Bottom (BJ,
-        //               +Y) — ADDED, not subtracted (per KKai's
-        //               correction — this view's own Y axis runs the
-        //               opposite sense to plain world-Z-up); the top
-        //               edge is Height further from the bottom edge in
-        //               the same direction bottom moved away from CoG.
-        //   END view:   near/"rear" edge = CoG-X-view ± CoG-to-Rear
-        //               (BI) — PLUS for the Right end view (+X), MINUS
-        //               for the Left one (−X); bottom edge = CoG-Y-view
-        //               + CoG-to-Bottom (BJ, +Y, same sense as Front
-        //               view); opposite edges are Width/Height further
-        //               out, same direction convention.
-        // CoG-X/Y-view above (cogTopX/Y, cogFrontX/Y, cogEndX/Y) reuse
-        // the exact anchors (deckTopFrontYm/deckTopEndYm/
-        // cogEndAnchorXm/cogEndYSign) COG_CARGO's own marker is built
-        // from, so the box and its CoG marker always agree.
+        // Per KKai's spec, every rectangle is positioned CoG-relative,
+        // using this item's own CoG (Input!BB35:BD39 — cargo.x/y/z) and
+        // its CoG-to-edge distances (Input!BH35:BH39 CoG-to-Left,
+        // BI35:BI39 CoG-to-Rear, BJ35:BJ39 CoG-to-Bottom — read here via
+        // tlX/tlY, which are these SAME distances already folded into
+        // the box's center position — see cargoOffsetLeft/Rear above —
+        // and via computeCargoZSpans(), which folds in CoG-to-Bottom
+        // via Gap the same way):
+        //   TOP view:   X — CoG-to-Left (BH) sets the -X (left) edge,
+        //               X — CoG-to-Left + Length sets the +X (right)
+        //               edge. Y — CoG-to-Rear (BI) sets the +Y (rear)
+        //               edge, Y — CoG-to-Rear − Width sets the −Y
+        //               (front) edge. Same dashboard-Y+ = AutoCAD-Y-
+        //               flip as every other top-view element.
+        //   FRONT view: X — same X span as the Top view (no flip, same
+        //               axis as computeTrailerCADInserts' side view).
+        //               Y (vertical) — CoG-to-Bottom (BJ, via Gap) sets
+        //               the box's base above deckTopFrontYm (the FRONT
+        //               view's own fixed-693mm ground reference, same
+        //               one COG_CARGO's front marker uses), Height
+        //               above that sets the top edge.
+        //   END view:   horizontal — CoG-to-Rear (BI) sets the edge on
+        //               the "rear" side (+X for the Right end view,
+        //               −X for the Left one — anchors/sign shared with
+        //               COG_CARGO's own end marker, cogEndAnchorXm/
+        //               cogEndYSign), CoG-to-Rear − Width sets the
+        //               opposite (front) edge. Vertical — same
+        //               CoG-to-Bottom (BJ) span as the Front view,
+        //               above deckTopEndYm (that view's own REAL-
+        //               trailer-height ground reference).
         // Zero/negative footprints (blank Length or Width) are skipped
         // in every view.
         function computeCargoCADOutlines(anchors) {
@@ -9388,51 +9427,55 @@
             const deckTopEndYm = a.deckTopEndYm || 0;
             const cogEndAnchorXm = a.cogEndAnchorXm || 0;
             const cogEndYSign = (a.cogEndYSign === 1) ? 1 : -1;
+            const deckTopWorldZ = (a.deckTopWorldZ !== undefined) ? a.deckTopWorldZ : tgZTrailerHeightMm;
             const endViewLabel = a.endViewLabel || 'End';
-            const endOffsetSign = (endViewLabel === 'Right') ? 1 : -1; // + for Right end view, − for Left, per KKai's spec
             const zSpans = computeCargoZSpans();
             const outlines = [];
             cargoItems.forEach((c, i) => {
                 const lenMm = (parseFloat(c.length) || 0) * 1000;
                 const widMm = (parseFloat(c.width) || 0) * 1000;
-                const heightMm = (parseFloat(c.height) || 0) * 1000;
                 if (lenMm <= 0 || widMm <= 0) return;
+                const halfLenMm = lenMm / 2, halfWidMm = widMm / 2;
+                const tlXMm = (parseFloat(c.tlX) || 0) * 1000; // box center X — already CoG − CoG-to-Left + Length/2
+                const tlYMm = (parseFloat(c.tlY) || 0) * 1000; // box center Y — already CoG + CoG-to-Rear − Width/2
                 const name = c.name || 'Cargo';
-                const worldXMm = (parseFloat(c.x) || 0) * 1000; // CoG X — Input!BB
-                const worldYMm = (parseFloat(c.y) || 0) * 1000; // CoG Y — Input!BC
-                const worldZMm = (parseFloat(c.z) || 0) * 1000; // CoG Z — Input!BD (height above deck)
-                const offLeftMm = cargoOffsetLeft(c) * 1000;               // Input!BH
-                const offRearMm = cargoOffsetRear(c) * 1000;                // Input!BI
-                const offBottomMm = cargoOffsetBottom(i, zSpans) * 1000;    // Input!BJ
+                const span = zSpans[i] || { baseWorldZ: deckTopWorldZ, topWorldZ: deckTopWorldZ };
+                const aboveDeckBaseMm = span.baseWorldZ - deckTopWorldZ; // CoG-to-Bottom (BJ), via Gap
+                const aboveDeckTopMm = span.topWorldZ - deckTopWorldZ;   // + Height
 
-                // Each view's own CoG position, same anchors as COG_CARGO's marker.
-                const cogTopX = worldXMm * CAD_UNIT_SCALE;
-                const cogTopY = -worldYMm * CAD_UNIT_SCALE;
-                const cogFrontX = worldXMm * CAD_UNIT_SCALE;
-                const cogFrontY = (deckTopFrontYm + worldZMm) * CAD_UNIT_SCALE;
-                const cogEndX = (cogEndAnchorXm + cogEndYSign * worldYMm) * CAD_UNIT_SCALE;
-                const cogEndY = (deckTopEndYm + worldZMm) * CAD_UNIT_SCALE;
+                // Top view — X unflipped, Y negated (dashboard-Y+ = AutoCAD-Y-).
+                outlines.push({
+                    name: `${name} (Top)`,
+                    x1: (tlXMm - halfLenMm) * CAD_UNIT_SCALE,
+                    y1: -(tlYMm + halfWidMm) * CAD_UNIT_SCALE,
+                    x2: (tlXMm + halfLenMm) * CAD_UNIT_SCALE,
+                    y2: -(tlYMm - halfWidMm) * CAD_UNIT_SCALE
+                });
 
-                // Top view.
-                const topLeftX = cogTopX - offLeftMm * CAD_UNIT_SCALE;
-                const topRightX = topLeftX + lenMm * CAD_UNIT_SCALE;
-                const topRearY = cogTopY - offRearMm * CAD_UNIT_SCALE;
-                const topFrontY = topRearY + widMm * CAD_UNIT_SCALE;
-                outlines.push({ name: `${name} (Top)`, x1: topLeftX, y1: topRearY, x2: topRightX, y2: topFrontY });
+                // Front view — X same axis/sign as Top view; Y is
+                // height above deckTopFrontYm (fixed-693 ground line).
+                outlines.push({
+                    name: `${name} (Front)`,
+                    x1: (tlXMm - halfLenMm) * CAD_UNIT_SCALE,
+                    y1: (deckTopFrontYm + aboveDeckBaseMm) * CAD_UNIT_SCALE,
+                    x2: (tlXMm + halfLenMm) * CAD_UNIT_SCALE,
+                    y2: (deckTopFrontYm + aboveDeckTopMm) * CAD_UNIT_SCALE
+                });
 
-                // Front view.
-                const frontLeftX = cogFrontX - offLeftMm * CAD_UNIT_SCALE;
-                const frontRightX = frontLeftX + lenMm * CAD_UNIT_SCALE;
-                const frontBottomY = cogFrontY + offBottomMm * CAD_UNIT_SCALE;
-                const frontTopY = frontBottomY - heightMm * CAD_UNIT_SCALE;
-                outlines.push({ name: `${name} (Front)`, x1: frontLeftX, y1: frontBottomY, x2: frontRightX, y2: frontTopY });
-
-                // End view (Right for Load In, Left for Load Out).
-                const endNearX = cogEndX + endOffsetSign * offRearMm * CAD_UNIT_SCALE;
-                const endFarX = endNearX - endOffsetSign * widMm * CAD_UNIT_SCALE;
-                const endBottomY = cogEndY + offBottomMm * CAD_UNIT_SCALE;
-                const endTopY = endBottomY - heightMm * CAD_UNIT_SCALE;
-                outlines.push({ name: `${name} (${endViewLabel} End)`, x1: endNearX, y1: endBottomY, x2: endFarX, y2: endTopY });
+                // End view (Right for Load In, Left for Load Out) —
+                // horizontal axis is world Y (width), anchored/signed
+                // exactly like COG_CARGO's own end marker; vertical is
+                // height above deckTopEndYm (real-trailer-height ground
+                // line).
+                const endXAtRear = (cogEndAnchorXm + cogEndYSign * (tlYMm + halfWidMm)) * CAD_UNIT_SCALE;
+                const endXAtFront = (cogEndAnchorXm + cogEndYSign * (tlYMm - halfWidMm)) * CAD_UNIT_SCALE;
+                outlines.push({
+                    name: `${name} (${endViewLabel} End)`,
+                    x1: endXAtRear,
+                    y1: (deckTopEndYm + aboveDeckBaseMm) * CAD_UNIT_SCALE,
+                    x2: endXAtFront,
+                    y2: (deckTopEndYm + aboveDeckTopMm) * CAD_UNIT_SCALE
+                });
             });
             return outlines;
         }
