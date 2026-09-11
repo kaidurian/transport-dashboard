@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.95)</h1>
+            <h1>🚂 Transport Dashboard (Rev.96)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9349,36 +9349,37 @@
         // (anchors passed in as `anchors`, its own `cogAnchors` return
         // value), so the cargo box lines up with those views exactly.
         //
-        // Per KKai's spec, every rectangle is positioned CoG-relative,
-        // using this item's own CoG (Input!BB35:BD39 — cargo.x/y/z) and
-        // its CoG-to-edge distances (Input!BH35:BH39 CoG-to-Left,
-        // BI35:BI39 CoG-to-Rear, BJ35:BJ39 CoG-to-Bottom — read here via
-        // tlX/tlY, which are these SAME distances already folded into
-        // the box's center position — see cargoOffsetLeft/Rear above —
-        // and via computeCargoZSpans(), which folds in CoG-to-Bottom
-        // via Gap the same way):
-        //   TOP view:   X — CoG-to-Left (BH) sets the -X (left) edge,
-        //               X — CoG-to-Left + Length sets the +X (right)
-        //               edge. Y — CoG-to-Rear (BI) sets the +Y (rear)
-        //               edge, Y — CoG-to-Rear − Width sets the −Y
-        //               (front) edge. Same dashboard-Y+ = AutoCAD-Y-
-        //               flip as every other top-view element.
-        //   FRONT view: X — same X span as the Top view (no flip, same
-        //               axis as computeTrailerCADInserts' side view).
-        //               Y (vertical) — CoG-to-Bottom (BJ, via Gap) sets
-        //               the box's base above deckTopFrontYm (the FRONT
-        //               view's own fixed-693mm ground reference, same
-        //               one COG_CARGO's front marker uses), Height
-        //               above that sets the top edge.
-        //   END view:   horizontal — CoG-to-Rear (BI) sets the edge on
-        //               the "rear" side (+X for the Right end view,
-        //               −X for the Left one — anchors/sign shared with
-        //               COG_CARGO's own end marker, cogEndAnchorXm/
-        //               cogEndYSign), CoG-to-Rear − Width sets the
-        //               opposite (front) edge. Vertical — same
-        //               CoG-to-Bottom (BJ) span as the Front view,
-        //               above deckTopEndYm (that view's own REAL-
-        //               trailer-height ground reference).
+        // Per KKai's spec, every edge is built directly off this item's
+        // own CoG (Input!BB35:BD39 — cargo.x/y/z) plus/minus its
+        // CoG-to-edge distance (cargoOffsetLeft/Rear/Bottom() — the
+        // exact same meters values pushed/pulled at Input!BH35:BH39/
+        // BI35:BI39/BJ35:BJ39), with the sign of each offset given
+        // explicitly rather than derived from tlX/tlY/Gap (which bakes
+        // in the OPPOSITE sign for CoG-to-Bottom — see the "+Y" bottom
+        // note below):
+        //   TOP view:   left edge  = CoG-X-view − CoG-to-Left  (BH, −X)
+        //               rear edge  = CoG-Y-view − CoG-to-Rear  (BI, −Y)
+        //               (CoG-X/Y-view are this view's own CoG position,
+        //               i.e. cogTopX/cogTopY below — Y already carries
+        //               the usual dashboard-Y+ = AutoCAD-Y- flip);
+        //               the opposite edges are Length/Width further out.
+        //   FRONT view: left edge   = CoG-X-view − CoG-to-Left (BH, −X)
+        //               bottom edge = CoG-Y-view + CoG-to-Bottom (BJ,
+        //               +Y) — ADDED, not subtracted (per KKai's
+        //               correction — this view's own Y axis runs the
+        //               opposite sense to plain world-Z-up); the top
+        //               edge is Height further from the bottom edge in
+        //               the same direction bottom moved away from CoG.
+        //   END view:   near/"rear" edge = CoG-X-view ± CoG-to-Rear
+        //               (BI) — PLUS for the Right end view (+X), MINUS
+        //               for the Left one (−X); bottom edge = CoG-Y-view
+        //               + CoG-to-Bottom (BJ, +Y, same sense as Front
+        //               view); opposite edges are Width/Height further
+        //               out, same direction convention.
+        // CoG-X/Y-view above (cogTopX/Y, cogFrontX/Y, cogEndX/Y) reuse
+        // the exact anchors (deckTopFrontYm/deckTopEndYm/
+        // cogEndAnchorXm/cogEndYSign) COG_CARGO's own marker is built
+        // from, so the box and its CoG marker always agree.
         // Zero/negative footprints (blank Length or Width) are skipped
         // in every view.
         function computeCargoCADOutlines(anchors) {
@@ -9387,55 +9388,51 @@
             const deckTopEndYm = a.deckTopEndYm || 0;
             const cogEndAnchorXm = a.cogEndAnchorXm || 0;
             const cogEndYSign = (a.cogEndYSign === 1) ? 1 : -1;
-            const deckTopWorldZ = (a.deckTopWorldZ !== undefined) ? a.deckTopWorldZ : tgZTrailerHeightMm;
             const endViewLabel = a.endViewLabel || 'End';
+            const endOffsetSign = (endViewLabel === 'Right') ? 1 : -1; // + for Right end view, − for Left, per KKai's spec
             const zSpans = computeCargoZSpans();
             const outlines = [];
             cargoItems.forEach((c, i) => {
                 const lenMm = (parseFloat(c.length) || 0) * 1000;
                 const widMm = (parseFloat(c.width) || 0) * 1000;
+                const heightMm = (parseFloat(c.height) || 0) * 1000;
                 if (lenMm <= 0 || widMm <= 0) return;
-                const halfLenMm = lenMm / 2, halfWidMm = widMm / 2;
-                const tlXMm = (parseFloat(c.tlX) || 0) * 1000; // box center X — already CoG − CoG-to-Left + Length/2
-                const tlYMm = (parseFloat(c.tlY) || 0) * 1000; // box center Y — already CoG + CoG-to-Rear − Width/2
                 const name = c.name || 'Cargo';
-                const span = zSpans[i] || { baseWorldZ: deckTopWorldZ, topWorldZ: deckTopWorldZ };
-                const aboveDeckBaseMm = span.baseWorldZ - deckTopWorldZ; // CoG-to-Bottom (BJ), via Gap
-                const aboveDeckTopMm = span.topWorldZ - deckTopWorldZ;   // + Height
+                const worldXMm = (parseFloat(c.x) || 0) * 1000; // CoG X — Input!BB
+                const worldYMm = (parseFloat(c.y) || 0) * 1000; // CoG Y — Input!BC
+                const worldZMm = (parseFloat(c.z) || 0) * 1000; // CoG Z — Input!BD (height above deck)
+                const offLeftMm = cargoOffsetLeft(c) * 1000;               // Input!BH
+                const offRearMm = cargoOffsetRear(c) * 1000;                // Input!BI
+                const offBottomMm = cargoOffsetBottom(i, zSpans) * 1000;    // Input!BJ
 
-                // Top view — X unflipped, Y negated (dashboard-Y+ = AutoCAD-Y-).
-                outlines.push({
-                    name: `${name} (Top)`,
-                    x1: (tlXMm - halfLenMm) * CAD_UNIT_SCALE,
-                    y1: -(tlYMm + halfWidMm) * CAD_UNIT_SCALE,
-                    x2: (tlXMm + halfLenMm) * CAD_UNIT_SCALE,
-                    y2: -(tlYMm - halfWidMm) * CAD_UNIT_SCALE
-                });
+                // Each view's own CoG position, same anchors as COG_CARGO's marker.
+                const cogTopX = worldXMm * CAD_UNIT_SCALE;
+                const cogTopY = -worldYMm * CAD_UNIT_SCALE;
+                const cogFrontX = worldXMm * CAD_UNIT_SCALE;
+                const cogFrontY = (deckTopFrontYm + worldZMm) * CAD_UNIT_SCALE;
+                const cogEndX = (cogEndAnchorXm + cogEndYSign * worldYMm) * CAD_UNIT_SCALE;
+                const cogEndY = (deckTopEndYm + worldZMm) * CAD_UNIT_SCALE;
 
-                // Front view — X same axis/sign as Top view; Y is
-                // height above deckTopFrontYm (fixed-693 ground line).
-                outlines.push({
-                    name: `${name} (Front)`,
-                    x1: (tlXMm - halfLenMm) * CAD_UNIT_SCALE,
-                    y1: (deckTopFrontYm + aboveDeckBaseMm) * CAD_UNIT_SCALE,
-                    x2: (tlXMm + halfLenMm) * CAD_UNIT_SCALE,
-                    y2: (deckTopFrontYm + aboveDeckTopMm) * CAD_UNIT_SCALE
-                });
+                // Top view.
+                const topLeftX = cogTopX - offLeftMm * CAD_UNIT_SCALE;
+                const topRightX = topLeftX + lenMm * CAD_UNIT_SCALE;
+                const topRearY = cogTopY - offRearMm * CAD_UNIT_SCALE;
+                const topFrontY = topRearY + widMm * CAD_UNIT_SCALE;
+                outlines.push({ name: `${name} (Top)`, x1: topLeftX, y1: topRearY, x2: topRightX, y2: topFrontY });
 
-                // End view (Right for Load In, Left for Load Out) —
-                // horizontal axis is world Y (width), anchored/signed
-                // exactly like COG_CARGO's own end marker; vertical is
-                // height above deckTopEndYm (real-trailer-height ground
-                // line).
-                const endXAtRear = (cogEndAnchorXm + cogEndYSign * (tlYMm + halfWidMm)) * CAD_UNIT_SCALE;
-                const endXAtFront = (cogEndAnchorXm + cogEndYSign * (tlYMm - halfWidMm)) * CAD_UNIT_SCALE;
-                outlines.push({
-                    name: `${name} (${endViewLabel} End)`,
-                    x1: endXAtRear,
-                    y1: (deckTopEndYm + aboveDeckBaseMm) * CAD_UNIT_SCALE,
-                    x2: endXAtFront,
-                    y2: (deckTopEndYm + aboveDeckTopMm) * CAD_UNIT_SCALE
-                });
+                // Front view.
+                const frontLeftX = cogFrontX - offLeftMm * CAD_UNIT_SCALE;
+                const frontRightX = frontLeftX + lenMm * CAD_UNIT_SCALE;
+                const frontBottomY = cogFrontY + offBottomMm * CAD_UNIT_SCALE;
+                const frontTopY = frontBottomY - heightMm * CAD_UNIT_SCALE;
+                outlines.push({ name: `${name} (Front)`, x1: frontLeftX, y1: frontBottomY, x2: frontRightX, y2: frontTopY });
+
+                // End view (Right for Load In, Left for Load Out).
+                const endNearX = cogEndX + endOffsetSign * offRearMm * CAD_UNIT_SCALE;
+                const endFarX = endNearX - endOffsetSign * widMm * CAD_UNIT_SCALE;
+                const endBottomY = cogEndY + offBottomMm * CAD_UNIT_SCALE;
+                const endTopY = endBottomY - heightMm * CAD_UNIT_SCALE;
+                outlines.push({ name: `${name} (${endViewLabel} End)`, x1: endNearX, y1: endBottomY, x2: endFarX, y2: endTopY });
             });
             return outlines;
         }
