@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.98)</h1>
+            <h1>🚂 Transport Dashboard (Rev.99)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10222,11 +10222,13 @@
                 // meaningful for trains with a known deck footprint
                 // (Goldhofer/SPMT preset) — computeHeaderDbarBlocksForSide()
                 // returns [] otherwise, same guard the preview itself
-                // uses. Rotation follows the same load-direction
-                // convention as the trailer's own block insert above (no
-                // separate FWD block name was given for this accessory,
-                // so the block itself stays the same for both directions
-                // — only its rotation flips).
+                // uses. Per KKai's updated spec, ROTATION now follows
+                // which field the block came from (Header/Dbar block
+                // Left vs Right) instead of the AutoCAD Load In/Out
+                // direction — Left always inserts un-rotated/un-mirrored,
+                // Right always rotates the top view 180° and mirrors the
+                // side view (X scale -1), regardless of loadDirection
+                // (loadDirection still only affects hdX below).
                 ['left', 'right'].forEach(side => {
                     const typeKey = side === 'right' ? train.headerDbarRight : train.headerDbarLeft;
                     const hdDef = HEADER_DBAR_TYPES[typeKey];
@@ -10242,7 +10244,8 @@
                         return;
                     }
                     const anchor = hdBlocks[0];
-                    // X per KKai's updated spec:
+                    // X per KKai's updated spec (position — unaffected by
+                    // this change, still driven by loadDirection):
                     // Load Out — keeps the flush-at-edge anchor.xCenter
                     // (this accessory's own train-edge position), unchanged.
                     // Load In — inserted at the 1ST TRAILER's X instead,
@@ -10251,11 +10254,11 @@
                         ? (firstTrainAxle1Xm * CAD_UNIT_SCALE)
                         : (anchor.xCenter * CAD_UNIT_SCALE);
                     const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
-                    // Per KKai's updated spec the block name still
-                    // doesn't change by load direction (no _AFT/_FWD
-                    // suffix) — Load Out rotates the top view 180°
-                    // and mirrors the side view (X scale -1); Load
-                    // In does neither, same block both ways.
+                    // Direction (rotation/mirror) — driven by side, not
+                    // loadDirection: Left = 0°/un-mirrored, Right =
+                    // 180°/mirrored (X scale -1), same block name both
+                    // ways (no separate _AFT/_FWD block was given).
+                    const hdRotated = side === 'right';
                     inserts.push({
                         trainName: `${train.name} — ${hdLabel}`,
                         view: 'top',
@@ -10264,7 +10267,7 @@
                         loadDirection,
                         x: hdX,
                         y: hdY,
-                        rotationDeg: (loadDirection === 'out') ? 180 : 0
+                        rotationDeg: hdRotated ? 180 : 0
                     });
                     if (hdDef.cadSideViewBlockName) {
                         // Front (side) view — shares this accessory's
@@ -10282,7 +10285,7 @@
                             x: hdX,
                             y: sharedSideYm,
                             rotationDeg: 0,
-                            xScale: (loadDirection === 'out') ? -1 : 1
+                            xScale: hdRotated ? -1 : 1
                         });
                     }
                 });
