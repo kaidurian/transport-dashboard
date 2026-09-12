@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.97)</h1>
+            <h1>🚂 Transport Dashboard (Rev.98)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2670,11 +2670,19 @@
         ];
 
         // Sums total accessory weight (t) across ALL trains for one
-        // Header/Dbar type — e.g. 2 trains each with "3m" -> 1.48.
+        // Header/Dbar type — e.g. 2 trains each with "3m" -> 1.48. Left
+        // and Right are independent selections (see train.headerDbarLeft/
+        // headerDbarRight), so a single train with the same type on BOTH
+        // sides counts twice — two physical blocks, two weights.
         function sumHeaderDbarWeight(typeKey) {
             const def = HEADER_DBAR_TYPES[typeKey];
             if (!def) return 0;
-            return trailerGenTrains.reduce((sum, t) => sum + (t.headerDbar === typeKey ? def.totalWeightT : 0), 0);
+            return trailerGenTrains.reduce((sum, t) => {
+                let s = 0;
+                if (t.headerDbarLeft === typeKey) s += def.totalWeightT;
+                if (t.headerDbarRight === typeKey) s += def.totalWeightT;
+                return sum + s;
+            }, 0);
         }
 
         // Pushes the total GHF 2F Header&Dbar weight (t) per type to the
@@ -2687,22 +2695,34 @@
             await pushValueToSheetCell(PROPERTIES_SHEET_NAME, 'D5', sumHeaderDbarWeight('3m_ppu'), 'Header&Dbar 3m&PPU weight');
         }
 
-        // Infers a train's Header/Dbar selection back out of a raw
-        // Input!A11:.. "Set Train Group" read (setGroupValues — the 2D
-        // values array for the WHOLE block, all SETGROUP_MAX_TRAINS
-        // train slots at once, as loaded by pullWheelDataFromExcel) for
-        // one train index (0-based, same indexing as trailerGenTrains).
-        // Reuses the existing 3-column-per-train layout — no separate
-        // storage: scans that train's label column (column 0 of its
-        // SETGROUP_BLOCK_WIDTH-wide slot) for a row whose text matches a
-        // HEADER_DBAR_TYPES label, and infers the side from whether it's
-        // the FIRST or LAST non-blank row of that train's block (see
-        // computeSetTrainGroupRows — 'left' unshifts it to the front,
-        // 'right' pushes it to the back). Returns 'none'/'left' when
-        // setGroupValues is unavailable (e.g. the read failed) or no
-        // matching row is found for this train.
+        // Builds the exact label text shown in the dropdown/export row
+        // for one Header/Dbar type + side, e.g. "GHF 2F Header&Dbar 3m
+        // Left" / "GHF 2F Header&Dbar 3m&PPU Right".
+        function hdSideLabel(typeKey, side) {
+            const def = HEADER_DBAR_TYPES[typeKey];
+            if (!def) return '';
+            return `${def.label} ${side === 'right' ? 'Right' : 'Left'}`;
+        }
+
+        // Infers a train's Header/Dbar Left AND Right selections back out
+        // of a raw Input!A11:.. "Set Train Group" read (setGroupValues —
+        // the 2D values array for the WHOLE block, all
+        // SETGROUP_MAX_TRAINS train slots at once, as loaded by
+        // pullWheelDataFromExcel) for one train index (0-based, same
+        // indexing as trailerGenTrains). Reuses the existing 3-column-
+        // per-train layout — no separate storage: scans every row of
+        // that train's label column (column 0 of its
+        // SETGROUP_BLOCK_WIDTH-wide slot) for text matching a Left- or
+        // Right-suffixed HEADER_DBAR_TYPES label (see hdSideLabel) —
+        // since the side is now baked directly into the label text
+        // itself, Left/Right no longer need to be inferred from row
+        // position, and both can be present at once (one Left row near
+        // the front, one Right row near the back — see
+        // computeSetTrainGroupRows). Returns 'none' for either side not
+        // found, or when setGroupValues is unavailable (e.g. the read
+        // failed).
         function parseHeaderDbarFromSetGroupBlock(setGroupValues, trainIndex) {
-            const fallback = { headerDbar: 'none', headerDbarSide: 'left' };
+            const fallback = { headerDbarLeft: 'none', headerDbarRight: 'none' };
             if (!setGroupValues || trainIndex >= SETGROUP_MAX_TRAINS) return fallback;
             const localBase = trainIndex * SETGROUP_BLOCK_WIDTH; // label column within this train's slot
             const labels = [];
@@ -2712,15 +2732,15 @@
                 labels.push(raw);
             }
             if (labels.length === 0) return fallback;
-            const typeKeyForLabel = (text) => {
-                const entry = Object.keys(HEADER_DBAR_TYPES).find(k => HEADER_DBAR_TYPES[k].label === text);
-                return entry || null;
-            };
-            const firstKey = typeKeyForLabel(labels[0]);
-            if (firstKey) return { headerDbar: firstKey, headerDbarSide: 'left' };
-            const lastKey = typeKeyForLabel(labels[labels.length - 1]);
-            if (lastKey) return { headerDbar: lastKey, headerDbarSide: 'right' };
-            return fallback;
+            const result = { ...fallback };
+            const typeKeys = Object.keys(HEADER_DBAR_TYPES);
+            labels.forEach(text => {
+                typeKeys.forEach(key => {
+                    if (text === hdSideLabel(key, 'left')) result.headerDbarLeft = key;
+                    else if (text === hdSideLabel(key, 'right')) result.headerDbarRight = key;
+                });
+            });
+            return result;
         }
 
         function getGroupDef(groupNumber) {
@@ -2731,7 +2751,7 @@
 
         // ---- Header/Dbar hydraulic blocks (Goldhofer "2F Header&Dbar")
         // — an optional accessory attached to the LEFT or RIGHT side of a
-        // train's deck (see train.headerDbar / train.headerDbarSide),
+        // train's deck (see train.headerDbarLeft / train.headerDbarRight),
         // shown in the 2D/3D preview and included as an extra row (front
         // = left side, back = right side) in the "Set Train Group" export
         // — see computeSetTrainGroupRows(). Dimensions/weights per the
@@ -2811,16 +2831,22 @@
         // edge (xCenter = edgeX) rather than offset outward by the
         // block's own half-length — the AFT/FWD block artwork itself
         // already carries that outward extension.
-        function computeHeaderDbarBlocks(train, opts) {
+        // Same geometry as before, but for ONE side only — 'left' reads
+        // train.headerDbarLeft, 'right' reads train.headerDbarRight.
+        // These two selections are now fully independent (a train can
+        // have a Left accessory, a Right accessory, both, or neither) —
+        // see computeHeaderDbarBlocks() below for the combined-side
+        // wrapper most callers use.
+        function computeHeaderDbarBlocksForSide(train, side, opts) {
             const flushAtEdge = !!(opts && opts.flushAtEdge);
-            const def = HEADER_DBAR_TYPES[train.headerDbar];
+            const typeKey = side === 'right' ? train.headerDbarRight : train.headerDbarLeft;
+            const def = HEADER_DBAR_TYPES[typeKey];
             if (!def) return [];
             const deckLen = parseFloat(train.deckLength) || 0;
             const deckWid = parseFloat(train.deckWidth) || 0;
             if (!deckLen || !deckWid) return [];
             const trainX = parseFloat(train.x) || 0;
             const trainY = parseFloat(train.y) || 0;
-            const side = train.headerDbarSide === 'right' ? 'right' : 'left';
             // Deck FRONT edge (small X) for 'left'; REAR edge (large X) for 'right'.
             const edgeX = side === 'left' ? trainX : (trainX + deckLen);
             const outwardSign = side === 'left' ? -1 : 1; // extend further ahead of front / behind rear
@@ -2836,9 +2862,22 @@
                 yCenter: i === 0 ? yCenter0 : yCenter0 + secondSign * (def.secondBlockOffsetY || 0),
                 zTop: deckTopZ,
                 zBase: deckTopZ - b.height,
-                label: def.label,
+                label: hdSideLabel(typeKey, side),
+                typeKey,
                 side
             }));
+        }
+
+        // Combined Left + Right blocks for a train — the shape every 2D/
+        // 3D preview render call site expects (they just draw whatever
+        // comes back, regardless of which side each block belongs to;
+        // each block still carries its own .side/.label so callers that
+        // DO care, like the AutoCAD export below, can tell them apart).
+        function computeHeaderDbarBlocks(train, opts) {
+            return [
+                ...computeHeaderDbarBlocksForSide(train, 'left', opts),
+                ...computeHeaderDbarBlocksForSide(train, 'right', opts)
+            ];
         }
 
         // 'row' says which physical axle(s) of each axle LINE in [fromAxle,
@@ -2924,11 +2963,13 @@
                 axle1OffsetX: null,
                 axle1OffsetY: null,
                 axlePairOffsetY: null,
-                // Optional GHF 2F Header&Dbar hydraulic block accessory —
-                // see HEADER_DBAR_TYPES / computeHeaderDbarBlocks.
-                // 'none' | '3m' | '3m_ppu', attached to 'left' | 'right'.
-                headerDbar: 'none',
-                headerDbarSide: 'left'
+                // Optional GHF 2F Header&Dbar hydraulic block accessories
+                // — see HEADER_DBAR_TYPES / computeHeaderDbarBlocksForSide.
+                // 'none' | '3m' | '3m_ppu', independently for each side —
+                // a train can carry a Left accessory, a Right accessory,
+                // both, or neither.
+                headerDbarLeft: 'none',
+                headerDbarRight: 'none'
             };
         }
 
@@ -3000,16 +3041,15 @@
             scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
 
-        // Sets a train's Header/Dbar accessory type or side (dropdowns in
-        // the train card) and re-renders — see HEADER_DBAR_TYPES /
-        // computeHeaderDbarBlocks for the geometry this drives, and
-        // computeSetTrainGroupRows for how it's reflected in the pushed
-        // "Set Train Group" export.
+        // Sets a train's Header/Dbar Left or Right accessory type
+        // (dropdowns in the train card) and re-renders — see
+        // HEADER_DBAR_TYPES / computeHeaderDbarBlocksForSide for the
+        // geometry this drives, and computeSetTrainGroupRows for how
+        // it's reflected in the pushed "Set Train Group" export.
         function updateHeaderDbarField(id, field, value) {
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
-            if (field === 'headerDbar') train.headerDbar = value;
-            else if (field === 'headerDbarSide') train.headerDbarSide = (value === 'right') ? 'right' : 'left';
+            if (field === 'headerDbarLeft' || field === 'headerDbarRight') train[field] = value;
             renderTrailerDashboard();
             scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
@@ -3059,19 +3099,17 @@
                 });
             });
 
-            // Header/Dbar accessory row (no Group Nr Left/Right of its
-            // own — blank in both columns) — placed BEFORE the axle
-            // segment rows when attached to the trailer's LEFT side, or
-            // AFTER them when attached to the RIGHT side, e.g. for a
-            // 14-line Goldhofer split "4,4,6":
-            //   left side  -> Header&Dbar 3m&PPU, GHF 4, GHF 4, GHF 6
-            //   right side -> GHF 4, GHF 4, GHF 6, Header&Dbar 3m&PPU
-            const hdDef = HEADER_DBAR_TYPES[train.headerDbar];
-            if (hdDef) {
-                const hdRow = { label: hdDef.label, left: null, right: null };
-                if (train.headerDbarSide === 'right') rows.push(hdRow);
-                else rows.unshift(hdRow);
-            }
+            // Header/Dbar accessory row(s) (no Group Nr Left/Right of
+            // their own — blank in both columns) — the Left accessory
+            // (if any) is placed BEFORE the axle segment rows, the Right
+            // accessory (if any) AFTER them; both can be present at
+            // once, e.g. for a 14-line Goldhofer split "4,4,6" with both
+            // sides set:
+            //   Header&Dbar 3m&PPU Left, GHF 4, GHF 4, GHF 6, Header&Dbar 3m Right
+            const hdLeftDef = HEADER_DBAR_TYPES[train.headerDbarLeft];
+            if (hdLeftDef) rows.unshift({ label: hdSideLabel(train.headerDbarLeft, 'left'), left: null, right: null });
+            const hdRightDef = HEADER_DBAR_TYPES[train.headerDbarRight];
+            if (hdRightDef) rows.push({ label: hdSideLabel(train.headerDbarRight, 'right'), left: null, right: null });
             return rows;
         }
 
@@ -3197,8 +3235,8 @@
                 newTrain.axle1OffsetX = train1.axle1OffsetX;
                 newTrain.axle1OffsetY = train1.axle1OffsetY;
                 newTrain.axlePairOffsetY = train1.axlePairOffsetY;
-                newTrain.headerDbar = train1.headerDbar || 'none';
-                newTrain.headerDbarSide = train1.headerDbarSide || 'left';
+                newTrain.headerDbarLeft = train1.headerDbarLeft || 'none';
+                newTrain.headerDbarRight = train1.headerDbarRight || 'none';
             }
             const lastTrain = trailerGenTrains[trailerGenTrains.length - 1];
             if (lastTrain) {
@@ -3910,8 +3948,8 @@
                         axle1OffsetX: null,
                         axle1OffsetY: null,
                         axlePairOffsetY: null,
-                        headerDbar: 'none',
-                        headerDbarSide: 'left'
+                        headerDbarLeft: 'none',
+                        headerDbarRight: 'none'
                     };
                 });
 
@@ -6783,6 +6821,18 @@
                         </div>
                     </div>
 
+                    <div class="tg-field-grid">
+                        <div class="tg-field">
+                            <label>Header/Dbar block (Left)</label>
+                            <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to the LEFT side of this trailer's deck edge — mounted at the train's FRONT (just ahead of the deck's front edge) and listed BEFORE all this train's axle-group segments in the AutoCAD split / Set Train Group export (e.g. 'Header&amp;Dbar 3m Left, GHF 4, GHF 4, GHF 6'). Centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward smaller Y (above it in plan view). Shown in the 2D/3D preview. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
+                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbarLeft', this.value)">
+                                <option value="none" ${(!train.headerDbarLeft || train.headerDbarLeft === 'none') ? 'selected' : ''}>None</option>
+                                <option value="3m" ${train.headerDbarLeft === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m Left</option>
+                                <option value="3m_ppu" ${train.headerDbarLeft === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU Left</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="tg-cad-split-row">
                         <label>AutoCAD split (axle lines per physical trailer, front→back — e.g. "4,6" for a 10-line train built from a 4-line unit then a 6-line unit)</label>
                         <div class="tg-cad-split-input-row">
@@ -6807,23 +6857,14 @@
 
                     <div class="tg-field-grid">
                         <div class="tg-field">
-                            <label>Header/Dbar block</label>
-                            <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to this trailer's deck edge, shown in the 2D/3D preview and included as an extra row in the AutoCAD split / Set Train Group export. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
-                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbar', this.value)">
-                                <option value="none" ${(!train.headerDbar || train.headerDbar === 'none') ? 'selected' : ''}>None</option>
-                                <option value="3m" ${train.headerDbar === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m</option>
-                                <option value="3m_ppu" ${train.headerDbar === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU</option>
+                            <label>Header/Dbar block (Right)</label>
+                            <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to the RIGHT side of this trailer's deck edge — mounted at the train's BACK (just behind the deck's rear edge) and listed AFTER all this train's axle-group segments in the AutoCAD split / Set Train Group export (e.g. 'GHF 4, GHF 4, GHF 6, Header&amp;Dbar 3m Right'). Centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward larger Y (below it in plan view). Shown in the 2D/3D preview. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
+                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbarRight', this.value)">
+                                <option value="none" ${(!train.headerDbarRight || train.headerDbarRight === 'none') ? 'selected' : ''}>None</option>
+                                <option value="3m" ${train.headerDbarRight === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m Right</option>
+                                <option value="3m_ppu" ${train.headerDbarRight === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU Right</option>
                             </select>
                         </div>
-                        ${train.headerDbar && train.headerDbar !== 'none' ? `
-                        <div class="tg-field">
-                            <label>Position</label>
-                            <select title="Where the block sits and where its row appears in the AutoCAD split / Set Train Group export for this train. 'Trailer left side' = the FIRST block, mounted at the train's FRONT (just ahead of the deck's front edge) and listed BEFORE all this train's axle-group segments (e.g. 'Header&amp;Dbar 3m,4,4,6'). 'Trailer right side' = the LAST block, mounted at the train's BACK (just behind the deck's rear edge) and listed AFTER them (e.g. '4,4,6,Header&amp;Dbar 3m'). Either way the block is centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward smaller Y (above it in plan view) for 'left', toward larger Y (below it) for 'right'."
-                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbarSide', this.value)">
-                                <option value="left" ${train.headerDbarSide !== 'right' ? 'selected' : ''}>Trailer left side</option>
-                                <option value="right" ${train.headerDbarSide === 'right' ? 'selected' : ''}>Trailer right side</option>
-                            </select>
-                        </div>` : ''}
                     </div>
 
                     <div class="tg-groups-label">Axle groups (custom load per axle range)</div>
@@ -7466,7 +7507,7 @@
                     const cx = (hx1 + hx2) / 2, cy = (hy1 + hy2) / 2;
                     headerDbarSvg += `<g>` +
                         `<rect x="${Math.min(hx1, hx2)}" y="${Math.min(hy1, hy2)}" width="${Math.abs(hx2 - hx1)}" height="${Math.abs(hy2 - hy1)}" fill="${TG_HEADER_DBAR_COLOR}" fill-opacity="0.25" stroke="${TG_HEADER_DBAR_COLOR}" stroke-width="1.5"/>` +
-                        (b.index === 0 ? planLeaderLabel(cx, Math.min(hy1, hy2), `${escapeHtml(b.label)} (${b.side})`, TG_HEADER_DBAR_COLOR, { fontSize: 9 }) : '') +
+                        (b.index === 0 ? planLeaderLabel(cx, Math.min(hy1, hy2), escapeHtml(b.label), TG_HEADER_DBAR_COLOR, { fontSize: 9 }) : '') +
                         `</g>`;
                 });
             });
@@ -10163,80 +10204,88 @@
                 lastMappedTrainEndViewXm = endViewXm;
                 lastMappedTrainWidthMm = trainDeckWidthMm;
 
-                // Header/Dbar accessory (if any) — ONE AutoCAD block
+                // Header/Dbar accessories (if any) — ONE AutoCAD block
                 // insert per accessory instance (not per sub-block piece
                 // drawn in the preview), using
-                // HEADER_DBAR_TYPES[train.headerDbar].cadBlockName.
-                // Anchor point = the accessory's first sub-block center,
-                // same X computeHeaderDbarBlocks() positions it at for
-                // the 2D/3D preview (see that function's own comments for
-                // the left/right + PPU-offset geometry) — its Y is
-                // NEGATED for the same dashboard-Y+ = AutoCAD-Y- reason
-                // as the top view above, since this accessory travels
-                // with its train's own position. Only meaningful for
-                // trains with a known deck footprint (Goldhofer/SPMT
-                // preset) — computeHeaderDbarBlocks() returns [] otherwise,
-                // same guard the preview itself uses. Rotation follows the
-                // same load-direction convention as the trailer's own
-                // block insert above (no separate FWD block name was
-                // given for this accessory, so the block itself stays the
-                // same for both directions — only its rotation flips).
-                const hdDef = HEADER_DBAR_TYPES[train.headerDbar];
-                if (hdDef && hdDef.cadBlockName) {
+                // HEADER_DBAR_TYPES[typeKey].cadBlockName. Left and Right
+                // are independent selections (train.headerDbarLeft/
+                // headerDbarRight — see computeHeaderDbarBlocksForSide),
+                // so a train can export ZERO, ONE, or BOTH of these in
+                // the same pass; each is handled identically below, just
+                // keyed off its own side. Anchor point = that accessory's
+                // first sub-block center, same X computeHeaderDbarBlocksForSide()
+                // positions it at for the 2D/3D preview (see that
+                // function's own comments for the left/right + PPU-offset
+                // geometry) — its Y is NEGATED for the same dashboard-Y+
+                // = AutoCAD-Y- reason as the top view above, since this
+                // accessory travels with its train's own position. Only
+                // meaningful for trains with a known deck footprint
+                // (Goldhofer/SPMT preset) — computeHeaderDbarBlocksForSide()
+                // returns [] otherwise, same guard the preview itself
+                // uses. Rotation follows the same load-direction
+                // convention as the trailer's own block insert above (no
+                // separate FWD block name was given for this accessory,
+                // so the block itself stays the same for both directions
+                // — only its rotation flips).
+                ['left', 'right'].forEach(side => {
+                    const typeKey = side === 'right' ? train.headerDbarRight : train.headerDbarLeft;
+                    const hdDef = HEADER_DBAR_TYPES[typeKey];
+                    if (!hdDef || !hdDef.cadBlockName) return;
+                    const hdLabel = hdSideLabel(typeKey, side);
                     // flushAtEdge: true — per KKai's spec, xCenter =
                     // edgeX (no more ± half-block-length outward
                     // extension) for this export path only; the 2D/3D
                     // preview keeps its own xCenter formula unchanged.
-                    const hdBlocks = computeHeaderDbarBlocks(train, { flushAtEdge: true });
-                    if (hdBlocks.length) {
-                        const anchor = hdBlocks[0];
-                        // X per KKai's updated spec:
-                        // Load Out — keeps the flush-at-edge anchor.xCenter
-                        // (this accessory's own train-edge position), unchanged.
-                        // Load In — inserted at the 1ST TRAILER's X instead,
-                        // using firstTrainAxle1Xm (Input!B5) computed above.
-                        const hdX = (loadDirection === 'in')
-                            ? (firstTrainAxle1Xm * CAD_UNIT_SCALE)
-                            : (anchor.xCenter * CAD_UNIT_SCALE);
-                        const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
-                        // Per KKai's updated spec the block name still
-                        // doesn't change by load direction (no _AFT/_FWD
-                        // suffix) — Load Out rotates the top view 180°
-                        // and mirrors the side view (X scale -1); Load
-                        // In does neither, same block both ways.
+                    const hdBlocks = computeHeaderDbarBlocksForSide(train, side, { flushAtEdge: true });
+                    if (!hdBlocks.length) {
+                        warnings.push(`Train "${train.name}" has a Header/Dbar accessory (${hdLabel}) selected but no deck footprint (pick a Goldhofer/SPMT trailer-type preset) — skipped from .scr export.`);
+                        return;
+                    }
+                    const anchor = hdBlocks[0];
+                    // X per KKai's updated spec:
+                    // Load Out — keeps the flush-at-edge anchor.xCenter
+                    // (this accessory's own train-edge position), unchanged.
+                    // Load In — inserted at the 1ST TRAILER's X instead,
+                    // using firstTrainAxle1Xm (Input!B5) computed above.
+                    const hdX = (loadDirection === 'in')
+                        ? (firstTrainAxle1Xm * CAD_UNIT_SCALE)
+                        : (anchor.xCenter * CAD_UNIT_SCALE);
+                    const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
+                    // Per KKai's updated spec the block name still
+                    // doesn't change by load direction (no _AFT/_FWD
+                    // suffix) — Load Out rotates the top view 180°
+                    // and mirrors the side view (X scale -1); Load
+                    // In does neither, same block both ways.
+                    inserts.push({
+                        trainName: `${train.name} — ${hdLabel}`,
+                        view: 'top',
+                        blockName: hdDef.cadBlockName,
+                        axleCount: null,
+                        loadDirection,
+                        x: hdX,
+                        y: hdY,
+                        rotationDeg: (loadDirection === 'out') ? 180 : 0
+                    });
+                    if (hdDef.cadSideViewBlockName) {
+                        // Front (side) view — shares this accessory's
+                        // own X (top/side views share X across this
+                        // whole export — see the trailer's own
+                        // ['top','side'].forEach insert above), Y on
+                        // the same sharedSideYm ground line every
+                        // other train's front-view insert uses.
                         inserts.push({
-                            trainName: `${train.name} — ${hdDef.label}`,
-                            view: 'top',
-                            blockName: hdDef.cadBlockName,
+                            trainName: `${train.name} — ${hdLabel} (front view)`,
+                            view: 'side',
+                            blockName: hdDef.cadSideViewBlockName,
                             axleCount: null,
                             loadDirection,
                             x: hdX,
-                            y: hdY,
-                            rotationDeg: (loadDirection === 'out') ? 180 : 0
+                            y: sharedSideYm,
+                            rotationDeg: 0,
+                            xScale: (loadDirection === 'out') ? -1 : 1
                         });
-                        if (hdDef.cadSideViewBlockName) {
-                            // Front (side) view — shares this accessory's
-                            // own X (top/side views share X across this
-                            // whole export — see the trailer's own
-                            // ['top','side'].forEach insert above), Y on
-                            // the same sharedSideYm ground line every
-                            // other train's front-view insert uses.
-                            inserts.push({
-                                trainName: `${train.name} — ${hdDef.label} (front view)`,
-                                view: 'side',
-                                blockName: hdDef.cadSideViewBlockName,
-                                axleCount: null,
-                                loadDirection,
-                                x: hdX,
-                                y: sharedSideYm,
-                                rotationDeg: 0,
-                                xScale: (loadDirection === 'out') ? -1 : 1
-                            });
-                        }
-                    } else {
-                        warnings.push(`Train "${train.name}" has a Header/Dbar accessory (${hdDef.label}) selected but no deck footprint (pick a Goldhofer/SPMT trailer-type preset) — skipped from .scr export.`);
                     }
-                }
+                });
             });
 
             // ---- Cargo CoG (COG_CARGO) + Combined CoG (CCOG) markers ----
