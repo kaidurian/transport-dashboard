@@ -672,6 +672,37 @@
             color: #fff !important;
             transition: background 0.15s ease, border-color 0.15s ease;
         }
+        /* ---- Whole-card echo of the same sync indicator ---- */
+        /* The button-level pulse above is easy to miss once its card
+           has been scrolled so the button itself is off-screen (a long
+           train list under "📤 Push to Excel", or a long CoG Envelope
+           Table above "🧮 Calculate CoG Envelope"). setBtnSyncing/
+           flashBtnResult also toggle these classes on that button's
+           OWN containing card (.tg-trailer-card / .tg-cargo-card), so a
+           colored ring + background tint follows the card as a whole —
+           visible no matter which part of that card is currently in
+           view — instead of only the button itself. Uses an inset
+           box-shadow (not a border/outline) so it never shifts layout
+           or fights the card's own border-left accent color. */
+        .tg-card-syncing {
+            box-shadow: inset 0 0 0 2px #eab308;
+            background: color-mix(in srgb, var(--tank-box-bg) 85%, #eab308 15%) !important;
+            animation: tgCardSyncPulse 0.9s ease-in-out infinite;
+        }
+        @keyframes tgCardSyncPulse {
+            0%, 100% { box-shadow: inset 0 0 0 2px #eab308; }
+            50% { box-shadow: inset 0 0 0 2px rgba(234, 179, 8, 0.35); }
+        }
+        .tg-card-flash-ok {
+            box-shadow: inset 0 0 0 2px var(--accent-green);
+            background: color-mix(in srgb, var(--tank-box-bg) 85%, var(--accent-green) 15%) !important;
+            transition: box-shadow 0.15s ease, background 0.15s ease;
+        }
+        .tg-card-flash-err {
+            box-shadow: inset 0 0 0 2px #ef4444;
+            background: color-mix(in srgb, var(--tank-box-bg) 85%, #ef4444 15%) !important;
+            transition: box-shadow 0.15s ease, background 0.15s ease;
+        }
         /* Small 📤 push-to-Excel button appended after the Z value on
            each LC1-4 row of the 📊 CoG Envelope Table — compact so it
            sits inline in a table cell instead of looking like a full
@@ -689,7 +720,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.99.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.100)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1125,11 +1156,11 @@
             </div>
 
             <div class="tg-footer">
-                <label class="tg-preview-toggle" title="Applies to every train in the AutoCAD export. Load In: 0° rotation. Load Out: top view rotated 180°, front view mirrored instead.">
+                <label class="tg-preview-toggle" title="Applies to every train in the AutoCAD export. Load in (Right to Left): 0° rotation. Load out (Left to Right): top view rotated 180°, front view mirrored instead.">
                     AutoCAD Load direction:
                     <select id="tgLoadDirectionSelect" onchange="setTrailerGenLoadDirection(this.value)">
-                        <option value="in">Load In</option>
-                        <option value="out">Load Out</option>
+                        <option value="in">Load in (Right to Left)</option>
+                        <option value="out">Load out (Left to Right)</option>
                     </select>
                 </label>
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts top/side/end view blocks per train (offset in Y so the 3 views don't overlap), the Transport Data table (rows 2 and 63 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 63 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
@@ -1299,12 +1330,29 @@
         // completion), whether that button was clicked by hand or the
         // same push/pull function ran silently via auto-sync. See the
         // .tg-btn-syncing/.tg-btn-flash-ok/.tg-btn-flash-err CSS.
+        //
+        // Also echoes the same state onto that button's own containing
+        // card (.tg-trailer-card / .tg-cargo-card — see
+        // findSyncCardFor()) via the .tg-card-syncing/.tg-card-flash-ok/
+        // .tg-card-flash-err CSS: a colored ring + background tint on
+        // the WHOLE card, so the indicator is still visible if the
+        // button itself has scrolled out of view (e.g. a long train
+        // list above "📤 Push to Excel", or the CoG Envelope Table
+        // above "🧮 Calculate CoG Envelope").
         const BTN_FLASH_MS = 900;
+        function findSyncCardFor(btnEl) {
+            return btnEl ? btnEl.closest('.tg-trailer-card, .tg-cargo-card') : null;
+        }
         function setBtnSyncing(btnId, on) {
             const el = document.getElementById(btnId);
             if (!el) return;
             el.classList.toggle('tg-btn-syncing', !!on);
             if (on) el.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err');
+            const card = findSyncCardFor(el);
+            if (card) {
+                card.classList.toggle('tg-card-syncing', !!on);
+                if (on) card.classList.remove('tg-card-flash-ok', 'tg-card-flash-err');
+            }
         }
         function flashBtnResult(btnId, ok) {
             const el = document.getElementById(btnId);
@@ -1312,6 +1360,12 @@
             el.classList.remove('tg-btn-syncing');
             el.classList.add(ok ? 'tg-btn-flash-ok' : 'tg-btn-flash-err');
             setTimeout(() => el.classList.remove('tg-btn-flash-ok', 'tg-btn-flash-err'), BTN_FLASH_MS);
+            const card = findSyncCardFor(el);
+            if (card) {
+                card.classList.remove('tg-card-syncing');
+                card.classList.add(ok ? 'tg-card-flash-ok' : 'tg-card-flash-err');
+                setTimeout(() => card.classList.remove('tg-card-flash-ok', 'tg-card-flash-err'), BTN_FLASH_MS);
+            }
         }
         // Wraps an async push/pull function so its button (by id) pulses
         // amber while `fn` is in flight and flashes green/red on
@@ -6536,7 +6590,7 @@
                 el.textContent = `${segments.join(' + ')} = ${sum} ✓, but ${unmapped.join('/')}-line block(s) not mapped in CAD_BLOCK_MAP.`;
                 el.classList.add('tg-cad-split-error');
             } else {
-                el.textContent = `${segments.join(' + ')} = ${sum} ✓ — ${segments.length} separate AutoCAD block(s) will be inserted.`;
+                el.textContent = `${segments.join(' + ')} = ${sum} ✓ `;
                 el.classList.remove('tg-cad-split-error');
             }
         }
@@ -6834,7 +6888,7 @@
                     </div>
 
                     <div class="tg-cad-split-row">
-                        <label>AutoCAD split (axle lines per physical trailer, front→back — e.g. "4,6" for a 10-line train built from a 4-line unit then a 6-line unit)</label>
+                        <label title="Axle lines per physical trailer, front→back — e.g. &quot;4,6&quot; for a 10-line train built from a 4-line unit then a 6-line unit. Each segment becomes its own separate AutoCAD block on export.">Trailer split</label>
                         <div class="tg-cad-split-input-row">
                             <input type="text" placeholder="auto — whole train as one block" value="${train.cadSplit || ''}"
                                    title="Leave blank for one AutoCAD block covering all axle lines. Enter comma-separated axle-line counts (matching CAD_BLOCK_MAP, e.g. 4,6) to insert one block per physical unit instead."
@@ -6851,7 +6905,7 @@
                             const unmapped = segments.filter(n => !CAD_BLOCK_MAP[n]);
                             if (sum !== axleCount) return `${segments.join(' + ')} = ${sum}, but this train has ${axleCount} axle line(s) — fix before export.`;
                             if (unmapped.length) return `${segments.join(' + ')} = ${sum} ✓, but ${unmapped.join('/')}-line block(s) not mapped in CAD_BLOCK_MAP.`;
-                            return `${segments.join(' + ')} = ${sum} ✓ — ${segments.length} separate AutoCAD block(s) will be inserted.`;
+                            return `${segments.join(' + ')} = ${sum} ✓ `;
                         })()}</div>
                     </div>
 
