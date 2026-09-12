@@ -689,7 +689,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.99)</h1>
+            <h1>🚂 Transport Dashboard (Rev.99.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10244,13 +10244,16 @@
                         return;
                     }
                     const anchor = hdBlocks[0];
-                    // X per KKai's updated spec (position — unaffected by
-                    // this change, still driven by loadDirection):
-                    // Load Out — keeps the flush-at-edge anchor.xCenter
-                    // (this accessory's own train-edge position), unchanged.
-                    // Load In — inserted at the 1ST TRAILER's X instead,
-                    // using firstTrainAxle1Xm (Input!B5) computed above.
-                    const hdX = (loadDirection === 'in')
+                    // X per KKai's updated spec (position):
+                    // Load Out — always keeps the flush-at-edge
+                    // anchor.xCenter (this accessory's own train-edge
+                    // position), for both Left and Right.
+                    // Load In — Left inserts at the 1ST TRAILER's X
+                    // instead, using firstTrainAxle1Xm (Input!B5)
+                    // computed above; RIGHT keeps the flush-at-edge
+                    // anchor.xCenter even on Load In (Right's own X-
+                    // position anchor is NOT overridden by loadDirection).
+                    const hdX = (loadDirection === 'in' && side !== 'right')
                         ? (firstTrainAxle1Xm * CAD_UNIT_SCALE)
                         : (anchor.xCenter * CAD_UNIT_SCALE);
                     const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
