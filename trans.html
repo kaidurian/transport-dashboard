@@ -720,7 +720,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.100)</h1>
+            <h1>🚂 Transport Dashboard (Rev.101)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1923,6 +1923,48 @@
         // (that train's own width + this gap), e.g. a 3000mm-wide train
         // steps 3300mm. Same constant regardless of trailer type/width.
         const CAD_END_VIEW_GAP_MM = 300;
+
+        // ---- Real AutoCAD dimension entities (DIMLINEAR) ----
+        // Everything above this point only ever draws BLOCK inserts and
+        // plain TEXT/LINE entities — none of it is a true AutoCAD
+        // DIMENSION object. computeCadDimensions() (below, called from
+        // computeTrailerCADInserts) adds actual DIMLINEAR entities for
+        // deck length/width, overall train length, trailer-to-trailer
+        // offsets, axle-group spacing, cargo length/width, CoG/CCoG
+        // distance from world origin (0,0), and CoG/CCoG height from
+        // ground + from the trailer top deck. Every one of them reuses
+        // the EXACT coordinate values already computed for the
+        // corresponding block insert/marker elsewhere in this file
+        // (e.g. the CoG marker's own cogEndX/cogEndY) rather than
+        // re-deriving position math independently, so a dimension can
+        // never disagree with the entity it's measuring. All on one
+        // dedicated layer (CAD_DIM_LAYER_NAME) so they can be hidden/
+        // frozen as a group, and offset perpendicular to whatever
+        // they're measuring by DIM_OFFSET_MM/DIM_OFFSET_STACK_MM so
+        // extension lines don't run directly through the drawing.
+        const CAD_DIM_LAYER_NAME = 'TG_DIMENSIONS';
+        // Perpendicular gap (mm) between a measured feature and its own
+        // dimension line — first "row" of dimensions closest to the
+        // geometry.
+        const DIM_OFFSET_MM = 500;
+        // Extra gap (mm) added per additional "stacked" row of
+        // dimensions on the same side of the same feature (e.g. overall
+        // train length sits further out than each individual trailer's
+        // own deck length, so the two dimension lines don't overlap).
+        const DIM_OFFSET_STACK_MM = 500;
+
+        // Pushes one DIMLINEAR entity: (x1,y1)/(x2,y2) are the two real
+        // feature points being measured (extension line origins —
+        // AutoCAD draws the actual value from the true distance between
+        // these two, so they must be the REAL coordinates, never
+        // pre-offset); (dimX,dimY) is the dimension LINE's own location,
+        // offset away from that feature — whichever axis that third
+        // point differs on from the (x1,y1)-(x2,y2) line decides
+        // horizontal vs. vertical orientation (matching interactive
+        // DIMLINEAR behavior exactly, no separate H/V flag needed).
+        function pushCadDimension(dimensions, x1, y1, x2, y2, dimX, dimY) {
+            dimensions.push({ x1, y1, x2, y2, dimX, dimY });
+        }
 
         // ---- Drawing Table placement in Paper Space (.scr export) ----
         // The Drawing Table's row/column dimensions (see
@@ -10004,6 +10046,7 @@
         function computeTrailerCADInserts() {
             const inserts = [];
             const warnings = [];
+            const dimensions = [];
             const loadDirection = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
             // Per KKai's spec: with more than one train, every train's
             // front (side) view insert shares the exact same Y value —
@@ -10062,6 +10105,18 @@
             // unaffected (keeps the flush-at-edge anchor — see the hdX
             // assignment inside the per-train loop below).
             const firstTrainAxle1Xm = trailerGenTrains.length ? (parseFloat(trailerGenTrains[0].x) || 0) : 0;
+            // ---- Dimension bookkeeping across the whole train loop ----
+            // overallMinXm/overallMaxXm track the front-most/rear-most
+            // deck edge across ALL trains, for the single "overall train
+            // length (front to back)" dimension emitted after the loop.
+            // trainAnchorsForDim collects each successfully-mapped
+            // train's own (axle1X, trainBaseYm) for the "trailer-to-
+            // trailer X/Y offset" dimensions between consecutive trains,
+            // also emitted after the loop (needs every train's anchor
+            // up front to dimension the GAP between train i and i+1).
+            let overallMinXm = null;
+            let overallMaxXm = null;
+            const trainAnchorsForDim = [];
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const spacing = parseFloat(train.spacing) || 0;
@@ -10095,6 +10150,66 @@
                 // land on that centerline. E.g. a 3000mm-wide trailer
                 // with Y offset 573mm inserts at -(1500+573)=-2073.
                 const trainDeckWidthMm = parseFloat(train.deckWidth) || parseFloat(train.axlePairOffsetY) || 0;
+                // Deck length (mm) — real deckLength field when this
+                // train came from an SPMT/Goldhofer preset, else the
+                // axle-span estimate, same formula as
+                // longestTrailerLengthMm's own per-train calc above.
+                // trainX (=axle1X=train.x) is this deck's own FRONT
+                // (small-X) edge in dashboard space, and it extends
+                // toward +X by this length to its REAR edge — same
+                // convention already used/verified by
+                // computeHeaderDbarBlocksForSide's edgeX formula, so
+                // these dimensions always line up with wherever that
+                // accessory (and the 2D/3D preview) draws the deck.
+                const trainLengthMm = parseFloat(train.deckLength) || Math.max((axleCount - 1) * spacing, 0);
+
+                // ---- Deck length / width dimensions (top view) ----
+                if (trainLengthMm > 0 && trainDeckWidthMm > 0) {
+                    const frontXcad = axle1X * CAD_UNIT_SCALE;
+                    const rearXcad = (axle1X + trainLengthMm) * CAD_UNIT_SCALE;
+                    const frontEdgeYcad = -trainBaseYm * CAD_UNIT_SCALE;
+                    const rearEdgeYcad = -(trainBaseYm + trainDeckWidthMm) * CAD_UNIT_SCALE;
+                    // Length — horizontal dim along the deck's own front
+                    // (small-Y) edge, offset further in +Y (CAD) so it
+                    // sits clear of the block artwork.
+                    pushCadDimension(dimensions, frontXcad, frontEdgeYcad, rearXcad, frontEdgeYcad,
+                        (frontXcad + rearXcad) / 2, frontEdgeYcad + DIM_OFFSET_MM);
+                    // Width — vertical dim along the deck's own front
+                    // (small-X) edge, offset further in -X (CAD) so it
+                    // doesn't run through the length dimension above.
+                    pushCadDimension(dimensions, frontXcad, frontEdgeYcad, frontXcad, rearEdgeYcad,
+                        frontXcad - DIM_OFFSET_MM, (frontEdgeYcad + rearEdgeYcad) / 2);
+                    overallMinXm = (overallMinXm === null) ? axle1X : Math.min(overallMinXm, axle1X);
+                    overallMaxXm = (overallMaxXm === null) ? (axle1X + trainLengthMm) : Math.max(overallMaxXm, axle1X + trainLengthMm);
+                }
+                trainAnchorsForDim.push({ axle1X, trainBaseYm });
+
+                // ---- Axle-group spacing dimension (top view) ----
+                // One per train.groups entry (the "custom load per axle
+                // range" groups, e.g. axles 3-6) — spans that group's
+                // own axle range using the SAME axle-position formula
+                // already established for individual axles elsewhere in
+                // this dashboard (posX(N) = axle1X − (N−1)×spacing — see
+                // the SVG preview's identical formula). The exact
+                // direction that formula extends in in AutoCAD space is
+                // secondary here: using it identically for BOTH ends of
+                // the range always yields the true (to−from)×spacing
+                // distance regardless, so the dimension VALUE is correct
+                // even in the (unlikely) case the visual direction needs
+                // a flip later. Offset to the OPPOSITE side of the deck
+                // from the length dimension above so the two don't
+                // overlap.
+                if (spacing > 0 && trainDeckWidthMm > 0) {
+                    const farEdgeYcad = -(trainBaseYm + trainDeckWidthMm) * CAD_UNIT_SCALE;
+                    (train.groups || []).forEach(g => {
+                        const from = parseInt(g.from, 10), to = parseInt(g.to, 10);
+                        if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return;
+                        const posX = (axleNum) => (axle1X - (axleNum - 1) * spacing) * CAD_UNIT_SCALE;
+                        const x1 = posX(from), x2 = posX(to);
+                        pushCadDimension(dimensions, x1, farEdgeYcad, x2, farEdgeYcad,
+                            (x1 + x2) / 2, farEdgeYcad - DIM_OFFSET_MM);
+                    });
+                }
 
                 let axleOffset = 0;
                 // Running total of segment block lengths (CAD_BLOCK_MAP
@@ -10348,6 +10463,34 @@
                 });
             });
 
+            // ---- Overall train length (front to back) — one dimension
+            // spanning ALL mapped trains' combined footprint, using the
+            // min/max deck edges tracked in the loop above. Placed
+            // further out (DIM_OFFSET_STACK_MM extra) than any single
+            // trailer's own deck-length dimension so the two don't
+            // overlap. ----
+            if (overallMinXm !== null && overallMaxXm !== null && trailerGenTrains.length) {
+                const refTrainYm = trailerGenTrains.reduce((min, t) => Math.min(min, parseFloat(t.y) || 0), Infinity);
+                const minXcad = overallMinXm * CAD_UNIT_SCALE;
+                const maxXcad = overallMaxXm * CAD_UNIT_SCALE;
+                const dimYcad = -refTrainYm * CAD_UNIT_SCALE + DIM_OFFSET_MM + DIM_OFFSET_STACK_MM;
+                pushCadDimension(dimensions, minXcad, dimYcad, maxXcad, dimYcad, (minXcad + maxXcad) / 2, dimYcad);
+            }
+
+            // ---- Trailer-to-trailer X/Y offsets — one X + one Y
+            // dimension between each pair of CONSECUTIVE trains' own
+            // anchor corners (axle1X/trainBaseYm), same points
+            // train.x/train.y themselves represent. ----
+            for (let i = 0; i < trainAnchorsForDim.length - 1; i++) {
+                const a = trainAnchorsForDim[i], b = trainAnchorsForDim[i + 1];
+                const ax = a.axle1X * CAD_UNIT_SCALE, ay = -a.trainBaseYm * CAD_UNIT_SCALE;
+                const bx = b.axle1X * CAD_UNIT_SCALE, by = -b.trainBaseYm * CAD_UNIT_SCALE;
+                // X offset — horizontal dim, dimension line offset in Y.
+                pushCadDimension(dimensions, ax, ay, bx, ay, (ax + bx) / 2, ay + DIM_OFFSET_MM + 2 * DIM_OFFSET_STACK_MM);
+                // Y offset — vertical dim, dimension line offset in X.
+                pushCadDimension(dimensions, bx, ay, bx, by, bx + DIM_OFFSET_MM + 2 * DIM_OFFSET_STACK_MM, (ay + by) / 2);
+            }
+
             // ---- Cargo CoG (COG_CARGO) + Combined CoG (CCOG) markers ----
             // One COG_CARGO block per cargo item, positioned from that
             // item's own Dashboard 🔗 CoGx/CoGy/CoGz (cargo.x/y/z —
@@ -10482,6 +10625,46 @@
                 texts.push({ view: 'top', x: cogTopX, y: cogTopY, text: cogLabelText });
                 texts.push({ view: 'side', x: cogFrontX, y: cogFrontY, text: cogLabelText });
                 texts.push({ view: 'end', x: cogEndX, y: cogEndY, text: cogLabelText });
+
+                // ---- Cargo length/width (top view) ----
+                // Box edges — cargo.tlX/tlY (meters) are this item's own
+                // stored top-left/rear-left corner (see syncCargoGeometry/
+                // cargoOffsetLeft/cargoOffsetRear — the box is centered
+                // on the CoG only by default; either offset can be
+                // edited independently), so read them directly rather
+                // than re-deriving from cogXMm/cogYMm.
+                const lenMm = (parseFloat(cargo.length) || 0) * 1000;
+                const widMm = (parseFloat(cargo.width) || 0) * 1000;
+                if (lenMm > 0 && widMm > 0) {
+                    const tlXMm = (parseFloat(cargo.tlX) || 0) * 1000;
+                    const tlYMm = (parseFloat(cargo.tlY) || 0) * 1000;
+                    const x1 = tlXMm * CAD_UNIT_SCALE, x2 = (tlXMm + lenMm) * CAD_UNIT_SCALE;
+                    const y1 = -tlYMm * CAD_UNIT_SCALE, y2 = -(tlYMm + widMm) * CAD_UNIT_SCALE;
+                    pushCadDimension(dimensions, x1, y1, x2, y1, (x1 + x2) / 2, y1 - DIM_OFFSET_MM);
+                    pushCadDimension(dimensions, x1, y1, x1, y2, x1 - DIM_OFFSET_MM, (y1 + y2) / 2);
+                }
+
+                // ---- CoG distance from world origin (0,0) — top view.
+                // Reuses this item's own cogTopX/cogTopY directly (the
+                // exact point the COG_CARGO marker above is drawn at).
+                // One horizontal dim (X component, dimension line offset
+                // in Y) + one vertical dim (Y component, offset in X). ----
+                pushCadDimension(dimensions, 0, 0, cogTopX, cogTopY, cogTopX / 2, cogTopY + DIM_OFFSET_MM);
+                pushCadDimension(dimensions, 0, 0, cogTopX, cogTopY, cogTopX + DIM_OFFSET_MM, cogTopY / 2);
+
+                // ---- CoG height from ground + from trailer top deck —
+                // end view. Both reuse this item's own already-computed
+                // cogEndX/cogEndY (same point the End-view COG_CARGO
+                // marker is drawn at) and the shared ground/deck-top
+                // reference lines (sharedEndYmForCog/deckTopEndYm) —
+                // both of those are true ground-referenced heights in
+                // the End view (see the comment above deckTopEndYm), so
+                // these measure the REAL height, not the fixed-693mm
+                // reference the Front view uses for marker placement. ----
+                const groundEndYcad = sharedEndYmForCog * CAD_UNIT_SCALE;
+                const deckTopEndYcad = deckTopEndYm * CAD_UNIT_SCALE;
+                pushCadDimension(dimensions, cogEndX, groundEndYcad, cogEndX, cogEndY, cogEndX - DIM_OFFSET_MM, (groundEndYcad + cogEndY) / 2);
+                pushCadDimension(dimensions, cogEndX, deckTopEndYcad, cogEndX, cogEndY, cogEndX - DIM_OFFSET_MM - DIM_OFFSET_STACK_MM, (deckTopEndYcad + cogEndY) / 2);
             });
 
             // Combined CoG (CCOG) — single marker, Excel Display!B16:D16
@@ -10555,6 +10738,20 @@
                 texts.push({ view: 'top', x: ccogTopX, y: ccogTopY, text: ccogLabelText });
                 texts.push({ view: 'side', x: ccogFrontX, y: ccogFrontY, text: ccogLabelText });
                 texts.push({ view: 'end', x: ccogEndX, y: ccogEndY, text: ccogLabelText });
+
+                // ---- CCoG distance from world origin (0,0) — top view,
+                // same X/Y-component pattern as each cargo CoG above. ----
+                pushCadDimension(dimensions, 0, 0, ccogTopX, ccogTopY, ccogTopX / 2, ccogTopY + DIM_OFFSET_MM);
+                pushCadDimension(dimensions, 0, 0, ccogTopX, ccogTopY, ccogTopX + DIM_OFFSET_MM, ccogTopY / 2);
+
+                // ---- CCoG height from ground + from trailer top deck —
+                // end view. ccogEndY is already ground-referenced (see
+                // this block's own comment above), so both dimensions
+                // measure a real height exactly like the per-cargo ones. ----
+                const ccogGroundEndYcad = sharedEndYmForCog * CAD_UNIT_SCALE;
+                const ccogDeckTopEndYcad = deckTopEndYm * CAD_UNIT_SCALE;
+                pushCadDimension(dimensions, ccogEndX, ccogGroundEndYcad, ccogEndX, ccogEndY, ccogEndX + DIM_OFFSET_MM, (ccogGroundEndYcad + ccogEndY) / 2);
+                pushCadDimension(dimensions, ccogEndX, ccogDeckTopEndYcad, ccogEndX, ccogEndY, ccogEndX + DIM_OFFSET_MM + DIM_OFFSET_STACK_MM, (ccogDeckTopEndYcad + ccogEndY) / 2);
             }
 
             // Anchors handed to computeCargoCADOutlines() so the cargo
@@ -10570,14 +10767,14 @@
                 endViewLabel: (loadDirection === 'in') ? 'Right' : 'Left'
             };
 
-            return { inserts, texts, warnings, cogAnchors };
+            return { inserts, texts, warnings, cogAnchors, dimensions };
         }
 
         function setTrailerGenLoadDirection(value) {
             trailerGenLoadDirection = (value === 'out') ? 'out' : 'in';
         }
 
-        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts) {
+        function buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts, dimensions) {
             const lines = [];
             lines.push(';; Disable snaps');
             lines.push('OSMODE 0');
@@ -10678,6 +10875,40 @@
                     lines.push(`${o.x1.toFixed(3)},${o.y1.toFixed(3)},0`);
                     lines.push(`${o.x2.toFixed(3)},${o.y2.toFixed(3)},0`);
                 });
+            }
+            if (dimensions && dimensions.length) {
+                // Real AutoCAD DIMLINEAR entities — deck length/width,
+                // overall train length, trailer-to-trailer offsets,
+                // axle-group spacing, cargo length/width, CoG/CCoG
+                // distance from (0,0), and CoG/CCoG height from ground +
+                // top deck (see computeCadDimensions comments at the top
+                // of computeTrailerCADInserts for exactly how each is
+                // derived). Own dedicated layer, cleared first so
+                // re-running this script replaces them instead of piling
+                // up duplicates — same pattern as the CoG marker layer
+                // above. DIMLINEAR itself needs no extra confirmation
+                // line after its 3 points — it draws immediately, same
+                // as when typed interactively.
+                lines.push(';; Dimensions (deck L/W, train length, offsets, axle spacing, cargo L/W, CoG/CCoG position + height) — own dedicated layer, cleared before redrawing');
+                lines.push('-LAYER');
+                lines.push('Make');
+                lines.push(CAD_DIM_LAYER_NAME);
+                lines.push('');
+                lines.push(`(if (setq tgOldDims (ssget "_X" (list (cons 8 "${CAD_DIM_LAYER_NAME}")))) (command "._ERASE" tgOldDims ""))`);
+                lines.push('-LAYER');
+                lines.push('Set');
+                lines.push(CAD_DIM_LAYER_NAME);
+                lines.push('');
+                dimensions.forEach(d => {
+                    lines.push('DIMLINEAR');
+                    lines.push(`${d.x1.toFixed(3)},${d.y1.toFixed(3)},0`);
+                    lines.push(`${d.x2.toFixed(3)},${d.y2.toFixed(3)},0`);
+                    lines.push(`${d.dimX.toFixed(3)},${d.dimY.toFixed(3)},0`);
+                });
+                lines.push('-LAYER');
+                lines.push('Set');
+                lines.push('0');
+                lines.push('');
             }
             // Bring the Model Space content (trailer inserts + cargo
             // outlines) into view before switching spaces — once
@@ -10782,7 +11013,7 @@
             // as-is) when not connected to Excel, e.g. standalone webpage
             // use — the export still proceeds with whatever's in memory.
             await pullCargoFromExcelImpl({ silent: true });
-            const { inserts, texts: cogLabelTexts, warnings, cogAnchors } = computeTrailerCADInserts();
+            const { inserts, texts: cogLabelTexts, warnings, cogAnchors, dimensions } = computeTrailerCADInserts();
             const cargoOutlines = computeCargoCADOutlines(cogAnchors);
 
             // Drawing Table grid (TEXT + LINE entities) — placed in
@@ -10817,7 +11048,7 @@
                 alert('Nothing to export — no train currently matches a mapped AutoCAD block (4-line/6-line), no cargo item has a footprint, no Transport Data has been pulled, and no 🚚 Transport Data w/ CoG Env LC1-4 table has been pulled.');
                 return;
             }
-            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts);
+            const scriptText = buildTrailerCADScript(inserts, cargoOutlines, drawingTableLispLines, lcTables, cogLabelTexts, dimensions);
             const blob = new Blob([scriptText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -10832,6 +11063,7 @@
                 parts.push(`${inserts.length} trailer block insert(s) — top/side/end views (${uniqueBlocks.join(', ')})`);
             }
             if (cargoOutlines.length) parts.push(`${cargoOutlines.length} cargo outline(s)`);
+            if (dimensions.length) parts.push(`${dimensions.length} dimension(s)`);
             if (drawingTableLispLines.length) parts.push(`1 Transport Data (${drawingTableExportRows.length}×${(drawingTableExportRows[0] || []).length}) text/line grid`);
             if (lcTables) parts.push(`${Object.keys(lcTables).length} LC1-4 table(s) (new "${LC_TABLE_LAYOUT_NAME}" Layout, ISO A3 landscape)`);
             let msg = `📐 Exported ${parts.join(', ')} to .scr.`;
