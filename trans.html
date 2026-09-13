@@ -720,7 +720,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.101)</h1>
+            <h1>🚂 Transport Dashboard (Rev.102)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7632,7 +7632,6 @@
                     `<rect x="${Math.min(rx1, rx2)}" y="${Math.min(ry1, ry2)}" width="${Math.abs(rx2 - rx1)}" height="${Math.abs(ry2 - ry1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
                     planLeaderLabel(boxCx, Math.min(ry1, ry2), `${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`, cargoColor) +
                     cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
-                    planLeaderLabel(cogCx, cogCy, 'CoG', cargoColor, { fontSize: 8.5, dist: 22 }) +
                     `</g>`;
             });
 
@@ -7650,14 +7649,12 @@
             if (cogTrailerSignLoaded) {
                 const tCx = sx(parseFloat(cogTrailerSign.x) || 0), tCy = sy(parseFloat(cogTrailerSign.y) || 0);
                 cargoSvg += `<g>` +
-                    planLeaderLabel(tCx, tCy, 'Trailer CoG', TG_COG_TRAILER_COLOR) +
                     cogSymbolSvg(tCx, tCy, 9, TG_COG_TRAILER_COLOR) +
                     `</g>`;
             }
             if (cogCombinedSignLoaded) {
                 const cCx = sx(parseFloat(cogCombinedSign.x) || 0), cCy = sy(parseFloat(cogCombinedSign.y) || 0);
                 cargoSvg += `<g>` +
-                    planLeaderLabel(cCx, cCy, 'CCoG', TG_CARGO_TOTAL_COLOR) +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
                     `</g>`;
             }
@@ -7788,8 +7785,8 @@
                     const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
                     const zone = zoneOf(cxMm);
                     const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, cxMm, zone, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m`, cargoColor);
-                    dimensionsSvg += dimV(0, cyMm, zone, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m`, cargoColor);
+                    dimensionsSvg += dimH(0, cxMm, zone, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`, cargoColor);
+                    dimensionsSvg += dimV(0, cyMm, zone, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`, cargoColor);
                 });
 
                 // World origin (0,0) → Trailer CoG and → Combined CoG,
@@ -7799,15 +7796,15 @@
                     const tCxMm = parseFloat(cogTrailerSign.x) || 0, tCyMm = parseFloat(cogTrailerSign.y) || 0;
                     const zone = zoneOf(tCxMm);
                     const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, tCxMm, zone, tier, `${Math.round(tCxMm)}`, TG_COG_TRAILER_COLOR);
-                    dimensionsSvg += dimV(0, tCyMm, zone, tier, `${Math.round(tCyMm)}`, TG_COG_TRAILER_COLOR);
+                    dimensionsSvg += dimH(0, tCxMm, zone, tier, `${Math.round(tCxMm)} (Trailer CoG)`, TG_COG_TRAILER_COLOR);
+                    dimensionsSvg += dimV(0, tCyMm, zone, tier, `${Math.round(tCyMm)} (Trailer CoG)`, TG_COG_TRAILER_COLOR);
                 }
                 if (cogCombinedSignLoaded) {
                     const cCxMm = parseFloat(cogCombinedSign.x) || 0, cCyMm = parseFloat(cogCombinedSign.y) || 0;
                     const zone = zoneOf(cCxMm);
                     const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, cCxMm, zone, tier, `${Math.round(cCxMm)}`, TG_CARGO_TOTAL_COLOR);
-                    dimensionsSvg += dimV(0, cCyMm, zone, tier, `${Math.round(cCyMm)}`, TG_CARGO_TOTAL_COLOR);
+                    dimensionsSvg += dimH(0, cCxMm, zone, tier, `${Math.round(cCxMm)} (CCoG)`, TG_CARGO_TOTAL_COLOR);
+                    dimensionsSvg += dimV(0, cCyMm, zone, tier, `${Math.round(cCyMm)} (CCoG)`, TG_CARGO_TOTAL_COLOR);
                 }
             }
 
@@ -8133,25 +8130,15 @@
             const wheelR = Math.max(3, TG_ELEV_WHEEL_DIAM * scale / 2);
             const deckTopY = sz(tgZTrailerHeightMm);
             const deckTopYEnd = szEnd(tgZTrailerHeightMm);
-            // Leader-line label placement for the side/end views — same
-            // AutoCAD-callout idea as the plan view's planLeaderLabel:
-            // pulls a label OUT away from a given panel's own reference
-            // center point instead of stamping it directly over the
-            // trailer/cargo shapes, connected back to its real anchor by
-            // a thin line. panelCx/panelCy is that panel's own center
-            // (different per side view vs. left/right end view, since
-            // they're three separate little drawings sharing this one
-            // helper).
-            const elevLeaderLabel = (panelCx, panelCy, anchorX, anchorY, text, color, opts = {}) => {
-                const fontSize = opts.fontSize || 8.5;
-                const dist = opts.dist || 22;
-                let dx = anchorX - panelCx, dy = anchorY - panelCy;
-                const len = Math.hypot(dx, dy) || 1;
-                dx /= len; dy /= len;
-                const labelX = anchorX + dx * dist, labelY = anchorY + dy * dist;
-                const anchorAlign = Math.abs(dx) < 0.35 ? 'middle' : (dx > 0 ? 'start' : 'end');
-                return `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${labelX.toFixed(1)}" y2="${labelY.toFixed(1)}" stroke="${color}" stroke-width="1" opacity="0.55"/>` +
-                    `<text x="${(labelX + (anchorAlign === 'middle' ? 0 : (dx > 0 ? 4 : -4))).toFixed(1)}" y="${(labelY + (dy >= 0 ? 4 : -3)).toFixed(1)}" font-size="${fontSize}" font-weight="700" text-anchor="${anchorAlign}" fill="${color}">${text}</text>`;
+            // Plain CoG-name label, set directly beside its marker with
+            // NO connecting leader line — matches the reference drawing
+            // style (side view only; the end views identify each point
+            // purely from the Z-dimension stacks instead, see dimSvg
+            // below, so no adjacent name text is drawn there at all).
+            const cogInlineLabel = (cx, cy, r, text, color, opts = {}) => {
+                const fontSize = opts.fontSize || 9;
+                const gap = opts.gap != null ? opts.gap : 4;
+                return `<text x="${(cx + r + gap).toFixed(1)}" y="${(cy + fontSize * 0.32).toFixed(1)}" font-size="${fontSize}" font-weight="700" fill="${color}">${text}</text>`;
             };
             const deckThickPx = TG_ELEV_DECK_THICK * scale;
 
@@ -8316,12 +8303,7 @@
             // Y — CoG, Z — CoG measured from the trailer deck) — it does
             // not need to land inside the box, and box edits never move
             // it (see cargoBoxZ above for the same base/CoG split).
-            // Panel center reference points for elevLeaderLabel — each of
-            // the three little drawings (side view, left end view, right
-            // end view) gets labels pulled outward from its OWN center,
-            // not the whole combined canvas's center.
-            const sidePanelCx = sideOffsetX + sideW / 2, sidePanelCy = deckTopY;
-            const endPanelCx1 = endOffsetX1 + endW / 2, endPanelCy = deckTopYEnd;
+            const endPanelCx1 = endOffsetX1 + endW / 2;
             const endPanelCx2 = endOffsetX2 + endW / 2;
 
             let cargoElevSvg = '';
@@ -8340,7 +8322,7 @@
                 const ssy1 = sz(boxTopWorldZ), ssy2 = sz(baseWorldZ);
                 cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
                 cargoElevSvg += cogSymbolSvg(sx(cxMm), sz(cogWorldZ), 6, cargoColor);
-                cargoElevSvg += elevLeaderLabel(sidePanelCx, sidePanelCy, sx(cxMm), sz(cogWorldZ), 'CoG', cargoColor);
+                cargoElevSvg += cogInlineLabel(sx(cxMm), sz(cogWorldZ), 6, `${escapeHtml(c.name)} ${(parseFloat(c.weight) || 0).toFixed(2)}t`, cargoColor, { fontSize: 8.5 });
 
                 // End views (left panel via sy1, right panel mirrored via sy2).
                 [[sy1, endPanelCx1], [sy2, endPanelCx2]].forEach(([syFn, panelCx]) => {
@@ -8348,7 +8330,9 @@
                     const esy1 = szEnd(boxTopWorldZ), esy2 = szEnd(baseWorldZ);
                     cargoElevSvg += `<rect x="${Math.min(esx1, esx2)}" y="${Math.min(esy1, esy2)}" width="${Math.abs(esx2 - esx1)}" height="${Math.abs(esy2 - esy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
                     cargoElevSvg += cogSymbolSvg(syFn(cyMm), szEnd(cogWorldZ), 6, cargoColor);
-                    cargoElevSvg += elevLeaderLabel(panelCx, endPanelCy, syFn(cyMm), szEnd(cogWorldZ), 'CoG', cargoColor);
+                    // No adjacent name text here — the end views identify
+                    // this point purely from the Z-dimension stack (see
+                    // dimSvg below), matching the reference drawing.
                 });
             });
 
@@ -8383,22 +8367,22 @@
                 const tCyMm = parseFloat(cogTrailerSign.y) || 0;
                 const tWorldZ = parseFloat(cogTrailerSign.z) || 0;
                 cargoElevSvg += cogSymbolSvg(sx(tCxMm), sz(tWorldZ), 9, TG_COG_TRAILER_COLOR);
-                cargoElevSvg += elevLeaderLabel(sidePanelCx, sidePanelCy, sx(tCxMm), sz(tWorldZ), 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9, dist: 26 });
+                cargoElevSvg += cogInlineLabel(sx(tCxMm), sz(tWorldZ), 9, 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9 });
                 cargoElevSvg += cogSymbolSvg(sy1(tCyMm), szEnd(tWorldZ), 9, TG_COG_TRAILER_COLOR);
-                cargoElevSvg += elevLeaderLabel(endPanelCx1, endPanelCy, sy1(tCyMm), szEnd(tWorldZ), 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9, dist: 26 });
                 cargoElevSvg += cogSymbolSvg(sy2(tCyMm), szEnd(tWorldZ), 9, TG_COG_TRAILER_COLOR);
-                cargoElevSvg += elevLeaderLabel(endPanelCx2, endPanelCy, sy2(tCyMm), szEnd(tWorldZ), 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9, dist: 26 });
+                // No adjacent name text in the end views — identified by
+                // the Z-dimension stack instead (see dimSvg below).
             }
             if (cogCombinedSignLoaded) {
                 const cCxMm = parseFloat(cogCombinedSign.x) || 0;
                 const cCyMm = parseFloat(cogCombinedSign.y) || 0;
                 const cWorldZ = parseFloat(cogCombinedSign.z) || 0;
                 cargoElevSvg += cogSymbolSvg(sx(cCxMm), sz(cWorldZ), 9, TG_CARGO_TOTAL_COLOR);
-                cargoElevSvg += elevLeaderLabel(sidePanelCx, sidePanelCy, sx(cCxMm), sz(cWorldZ), 'CCoG', TG_CARGO_TOTAL_COLOR, { fontSize: 9, dist: 26 });
+                cargoElevSvg += cogInlineLabel(sx(cCxMm), sz(cWorldZ), 9, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(2)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9 });
                 cargoElevSvg += cogSymbolSvg(sy1(cCyMm), szEnd(cWorldZ), 9, TG_CARGO_TOTAL_COLOR);
-                cargoElevSvg += elevLeaderLabel(endPanelCx1, endPanelCy, sy1(cCyMm), szEnd(cWorldZ), 'CCoG', TG_CARGO_TOTAL_COLOR, { fontSize: 9, dist: 26 });
                 cargoElevSvg += cogSymbolSvg(sy2(cCyMm), szEnd(cWorldZ), 9, TG_CARGO_TOTAL_COLOR);
-                cargoElevSvg += elevLeaderLabel(endPanelCx2, endPanelCy, sy2(cCyMm), szEnd(cWorldZ), 'CCoG', TG_CARGO_TOTAL_COLOR, { fontSize: 9, dist: 26 });
+                // No adjacent name text in the end views — identified by
+                // the Z-dimension stack instead (see dimSvg below).
             }
 
             // ---- Stability angle triangles (Right End View only) ----
@@ -8611,7 +8595,7 @@
                         `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${cargoColor}" stroke-width="1"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${textX} ${midY})">Z ${totalZAboveDeckM} m</text>` +
+                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${textX} ${midY})">${totalZAboveDeckM} m (${escapeHtml(c.name)} CoG)</text>` +
                         `</g>`;
                 });
 
@@ -8628,8 +8612,8 @@
                 // from the ground line (not the trailer deck), since
                 // Display!D15/D16 is already the ground -> CoG height.
                 const tgCogZDims = [];
-                if (cogTrailerSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG Z' });
-                if (cogCombinedSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'Combined CoG Z' });
+                if (cogTrailerSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG' });
+                if (cogCombinedSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'CCoG' });
                 tgCogZDims.forEach((d, dIdx) => {
                     const dimX = endOffsetX2 + endW + 15 + TG_COGZ_LINE_GAP + dIdx * TG_COGZ_TIER_STEP;
                     const dimYTop = szEnd(d.worldZ), dimYBot = endGroundY;
@@ -8639,7 +8623,7 @@
                         `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${d.color}" stroke-width="1"/>` +
                         `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1"/>` +
-                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${textX} ${midY})">${d.label} ${(d.worldZ / 1000).toFixed(3)} m</text>` +
+                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${textX} ${midY})">${(d.worldZ / 1000).toFixed(3)} m (${d.label})</text>` +
                         `</g>`;
                 });
             }
