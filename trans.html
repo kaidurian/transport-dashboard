@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.103)</h1>
+            <h1>🚂 Transport Dashboard (Rev.103.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1603,6 +1603,7 @@
                     await pullHorizontalLoadsFromExcel({ silent: true });
                     await pullCogSignsFromExcel();
                     await pullStabilityFromExcel();
+                    await pullHeaderDbarLengthsFromExcel();
                     await pullLoadPerAxleFromExcel();
                     await pullDrawingTableFromExcel({ silent: true });
                     await pullCogEnvSummaryFromExcel({ silent: true }); // independent pull — see that function's own comment for why this deliberately never touches tgCogEnvComputed/the 📊 CoG Envelope Table
@@ -3024,17 +3025,77 @@
         // edge (train.x). But when a Header/Dbar block is attached on
         // the LEFT (front), that block sticks out further ahead (-X) of
         // the deck edge, so the true front-most point moves out by the
-        // block's own protrusion length — see computeHeaderDbarBlocksForSide,
-        // where each sub-block sits flush against the deck's front edge
-        // and extends outward by its OWN length. The accessory's overall
-        // reach is therefore the LONGEST of its sub-block lengths
-        // (currently always the first, 955mm, "header&dbar" block itself
-        // — the &PPU variant's extra 2nd block is shorter, so it never
-        // wins). Returns 0 when no Header/Dbar (Left) block is selected.
+        // block's own length. That length is NOT the small visual
+        // sub-block dims in HEADER_DBAR_TYPES[key].blocks[] (those are
+        // just for the 2D/3D preview footprint) — it's the authoritative
+        // "L [mm]" value from the Excel "Properties" sheet's ItemType
+        // table (column A name / column B length, e.g. row "GHF 2F
+        // Header&Dbar 3m Left" -> 3700) — see
+        // pullHeaderDbarLengthsFromExcel(). tgHeaderDbarLengthMm holds
+        // the last-pulled value per HEADER_DBAR_TYPES key, defaulting to
+        // HEADER_DBAR_LENGTH_DEFAULT_MM (matches the Properties sheet's
+        // own default, 3700mm for both "3m" and "3m&PPU") until pulled.
+        const HEADER_DBAR_LENGTH_DEFAULT_MM = 3700;
+        let tgHeaderDbarLengthMm = { '3m': HEADER_DBAR_LENGTH_DEFAULT_MM, '3m_ppu': HEADER_DBAR_LENGTH_DEFAULT_MM };
+
+        // Reads the Header/Dbar (Left) block lengths straight out of the
+        // Excel "Properties" sheet's ItemType table — column A = name
+        // (matched against hdSideLabel(typeKey, 'left'), e.g. "GHF 2F
+        // Header&Dbar 3m Left"), column B = length (mm). Scans A1:B20 (the
+        // table is a handful of fixed rows near the top of the sheet — see
+        // Properties.xlsm) rather than a single fixed cell, so row order
+        // doesn't matter. Silently leaves tgHeaderDbarLengthMm at its
+        // previous/default value per type if a row isn't found or the
+        // sheet/workbook isn't reachable — never blocks the rest of the
+        // pull chain. Called on open/refresh (seedInitialOffsetsFromExcel)
+        // and every auto-poll tick (runAutoPull), same as the other
+        // Properties-sheet reads (e.g. pullStabilityFromExcel).
+        async function pullHeaderDbarLengthsFromExcel() {
+            if (!isOfficeInitialized) return;
+            try {
+                let rows = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(PROPERTIES_SHEET_NAME);
+                    const range = sheet.getRange('A1:B20');
+                    range.load('values');
+                    await context.sync();
+                    rows = range.values;
+                });
+                if (!rows) return;
+                Object.keys(HEADER_DBAR_TYPES).forEach(typeKey => {
+                    const wantLabel = hdSideLabel(typeKey, 'left');
+                    const row = rows.find(r => String(r[0]).trim() === wantLabel);
+                    const len = row ? parseFloat(row[1]) : NaN;
+                    if (Number.isFinite(len) && len > 0) tgHeaderDbarLengthMm[typeKey] = len;
+                });
+            } catch (e) {
+                console.warn(`Could not pull Header/Dbar block lengths from '${PROPERTIES_SHEET_NAME}'!A1:B20`, e);
+            }
+        }
+
+        // On-demand ⇩ button handler for the "🔒 X offset for Train &
+        // Header/Dbar block Left (mm)" field — pulls the latest lengths
+        // then re-renders so the computed value picks them up.
+        async function pullHeaderDbarLengthAndRerender() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Header/Dbar block length.');
+                return;
+            }
+            await pullHeaderDbarLengthsFromExcel();
+            renderTrailerDashboard();
+            logMsg(`↺ Pulled Header/Dbar block length(s) from ${PROPERTIES_SHEET_NAME}!A1:B20.`);
+        }
+
+        // See the X OFFSET reference comment above — the LONGEST reach
+        // ahead of the deck's front edge is simply the Header/Dbar
+        // (Left) block's own Excel-sourced length (tgHeaderDbarLengthMm),
+        // not the smaller visual preview sub-block dims. Returns 0 when
+        // no Header/Dbar (Left) block is selected.
         function headerDbarLeftProtrusionMm(train) {
-            const def = HEADER_DBAR_TYPES[train && train.headerDbarLeft];
-            if (!def) return 0;
-            return def.blocks.reduce((m, b) => Math.max(m, b.length || 0), 0);
+            const typeKey = train && train.headerDbarLeft;
+            if (!typeKey || typeKey === 'none' || !HEADER_DBAR_TYPES[typeKey]) return 0;
+            const val = tgHeaderDbarLengthMm[typeKey];
+            return Number.isFinite(val) ? val : HEADER_DBAR_LENGTH_DEFAULT_MM;
         }
 
         // "X offset for Train & Header/Dbar block Left (mm)" — the
@@ -6622,6 +6683,7 @@
                 }
                 await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
                 await pullStabilityFromExcel(); // Stability arm/angle + arm height — own try/catch inside
+                await pullHeaderDbarLengthsFromExcel(); // Header/Dbar (Left/Right) block "L [mm]" from Properties!A:B — own try/catch inside
                 await pullHorizontalLoadsFromExcel({ silent: true }); // Horizontal Loads — own try/catch inside
                 await pullCogEnvFromExcel({ silent: true }); // CoG Envelope dim/CoG inputs — own try/catch inside
                 await pullDrawingTableFromExcel({ silent: true }); // Transport Data — own try/catch inside
@@ -7005,8 +7067,8 @@
                     </div>
 
                     <div class="tg-field-grid">
-                        <div class="tg-field tg-field-readonly" title="${tgHdLeftProtrusion ? `= X offset for Train (${train.x}) − ${HEADER_DBAR_TYPES[train.headerDbarLeft].label} Left's length in -X (${tgHdLeftProtrusion}mm) = ${tgAdjustedX}mm. This combined value — not the raw X offset for Train above — is what gets pushed to Excel${tgXCell ? ` Input!${tgXCell}` : ''} on '📤 Push to Excel'.` : `No Header/Dbar block (Left) selected, so this equals X offset for Train (mm) as-is — that's what gets pushed to Excel${tgXCell ? ` Input!${tgXCell}` : ''} on '📤 Push to Excel'.`}">
-                            <label>🔒 X offset for Train &amp; Header/Dbar block Left (mm)</label>
+                        <div class="tg-field tg-field-readonly" title="${tgHdLeftProtrusion ? `= X offset for Train (${train.x}) + (-${tgHdLeftProtrusion}) = ${tgAdjustedX}mm — "-${tgHdLeftProtrusion}" is the ${HEADER_DBAR_TYPES[train.headerDbarLeft].label} Left's length from Excel '${PROPERTIES_SHEET_NAME}'!A:B ("${hdSideLabel(train.headerDbarLeft, 'left')}"). This combined value — not the raw X offset for Train above — is what gets pushed to Excel${tgXCell ? ` Input!${tgXCell}` : ''} on '📤 Push to Excel'.` : `No Header/Dbar block (Left) selected, so this equals X offset for Train (mm) as-is — that's what gets pushed to Excel${tgXCell ? ` Input!${tgXCell}` : ''} on '📤 Push to Excel'.`}">
+                            <label>🔒 X offset for Train &amp; Header/Dbar block Left (mm) <button type="button" class="tg-xy-sync-btn" title="Pull Header/Dbar block length(s) from Excel '${PROPERTIES_SHEET_NAME}'!A:B" onclick="pullHeaderDbarLengthAndRerender()">⇩</button></label>
                             <input type="number" value="${tgAdjustedX}" disabled>
                         </div>
                     </div>
