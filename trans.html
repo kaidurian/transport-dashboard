@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.10)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.11)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1993,7 +1993,15 @@
         // dimensions on the same side of the same feature (e.g. overall
         // train length sits further out than each individual trailer's
         // own deck length, so the two dimension lines don't overlap).
-        const DIM_OFFSET_STACK_MM = 1000;
+        const DIM_OFFSET_STACK_MM = 500;
+        // Extra manual clearance (mm) added ONLY to the Front view's
+        // "top border" — how far above the tallest cargo box the X
+        // direction chain (left-deck -> cargo -> right-deck) and the
+        // standalone total-top-deck-length dimension sit. Per KKai's
+        // request this is on top of the normal DIM_OFFSET_MM gap, not a
+        // replacement for it — see frontChainYcad in
+        // computeTrailerCADInserts().
+        const FRONT_VIEW_TOP_BORDER_EXTRA_MM = 1000;
 
         // Pushes one DIMLINEAR entity: (x1,y1)/(x2,y2) are the two real
         // feature points being measured (extension line origins —
@@ -11264,8 +11272,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // (rather than independently above the cargo), so the
                 // two can never cross each other or the cargo either.
                 const frontChainYcad = (frontViewHighestCargoTopYcad !== null)
-                    ? frontViewHighestCargoTopYcad + DIM_OFFSET_MM + 10000  // <- add extra top clearance here
-                    : deckTopFrontYcad + DIM_OFFSET_MM;
+                    ? frontViewHighestCargoTopYcad + DIM_OFFSET_MM + FRONT_VIEW_TOP_BORDER_EXTRA_MM
+                    : deckTopFrontYcad + DIM_OFFSET_MM + FRONT_VIEW_TOP_BORDER_EXTRA_MM;
                 // Sort the deck's own left/right edges together WITH every
                 // cargo edge (rather than always placing the deck edges
                 // first/last) so the chain still comes out in correct
