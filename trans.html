@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.6)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.7)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -11132,17 +11132,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // view. Per KKai's spec this must sit OUT from the
                 // trailer, cargo, or D-bar/header accessory — whichever
                 // reaches furthest — rather than beside the cargo's own
-                // box, so it's anchored off frontViewHeightDimAnchorXcad
-                // (max of deckRightXcad, the furthest-overhanging cargo
-                // edge, and any right-mounted Header/Dbar's real reach —
-                // see above) instead of the bare deck edge alone. Each
-                // cargo item then steps one more DIM_OFFSET_STACK_MM
-                // further out (X direction) than the previous one so
-                // multiple cargo height dimensions never overlap each
-                // other.
+                // box, so its DIMENSION LINE is anchored off
+                // frontViewHeightDimAnchorXcad (max of deckRightXcad,
+                // the furthest-overhanging cargo edge, and any right-
+                // mounted Header/Dbar's real reach — see above) instead
+                // of the bare deck edge alone. Each cargo item then
+                // steps one more DIM_OFFSET_STACK_MM further out (X
+                // direction) than the previous one so multiple cargo
+                // height dimensions never overlap each other.
+                // IMPORTANT: per pushCadDimension's own contract, x1/x2
+                // must be the REAL feature points (this cargo's own
+                // front-view X, cogFrontX — same X the COG_CARGO Front
+                // marker sits at), NOT the pre-offset anchor — only
+                // dimX/dimY (the trailing pair) may hold the offset
+                // placement. The previous version passed the offset
+                // anchor as x1/x2 too, which left the extension lines
+                // with zero real-world span and let AutoCAD fall back to
+                // drawing the dimension over the actual cargo geometry
+                // instead of out at the anchor — this is what still
+                // interfered with the cargo block.
                 if (frontViewHeightDimAnchorXcad !== null) {
                     const cargoHeightDimXcad = frontViewHeightDimAnchorXcad + DIM_OFFSET_MM + cargoIdx * DIM_OFFSET_STACK_MM;
-                    pushCadDimension(dimensions, cargoHeightDimXcad, deckTopFrontYcad, cargoHeightDimXcad, cargoFrontTopYcad,
+                    pushCadDimension(dimensions, cogFrontX, deckTopFrontYcad, cogFrontX, cargoFrontTopYcad,
                         cargoHeightDimXcad, (deckTopFrontYcad + cargoFrontTopYcad) / 2);
                 }
                 inserts.push({
@@ -11233,11 +11244,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // to the right-most top-deck edge — this replaces the old
             // standalone "first axle to last axle" deck-length dimension
             // removed above; (2) a SEPARATE standalone "total top deck
-            // length" dimension (same two deck-edge endpoints) placed
-            // well above the highest cargo box top so it never overlaps
-            // the cargo artwork or the chain dimension line below it. ----
+            // length" dimension (same two deck-edge endpoints) stacked
+            // one row further out than that chain. BOTH rows sit above
+            // the tallest cargo box top (frontViewHighestCargoTopYcad),
+            // not just above the deck-top line, so neither one's own
+            // dimension line ever runs through the cargo artwork. ----
             if (deckLeftXcad !== null && deckRightXcad !== null) {
-                const frontChainYcad = deckTopFrontYcad + DIM_OFFSET_MM;
+                // Per KKai's follow-up: the chain's DIMENSION LINE itself
+                // (not just the separate total-length dimension above it)
+                // must clear the tallest cargo box — previously this sat
+                // at a fixed deckTopFrontYcad + DIM_OFFSET_MM (500mm above
+                // the deck-top line), which is well below most real cargo
+                // heights, so the chain's own horizontal dimension line
+                // ran straight through the cargo artwork. Now it's raised
+                // to sit just above frontViewHighestCargoTopYcad (falling
+                // back to the old deck-top-relative offset only when
+                // there's no cargo yet), and the standalone total-length
+                // dimension is stacked one more row above THIS line
+                // (rather than independently above the cargo), so the
+                // two can never cross each other or the cargo either.
+                const frontChainYcad = (frontViewHighestCargoTopYcad !== null)
+                    ? frontViewHighestCargoTopYcad + DIM_OFFSET_MM
+                    : deckTopFrontYcad + DIM_OFFSET_MM;
                 // Sort the deck's own left/right edges together WITH every
                 // cargo edge (rather than always placing the deck edges
                 // first/last) so the chain still comes out in correct
@@ -11249,13 +11277,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const chainPoints = allChainX.map(x => ({ x, y: deckTopFrontYcad }));
                 pushCadDimensionChain(dimensions, chainPoints, (deckLeftXcad + deckRightXcad) / 2, frontChainYcad);
 
-                // Total top-deck length — standalone (not chained),
-                // raised above the tallest cargo box (falls back to just
-                // past the chain row above if there's no cargo yet) so
-                // it "un-interferes" with the cargo per KKai's spec.
-                const totalLengthDimYcad = (frontViewHighestCargoTopYcad !== null)
-                    ? frontViewHighestCargoTopYcad + DIM_OFFSET_MM + DIM_OFFSET_STACK_MM
-                    : frontChainYcad + DIM_OFFSET_STACK_MM;
+                // Total top-deck length — standalone (not chained), one
+                // more row further out than the chain line above (which
+                // is itself already above the tallest cargo box), so it
+                // "un-interferes" with both the cargo AND the chain per
+                // KKai's spec.
+                const totalLengthDimYcad = frontChainYcad + DIM_OFFSET_STACK_MM;
                 pushCadDimension(dimensions, deckLeftXcad, deckTopFrontYcad, deckRightXcad, deckTopFrontYcad,
                     (deckLeftXcad + deckRightXcad) / 2, totalLengthDimYcad);
             }
