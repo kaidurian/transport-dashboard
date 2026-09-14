@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.14)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.15)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8332,7 +8332,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Y-scale (width) — only the shared Z axis has to match between
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
-            const padT = 30, padB = 52; // padB grown to fit the End View panel labels, now placed BELOW each panel's ground line instead of above it
+            // padT reserves, ABOVE the front-view border itself, a small
+            // header band (TG_FRONT_DIM_HEADER_H) for the relocated
+            // "left deck -> cargo -> right deck" X chain + standalone
+            // "total top deck length" dimension (see rowChainY/rowTotalY
+            // below) — per KKai's spec these now sit outside/above the
+            // drawing's own top border instead of inside it, clear of
+            // any cargo/CoG content drawn inside the box. padB grown to
+            // fit the End View panel labels (now placed BELOW each
+            // panel's ground line, with extra clearance off that
+            // panel's own border — see the Left/Right End View text
+            // below).
+            const TG_FRONT_DIM_HEADER_H = 26;
+            const padT = 30 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
             // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
@@ -8532,8 +8544,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // ground line (rather than above the panel) so they read as
             // captions under the drawings, matching how the label sits
             // relative to its view.
-            groundSvg += `<text x="${endOffsetX1 + endW / 2}" y="${endGroundY + 24}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
-            groundSvg += `<text x="${endOffsetX2 + endW / 2}" y="${endGroundY + 24}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
+            // Extra clearance below each panel's own border (border
+            // bottom edge sits at endGroundY + 12 — see the rounded
+            // border rects further down) before the caption text, so
+            // the label reads clearly separate from the panel outline
+            // instead of crowding right up against it.
+            groundSvg += `<text x="${endOffsetX1 + endW / 2}" y="${endGroundY + 36}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
+            groundSvg += `<text x="${endOffsetX2 + endW / 2}" y="${endGroundY + 36}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
 
             // Y / Z axis sign — one per end-view panel, tucked just
             // inside its own inner-bottom corner (clear of the CoG Z
@@ -8812,7 +8829,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // the Z-dimension stack instead (see dimSvg below).
             }
 
-            // ---- Stability angle triangles (Right End View only) ----
+            // ---- Stability angle triangles (drawn in BOTH end views) ----
             // Right-triangle per system: CoG (apex) -> straight down to
             // the arm height (Properties!G2) -> across the arm distance
             // -> back up the hypotenuse to the CoG. The arm/angle
@@ -8824,9 +8841,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // groups' own axle positions, and the angle is re-derived
             // from that arm; otherwise it falls back to the
             // Excel-sourced value (Display!B26/C26 arm, B29/B30 angle)
-            // as before. Drawn only in the right end view (sy2), same
-            // panel as the Trailer/Combined CoG Z dimensions above —
-            // this view always collapses X, so a Group-3/4 arm that
+            // as before. Per KKai's latest spec both the Left AND Right
+            // End View panels now get their own copy of the same
+            // triangles + angle/dimension labels (previously right-only)
+            // — this view always collapses X, so a Group-3/4 arm that
             // isn't purely transverse is still drawn as a magnitude-only
             // horizontal offset here (see the 3D model for the true,
             // non-collapsed triangle geometry).
@@ -8839,6 +8857,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // vertically and would otherwise overlap each other's text.
             const TG_STAB_LABEL_STEP = 16; // extra outward offset per system index, so single/combined labels never collide
             let stabTriSvg = '';
+            let stabTriSvgLeft = '';
             const stabGroupCenters = computeAxleGroupCenters(rows);
             if ((stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) || (stabGroupCenters[3] && stabGroupCenters[4] && stabilityArmHeightLoaded)) {
                 const armY = szEnd(stabilityArmHeightMm);
@@ -8879,74 +8898,74 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         label: 'Combined',
                     });
                 }
-                // Apex screen positions for every system, computed up
-                // front (before the drawing loop below needs them) so
-                // the "Single" system's angle label can be placed at the
-                // vertical midpoint between the Cargo CoG apex and the
-                // Combined CoG apex — see the label-placement comment
-                // inside the loop.
-                const stabApexPositions = stabSystems.map(s => ({ x: sy2(s.cogYMm), y: szEnd(s.cogZMm) }));
-                stabSystems.forEach((s, sIdx) => {
-                    const apexX = sy2(s.cogYMm), apexY = szEnd(s.cogZMm);
-                    const armX = sy2(s.cogYMm + s.armMm);
-                    // Right triangle: apex -> arm point -> foot (directly below apex, at arm height) -> apex.
-                    stabTriSvg += `<path d="M ${apexX} ${apexY} L ${armX} ${armY} L ${apexX} ${armY} Z" fill="${s.color}" fill-opacity="0.06" stroke="${s.color}" stroke-width="1.3"/>`;
-                    // Vertical reference leg drawn dashed (it's the same
-                    // segment as the triangle's own left edge, restyled
-                    // so it reads as a reference line rather than a
-                    // solid triangle edge, matching the reference GA
-                    // drawing's plain vertical center line).
-                    stabTriSvg += `<line x1="${apexX}" y1="${apexY}" x2="${apexX}" y2="${armY}" stroke="${s.color}" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>`;
-                    // Small right-angle tick at the foot, between the
-                    // vertical leg and the horizontal arm leg — standard
-                    // technical-drawing convention, replaces the old
-                    // apex-hugging arc (which is what collided between
-                    // the two systems when their apexes sit close
-                    // together).
-                    const footSign = armX >= apexX ? 1 : -1;
-                    const tick = 6;
-                    stabTriSvg += `<path d="M ${apexX} ${armY - tick} L ${apexX + footSign * tick} ${armY - tick} L ${apexX + footSign * tick} ${armY}" fill="none" stroke="${s.color}" stroke-width="1"/>`;
-                    // Angle label — placed OUTSIDE the hypotenuse
-                    // (perpendicular offset away from the triangle's
-                    // interior, at the hypotenuse's own midpoint) rather
-                    // than at the apex, with each system's offset
-                    // stepped out by TG_STAB_LABEL_STEP so the two
-                    // systems' labels never overlap even when their
-                    // hypotenuses run close together.
-                    const midX = (apexX + armX) / 2, midY = (apexY + armY) / 2;
-                    const hx = armX - apexX, hz = armY - apexY;
-                    const hLen = Math.hypot(hx, hz) || 1;
-                    // Perpendicular to the hypotenuse, chosen to point
-                    // away from the vertical reference leg (i.e. away
-                    // from the triangle's interior/fill).
-                    let px = -hz / hLen, py = hx / hLen;
-                    if (px * footSign < 0) { px = -px; py = -py; }
-                    const labelOff = 14 + sIdx * TG_STAB_LABEL_STEP;
-                    let angleLabelX = midX + px * labelOff, angleLabelY = midY + py * labelOff;
-                    // The "Single" (Cargo CoG) angle label is relocated
-                    // to sit directly between the Cargo CoG apex and the
-                    // Combined CoG apex — the vertical/horizontal
-                    // midpoint of the two CoG points themselves — rather
-                    // than out past its own hypotenuse, so it reads as
-                    // "the angle between these two CoGs' triangles"
-                    // instead of floating off to one side.
-                    if (s.label === 'Single' && stabApexPositions.length > 1) {
-                        const combinedIdx = stabSystems.findIndex(x => x.label === 'Combined');
-                        if (combinedIdx !== -1) {
-                            const a0 = stabApexPositions[sIdx], a1 = stabApexPositions[combinedIdx];
-                            angleLabelX = (a0.x + a1.x) / 2;
-                            angleLabelY = (a0.y + a1.y) / 2;
-                        }
-                    }
-                    stabTriSvg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
-                    // Arm distance label — placed below the arm foot
-                    // point, outside the triangle's base leg, each
-                    // system stacked at its own vertical tier so the
-                    // single/combined arm labels (whose arm points sit
-                    // close together horizontally) never collide.
-                    const armLabelY = armY + 14 + sIdx * TG_STAB_LABEL_STEP;
-                    stabTriSvg += `<text x="${armX}" y="${armLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.armMm.toFixed(1)}</text>`;
-                });
+                // Renders the full triangle set for one end-view panel,
+                // given that panel's own horizontal-axis mapping (sy1 for
+                // the left panel, sy2 for the right one) — factored out
+                // so both panels draw from the exact same system data
+                // instead of duplicating the loop.
+                const renderStabSystems = (syFn) => {
+                    let svg = '';
+                    // A single shared "side" (left/right of the vertical
+                    // reference leg) for the ANGLE LABELS only, taken from
+                    // the first system's own foot direction — so the
+                    // "Single" system's angle label always lands on the
+                    // same side as "Combined" (per KKai's spec) instead of
+                    // each system mirroring independently, which is what
+                    // previously let the Single label drift onto/through
+                    // the angle line itself when the two systems' arms
+                    // pointed opposite ways.
+                    let sharedLabelSign = null;
+                    stabSystems.forEach((s, sIdx) => {
+                        const apexX = syFn(s.cogYMm), apexY = szEnd(s.cogZMm);
+                        const armX = syFn(s.cogYMm + s.armMm);
+                        // Right triangle: apex -> arm point -> foot (directly below apex, at arm height) -> apex.
+                        svg += `<path d="M ${apexX} ${apexY} L ${armX} ${armY} L ${apexX} ${armY} Z" fill="${s.color}" fill-opacity="0.06" stroke="${s.color}" stroke-width="1.3"/>`;
+                        // Vertical reference leg drawn dashed (it's the same
+                        // segment as the triangle's own left edge, restyled
+                        // so it reads as a reference line rather than a
+                        // solid triangle edge, matching the reference GA
+                        // drawing's plain vertical center line).
+                        svg += `<line x1="${apexX}" y1="${apexY}" x2="${apexX}" y2="${armY}" stroke="${s.color}" stroke-width="1" stroke-dasharray="2 2" opacity="0.6"/>`;
+                        // Small right-angle tick at the foot, between the
+                        // vertical leg and the horizontal arm leg — standard
+                        // technical-drawing convention, replaces the old
+                        // apex-hugging arc (which is what collided between
+                        // the two systems when their apexes sit close
+                        // together).
+                        const footSign = armX >= apexX ? 1 : -1;
+                        if (sharedLabelSign === null) sharedLabelSign = footSign;
+                        const tick = 6;
+                        svg += `<path d="M ${apexX} ${armY - tick} L ${apexX + footSign * tick} ${armY - tick} L ${apexX + footSign * tick} ${armY}" fill="none" stroke="${s.color}" stroke-width="1"/>`;
+                        // Angle label — placed OUTSIDE the hypotenuse
+                        // (perpendicular offset away from the triangle's
+                        // interior, at the hypotenuse's own midpoint) rather
+                        // than at the apex, with each system's offset
+                        // stepped out by TG_STAB_LABEL_STEP so the two
+                        // systems' labels never overlap even when their
+                        // hypotenuses run close together — and both use the
+                        // SAME sharedLabelSign side, so "Single" sits beside
+                        // "Combined" rather than mirrored across the arm
+                        // reference line into it.
+                        const midX = (apexX + armX) / 2, midY = (apexY + armY) / 2;
+                        const hx = armX - apexX, hz = armY - apexY;
+                        const hLen = Math.hypot(hx, hz) || 1;
+                        let px = -hz / hLen, py = hx / hLen;
+                        if (px * sharedLabelSign < 0) { px = -px; py = -py; }
+                        const labelOff = 14 + sIdx * TG_STAB_LABEL_STEP;
+                        const angleLabelX = midX + px * labelOff, angleLabelY = midY + py * labelOff;
+                        svg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
+                        // Arm distance label — placed below the arm foot
+                        // point, outside the triangle's base leg, each
+                        // system stacked at its own vertical tier so the
+                        // single/combined arm labels (whose arm points sit
+                        // close together horizontally) never collide.
+                        const armLabelY = armY + 14 + sIdx * TG_STAB_LABEL_STEP;
+                        svg += `<text x="${armX}" y="${armLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.armMm.toFixed(1)}</text>`;
+                    });
+                    return svg;
+                };
+                stabTriSvg = renderStabSystems(sy2);
+                stabTriSvgLeft = renderStabSystems(sy1);
             }
 
             // ---- Dimensions ----
@@ -8961,24 +8980,39 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // near/far ordering as the plan view's dimension stacks
                 // (shorter, more local distances sit closest to the
                 // drawing; the one overall span sits outermost).
-                const dimHFront = (xa, xb, y, color, label) => {
+                // textY (optional) lets the tick marks/dimension line
+                // stay on one shared row while the TEXT itself nudges up
+                // a little — used below to keep adjacent short chain
+                // segments' labels from overlapping each other in X.
+                const dimHFront = (xa, xb, y, color, label, textY) => {
                     const x1 = sx(xa), x2 = sx(xb);
                     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
+                    const ty = textY != null ? textY : y;
                     const boxW = Math.max(20, String(label).length * 5.2);
                     return `<g opacity="0.9">` +
                         `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
                         `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
-                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
-                        `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="${color}">${escapeHtml(String(label))}</text>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${ty - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<text x="${(lo + hi) / 2}" y="${ty - 5}" font-size="${fDim}" text-anchor="middle" fill="${color}">${escapeHtml(String(label))}</text>` +
                         `</g>`;
                 };
                 const deckTrainsFront = trailerGenTrains.filter(t => t.deckLength);
                 if (deckTrainsFront.length) {
                     const deckX1o = Math.min(...deckTrainsFront.map(t => parseFloat(t.x) || 0));
                     const deckX2o = Math.max(...deckTrainsFront.map(t => (parseFloat(t.x) || 0) + t.deckLength));
-                    const rowChainY = padT + 24;   // near row — short local spacings
-                    const rowTotalY = padT + 10;   // far row — one overall span
+                    // Both rows now live in the TG_FRONT_DIM_HEADER_H band
+                    // reserved above the panel's own top border (padT is
+                    // already pushed down by that header height — see
+                    // its declaration above), instead of inside the box
+                    // where they could compete for space with cargo/CoG
+                    // content. rowTotalY (the single overall span) sits
+                    // closest to the very top edge; rowChainY (the local
+                    // deck->cargo->deck chain) sits its own row below
+                    // that, still comfortably clear of the border line —
+                    // so the two never interfere with each other.
+                    const rowTotalY = 12;
+                    const rowChainY = 28;
                     const chainColor = 'var(--text-muted, #94a3b8)';
                     dimSvg += dimHFront(deckX1o, deckX2o, rowTotalY, 'var(--accent-blue, #38bdf8)', `${Math.round(deckX2o - deckX1o)} (Top deck length)`);
                     const sortedCargoX = cargoItems.map((c, i) => {
@@ -8986,13 +9020,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const tlXMm = (parseFloat(c.tlX) || 0) * 1000;
                         return { left: tlXMm - halfL, right: tlXMm + halfL, color: cargoColorFor(i), name: c.name };
                     }).sort((a, b) => a.left - b.left);
+                    // Alternates each successive chain-segment's text a
+                    // few px higher than the last (ticks/line stay on the
+                    // shared rowChainY row) — keeps neighboring segments'
+                    // labels from sitting at the exact same height and
+                    // overlapping in X when a segment is short.
+                    let chainSegIdx = 0;
+                    const nextChainTextY = () => rowChainY - (chainSegIdx++ % 2) * 9;
                     let cursorX = deckX1o;
                     sortedCargoX.forEach(cg => {
-                        if (cg.left - cursorX > 1) dimSvg += dimHFront(cursorX, cg.left, rowChainY, chainColor, `${Math.round(cg.left - cursorX)}`);
-                        dimSvg += dimHFront(cg.left, cg.right, rowChainY, cg.color, `${Math.round(cg.right - cg.left)} (${cg.name})`);
+                        if (cg.left - cursorX > 1) dimSvg += dimHFront(cursorX, cg.left, rowChainY, chainColor, `${Math.round(cg.left - cursorX)}`, nextChainTextY());
+                        dimSvg += dimHFront(cg.left, cg.right, rowChainY, cg.color, `${Math.round(cg.right - cg.left)} (${cg.name})`, nextChainTextY());
                         cursorX = cg.right;
                     });
-                    if (deckX2o - cursorX > 1) dimSvg += dimHFront(cursorX, deckX2o, rowChainY, chainColor, `${Math.round(deckX2o - cursorX)}`);
+                    if (deckX2o - cursorX > 1) dimSvg += dimHFront(cursorX, deckX2o, rowChainY, chainColor, `${Math.round(deckX2o - cursorX)}`, nextChainTextY());
                 }
                 // Deck-height dimension — drawn on the side view panel;
                 // labeled "(typ.)" since the same shared Z scale/height
@@ -9115,7 +9156,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvg}${dimSvg}
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvgLeft}${stabTriSvg}${dimSvg}
             </svg>`;
         }
 
