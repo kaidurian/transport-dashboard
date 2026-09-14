@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.103.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.104)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -996,6 +996,13 @@
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgMagnifierToggle" onchange="toggleTgMagnifier(this.checked)">
                                     🔍 Magnifier
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    Window:
+                                    <select id="tgMagnifierSizeSelect" onchange="setTgMagnifierSize(this.value)" title="Size of the floating magnifier lens window">
+                                        <option value="1">1x (220px)</option>
+                                        <option value="2">2x (440px)</option>
+                                    </select>
                                 </label>
                             </div>
                         </div>
@@ -7228,7 +7235,22 @@
         // every mousemove (cheap — no DOM rebuild per frame).
         // ============================================================
         const TG_MAGNIFIER_ZOOM = 2.5;
-        const TG_MAGNIFIER_SIZE = 220;
+        const TG_MAGNIFIER_SIZE_BASE = 220;
+        // Window (lens) size multiplier — 1x (base) or 2x, chosen via
+        // the "Window:" dropdown next to the 🔍 Magnifier toggle. This
+        // resizes the lens box itself, independent of TG_MAGNIFIER_ZOOM
+        // (which controls how much the content inside it is magnified).
+        let tgMagnifierSizeMult = 1;
+        function setTgMagnifierSize(val) {
+            tgMagnifierSizeMult = parseFloat(val) || 1;
+            const lens = document.getElementById('tgMagnifierLens');
+            if (lens) {
+                const size = TG_MAGNIFIER_SIZE_BASE * tgMagnifierSizeMult;
+                lens.style.width = size + 'px';
+                lens.style.height = size + 'px';
+            }
+        }
+        function tgMagnifierSize() { return TG_MAGNIFIER_SIZE_BASE * tgMagnifierSizeMult; }
 
         function toggleTgMagnifier(checked) {
             const preview = document.getElementById('tgPreview');
@@ -7255,6 +7277,9 @@
             // inside the lens without inheriting #tgPreview's own
             // overflow/max-height clipping.
             lens.innerHTML = '';
+            const size = tgMagnifierSize();
+            lens.style.width = size + 'px';
+            lens.style.height = size + 'px';
             const clone = preview.cloneNode(true);
             clone.removeAttribute('id');
             clone.style.overflow = 'visible';
@@ -7275,12 +7300,13 @@
             const relX = (e.clientX - rect.left) + preview.scrollLeft;
             const relY = (e.clientY - rect.top) + preview.scrollTop;
             const clone = lens.firstChild;
-            const half = TG_MAGNIFIER_SIZE / (2 * TG_MAGNIFIER_ZOOM);
+            const size = tgMagnifierSize();
+            const half = size / (2 * TG_MAGNIFIER_ZOOM);
             clone.style.transform = `scale(${TG_MAGNIFIER_ZOOM}) translate(${half - relX}px, ${half - relY}px)`;
             // Lens follows the cursor, offset up-and-right a little so the
             // pointer itself isn't hidden underneath it.
-            lens.style.left = (e.clientX - TG_MAGNIFIER_SIZE / 2 + 24) + 'px';
-            lens.style.top = (e.clientY - TG_MAGNIFIER_SIZE - 16) + 'px';
+            lens.style.left = (e.clientX - size / 2 + 24) + 'px';
+            lens.style.top = (e.clientY - size - 16) + 'px';
         }
 
         function tgMagnifierLeave() {
@@ -7531,7 +7557,6 @@
                 <div class="tg-view-section">${topHtml}</div>
                 <div class="tg-view-section">${elevationHtml}</div>
                 <div class="tg-view-section">${renderTrailerGenHLoadsPanel()}</div>
-                <div class="tg-orient-cube-overlay">${buildOrientationCubeSvg()}</div>
                 <div class="tg-unit-label-overlay">Unit: mm.</div>
             `;
             // Set the initial cube/unit-label scale for this wrap right
@@ -7735,11 +7760,17 @@
                 const rx1 = sx(ox), ry1 = sy(oy);
                 const rx2 = sx(ox + t.deckLength), ry2 = sy(oy + t.deckWidth);
                 const rw = rx2 - rx1, rh = ry2 - ry1;
-                const label = `${t.name} — ${t.trailerType === 'goldhofer' ? 'Goldhofer' : 'SPMT'} ${t.axleLineCount}-line deck`;
-                const deckMidX = (rx1 + rx2) / 2, deckMidY = (ry1 + ry2) / 2;
+                // Short form — e.g. "Train 1 GHF 14 line" — plain text
+                // with NO leader line, placed directly in clear space
+                // just above the deck rectangle's own top edge (deck
+                // rectangles never sit right at the canvas edge, so this
+                // stays clear of axle lines/cargo in the normal case).
+                const shortType = t.trailerType === 'goldhofer' ? 'GHF' : 'SPMT';
+                const label = `${t.name} ${shortType} ${t.axleLineCount} line`;
+                const deckMidX = (rx1 + rx2) / 2;
                 deckSvg += `<g>` +
                     `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>` +
-                    planLeaderLabel(deckMidX, Math.min(ry1, ry2), escapeHtml(label), 'var(--text-muted, #94a3b8)', { fontSize: 9, dist: 34 }) +
+                    `<text x="${deckMidX.toFixed(1)}" y="${(Math.min(ry1, ry2) - 6).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>` +
                     `</g>`;
             });
 
@@ -7890,78 +7921,111 @@
                 const dimColorOffset = '#f59e0b'; // amber — distinct from the corner→axle1 blue
                 let frontTier = 0, backTier = 0; // separate running tier counters per zone
 
+                // Baseline-style dims (all measured from the shared world
+                // origin 0,0) are collected here instead of drawn
+                // immediately, so they can be sorted by distance and
+                // tiered SHORTEST-first — the shortest span sits closest
+                // to the drawing, the longest sits farthest out, standard
+                // baseline-dimension convention — rather than in
+                // whatever order trains/cargo/CoG happen to be processed.
+                const baselineItems = { front: [], back: [] };
+
                 trailerGenTrains.forEach((t) => {
                     const ox = parseFloat(t.x) || 0, oy = parseFloat(t.y) || 0;
                     const zone = zoneOf(ox);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
 
-                    // World origin (0,0) → deck top-left corner (train.x,
-                    // train.y) — i.e. "X offset (mm)" / "Y offset (mm)" as
-                    // entered in the dashboard and synced with Excel sheet
-                    // "Input"!B5/B6. Drawn for EVERY train (preset or
-                    // custom/manual), since this offset always applies —
-                    // unlike the corner→axle1 inset below, which only
-                    // exists for preset trailers.
-                    dimensionsSvg += dimH(0, ox, zone, tier, `${Math.round(ox)}`, dimColorOffset);
-                    dimensionsSvg += dimV(0, oy, zone, tier, `${Math.round(oy)}`, dimColorOffset);
+                    // ---- Continuous-style local chain (closest tier) ----
+                    // X: deck corner → axle line 1 → axle line 2, drawn as
+                    // touching segments on ONE row (a true continuous
+                    // dimension chain) instead of separate stacked rows.
+                    // Y: origin(0,0) → deck corner → axle line 1 → axle
+                    // pair (right↔left) offset, chained the same way on
+                    // their own single row.
+                    if (t.axle1OffsetX != null && t.axle1OffsetY != null) {
+                        const axle1OffsetX = parseFloat(t.axle1OffsetX) || 0;
+                        const axle1OffsetY = parseFloat(t.axle1OffsetY) || 0;
+                        const axle1X = ox + axle1OffsetX, axle1Y = oy + axle1OffsetY;
+                        const spacing = parseFloat(t.spacing) || 0;
+                        const maxAxleForTrain = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
 
-                    if (t.axle1OffsetX == null || t.axle1OffsetY == null) return; // custom/manual trailer — no deck reference corner
-                    const axle1OffsetX = parseFloat(t.axle1OffsetX) || 0;
-                    const axle1OffsetY = parseFloat(t.axle1OffsetY) || 0;
-                    const axle1X = ox + axle1OffsetX, axle1Y = oy + axle1OffsetY;
-                    const spacing = parseFloat(t.spacing) || 0;
-                    const maxAxleForTrain = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
-                    const tier2 = zone === 'front' ? frontTier++ : backTier++;
+                        const chainTierX = zone === 'front' ? frontTier++ : backTier++;
+                        dimensionsSvg += dimH(ox, axle1X, zone, chainTierX, `${Math.round(axle1OffsetX)}`, dimColorCorner);
+                        if (maxAxleForTrain >= 2 && spacing) {
+                            const axle2X = axle1X - spacing;
+                            dimensionsSvg += dimH(axle1X, axle2X, zone, chainTierX, `${Math.abs(Math.round(spacing))}`, dimColorSpacing);
+                        }
 
-                    // Corner → axle line 1, X.
-                    dimensionsSvg += dimH(ox, axle1X, zone, tier2, `${Math.round(axle1OffsetX)}`, dimColorCorner);
-                    // Corner → axle line 1, Y.
-                    dimensionsSvg += dimV(oy, axle1Y, zone, tier2, `${Math.round(axle1OffsetY)}`, dimColorCorner);
-                    // Axle line 1 → axle line 2, X (line spacing).
-                    if (maxAxleForTrain >= 2 && spacing) {
-                        const axle2X = axle1X - spacing;
-                        const tier3 = zone === 'front' ? frontTier++ : backTier++;
-                        dimensionsSvg += dimH(axle1X, axle2X, zone, tier3, `${Math.abs(Math.round(spacing))}`, dimColorSpacing);
+                        const chainTierY = zone === 'front' ? frontTier++ : backTier++;
+                        dimensionsSvg += dimV(0, oy, zone, chainTierY, `${Math.round(oy)}`, dimColorOffset);
+                        dimensionsSvg += dimV(oy, axle1Y, zone, chainTierY, `${Math.round(axle1OffsetY)}`, dimColorCorner);
+                        if (t.axlePairOffsetY) {
+                            const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
+                            dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, zone, chainTierY, `${Math.round(axlePairOffsetY)}`, dimColorPair);
+                        }
+                    } else {
+                        // Custom/manual trailer — no deck reference corner
+                        // for the axle chain, but the Y origin→corner
+                        // offset still applies on its own chained row.
+                        const chainTierY = zone === 'front' ? frontTier++ : backTier++;
+                        dimensionsSvg += dimV(0, oy, zone, chainTierY, `${Math.round(oy)}`, dimColorOffset);
                     }
-                    // Right axle → left axle, Y (axle pair offset).
-                    if (t.axlePairOffsetY) {
-                        const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
-                        const tier4 = zone === 'front' ? frontTier++ : backTier++;
-                        dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, zone, tier4, `${Math.round(axlePairOffsetY)}`, dimColorPair);
-                    }
+
+                    // ---- Baseline dim — origin(0,0) → deck corner, X ----
+                    // A genuine overall span from the world origin (not a
+                    // local spacing), so it's queued with the other
+                    // baseline dims below rather than drawn here.
+                    baselineItems[zone].push({ dist: Math.abs(ox), x: ox, xLabel: `${Math.round(ox)}`, color: dimColorOffset });
                 });
 
                 // World origin (0,0) → each cargo item's CoG, in X and Y
-                // — mirrors the trailer's own origin→corner dimension
-                // lines above, just in meters (converted to mm) and in
-                // the cargo's own color. Zoned front/back the same way as
-                // every other call-out, by the cargo's own X position.
+                // — queued as a baseline item (see above), in the
+                // cargo's own color.
                 cargoItems.forEach((c) => {
                     const cargoColor = cargoColorFor(cargoItems.indexOf(c));
                     const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
                     const zone = zoneOf(cxMm);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, cxMm, zone, tier, `${(parseFloat(c.x) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`, cargoColor);
-                    dimensionsSvg += dimV(0, cyMm, zone, tier, `${(parseFloat(c.y) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`, cargoColor);
+                    baselineItems[zone].push({
+                        dist: Math.max(Math.abs(cxMm), Math.abs(cyMm)), x: cxMm, y: cyMm,
+                        xLabel: `${(parseFloat(c.x) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`,
+                        yLabel: `${(parseFloat(c.y) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`,
+                        color: cargoColor
+                    });
                 });
 
-                // World origin (0,0) → Trailer CoG and → Combined CoG,
-                // same style as the per-item cargo dimension lines above,
-                // zoned the same way by their own X position.
+                // World origin (0,0) → Trailer CoG and → Combined CoG —
+                // same baseline queue as the per-item cargo dims above,
+                // so Trailer CoG's dimension naturally sorts alongside
+                // (and, being typically the larger span, tiers below/
+                // farther-out than) the other CoG dims in its X group
+                // instead of always landing in its own fixed slot.
                 if (cogTrailerSignLoaded) {
                     const tCxMm = parseFloat(cogTrailerSign.x) || 0, tCyMm = parseFloat(cogTrailerSign.y) || 0;
                     const zone = zoneOf(tCxMm);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, tCxMm, zone, tier, `${Math.round(tCxMm)} (Trailer CoG)`, TG_COG_TRAILER_COLOR);
-                    dimensionsSvg += dimV(0, tCyMm, zone, tier, `${Math.round(tCyMm)} (Trailer CoG)`, TG_COG_TRAILER_COLOR);
+                    baselineItems[zone].push({
+                        dist: Math.max(Math.abs(tCxMm), Math.abs(tCyMm)), x: tCxMm, y: tCyMm,
+                        xLabel: `${Math.round(tCxMm)} (Trailer CoG)`, yLabel: `${Math.round(tCyMm)} (Trailer CoG)`,
+                        color: TG_COG_TRAILER_COLOR
+                    });
                 }
                 if (cogCombinedSignLoaded) {
                     const cCxMm = parseFloat(cogCombinedSign.x) || 0, cCyMm = parseFloat(cogCombinedSign.y) || 0;
                     const zone = zoneOf(cCxMm);
-                    const tier = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(0, cCxMm, zone, tier, `${Math.round(cCxMm)} (CCoG)`, TG_CARGO_TOTAL_COLOR);
-                    dimensionsSvg += dimV(0, cCyMm, zone, tier, `${Math.round(cCyMm)} (CCoG)`, TG_CARGO_TOTAL_COLOR);
+                    baselineItems[zone].push({
+                        dist: Math.max(Math.abs(cCxMm), Math.abs(cCyMm)), x: cCxMm, y: cCyMm,
+                        xLabel: `${Math.round(cCxMm)} (CCoG)`, yLabel: `${Math.round(cCyMm)} (CCoG)`,
+                        color: TG_CARGO_TOTAL_COLOR
+                    });
                 }
+
+                // Draw the queued baseline dims, shortest distance first
+                // (closest tier) — standard baseline-dimension ordering.
+                ['front', 'back'].forEach(zone => {
+                    baselineItems[zone].sort((a, b) => a.dist - b.dist).forEach(item => {
+                        const tier = zone === 'front' ? frontTier++ : backTier++;
+                        if (item.xLabel != null) dimensionsSvg += dimH(0, item.x, zone, tier, item.xLabel, item.color);
+                        if (item.yLabel != null) dimensionsSvg += dimV(0, item.y, zone, tier, item.yLabel, item.color);
+                    });
+                });
             }
 
             // Origin sign at world (0,0): X-axis arrow pointing right
@@ -8030,19 +8094,22 @@
                 const loads = [...new Set(allRows.map(r => r.load))];
                 const uniformLoad = loads.length === 1 ? loads[0] : null;
                 const totalLoad = allRows.reduce((s, r) => s + r.load, 0);
+                // Short tag — "G1"/"G2"/"G3"/"G4" — instead of the full
+                // "Group 1" name, both on-canvas and in the legend, and
+                // t/axle rounded to a single decimal.
+                const shortTag = `G${g.groupNumber}`;
                 const labelText = allNoLoad
-                    ? `${g.groupName} · ${n} axle(s) · no line load`
+                    ? `${shortTag} · ${n} axle(s) · no line load`
                     : (uniformLoad !== null
-                        ? `${g.groupName} · ${n} axle(s) · ${uniformLoad} t/axle · ${totalLoad.toFixed(1)} t`
-                        : `${g.groupName} · ${n} axle(s) · ${totalLoad.toFixed(1)} t total`);
+                        ? `${shortTag} · ${n} axle(s) · ${(parseFloat(uniformLoad) || 0).toFixed(1)} t/axle · ${totalLoad.toFixed(1)} t`
+                        : `${shortTag} · ${n} axle(s) · ${totalLoad.toFixed(1)} t total`);
                 if (tgShowGroupLabels) {
                     labelsSvg += `<g>` + planLeaderBoxLabel(overallX, overallY, escapeHtml(labelText), g.color) + `</g>`;
-                } else {
-                    // Labels hidden on canvas — collect the same detail
-                    // text to render as a separate, color-coded legend
-                    // below the preview instead.
-                    groupDetailRows.push({ color: g.color, text: labelText });
                 }
+                // Legend rows are collected unconditionally now — the
+                // detail legend is a PERMANENT fixture below the preview
+                // (not gated on the on-canvas label toggle any more).
+                groupDetailRows.push({ color: g.color, text: labelText });
             });
 
             let groupChainSvg = '';
@@ -8109,7 +8176,9 @@
             // preview window) directly below the preview, per group color.
             const detailsEl = document.getElementById('tgPreviewGroupDetails');
             if (detailsEl) {
-                detailsEl.innerHTML = tgShowGroupLabels ? '' : groupDetailRows.map(r =>
+                // Permanent legend — always shown now, regardless of the
+                // 🏷 on-canvas label toggle.
+                detailsEl.innerHTML = groupDetailRows.map(r =>
                     `<div class="tg-preview-group-detail-row" style="border-left-color:${r.color}; color:${r.color};">${escapeHtml(r.text)}</div>`
                 ).join('');
             }
@@ -8147,7 +8216,15 @@
         // Y-scale (width) — only the shared Z axis has to match between
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
-            const padT = 30, padB = 30, padGap = 56; // symmetric top/bottom padding + a generous gap between the stacked panels
+            const padT = 30, padB = 30;
+            // Gap between the stacked side-view panel and the end-view
+            // panels below it — grows with the number of end-view "X
+            // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
+            // + CCoG Y, see endXDim below) so that tiered stack always
+            // has room above the end panels without crowding the side
+            // view.
+            const endXDimCount = cargoItems.length + (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
+            const padGap = Math.max(56, 20 + endXDimCount * 13);
             // Cargo boxes span base .. base + Height, where "base" is
             // each item's own Height-start reference: the trailer's own
             // top deck, or the top of the PREVIOUS cargo item's box, for
@@ -8223,7 +8300,26 @@
             // train's length), so the right end view reuses the exact
             // same geometry, mirrored left-right, rather than being a
             // second independent cross-section.
-            const endGap = 40; // gap between the two end-view panels
+            // ---- Reserved margins for the CoG Z dimension stacks ----
+            // Cargo CoG Z (top deck -> cargo CoG) now draws on the INWARD
+            // side of BOTH end-view panels (left panel's right edge,
+            // right panel's left edge) — i.e. inside the gap between the
+            // two panels — while Trailer/Combined CoG Z (ground -> CoG)
+            // draws on the OUTWARD side of BOTH panels (left panel's
+            // left edge, right panel's right edge). Computed here, before
+            // endGap/panel offsets are laid out, so both reserved widths
+            // are already known.
+            const TG_COGZ_LINE_GAP = 12;   // panel edge -> first tier's dimension line
+            const TG_COGZ_TIER_STEP = 26;  // successive tiers' line spacing (must clear the rotated text below)
+            const TG_COGZ_TEXT_GAP = 10;   // dimension line -> its own rotated label
+            const cogZDimCount = (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
+            const cogZOutwardMargin = cogZDimCount > 0
+                ? TG_COGZ_LINE_GAP + (cogZDimCount - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
+            const cargoZInwardMargin = cargoItems.length > 0
+                ? TG_COGZ_LINE_GAP + (cargoItems.length - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
+            const leftDimMargin = cogZOutwardMargin;
+            const rightDimMargin = cogZOutwardMargin;
+            const endGap = Math.max(40, cargoZInwardMargin * 2); // gap between the two end-view panels — wide enough for both panels' own inward cargo-CoG-Z tier stack
             const endsTotalW = endW * 2 + endGap;
 
             // Extra outside-the-panel margin reserved for the CoG Z
@@ -8238,15 +8334,6 @@
             // are consumed. Computed here (rather than where the dims
             // are actually drawn, further below) since it has to feed
             // the canvas width/offsets before those are laid out.
-            const TG_COGZ_LINE_GAP = 12;   // panel edge -> first tier's dimension line
-            const TG_COGZ_TIER_STEP = 26;  // successive tiers' line spacing (must clear the rotated text below)
-            const TG_COGZ_TEXT_GAP = 10;   // dimension line -> its own rotated label
-            const leftDimMargin = cargoItems.length > 0
-                ? TG_COGZ_LINE_GAP + (cargoItems.length - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
-            const cogZDimCount = (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
-            const rightDimMargin = cogZDimCount > 0
-                ? TG_COGZ_LINE_GAP + (cogZDimCount - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
-
             // Horizontal Loads readout no longer lives in this SVG at
             // all — it's rendered as its own standalone HTML panel
             // (see renderTrailerGenHLoadsPanel), stacked as a new
@@ -8307,6 +8394,28 @@
             // Panel labels above each end-view panel.
             groundSvg += `<text x="${endOffsetX1 + endW / 2}" y="${endPadT - 8}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
             groundSvg += `<text x="${endOffsetX2 + endW / 2}" y="${endPadT - 8}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
+
+            // Y / Z axis sign — one per end-view panel, tucked just
+            // inside its own inner-bottom corner (clear of the CoG Z
+            // dimension stacks, which sit further out past each panel's
+            // edges). Y arrow runs along the panel's own screen-horizontal
+            // (world Y, cross-section width); Z arrow runs straight up
+            // (world Z, height above ground).
+            const axisSignSvg = (baseX, baseY, dir) => {
+                const len = 24;
+                const hx = baseX + dir * len, vy = baseY - len;
+                return `<g opacity="0.85">` +
+                    `<line x1="${baseX}" y1="${baseY}" x2="${hx}" y2="${baseY}" stroke="var(--accent-green, #10b981)" stroke-width="1.5"/>` +
+                    `<path d="M ${hx} ${baseY} L ${hx - dir * 5} ${baseY - 3} L ${hx - dir * 5} ${baseY + 3} Z" fill="var(--accent-green, #10b981)"/>` +
+                    `<line x1="${baseX}" y1="${baseY}" x2="${baseX}" y2="${vy}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1.5"/>` +
+                    `<path d="M ${baseX} ${vy} L ${baseX - 3} ${vy + 5} L ${baseX + 3} ${vy + 5} Z" fill="var(--accent-blue, #38bdf8)"/>` +
+                    `<circle cx="${baseX}" cy="${baseY}" r="2" fill="var(--text-main, #e2e8f0)"/>` +
+                    `<text x="${hx + dir * 4}" y="${baseY + 3}" font-size="9" fill="var(--accent-green, #10b981)" text-anchor="${dir > 0 ? 'start' : 'end'}">Y</text>` +
+                    `<text x="${baseX + 4}" y="${vy - 4}" font-size="9" fill="var(--accent-blue, #38bdf8)">Z</text>` +
+                    `</g>`;
+            };
+            groundSvg += axisSignSvg(endOffsetX1 + 8, endGroundY, 1);
+            groundSvg += axisSignSvg(endOffsetX2 + endW - 8, endGroundY, -1);
 
             // ---- Side view: one wheel + deck strip per train ----
             let sideWheelsSvg = '', sideDecksSvg = '';
@@ -8477,6 +8586,22 @@
                 const ssx1 = sx(tlXMm - lMm / 2), ssx2 = sx(tlXMm + lMm / 2);
                 const ssy1 = sz(boxTopWorldZ), ssy2 = sz(baseWorldZ);
                 cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
+                // Y (height) dimension — continuous, top deck line up to
+                // this cargo's own box top — drawn just outside the
+                // box's right edge so each item's dim stays local to it
+                // instead of stacking out at a shared panel margin.
+                if (tgShowDimensions) {
+                    const ydX = Math.max(ssx1, ssx2) + 7;
+                    const ydTop = Math.min(ssy1, ssy2), ydBot = deckTopY;
+                    const ydMidY = (ydTop + ydBot) / 2;
+                    const ydLabel = `${Math.round(boxTopWorldZ - deckTopWorldZ)} (${c.name})`;
+                    cargoElevSvg += `<g opacity="0.9">` +
+                        `<line x1="${ydX}" y1="${ydBot}" x2="${ydX}" y2="${ydTop}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${ydX - 3}" y1="${ydBot}" x2="${ydX + 3}" y2="${ydBot}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<line x1="${ydX - 3}" y1="${ydTop}" x2="${ydX + 3}" y2="${ydTop}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<text x="${ydX + 9}" y="${ydMidY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${ydX + 9} ${ydMidY})">${escapeHtml(ydLabel)}</text>` +
+                        `</g>`;
+                }
                 cargoElevSvg += cogSymbolSvg(sx(cxMm), sz(cogWorldZ), 6, cargoColor);
                 cargoElevSvg += cogInlineLabel(sx(cxMm), sz(cogWorldZ), 6, `${escapeHtml(c.name)} ${(parseFloat(c.weight) || 0).toFixed(2)}t`, cargoColor, { fontSize: 8.5 });
 
@@ -8681,16 +8806,48 @@
             // ---- Dimensions ----
             let dimSvg = '';
             if (tgShowDimensions) {
-                const allSx = rows.map(r => sx(r.x));
-                const lo = Math.min(...allSx), hi = Math.max(...allSx);
-                const dimY = deckTopY - 16;
-                const overallLenMm = Math.round(Math.max(...rows.map(r => r.x)) - Math.min(...rows.map(r => r.x)));
-                dimSvg += `<g opacity="0.9">` +
-                    `<line x1="${lo}" y1="${dimY}" x2="${hi}" y2="${dimY}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
-                    `<line x1="${lo}" y1="${dimY - 3}" x2="${lo}" y2="${dimY + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                    `<line x1="${hi}" y1="${dimY - 3}" x2="${hi}" y2="${dimY + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                    `<text x="${(lo + hi) / 2}" y="${dimY - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${overallLenMm}</text>` +
-                    `</g>`;
+                // ---- Front (side) view X dimensions ----
+                // The old first-axle→last-axle span is no longer drawn.
+                // In its place: a continuous chain of deck-edge → cargo
+                // edge → cargo edge → ... → deck-edge segments (one row,
+                // shorter/local spacings) plus a single overall "top deck
+                // length" call-out in its own row further out — same
+                // near/far ordering as the plan view's dimension stacks
+                // (shorter, more local distances sit closest to the
+                // drawing; the one overall span sits outermost).
+                const dimHFront = (xa, xb, y, color, label) => {
+                    const x1 = sx(xa), x2 = sx(xb);
+                    const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
+                    const boxW = Math.max(20, String(label).length * 5.2);
+                    return `<g opacity="0.9">` +
+                        `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="${color}">${escapeHtml(String(label))}</text>` +
+                        `</g>`;
+                };
+                const deckTrainsFront = trailerGenTrains.filter(t => t.deckLength);
+                if (deckTrainsFront.length) {
+                    const deckX1o = Math.min(...deckTrainsFront.map(t => parseFloat(t.x) || 0));
+                    const deckX2o = Math.max(...deckTrainsFront.map(t => (parseFloat(t.x) || 0) + t.deckLength));
+                    const rowChainY = padT + 24;   // near row — short local spacings
+                    const rowTotalY = padT + 10;   // far row — one overall span
+                    const chainColor = 'var(--text-muted, #94a3b8)';
+                    dimSvg += dimHFront(deckX1o, deckX2o, rowTotalY, 'var(--accent-blue, #38bdf8)', `${Math.round(deckX2o - deckX1o)} (Top deck length)`);
+                    const sortedCargoX = cargoItems.map((c, i) => {
+                        const halfL = ((parseFloat(c.length) || 0) * 1000) / 2;
+                        const tlXMm = (parseFloat(c.tlX) || 0) * 1000;
+                        return { left: tlXMm - halfL, right: tlXMm + halfL, color: cargoColorFor(i), name: c.name };
+                    }).sort((a, b) => a.left - b.left);
+                    let cursorX = deckX1o;
+                    sortedCargoX.forEach(cg => {
+                        if (cg.left - cursorX > 1) dimSvg += dimHFront(cursorX, cg.left, rowChainY, chainColor, `${Math.round(cg.left - cursorX)}`);
+                        dimSvg += dimHFront(cg.left, cg.right, rowChainY, cg.color, `${Math.round(cg.right - cg.left)} (${cg.name})`);
+                        cursorX = cg.right;
+                    });
+                    if (deckX2o - cursorX > 1) dimSvg += dimHFront(cursorX, deckX2o, rowChainY, chainColor, `${Math.round(deckX2o - cursorX)}`);
+                }
                 // Deck-height dimension — drawn on the side view panel;
                 // labeled "(typ.)" since the same shared Z scale/height
                 // applies to the end view panel below it.
@@ -8722,65 +8879,89 @@
                     });
                 });
 
-                // Cargo CoG height (Z) — vertical dimension from the
-                // trailer's own top deck up to the CoG point, in the
-                // cargo's own color. Drawn in the LEFT END VIEW, tiered
-                // outward from that panel's own left edge (rather than
-                // near the item's own X inside the side view), so it
-                // never overlaps the cargo box / wheels drawn inside the
-                // panel regardless of where the CoG sign itself sits —
-                // each additional cargo item tiers one step further left
-                // (see leftDimMargin above, which reserves the canvas
-                // space for this). Anchored to the CoG point itself (not
-                // the box) so Length/Width/box position never move this
-                // line — only X — CoG/Y — CoG/Z — CoG do.
+                // Vertical (Z) dim helper — shared by the cargo-CoG and
+                // trailer/CCoG-Z stacks below. dir = +1 draws the tier
+                // line/label growing to the RIGHT of dimX0 (used on a
+                // panel's LEFT-hand edge), dir = -1 growing to the LEFT
+                // (used on a panel's RIGHT-hand edge) — so both panels
+                // can host the same stack, mirrored.
+                const dimZStack = (dimX0, dir, yTop, yBot, color, label, tierIdx) => {
+                    const dimX = dimX0 + dir * (TG_COGZ_LINE_GAP + tierIdx * TG_COGZ_TIER_STEP);
+                    const midY = (yTop + yBot) / 2;
+                    const textX = dimX - dir * TG_COGZ_TEXT_GAP;
+                    return `<g opacity="0.9">` +
+                        `<line x1="${dimX}" y1="${yBot}" x2="${dimX}" y2="${yTop}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${dimX - 3}" y1="${yBot}" x2="${dimX + 3}" y2="${yBot}" stroke="${color}" stroke-width="1"/>` +
+                        `<line x1="${dimX - 3}" y1="${yTop}" x2="${dimX + 3}" y2="${yTop}" stroke="${color}" stroke-width="1"/>` +
+                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${color}" transform="rotate(-90 ${textX} ${midY})">${escapeHtml(label)}</text>` +
+                        `</g>`;
+                };
+
+                // Cargo CoG height (Z) — top deck up to each item's CoG,
+                // in the item's own color. Per the reference layout this
+                // now draws on the INWARD side of BOTH end-view panels
+                // (left panel's right edge, right panel's left edge —
+                // i.e. inside the gap between the two panels), tiered one
+                // step further in per additional cargo item.
                 cargoItems.forEach((c, dimCargoIdx) => {
                     const cargoColor = cargoColorFor(dimCargoIdx);
                     const { cogWorldZ } = cargoBoxZ[dimCargoIdx];
-                    const dimX = endOffsetX1 - 15 - TG_COGZ_LINE_GAP - dimCargoIdx * TG_COGZ_TIER_STEP;
                     const dimYTop = szEnd(cogWorldZ), dimYBot = deckTopYEnd;
-                    const midY = (dimYTop + dimYBot) / 2;
-                    // Labeled with the CoG's actual total height above the
-                    // trailer top deck (matches the line drawn, which
-                    // always starts at the deck) rather than the item's
-                    // own Z input, which is only relative to its own
-                    // Height-start reference when stacked on a previous item.
                     const totalZAboveDeckM = ((cogWorldZ - deckTopWorldZ) / 1000).toFixed(3);
-                    const textX = dimX - TG_COGZ_TEXT_GAP;
-                    dimSvg += `<g opacity="0.9">` +
-                        `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
-                        `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${cargoColor}" transform="rotate(-90 ${textX} ${midY})">${totalZAboveDeckM} m (${escapeHtml(c.name)} CoG)</text>` +
-                        `</g>`;
+                    const label = `${totalZAboveDeckM} m (${c.name} CoG)`;
+                    dimSvg += dimZStack(endOffsetX1 + endW + 15, 1, dimYTop, dimYBot, cargoColor, label, dimCargoIdx);
+                    dimSvg += dimZStack(endOffsetX2 - 15, -1, dimYTop, dimYBot, cargoColor, label, dimCargoIdx);
                 });
 
                 // Trailer CoG + Combined CoG height (Z) — ground (world
                 // Z = 0) up to each sign's own CoG point, same style as
-                // the cargo Z dimensions above, each drawn in its own
-                // sign's color. Drawn in the RIGHT END VIEW, tiered
-                // outward from that panel's own right edge — keeps the
-                // side (front) view panel free of stacked Z call-outs
-                // entirely, and keeps these clear of the cargo Z dims
-                // (which live in the LEFT end view instead) as well as
-                // the deck/wheels drawn inside this panel. Unlike the
-                // per-item cargo Z dimensions, these read straight up
-                // from the ground line (not the trailer deck), since
-                // Display!D15/D16 is already the ground -> CoG height.
+                // the cargo Z dimensions above. Draws on the OUTWARD side
+                // of BOTH end-view panels (left panel's left edge, right
+                // panel's right edge). Unlike the per-item cargo Z
+                // dimensions, these read straight up from the ground line
+                // (not the trailer deck), since Display!D15/D16 is
+                // already the ground -> CoG height.
                 const tgCogZDims = [];
                 if (cogTrailerSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogTrailerSign.z) || 0, color: TG_COG_TRAILER_COLOR, label: 'Trailer CoG' });
                 if (cogCombinedSignLoaded) tgCogZDims.push({ worldZ: parseFloat(cogCombinedSign.z) || 0, color: TG_CARGO_TOTAL_COLOR, label: 'CCoG' });
                 tgCogZDims.forEach((d, dIdx) => {
-                    const dimX = endOffsetX2 + endW + 15 + TG_COGZ_LINE_GAP + dIdx * TG_COGZ_TIER_STEP;
                     const dimYTop = szEnd(d.worldZ), dimYBot = endGroundY;
-                    const midY = (dimYTop + dimYBot) / 2;
-                    const textX = dimX + TG_COGZ_TEXT_GAP;
-                    dimSvg += `<g opacity="0.9">` +
-                        `<line x1="${dimX}" y1="${dimYBot}" x2="${dimX}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1" stroke-dasharray="2 2"/>` +
-                        `<line x1="${dimX - 3}" y1="${dimYBot}" x2="${dimX + 3}" y2="${dimYBot}" stroke="${d.color}" stroke-width="1"/>` +
-                        `<line x1="${dimX - 3}" y1="${dimYTop}" x2="${dimX + 3}" y2="${dimYTop}" stroke="${d.color}" stroke-width="1"/>` +
-                        `<text x="${textX}" y="${midY}" font-size="${fDim}" text-anchor="middle" fill="${d.color}" transform="rotate(-90 ${textX} ${midY})">${(d.worldZ / 1000).toFixed(3)} m (${d.label})</text>` +
+                    const label = `${(d.worldZ / 1000).toFixed(3)} m (${d.label})`;
+                    dimSvg += dimZStack(endOffsetX1 - 15, -1, dimYTop, dimYBot, d.color, label, dIdx);
+                    dimSvg += dimZStack(endOffsetX2 + endW + 15, 1, dimYTop, dimYBot, d.color, label, dIdx);
+                });
+
+                // ---- End-view "X direction" (screen-horizontal / world
+                // Y) baseline dimensions — each significant CoG's world-Y
+                // offset from 0,0, drawn as a baseline stack (common
+                // origin, shorter distance tiered closest) above each end
+                // panel. These are the SAME world-Y values driving the
+                // plan (top) view's own Y — dimension stack, so the two
+                // relate directly: e.g. a cargo item's Y offset shown
+                // here matches its Y offset call-out in the plan view.
+                const endXDim = (syFn, y0World, yWorld, tier, label, color) => {
+                    const xa = syFn(y0World), xb = syFn(yWorld);
+                    const lo = Math.min(xa, xb), hi = Math.max(xa, xb);
+                    const y = endPadT - 10 - tier * 13;
+                    const boxW = Math.max(20, label.length * 5.2);
+                    return `<g opacity="0.9">` +
+                        `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="8" text-anchor="middle" fill="${color}">${escapeHtml(label)}</text>` +
                         `</g>`;
+                };
+                const endYPoints = [];
+                cargoItems.forEach((c, i) => endYPoints.push({ yWorld: (parseFloat(c.y) || 0) * 1000, color: cargoColorFor(i), label: `${(parseFloat(c.y) || 0).toFixed(3)} (${c.name} CoG)` }));
+                if (cogTrailerSignLoaded) endYPoints.push({ yWorld: parseFloat(cogTrailerSign.y) || 0, color: TG_COG_TRAILER_COLOR, label: `${Math.round(parseFloat(cogTrailerSign.y) || 0)} (Trailer CoG)` });
+                if (cogCombinedSignLoaded) endYPoints.push({ yWorld: parseFloat(cogCombinedSign.y) || 0, color: TG_CARGO_TOTAL_COLOR, label: `${Math.round(parseFloat(cogCombinedSign.y) || 0)} (CCoG)` });
+                // Shorter distance from 0 tiers closest to the panel
+                // (baseline style, nearest first).
+                [sy1, sy2].forEach(syFn => {
+                    endYPoints.slice().sort((a, b) => Math.abs(a.yWorld) - Math.abs(b.yWorld)).forEach((p, tier) => {
+                        dimSvg += endXDim(syFn, 0, p.yWorld, tier, p.label, p.color);
+                    });
                 });
             }
 
