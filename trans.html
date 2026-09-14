@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.5)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.6)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3121,6 +3121,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // no Header/Dbar (Left) block is selected.
         function headerDbarLeftProtrusionMm(train) {
             const typeKey = train && train.headerDbarLeft;
+            if (!typeKey || typeKey === 'none' || !HEADER_DBAR_TYPES[typeKey]) return 0;
+            const val = tgHeaderDbarLengthMm[typeKey];
+            return Number.isFinite(val) ? val : HEADER_DBAR_LENGTH_DEFAULT_MM;
+        }
+
+        // Side-agnostic version of headerDbarLeftProtrusionMm above —
+        // same authoritative Excel "L [mm]" length (tgHeaderDbarLengthMm,
+        // keyed by HEADER_DBAR_TYPES type only, not by side — it's the
+        // same physical accessory whichever edge it's mounted on), used
+        // by the Front-view AutoCAD-export Y-height dimension anchor
+        // (see computeTrailerCADInserts' headerDbarMaxXm) so that
+        // dimension clears a RIGHT-mounted Header/Dbar block's real
+        // outward reach, not just its small preview-footprint length.
+        function headerDbarProtrusionMm(typeKey) {
             if (!typeKey || typeKey === 'none' || !HEADER_DBAR_TYPES[typeKey]) return 0;
             const val = tgHeaderDbarLengthMm[typeKey];
             return Number.isFinite(val) ? val : HEADER_DBAR_LENGTH_DEFAULT_MM;
@@ -10539,6 +10553,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // up front to dimension the GAP between train i and i+1).
             let overallMinXm = null;
             let overallMaxXm = null;
+            // Farthest +X reach (world mm) of any RIGHT-mounted
+            // Header/Dbar accessory across all trains — tracked
+            // alongside overallMaxXm so the Front view's "top deck to
+            // top of cargo" Y-height dimension (built after this loop)
+            // can anchor past a rear-mounted Header/Dbar block too, not
+            // just the bare deck edge — per KKai's spec those
+            // dimensions must sit out from the trailer, cargo, OR
+            // D-bar, whichever reaches furthest. Populated in the
+            // Header/Dbar insert block below (side === 'right' only —
+            // that's the side that can extend past deckRightXcad; a
+            // LEFT/front-mounted accessory extends the opposite way
+            // and doesn't compete with this right-side anchor).
+            let headerDbarMaxXm = null;
             // Front-left deck-footprint corner Y (world mm) — minimum
             // trainBaseYm across every mapped train, tracked alongside
             // overallMinXm/overallMaxXm above so the Top view's
@@ -10860,6 +10887,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         ? (firstTrainAxle1Xm * CAD_UNIT_SCALE)
                         : (anchor.xCenter * CAD_UNIT_SCALE);
                     const hdY = -anchor.yCenter * CAD_UNIT_SCALE;
+                    // Track this accessory's own far (+X) reach — flush
+                    // edge (anchor.xCenter, world mm) plus its real
+                    // Excel-sourced length (headerDbarProtrusionMm),
+                    // since the block artwork extends further outward
+                    // from that flush insertion point by its own length
+                    // (see computeHeaderDbarBlocksForSide's flushAtEdge
+                    // comment). Only the RIGHT side competes with
+                    // deckRightXcad for the Front view's Y-height
+                    // dimension anchor below — see headerDbarMaxXm.
+                    if (side === 'right') {
+                        const hdFarXm = anchor.xCenter + headerDbarProtrusionMm(typeKey);
+                        headerDbarMaxXm = (headerDbarMaxXm === null) ? hdFarXm : Math.max(headerDbarMaxXm, hdFarXm);
+                    }
                     // Direction (rotation/mirror) — driven by side, not
                     // loadDirection: Left = 0°/un-mirrored, Right =
                     // 180°/mirrored (X scale -1), same block name both
@@ -11037,6 +11077,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // the "top deck to top of cargo" Y dimension measures the
             // cargo's true top surface, not just its CoG height.
             const cargoZSpansForDims = computeCargoZSpans();
+            // Farthest +X cargo box edge (front view, same X axis as top
+            // view) across ALL cargo items — computed in its own pass
+            // (rather than inline in the dimension-building loop below)
+            // because the Y-height dimension anchor for cargo #0 needs
+            // to already know about a LATER cargo item's overhang, not
+            // just the ones processed so far.
+            let cargoFarRightXcad = null;
+            cargoItems.forEach(cargo => {
+                const lenMm = (parseFloat(cargo.length) || 0) * 1000;
+                if (lenMm <= 0) return;
+                const tlXMm = (parseFloat(cargo.tlX) || 0) * 1000;
+                const rightXcad = (tlXMm + lenMm) * CAD_UNIT_SCALE;
+                cargoFarRightXcad = (cargoFarRightXcad === null) ? rightXcad : Math.max(cargoFarRightXcad, rightXcad);
+            });
+            // Outer anchor for the "top deck to top of cargo" Y-height
+            // dimensions below — per KKai's spec these must sit out from
+            // the TRAILER, CARGO, or D-BAR, whichever reaches furthest,
+            // not just the bare deck edge (deckRightXcad) — so take the
+            // max of the deck's own right edge, the furthest-overhanging
+            // cargo box, and any right-mounted Header/Dbar accessory's
+            // real reach (headerDbarMaxXm, tracked during the train
+            // loop above).
+            const headerDbarMaxXcad = (headerDbarMaxXm !== null) ? headerDbarMaxXm * CAD_UNIT_SCALE : null;
+            const frontViewHeightDimAnchorXcad = [deckRightXcad, cargoFarRightXcad, headerDbarMaxXcad]
+                .filter(v => v !== null)
+                .reduce((max, v) => (max === null ? v : Math.max(max, v)), null);
             cargoItems.forEach((cargo, cargoIdx) => {
                 const cogXMm = (parseFloat(cargo.x) || 0) * 1000;
                 const cogYMm = (parseFloat(cargo.y) || 0) * 1000;
@@ -11064,14 +11130,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                 // ---- "Top deck to top of cargo" — Y direction, front
                 // view. Per KKai's spec this must sit OUT from the
-                // trailer, cargo, and any D-bar/header accessory rather
-                // than beside the cargo's own box — anchored past the
-                // whole deck's own right-most edge (deckRightXcad) — and
-                // each cargo item steps one more DIM_OFFSET_STACK_MM
-                // further out than the previous one so multiple cargo
-                // height dimensions never overlap each other.
-                if (deckRightXcad !== null) {
-                    const cargoHeightDimXcad = deckRightXcad + DIM_OFFSET_MM + cargoIdx * DIM_OFFSET_STACK_MM;
+                // trailer, cargo, or D-bar/header accessory — whichever
+                // reaches furthest — rather than beside the cargo's own
+                // box, so it's anchored off frontViewHeightDimAnchorXcad
+                // (max of deckRightXcad, the furthest-overhanging cargo
+                // edge, and any right-mounted Header/Dbar's real reach —
+                // see above) instead of the bare deck edge alone. Each
+                // cargo item then steps one more DIM_OFFSET_STACK_MM
+                // further out (X direction) than the previous one so
+                // multiple cargo height dimensions never overlap each
+                // other.
+                if (frontViewHeightDimAnchorXcad !== null) {
+                    const cargoHeightDimXcad = frontViewHeightDimAnchorXcad + DIM_OFFSET_MM + cargoIdx * DIM_OFFSET_STACK_MM;
                     pushCadDimension(dimensions, cargoHeightDimXcad, deckTopFrontYcad, cargoHeightDimXcad, cargoFrontTopYcad,
                         cargoHeightDimXcad, (deckTopFrontYcad + cargoFrontTopYcad) / 2);
                 }
