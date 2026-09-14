@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.15)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.16)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8936,23 +8936,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         if (sharedLabelSign === null) sharedLabelSign = footSign;
                         const tick = 6;
                         svg += `<path d="M ${apexX} ${armY - tick} L ${apexX + footSign * tick} ${armY - tick} L ${apexX + footSign * tick} ${armY}" fill="none" stroke="${s.color}" stroke-width="1"/>`;
-                        // Angle label — placed OUTSIDE the hypotenuse
-                        // (perpendicular offset away from the triangle's
-                        // interior, at the hypotenuse's own midpoint) rather
-                        // than at the apex, with each system's offset
-                        // stepped out by TG_STAB_LABEL_STEP so the two
-                        // systems' labels never overlap even when their
-                        // hypotenuses run close together — and both use the
-                        // SAME sharedLabelSign side, so "Single" sits beside
-                        // "Combined" rather than mirrored across the arm
-                        // reference line into it.
-                        const midX = (apexX + armX) / 2, midY = (apexY + armY) / 2;
-                        const hx = armX - apexX, hz = armY - apexY;
-                        const hLen = Math.hypot(hx, hz) || 1;
-                        let px = -hz / hLen, py = hx / hLen;
-                        if (px * sharedLabelSign < 0) { px = -px; py = -py; }
-                        const labelOff = 14 + sIdx * TG_STAB_LABEL_STEP;
-                        const angleLabelX = midX + px * labelOff, angleLabelY = midY + py * labelOff;
+                        // Angle label placement differs by system:
+                        // "Single" now sits directly UNDER its own CoG
+                        // apex (small offset down/toward the shared
+                        // side, just enough to clear the dashed vertical
+                        // reference line), rather than out at its own
+                        // hypotenuse's midpoint — reads as "this is the
+                        // angle at this CoG mark" instead of floating
+                        // near the arm. "Combined" keeps the original
+                        // hypotenuse-midpoint placement. Both still use
+                        // the SAME sharedLabelSign side, so "Single"
+                        // sits beside "Combined" rather than mirrored
+                        // across the arm reference line into it.
+                        let angleLabelX, angleLabelY;
+                        if (s.label === 'Single') {
+                            angleLabelX = apexX + sharedLabelSign * 14;
+                            angleLabelY = apexY + 14;
+                        } else {
+                            const midX = (apexX + armX) / 2, midY = (apexY + armY) / 2;
+                            const hx = armX - apexX, hz = armY - apexY;
+                            const hLen = Math.hypot(hx, hz) || 1;
+                            let px = -hz / hLen, py = hx / hLen;
+                            if (px * sharedLabelSign < 0) { px = -px; py = -py; }
+                            const labelOff = 14 + sIdx * TG_STAB_LABEL_STEP;
+                            angleLabelX = midX + px * labelOff;
+                            angleLabelY = midY + py * labelOff;
+                        }
                         svg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
                         // Arm distance label — placed below the arm foot
                         // point, outside the triangle's base leg, each
