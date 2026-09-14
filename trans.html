@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.4)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2006,6 +2006,27 @@
         // DIMLINEAR behavior exactly, no separate H/V flag needed).
         function pushCadDimension(dimensions, x1, y1, x2, y2, dimX, dimY) {
             dimensions.push({ x1, y1, x2, y2, dimX, dimY });
+        }
+
+        // Pushes a CONTINUOUS dimension chain — AutoCAD's real DIMCONTINUE
+        // behavior: the first two points form a normal DIMLINEAR (dimX/
+        // dimY set its dimension-line offset exactly like pushCadDimension
+        // above); every point after that continues the SAME dimension
+        // line via DIMCONTINUE, which reuses the prior dimension's own
+        // offset automatically — this is what draws as one unbroken row
+        // of chained dimensions (e.g. "top deck -> 0,0 -> CoG", or
+        // "left deck -> cargo -> cargo -> right deck") instead of several
+        // independent, potentially misaligned dimension lines. `points`
+        // needs at least 2 entries ({x,y} each).
+        function pushCadDimensionChain(dimensions, points, dimX, dimY) {
+            if (!points || points.length < 2) return;
+            dimensions.push({
+                chain: true,
+                x1: points[0].x, y1: points[0].y,
+                x2: points[1].x, y2: points[1].y,
+                dimX, dimY,
+                continuePoints: points.slice(2).map(p => ({ x: p.x, y: p.y }))
+            });
         }
 
         // ---- Drawing Table placement in Paper Space (.scr export) ----
@@ -10518,6 +10539,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // up front to dimension the GAP between train i and i+1).
             let overallMinXm = null;
             let overallMaxXm = null;
+            // Front-left deck-footprint corner Y (world mm) — minimum
+            // trainBaseYm across every mapped train, tracked alongside
+            // overallMinXm/overallMaxXm above so the Top view's
+            // continuous "top deck -> 0,0 -> trailer CoG" dimension
+            // chain (built near the Combined CoG block further down)
+            // has a real deck-edge corner point to start from.
+            let deckRefYm = null;
             const trainAnchorsForDim = [];
             trailerGenTrains.forEach(train => {
                 const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
@@ -10571,20 +10599,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const rearXcad = (axle1X + trainLengthMm) * CAD_UNIT_SCALE;
                     const frontEdgeYcad = -trainBaseYm * CAD_UNIT_SCALE;
                     const rearEdgeYcad = -(trainBaseYm + trainDeckWidthMm) * CAD_UNIT_SCALE;
-                    // Length — horizontal dim along the deck's own front
-                    // (small-Y) edge, offset further in +Y (CAD) so it
-                    // sits clear of the block artwork.
-                    pushCadDimension(dimensions, frontXcad, frontEdgeYcad, rearXcad, frontEdgeYcad,
-                        (frontXcad + rearXcad) / 2, frontEdgeYcad + DIM_OFFSET_MM);
+                    // NOTE: the deck LENGTH dimension (front axle to rear
+                    // axle, X direction) that used to sit here was removed
+                    // per KKai's spec — it duplicated the "first to last
+                    // axle" span and is superseded by the Front view's own
+                    // continuous cargo-anchored X dimension chain + total
+                    // top-deck-length dimension (see the front-view X
+                    // dimensions built after the cargoItems.forEach loop
+                    // further down).
                     // Width — vertical dim along the deck's own front
                     // (small-X) edge, offset further in -X (CAD) so it
-                    // doesn't run through the length dimension above.
+                    // doesn't run through any dimension above.
                     pushCadDimension(dimensions, frontXcad, frontEdgeYcad, frontXcad, rearEdgeYcad,
                         frontXcad - DIM_OFFSET_MM, (frontEdgeYcad + rearEdgeYcad) / 2);
                     overallMinXm = (overallMinXm === null) ? axle1X : Math.min(overallMinXm, axle1X);
                     overallMaxXm = (overallMaxXm === null) ? (axle1X + trainLengthMm) : Math.max(overallMaxXm, axle1X + trainLengthMm);
                 }
                 trainAnchorsForDim.push({ axle1X, trainBaseYm });
+                deckRefYm = (deckRefYm === null) ? trainBaseYm : Math.min(deckRefYm, trainBaseYm);
 
                 // ---- Axle-group spacing dimension (top view) ----
                 // One per train.groups entry (the "custom load per axle
@@ -10982,7 +11014,30 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // unchanged) and draws it on the same CARGO_COG_MARKERS
             // layer as the markers themselves.
             const texts = [];
-            cargoItems.forEach(cargo => {
+            // ---- Front view (elevation) X/Y dimension setup — per
+            // KKai's spec: deckLeftXcad/deckRightXcad (world X, shared
+            // with the top view) and deckTopFrontYcad (that view's own
+            // deck-top reference line) anchor both (1) the continuous
+            // "left top deck -> cargo -> cargo length -> cargo -> right
+            // top deck" X chain + standalone "total top deck length"
+            // dimension, and (2) each cargo's own "top deck -> top of
+            // cargo" Y dimension — all built inside/after the loop below.
+            const deckLeftXcad = (overallMinXm !== null) ? overallMinXm * CAD_UNIT_SCALE : null;
+            const deckRightXcad = (overallMaxXm !== null) ? overallMaxXm * CAD_UNIT_SCALE : null;
+            const deckTopFrontYcad = deckTopFrontYm * CAD_UNIT_SCALE;
+            // Collects every cargo's own left/right box-edge X (front
+            // view, same X axis as top view) as the loop runs, plus the
+            // highest cargo-top Y across all items — both consumed AFTER
+            // the loop to build the X chain / total-length dimension.
+            const frontViewCargoXPoints = [];
+            let frontViewHighestCargoTopYcad = null;
+            // Real cargo box top (world Z, mm) per item, honoring
+            // Height-start/Gap/Height exactly like the actual cargo
+            // RECTANG outlines (see computeCargoCADOutlines) — needed so
+            // the "top deck to top of cargo" Y dimension measures the
+            // cargo's true top surface, not just its CoG height.
+            const cargoZSpansForDims = computeCargoZSpans();
+            cargoItems.forEach((cargo, cargoIdx) => {
                 const cogXMm = (parseFloat(cargo.x) || 0) * 1000;
                 const cogYMm = (parseFloat(cargo.y) || 0) * 1000;
                 const cogZMm = (parseFloat(cargo.z) || 0) * 1000;
@@ -10994,6 +11049,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const cogFrontY = (deckTopFrontYm + cogZMm) * CAD_UNIT_SCALE;
                 const cogEndX = (cogEndAnchorXm + cogEndYSign * cogYMm) * CAD_UNIT_SCALE;
                 const cogEndY = (deckTopEndYm + cogZMm) * CAD_UNIT_SCALE;
+
+                // ---- Front view — real top-of-box height (world Z),
+                // same Height-start/Gap/Height math as computeCargoZSpans/
+                // computeCargoCADOutlines, converted onto this view's own
+                // deckTopFrontYm reference line — used for the "top deck
+                // to top of cargo" Y dimension below and the "total top
+                // deck length" placement height further down.
+                const zSpanForThis = cargoZSpansForDims[cargoIdx] || { topWorldZ: tgZTrailerHeightMm };
+                const aboveDeckTopMmForThis = zSpanForThis.topWorldZ - tgZTrailerHeightMm;
+                const cargoFrontTopYcad = (deckTopFrontYm + aboveDeckTopMmForThis) * CAD_UNIT_SCALE;
+                frontViewHighestCargoTopYcad = (frontViewHighestCargoTopYcad === null)
+                    ? cargoFrontTopYcad : Math.max(frontViewHighestCargoTopYcad, cargoFrontTopYcad);
+
+                // ---- "Top deck to top of cargo" — Y direction, front
+                // view. Per KKai's spec this must sit OUT from the
+                // trailer, cargo, and any D-bar/header accessory rather
+                // than beside the cargo's own box — anchored past the
+                // whole deck's own right-most edge (deckRightXcad) — and
+                // each cargo item steps one more DIM_OFFSET_STACK_MM
+                // further out than the previous one so multiple cargo
+                // height dimensions never overlap each other.
+                if (deckRightXcad !== null) {
+                    const cargoHeightDimXcad = deckRightXcad + DIM_OFFSET_MM + cargoIdx * DIM_OFFSET_STACK_MM;
+                    pushCadDimension(dimensions, cargoHeightDimXcad, deckTopFrontYcad, cargoHeightDimXcad, cargoFrontTopYcad,
+                        cargoHeightDimXcad, (deckTopFrontYcad + cargoFrontTopYcad) / 2);
+                }
                 inserts.push({
                     trainName: `${cargo.name || 'Cargo'} — CoG (Top)`,
                     view: 'top',
@@ -11044,6 +11125,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const y1 = -tlYMm * CAD_UNIT_SCALE, y2 = -(tlYMm + widMm) * CAD_UNIT_SCALE;
                     pushCadDimension(dimensions, x1, y1, x2, y1, (x1 + x2) / 2, y1 - DIM_OFFSET_MM);
                     pushCadDimension(dimensions, x1, y1, x1, y2, x1 - DIM_OFFSET_MM, (y1 + y2) / 2);
+                    // Front view — same left/right edges (shared X axis),
+                    // collected for the continuous "left top deck ->
+                    // cargo -> cargo -> right top deck" X chain built
+                    // right after this cargoItems.forEach loop.
+                    frontViewCargoXPoints.push({ x: x1 });
+                    frontViewCargoXPoints.push({ x: x2 });
                 }
 
                 // ---- CoG distance from world origin (0,0) — top view.
@@ -11068,6 +11155,40 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 pushCadDimension(dimensions, cogEndX, groundEndYcad, cogEndX, cogEndY, cogEndX - DIM_OFFSET_MM, (groundEndYcad + cogEndY) / 2);
                 pushCadDimension(dimensions, cogEndX, deckTopEndYcad, cogEndX, cogEndY, cogEndX - DIM_OFFSET_MM - DIM_OFFSET_STACK_MM, (deckTopEndYcad + cogEndY) / 2);
             });
+
+            // ---- Front view (elevation) X-direction dimensions — per
+            // KKai's spec: (1) ONE continuous dimension chain along the
+            // shared X axis from the left-most top-deck edge, through
+            // every cargo item's own left/right box edges (in X order),
+            // to the right-most top-deck edge — this replaces the old
+            // standalone "first axle to last axle" deck-length dimension
+            // removed above; (2) a SEPARATE standalone "total top deck
+            // length" dimension (same two deck-edge endpoints) placed
+            // well above the highest cargo box top so it never overlaps
+            // the cargo artwork or the chain dimension line below it. ----
+            if (deckLeftXcad !== null && deckRightXcad !== null) {
+                const frontChainYcad = deckTopFrontYcad + DIM_OFFSET_MM;
+                // Sort the deck's own left/right edges together WITH every
+                // cargo edge (rather than always placing the deck edges
+                // first/last) so the chain still comes out in correct
+                // left-to-right order even if a cargo item overhangs past
+                // the deck's own footprint.
+                const allChainX = [deckLeftXcad, deckRightXcad]
+                    .concat(frontViewCargoXPoints.map(p => p.x))
+                    .sort((a, b) => a - b);
+                const chainPoints = allChainX.map(x => ({ x, y: deckTopFrontYcad }));
+                pushCadDimensionChain(dimensions, chainPoints, (deckLeftXcad + deckRightXcad) / 2, frontChainYcad);
+
+                // Total top-deck length — standalone (not chained),
+                // raised above the tallest cargo box (falls back to just
+                // past the chain row above if there's no cargo yet) so
+                // it "un-interferes" with the cargo per KKai's spec.
+                const totalLengthDimYcad = (frontViewHighestCargoTopYcad !== null)
+                    ? frontViewHighestCargoTopYcad + DIM_OFFSET_MM + DIM_OFFSET_STACK_MM
+                    : frontChainYcad + DIM_OFFSET_STACK_MM;
+                pushCadDimension(dimensions, deckLeftXcad, deckTopFrontYcad, deckRightXcad, deckTopFrontYcad,
+                    (deckLeftXcad + deckRightXcad) / 2, totalLengthDimYcad);
+            }
 
             // Combined CoG (CCOG) — single marker, Excel Display!B16:D16
             // (cogCombinedSign). Unlike per-item CoG above, this is
@@ -11141,10 +11262,36 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 texts.push({ view: 'side', x: ccogFrontX, y: ccogFrontY, text: ccogLabelText });
                 texts.push({ view: 'end', x: ccogEndX, y: ccogEndY, text: ccogLabelText });
 
-                // ---- CCoG distance from world origin (0,0) — top view,
-                // same X/Y-component pattern as each cargo CoG above. ----
-                pushCadDimension(dimensions, 0, 0, ccogTopX, ccogTopY, ccogTopX / 2, ccogTopY + DIM_OFFSET_MM);
-                pushCadDimension(dimensions, 0, 0, ccogTopX, ccogTopY, ccogTopX + DIM_OFFSET_MM, ccogTopY / 2);
+                // ---- Top view — continuous dimension chain: top-deck
+                // front-left corner -> world origin (0,0) -> trailer
+                // (Combined) CoG. Per KKai's spec this draws as ONE
+                // continuous/chained dimension (AutoCAD DIMCONTINUE), not
+                // two disconnected dimensions, in both X and Y — replaces
+                // the old plain "CCoG distance from (0,0)" pair above.
+                // Reuses the same deck reference corner (overallMinXm/
+                // deckRefYm) already tracked earlier for the overall
+                // train length dimension.
+                if (overallMinXm !== null && deckRefYm !== null) {
+                    const deckCornerXcad = overallMinXm * CAD_UNIT_SCALE;
+                    const deckCornerYcad = -deckRefYm * CAD_UNIT_SCALE;
+                    // X chain — horizontal, offset one stack further out
+                    // than the plain per-trailer deck-length dimension so
+                    // it clears it.
+                    pushCadDimensionChain(
+                        dimensions,
+                        [{ x: deckCornerXcad, y: deckCornerYcad }, { x: 0, y: 0 }, { x: ccogTopX, y: ccogTopY }],
+                        (deckCornerXcad + ccogTopX) / 2,
+                        deckCornerYcad + DIM_OFFSET_MM + 2 * DIM_OFFSET_STACK_MM
+                    );
+                    // Y chain — vertical, offset further left than the
+                    // plain per-trailer deck-width dimension.
+                    pushCadDimensionChain(
+                        dimensions,
+                        [{ x: deckCornerXcad, y: deckCornerYcad }, { x: 0, y: 0 }, { x: ccogTopX, y: ccogTopY }],
+                        deckCornerXcad - DIM_OFFSET_MM - 2 * DIM_OFFSET_STACK_MM,
+                        (deckCornerYcad + ccogTopY) / 2
+                    );
+                }
 
                 // ---- CCoG height from ground + from trailer top deck —
                 // end view. ccogEndY is already ground-referenced (see
@@ -11306,6 +11453,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     lines.push(`${d.x1.toFixed(3)},${d.y1.toFixed(3)},0`);
                     lines.push(`${d.x2.toFixed(3)},${d.y2.toFixed(3)},0`);
                     lines.push(`${d.dimX.toFixed(3)},${d.dimY.toFixed(3)},0`);
+                    if (d.chain && d.continuePoints && d.continuePoints.length) {
+                        // Continuous dimension chain — DIMCONTINUE reuses
+                        // the DIMLINEAR above's own dimension-line offset
+                        // for every extra point here, so the whole chain
+                        // draws as one unbroken row (real AutoCAD
+                        // DIMCONTINUE behavior) instead of several
+                        // independently-offset dimensions.
+                        lines.push('DIMCONTINUE');
+                        d.continuePoints.forEach(p => {
+                            lines.push(`${p.x.toFixed(3)},${p.y.toFixed(3)},0`);
+                        });
+                        lines.push(''); // stop adding continued segments
+                        lines.push(''); // exit "Select continued dimension" prompt
+                    }
                 });
                 lines.push('-LAYER');
                 lines.push('Set');
