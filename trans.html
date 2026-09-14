@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.13)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.14)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8332,7 +8332,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Y-scale (width) — only the shared Z axis has to match between
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
-            const padT = 30, padB = 30;
+            const padT = 30, padB = 52; // padB grown to fit the End View panel labels, now placed BELOW each panel's ground line instead of above it
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
             // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
@@ -8435,8 +8435,25 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ? TG_COGZ_LINE_GAP + (cargoItems.length - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
             const leftDimMargin = cogZOutwardMargin;
             const rightDimMargin = cogZOutwardMargin;
-            const endGap = Math.max(40, cargoZInwardMargin * 2); // gap between the two end-view panels — wide enough for both panels' own inward cargo-CoG-Z tier stack
+            // Gap between the two end-view panels — wide enough for both
+            // panels' own inward cargo-CoG-Z tier stack, plus extra fixed
+            // breathing room so the Left/Right End View panels (and their
+            // now below-ground labels) read as clearly separate groups
+            // rather than crowding together.
+            const endGap = Math.max(90, cargoZInwardMargin * 2 + 40);
             const endsTotalW = endW * 2 + endGap;
+
+            // Outward margin reserved to the right of the FRONT (side)
+            // view panel for the relocated per-cargo height dimension
+            // stack (see cargoElevSvg below) — each cargo item's Y
+            // (height) dimension now lands on this shared right-side
+            // border, tiered outward in X so multiple items' lines/text
+            // never overlap.
+            const TG_CARGO_HGT_LINE_GAP = 10;   // panel edge -> first tier's dimension line
+            const TG_CARGO_HGT_TIER_STEP = 20;  // successive tiers' X spacing
+            const TG_CARGO_HGT_TEXT_GAP = 10;   // last tier's line -> its own rotated label
+            const cargoHgtOutwardMargin = cargoItems.length > 0
+                ? TG_CARGO_HGT_LINE_GAP + (cargoItems.length - 1) * TG_CARGO_HGT_TIER_STEP + TG_CARGO_HGT_TEXT_GAP + 20 : 0;
 
             // Extra outside-the-panel margin reserved for the CoG Z
             // dimension call-outs that now live in the end views instead
@@ -8460,7 +8477,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // (unless the two end views together need more room than the
             // plan view's plot area, in which case it grows to fit).
             const contentW = Math.max(sideW, endsTotalW);
-            const svgW = Math.max(svgWTop, padL + leftDimMargin + contentW + rightDimMargin + padR);
+            const svgW = Math.max(
+                svgWTop,
+                padL + leftDimMargin + contentW + rightDimMargin + padR,
+                sideOffsetX + sideW + cargoHgtOutwardMargin + padR // room for the relocated cargo-height dimension stack past the side view's own right edge
+            );
             const endOffsetX1 = padL + leftDimMargin + (contentW - endsTotalW) / 2; // left end-view panel
             const endOffsetX2 = endOffsetX1 + endW + endGap;        // right end-view panel
 
@@ -8507,9 +8528,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             let groundSvg = `<line x1="${sideOffsetX - 15}" y1="${sideGroundY}" x2="${sideOffsetX + sideW + 15}" y2="${sideGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
             groundSvg += `<line x1="${endOffsetX1 - 15}" y1="${endGroundY}" x2="${endOffsetX1 + endW + 15}" y2="${endGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
             groundSvg += `<line x1="${endOffsetX2 - 15}" y1="${endGroundY}" x2="${endOffsetX2 + endW + 15}" y2="${endGroundY}" stroke="var(--text-main, #e2e8f0)" stroke-width="1.2"/>`;
-            // Panel labels above each end-view panel.
-            groundSvg += `<text x="${endOffsetX1 + endW / 2}" y="${endPadT - 8}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
-            groundSvg += `<text x="${endOffsetX2 + endW / 2}" y="${endPadT - 8}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
+            // Panel labels — placed BELOW each end-view panel's own
+            // ground line (rather than above the panel) so they read as
+            // captions under the drawings, matching how the label sits
+            // relative to its view.
+            groundSvg += `<text x="${endOffsetX1 + endW / 2}" y="${endGroundY + 24}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
+            groundSvg += `<text x="${endOffsetX2 + endW / 2}" y="${endGroundY + 24}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
 
             // Y / Z axis sign — one per end-view panel, tucked just
             // inside its own inner-bottom corner (clear of the CoG Z
@@ -8703,11 +8727,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const ssy1 = sz(boxTopWorldZ), ssy2 = sz(baseWorldZ);
                 cargoElevSvg += `<rect x="${Math.min(ssx1, ssx2)}" y="${Math.min(ssy1, ssy2)}" width="${Math.abs(ssx2 - ssx1)}" height="${Math.abs(ssy2 - ssy1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>`;
                 // Y (height) dimension — continuous, top deck line up to
-                // this cargo's own box top — drawn just outside the
-                // box's right edge so each item's dim stays local to it
-                // instead of stacking out at a shared panel margin.
+                // this cargo's own box top — relocated to the outermost
+                // right-side border of the front (side) view panel
+                // (past sideOffsetX+sideW) instead of hugging each
+                // box's own right edge, so all cargo height call-outs
+                // read together off one shared border. Each item still
+                // gets its own tier, stepped outward in X by
+                // TG_CARGO_HGT_TIER_STEP per cargo index, so neither the
+                // dimension lines nor their rotated text overlap when
+                // multiple cargo items are present.
                 if (tgShowDimensions) {
-                    const ydX = Math.max(ssx1, ssx2) + 7;
+                    const ydX = sideOffsetX + sideW + TG_CARGO_HGT_LINE_GAP + cargoElevIdx * TG_CARGO_HGT_TIER_STEP;
                     const ydTop = Math.min(ssy1, ssy2), ydBot = deckTopY;
                     const ydMidY = (ydTop + ydBot) / 2;
                     const ydLabel = `${Math.round(boxTopWorldZ - deckTopWorldZ)} (${c.name})`;
