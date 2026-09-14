@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7684,7 +7684,10 @@
                 const len = Math.hypot(dx, dy) || 1;
                 dx /= len; dy /= len;
                 const labelX = anchorX + dx * dist, labelY = anchorY + dy * dist;
-                const boxW = Math.max(70, text.length * 5.6);
+                // Box sized to fit the text itself (short "G1"/"G2" tags
+                // now that the full detail string moved to the legend
+                // below) instead of a fixed 70px-wide minimum plate.
+                const boxW = text.length * 6.2 + 14;
                 const boxH = 16;
                 return `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${labelX.toFixed(1)}" y2="${labelY.toFixed(1)}" stroke="${color}" stroke-width="1" opacity="0.55"/>` +
                     `<rect x="${(labelX - boxW / 2).toFixed(1)}" y="${(labelY - boxH / 2).toFixed(1)}" width="${boxW}" height="${boxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="${color}" stroke-width="1"/>` +
@@ -7693,19 +7696,24 @@
 
             // Collision-avoiding "attached" label placement — no leader
             // line at all, just short text tucked directly against its
-            // own block/marker (header/dbar block, cargo box, CoG/CCoG
-            // markers). blockedRects accumulates every shape's own screen
-            // footprint as it's drawn below (axle clusters, deck
-            // rectangles, header/dbar blocks, cargo boxes) so later
-            // labels steer clear of earlier shapes; placedLabelRects
-            // does the same for labels themselves so two tags never
-            // stack on top of each other. Four candidate sides (above/
-            // below/right/left of the anchor rect) are tried in order
-            // and the first clear one wins; if all four collide, "above"
-            // is used anyway (a slight overlap beats a missing label).
+            // own block/marker (cargo box, CoG/CCoG markers). blockedRects
+            // accumulates every shape's own screen footprint as it's
+            // drawn below (axle clusters, deck rectangles, header/dbar
+            // blocks, cargo boxes) so later labels steer clear of earlier
+            // shapes; placedLabelRects does the same for labels
+            // themselves so two tags never stack on top of each other.
+            // Candidate sides (above/below/right/left, plus the four
+            // corners when opts.diagonals is set — used for the CoG/CCoG
+            // point markers, which need more room to fan out from each
+            // other than a rectangular block does) are scored by total
+            // overlap area against everything already placed, and the
+            // LEAST-overlapping one wins (not just "first clear one") so
+            // two labels forced to compete for the same tight space still
+            // separate as far as the geometry allows instead of both
+            // defaulting to the same "above" slot.
             const blockedRects = [];
             const placedLabelRects = [];
-            const rectsOverlap = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+            const overlapArea = (a, b) => Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1)) * Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
             const placeAttachedLabel = (rect, text, color, opts = {}) => {
                 const fontSize = opts.fontSize || 9;
                 const gap = opts.gap != null ? opts.gap : 4;
@@ -7718,10 +7726,21 @@
                     { x1: rect.x2 + gap, y1: midY - textH / 2, x2: rect.x2 + gap + textW, y2: midY + textH / 2, anchorX: rect.x2 + gap, anchorY: midY + 3, align: 'start' },
                     { x1: rect.x1 - gap - textW, y1: midY - textH / 2, x2: rect.x1 - gap, y2: midY + textH / 2, anchorX: rect.x1 - gap, anchorY: midY + 3, align: 'end' }
                 ];
-                const chosen = candidates.find(cand =>
-                    !blockedRects.some(b => rectsOverlap(cand, b)) &&
-                    !placedLabelRects.some(p => rectsOverlap(cand, p))
-                ) || candidates[0];
+                if (opts.diagonals) {
+                    candidates.push(
+                        { x1: rect.x2 + gap, y1: rect.y1 - gap - textH, x2: rect.x2 + gap + textW, y2: rect.y1 - gap, anchorX: rect.x2 + gap, anchorY: rect.y1 - gap - 3, align: 'start' },
+                        { x1: rect.x1 - gap - textW, y1: rect.y1 - gap - textH, x2: rect.x1 - gap, y2: rect.y1 - gap, anchorX: rect.x1 - gap, anchorY: rect.y1 - gap - 3, align: 'end' },
+                        { x1: rect.x2 + gap, y1: rect.y2 + gap, x2: rect.x2 + gap + textW, y2: rect.y2 + gap + textH, anchorX: rect.x2 + gap, anchorY: rect.y2 + gap + textH - 3, align: 'start' },
+                        { x1: rect.x1 - gap - textW, y1: rect.y2 + gap, x2: rect.x1 - gap, y2: rect.y2 + gap + textH, anchorX: rect.x1 - gap, anchorY: rect.y2 + gap + textH - 3, align: 'end' }
+                    );
+                }
+                let chosen = candidates[0], bestScore = Infinity;
+                for (const cand of candidates) {
+                    const score = blockedRects.reduce((s, b) => s + overlapArea(cand, b), 0) +
+                        placedLabelRects.reduce((s, p) => s + overlapArea(cand, p), 0);
+                    if (score < bestScore) { chosen = cand; bestScore = score; }
+                    if (bestScore === 0) break;
+                }
                 placedLabelRects.push(chosen);
                 return `<text x="${chosen.anchorX.toFixed(1)}" y="${chosen.anchorY.toFixed(1)}" font-size="${fontSize}" font-weight="700" text-anchor="${chosen.align}" fill="${color}">${text}</text>`;
             };
@@ -7814,11 +7833,10 @@
             // Header/Dbar accessory block(s) (plan view) — see
             // computeHeaderDbarBlocks. Drawn in a fixed amber color
             // (distinct from cargo/group colors, since it's a trailer
-            // accessory, not a group or a payload item). The type label
-            // is tucked directly against the block itself (no leader
-            // line) via placeAttachedLabel, which picks whichever side
-            // is clear of everything else already drawn; no per-block
-            // "1"/"2" index tag is drawn.
+            // accessory, not a group or a payload item). No text label —
+            // the block itself is enough at this zoom level and one
+            // fewer tag competing for space near the trailer/cargo
+            // labels; no per-block "1"/"2" index tag either.
             const TG_HEADER_DBAR_COLOR = '#eab308';
             let headerDbarSvg = '';
             trailerGenTrains.forEach(t => {
@@ -7829,7 +7847,6 @@
                     const rect = { x1: Math.min(hx1, hx2), y1: Math.min(hy1, hy2), x2: Math.max(hx1, hx2), y2: Math.max(hy1, hy2) };
                     headerDbarSvg += `<g>` +
                         `<rect x="${rect.x1}" y="${rect.y1}" width="${rect.x2 - rect.x1}" height="${rect.y2 - rect.y1}" fill="${TG_HEADER_DBAR_COLOR}" fill-opacity="0.25" stroke="${TG_HEADER_DBAR_COLOR}" stroke-width="1.5"/>` +
-                        (b.index === 0 ? placeAttachedLabel(rect, escapeHtml(b.label), TG_HEADER_DBAR_COLOR, { fontSize: 9 }) : '') +
                         `</g>`;
                     blockedRects.push(rect);
                 });
@@ -7871,21 +7888,25 @@
             // conversion. Drawn once each has actually been pulled at
             // least once, in distinct colors/sizes from the per-item CoG
             // symbols above so they read as reference points rather than
-            // another cargo item. Combined CoG is offset slightly above
-            // Trailer CoG's label when both signs land at/near the same
-            // point, so the two labels don't overlap each other.
+            // another cargo item.
             // Trailer CoG and Combined CoG each get the same "attached,
-            // no leader line" text treatment as the cargo/header-dbar
-            // labels above — a short tag placed directly beside its own
-            // marker, steered clear of every other block/label already
-            // on the canvas by the same placeAttachedLabel collision
-            // check, so all CoG-family markers read consistently.
+            // no leader line" text treatment as the cargo labels above —
+            // a short tag placed directly beside its own marker, steered
+            // clear of every other block/label already on the canvas by
+            // the same placeAttachedLabel collision check. diagonals:true
+            // gives these two point markers all 8 compass directions (not
+            // just the 4 sides) to fan out into, and the larger gap keeps
+            // them from crowding each other when the two markers land
+            // close together — between the wider search + least-overlap
+            // scoring in placeAttachedLabel, Trailer CoG's label (placed
+            // first) and Combined CoG's label consistently land on
+            // different sides instead of stacking on top of one another.
             if (cogTrailerSignLoaded) {
                 const tCx = sx(parseFloat(cogTrailerSign.x) || 0), tCy = sy(parseFloat(cogTrailerSign.y) || 0);
                 const tRect = { x1: tCx - 9, y1: tCy - 9, x2: tCx + 9, y2: tCy + 9 };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(tCx, tCy, 9, TG_COG_TRAILER_COLOR) +
-                    placeAttachedLabel(tRect, 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9, gap: 3 }) +
+                    placeAttachedLabel(tRect, 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9, gap: 7, diagonals: true }) +
                     `</g>`;
                 blockedRects.push(tRect);
             }
@@ -7894,7 +7915,7 @@
                 const cRect = { x1: cCx - 9, y1: cCy - 9, x2: cCx + 9, y2: cCy + 9 };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
-                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 3 }) +
+                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 7, diagonals: true }) +
                     `</g>`;
                 blockedRects.push(cRect);
             }
