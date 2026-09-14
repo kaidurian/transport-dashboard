@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.104)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7691,6 +7691,41 @@
                     `<text x="${labelX.toFixed(1)}" y="${(labelY + 3.5).toFixed(1)}" font-size="${fontSize}" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
             };
 
+            // Collision-avoiding "attached" label placement — no leader
+            // line at all, just short text tucked directly against its
+            // own block/marker (header/dbar block, cargo box, CoG/CCoG
+            // markers). blockedRects accumulates every shape's own screen
+            // footprint as it's drawn below (axle clusters, deck
+            // rectangles, header/dbar blocks, cargo boxes) so later
+            // labels steer clear of earlier shapes; placedLabelRects
+            // does the same for labels themselves so two tags never
+            // stack on top of each other. Four candidate sides (above/
+            // below/right/left of the anchor rect) are tried in order
+            // and the first clear one wins; if all four collide, "above"
+            // is used anyway (a slight overlap beats a missing label).
+            const blockedRects = [];
+            const placedLabelRects = [];
+            const rectsOverlap = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+            const placeAttachedLabel = (rect, text, color, opts = {}) => {
+                const fontSize = opts.fontSize || 9;
+                const gap = opts.gap != null ? opts.gap : 4;
+                const textW = Math.max(20, text.length * fontSize * 0.56);
+                const textH = fontSize + 4;
+                const midX = (rect.x1 + rect.x2) / 2, midY = (rect.y1 + rect.y2) / 2;
+                const candidates = [
+                    { x1: midX - textW / 2, y1: rect.y1 - gap - textH, x2: midX + textW / 2, y2: rect.y1 - gap, anchorX: midX, anchorY: rect.y1 - gap - 3, align: 'middle' },
+                    { x1: midX - textW / 2, y1: rect.y2 + gap, x2: midX + textW / 2, y2: rect.y2 + gap + textH, anchorX: midX, anchorY: rect.y2 + gap + textH - 3, align: 'middle' },
+                    { x1: rect.x2 + gap, y1: midY - textH / 2, x2: rect.x2 + gap + textW, y2: midY + textH / 2, anchorX: rect.x2 + gap, anchorY: midY + 3, align: 'start' },
+                    { x1: rect.x1 - gap - textW, y1: midY - textH / 2, x2: rect.x1 - gap, y2: midY + textH / 2, anchorX: rect.x1 - gap, anchorY: midY + 3, align: 'end' }
+                ];
+                const chosen = candidates.find(cand =>
+                    !blockedRects.some(b => rectsOverlap(cand, b)) &&
+                    !placedLabelRects.some(p => rectsOverlap(cand, p))
+                ) || candidates[0];
+                placedLabelRects.push(chosen);
+                return `<text x="${chosen.anchorX.toFixed(1)}" y="${chosen.anchorY.toFixed(1)}" font-size="${fontSize}" font-weight="700" text-anchor="${chosen.align}" fill="${color}">${text}</text>`;
+            };
+
             const trainClusters = {};
             const trainClusterOrder = [];
             rows.forEach(r => {
@@ -7748,6 +7783,7 @@
                 const centerX = pts.reduce((a, b) => a + b, 0) / pts.length;
                 if (!trainSpines[c.trainName]) trainSpines[c.trainName] = [];
                 trainSpines[c.trainName].push({ centerX, centerY: y });
+                blockedRects.push({ x1: x1 - 6, y1: y - 13, x2: x2 + 6, y2: y + 13 });
             });
 
             // Deck rectangles for any train using a fixed trailer preset —
@@ -7772,14 +7808,17 @@
                     `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>` +
                     `<text x="${deckMidX.toFixed(1)}" y="${(Math.min(ry1, ry2) - 6).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>` +
                     `</g>`;
+                blockedRects.push({ x1: Math.min(rx1, rx2), y1: Math.min(ry1, ry2) - 14, x2: Math.max(rx1, rx2), y2: Math.max(ry1, ry2) });
             });
 
             // Header/Dbar accessory block(s) (plan view) — see
             // computeHeaderDbarBlocks. Drawn in a fixed amber color
             // (distinct from cargo/group colors, since it's a trailer
-            // accessory, not a group or a payload item). The type label is
-            // pulled out clear of the block with a leader line (see
-            // planLeaderLabel); no per-block "1"/"2" index tag is drawn.
+            // accessory, not a group or a payload item). The type label
+            // is tucked directly against the block itself (no leader
+            // line) via placeAttachedLabel, which picks whichever side
+            // is clear of everything else already drawn; no per-block
+            // "1"/"2" index tag is drawn.
             const TG_HEADER_DBAR_COLOR = '#eab308';
             let headerDbarSvg = '';
             trailerGenTrains.forEach(t => {
@@ -7787,11 +7826,12 @@
                 blocks.forEach(b => {
                     const hx1 = sx(b.xCenter - b.lengthMm / 2), hx2 = sx(b.xCenter + b.lengthMm / 2);
                     const hy1 = sy(b.yCenter - b.widthMm / 2), hy2 = sy(b.yCenter + b.widthMm / 2);
-                    const cx = (hx1 + hx2) / 2, cy = (hy1 + hy2) / 2;
+                    const rect = { x1: Math.min(hx1, hx2), y1: Math.min(hy1, hy2), x2: Math.max(hx1, hx2), y2: Math.max(hy1, hy2) };
                     headerDbarSvg += `<g>` +
-                        `<rect x="${Math.min(hx1, hx2)}" y="${Math.min(hy1, hy2)}" width="${Math.abs(hx2 - hx1)}" height="${Math.abs(hy2 - hy1)}" fill="${TG_HEADER_DBAR_COLOR}" fill-opacity="0.25" stroke="${TG_HEADER_DBAR_COLOR}" stroke-width="1.5"/>` +
-                        (b.index === 0 ? planLeaderLabel(cx, Math.min(hy1, hy2), escapeHtml(b.label), TG_HEADER_DBAR_COLOR, { fontSize: 9 }) : '') +
+                        `<rect x="${rect.x1}" y="${rect.y1}" width="${rect.x2 - rect.x1}" height="${rect.y2 - rect.y1}" fill="${TG_HEADER_DBAR_COLOR}" fill-opacity="0.25" stroke="${TG_HEADER_DBAR_COLOR}" stroke-width="1.5"/>` +
+                        (b.index === 0 ? placeAttachedLabel(rect, escapeHtml(b.label), TG_HEADER_DBAR_COLOR, { fontSize: 9 }) : '') +
                         `</g>`;
+                    blockedRects.push(rect);
                 });
             });
 
@@ -7812,14 +7852,15 @@
                 const lMm = (parseFloat(c.length) || 0) * 1000, wMm = (parseFloat(c.width) || 0) * 1000;
                 const rx1 = sx(tlXMm - lMm / 2), ry1 = sy(tlYMm - wMm / 2);
                 const rx2 = sx(tlXMm + lMm / 2), ry2 = sy(tlYMm + wMm / 2);
-                const boxCx = sx(tlXMm);
+                const rect = { x1: Math.min(rx1, rx2), y1: Math.min(ry1, ry2), x2: Math.max(rx1, rx2), y2: Math.max(ry1, ry2) };
                 const cogXMm = (parseFloat(c.x) || 0) * 1000, cogYMm = (parseFloat(c.y) || 0) * 1000;
                 const cogCx = sx(cogXMm), cogCy = sy(cogYMm);
                 cargoSvg += `<g>` +
-                    `<rect x="${Math.min(rx1, rx2)}" y="${Math.min(ry1, ry2)}" width="${Math.abs(rx2 - rx1)}" height="${Math.abs(ry2 - ry1)}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
-                    planLeaderLabel(boxCx, Math.min(ry1, ry2), `${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`, cargoColor) +
+                    `<rect x="${rect.x1}" y="${rect.y1}" width="${rect.x2 - rect.x1}" height="${rect.y2 - rect.y1}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
+                    placeAttachedLabel(rect, `${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`, cargoColor) +
                     cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
                     `</g>`;
+                blockedRects.push(rect);
             });
 
             // Trailer CoG + Combined CoG signs — read live from Excel
@@ -7833,17 +7874,29 @@
             // another cargo item. Combined CoG is offset slightly above
             // Trailer CoG's label when both signs land at/near the same
             // point, so the two labels don't overlap each other.
+            // Trailer CoG and Combined CoG each get the same "attached,
+            // no leader line" text treatment as the cargo/header-dbar
+            // labels above — a short tag placed directly beside its own
+            // marker, steered clear of every other block/label already
+            // on the canvas by the same placeAttachedLabel collision
+            // check, so all CoG-family markers read consistently.
             if (cogTrailerSignLoaded) {
                 const tCx = sx(parseFloat(cogTrailerSign.x) || 0), tCy = sy(parseFloat(cogTrailerSign.y) || 0);
+                const tRect = { x1: tCx - 9, y1: tCy - 9, x2: tCx + 9, y2: tCy + 9 };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(tCx, tCy, 9, TG_COG_TRAILER_COLOR) +
+                    placeAttachedLabel(tRect, 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9, gap: 3 }) +
                     `</g>`;
+                blockedRects.push(tRect);
             }
             if (cogCombinedSignLoaded) {
                 const cCx = sx(parseFloat(cogCombinedSign.x) || 0), cCy = sy(parseFloat(cogCombinedSign.y) || 0);
+                const cRect = { x1: cCx - 9, y1: cCy - 9, x2: cCx + 9, y2: cCy + 9 };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
+                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 3 }) +
                     `</g>`;
+                blockedRects.push(cRect);
             }
 
             // ---- Stability arm(s) — plan view ----
@@ -8104,7 +8157,12 @@
                         ? `${shortTag} · ${n} axle(s) · ${(parseFloat(uniformLoad) || 0).toFixed(1)} t/axle · ${totalLoad.toFixed(1)} t`
                         : `${shortTag} · ${n} axle(s) · ${totalLoad.toFixed(1)} t total`);
                 if (tgShowGroupLabels) {
-                    labelsSvg += `<g>` + planLeaderBoxLabel(overallX, overallY, escapeHtml(labelText), g.color) + `</g>`;
+                    // On-canvas tag is just the short "G1"/"G2" form now —
+                    // the full detail string (axle count, t/axle, total)
+                    // still goes in the permanent legend below via
+                    // groupDetailRows, so nothing is lost, it's just not
+                    // repeated on the drawing itself.
+                    labelsSvg += `<g>` + planLeaderBoxLabel(overallX, overallY, escapeHtml(shortTag), g.color) + `</g>`;
                 }
                 // Legend rows are collected unconditionally now — the
                 // detail legend is a PERMANENT fixture below the preview
