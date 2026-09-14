@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.8)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.9)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -11264,7 +11264,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // (rather than independently above the cargo), so the
                 // two can never cross each other or the cargo either.
                 const frontChainYcad = (frontViewHighestCargoTopYcad !== null)
-                    ? frontViewHighestCargoTopYcad + DIM_OFFSET_MM
+                    ? frontViewHighestCargoTopYcad + DIM_OFFSET_MM + 2000  // <- add extra top clearance here
                     : deckTopFrontYcad + DIM_OFFSET_MM;
                 // Sort the deck's own left/right edges together WITH every
                 // cargo edge (rather than always placing the deck edges
