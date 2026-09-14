@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.105.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7734,8 +7734,13 @@
                         { x1: rect.x1 - gap - textW, y1: rect.y2 + gap, x2: rect.x1 - gap, y2: rect.y2 + gap + textH, anchorX: rect.x1 - gap, anchorY: rect.y2 + gap + textH - 3, align: 'end' }
                     );
                 }
-                let chosen = candidates[0], bestScore = Infinity;
-                for (const cand of candidates) {
+                // verticalOnly restricts the search to just the above/
+                // below candidates (the first two in the array above) —
+                // used for markers whose label must stay directly over
+                // or under the dot rather than drift to the side.
+                const pool = opts.verticalOnly ? candidates.slice(0, 2) : candidates;
+                let chosen = pool[0], bestScore = Infinity;
+                for (const cand of pool) {
                     const score = blockedRects.reduce((s, b) => s + overlapArea(cand, b), 0) +
                         placedLabelRects.reduce((s, p) => s + overlapArea(cand, p), 0);
                     if (score < bestScore) { chosen = cand; bestScore = score; }
@@ -7886,27 +7891,20 @@
             // cogCombinedSign. Already world mm (unlike the per-item
             // cargo CoG fields above, which are meters), so no *1000
             // conversion. Drawn once each has actually been pulled at
-            // least once, in distinct colors/sizes from the per-item CoG
-            // symbols above so they read as reference points rather than
-            // another cargo item.
-            // Trailer CoG and Combined CoG each get the same "attached,
-            // no leader line" text treatment as the cargo labels above —
-            // a short tag placed directly beside its own marker, steered
-            // clear of every other block/label already on the canvas by
-            // the same placeAttachedLabel collision check. diagonals:true
-            // gives these two point markers all 8 compass directions (not
-            // just the 4 sides) to fan out into, and the larger gap keeps
-            // them from crowding each other when the two markers land
-            // close together — between the wider search + least-overlap
-            // scoring in placeAttachedLabel, Trailer CoG's label (placed
-            // first) and Combined CoG's label consistently land on
-            // different sides instead of stacking on top of one another.
+            // least once. Trailer CoG's marker is now the SAME size (r=6)
+            // as the per-item cargo CoG markers — only its color (purple)
+            // sets it apart; Combined CoG keeps its own distinct color
+            // (red) too, so every CoG/CCoG marker on the drawing is a
+            // same-size dot distinguished purely by color. Trailer CoG
+            // gets no text label at all (the color already identifies
+            // it); Combined CoG keeps its "CCoG {weight}t" tag, placed
+            // directly above or below its own marker only (no
+            // left/right/diagonal candidates) via placeAttachedLabel.
             if (cogTrailerSignLoaded) {
                 const tCx = sx(parseFloat(cogTrailerSign.x) || 0), tCy = sy(parseFloat(cogTrailerSign.y) || 0);
-                const tRect = { x1: tCx - 9, y1: tCy - 9, x2: tCx + 9, y2: tCy + 9 };
+                const tRect = { x1: tCx - 6, y1: tCy - 6, x2: tCx + 6, y2: tCy + 6 };
                 cargoSvg += `<g>` +
-                    cogSymbolSvg(tCx, tCy, 9, TG_COG_TRAILER_COLOR) +
-                    placeAttachedLabel(tRect, 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9, gap: 7, diagonals: true }) +
+                    cogSymbolSvg(tCx, tCy, 6, TG_COG_TRAILER_COLOR) +
                     `</g>`;
                 blockedRects.push(tRect);
             }
@@ -7915,10 +7913,11 @@
                 const cRect = { x1: cCx - 9, y1: cCy - 9, x2: cCx + 9, y2: cCy + 9 };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
-                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 7, diagonals: true }) +
+                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 5, verticalOnly: true }) +
                     `</g>`;
                 blockedRects.push(cRect);
             }
+
 
             // ---- Stability arm(s) — plan view ----
             // Removed per request: the single/combined stability-arm
