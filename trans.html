@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.105.16)</h1>
+            <h1>🚂 Transport Dashboard (Rev.106)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8343,7 +8343,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // panel's ground line, with extra clearance off that
             // panel's own border — see the Left/Right End View text
             // below).
-            const TG_FRONT_DIM_HEADER_H = 26;
+            // Each cargo item's own X-direction (length) dimension now
+            // gets its own tier row in the chain stack below (see
+            // TG_FRONT_CHAIN_TIER_STEP/rowChainY further down) instead
+            // of two rows of alternating text, so no two cargo call-outs
+            // ever land at the same Y and interfere with each other.
+            // Worst case reserves one tier per cargo item PLUS one tier
+            // for each possible gap segment on either side of it (before
+            // the first item, between items, after the last item).
+            const TG_FRONT_CHAIN_TIER_STEP = 13;
+            const TG_FRONT_CHAIN_MAX_TIERS = cargoItems.length > 0 ? (2 * cargoItems.length + 1) : 1;
+            const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
             const padT = 30 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
@@ -8603,7 +8613,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const deckX2 = train.deckLength ? deckX1 + train.deckLength : Math.max(...uniqueX) + 300;
                 const dx1 = sx(deckX1), dx2 = sx(deckX2);
                 sideDecksSvg += `<rect x="${dx1}" y="${deckTopY}" width="${dx2 - dx1}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
-                sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${deckTopY - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
+                // Train number label relocated BELOW the ground line
+                // (rather than hugging the deck top) so it reads as a
+                // caption under the drawing, matching the panel-label
+                // convention used for the end-view captions further down.
+                sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${sideGroundY + 16}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
             });
 
             // ---- End views: one tire block per unique (train, Y, group),
@@ -8707,7 +8721,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const oy = parseFloat(t.y) || 0;
                     const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
                     decks += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
-                    decks += `<text x="${(dx1 + dx2) / 2}" y="${deckTopYEnd - 5}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
+                    // Train number label relocated to sit BETWEEN the
+                    // (now lowest, just-below-ground) width dimension
+                    // and the "Left/Right End View" caption further
+                    // below, instead of hugging the deck top.
+                    decks += `<text x="${(dx1 + dx2) / 2}" y="${endGroundY + 24}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
                 });
                 return { wheels, decks };
             }
@@ -8810,10 +8828,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const tCxMm = parseFloat(cogTrailerSign.x) || 0;
                 const tCyMm = parseFloat(cogTrailerSign.y) || 0;
                 const tWorldZ = parseFloat(cogTrailerSign.z) || 0;
-                cargoElevSvg += cogSymbolSvg(sx(tCxMm), sz(tWorldZ), 9, TG_COG_TRAILER_COLOR);
-                cargoElevSvg += cogInlineLabel(sx(tCxMm), sz(tWorldZ), 9, 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9 });
-                cargoElevSvg += cogSymbolSvg(sy1(tCyMm), szEnd(tWorldZ), 9, TG_COG_TRAILER_COLOR);
-                cargoElevSvg += cogSymbolSvg(sy2(tCyMm), szEnd(tWorldZ), 9, TG_COG_TRAILER_COLOR);
+                cargoElevSvg += cogSymbolSvg(sx(tCxMm), sz(tWorldZ), 6, TG_COG_TRAILER_COLOR);
+                cargoElevSvg += cogInlineLabel(sx(tCxMm), sz(tWorldZ), 6, 'Trailer CoG', TG_COG_TRAILER_COLOR, { fontSize: 9 });
+                cargoElevSvg += cogSymbolSvg(sy1(tCyMm), szEnd(tWorldZ), 6, TG_COG_TRAILER_COLOR);
+                cargoElevSvg += cogSymbolSvg(sy2(tCyMm), szEnd(tWorldZ), 6, TG_COG_TRAILER_COLOR);
                 // No adjacent name text in the end views — identified by
                 // the Z-dimension stack instead (see dimSvg below).
             }
@@ -9029,20 +9047,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const tlXMm = (parseFloat(c.tlX) || 0) * 1000;
                         return { left: tlXMm - halfL, right: tlXMm + halfL, color: cargoColorFor(i), name: c.name };
                     }).sort((a, b) => a.left - b.left);
-                    // Alternates each successive chain-segment's text a
-                    // few px higher than the last (ticks/line stay on the
-                    // shared rowChainY row) — keeps neighboring segments'
-                    // labels from sitting at the exact same height and
-                    // overlapping in X when a segment is short.
+                    // Each successive chain segment — including each
+                    // cargo item's own X-direction (length) dimension —
+                    // now gets its own dedicated Y tier, stepped down by
+                    // TG_FRONT_CHAIN_TIER_STEP per segment, instead of
+                    // sharing one row with only the text alternating.
+                    // This keeps every cargo item's dimension on a
+                    // different Y level so neighboring cargo call-outs
+                    // never interfere with each other, however close
+                    // together (or short) the segments are in X.
                     let chainSegIdx = 0;
-                    const nextChainTextY = () => rowChainY - (chainSegIdx++ % 2) * 9;
+                    const nextChainY = () => rowChainY + (chainSegIdx++) * TG_FRONT_CHAIN_TIER_STEP;
                     let cursorX = deckX1o;
                     sortedCargoX.forEach(cg => {
-                        if (cg.left - cursorX > 1) dimSvg += dimHFront(cursorX, cg.left, rowChainY, chainColor, `${Math.round(cg.left - cursorX)}`, nextChainTextY());
-                        dimSvg += dimHFront(cg.left, cg.right, rowChainY, cg.color, `${Math.round(cg.right - cg.left)} (${cg.name})`, nextChainTextY());
+                        if (cg.left - cursorX > 1) dimSvg += dimHFront(cursorX, cg.left, nextChainY(), chainColor, `${Math.round(cg.left - cursorX)}`);
+                        dimSvg += dimHFront(cg.left, cg.right, nextChainY(), cg.color, `${Math.round(cg.right - cg.left)} (${cg.name})`);
                         cursorX = cg.right;
                     });
-                    if (deckX2o - cursorX > 1) dimSvg += dimHFront(cursorX, deckX2o, rowChainY, chainColor, `${Math.round(deckX2o - cursorX)}`, nextChainTextY());
+                    if (deckX2o - cursorX > 1) dimSvg += dimHFront(cursorX, deckX2o, nextChainY(), chainColor, `${Math.round(deckX2o - cursorX)}`);
                 }
                 // Deck-height dimension — drawn on the side view panel;
                 // labeled "(typ.)" since the same shared Z scale/height
@@ -9054,18 +9076,43 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `<line x1="${sideOffsetX - 16}" y1="${deckTopY}" x2="${sideOffsetX - 8}" y2="${deckTopY}" stroke="var(--accent-green, #10b981)" stroke-width="1"/>` +
                     `<text x="${sideOffsetX - 20}" y="${heightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-green, #10b981)" transform="rotate(-90 ${sideOffsetX - 20} ${heightMidY})">${tgZTrailerHeightMm}</text>` +
                     `</g>`;
+                // Total height dimension — baseline style (measured
+                // straight from the ground reference, world Z = 0) up
+                // to the highest point of the whole assembly: the top
+                // of the tallest cargo box when cargo is present,
+                // otherwise the same as the trailer's own deck height.
+                // Drawn further out to the left of the deck-height
+                // dimension above so the two read together without
+                // overlapping.
+                const overallTopWorldZ = cargoBoxZ.length
+                    ? Math.max(tgZTrailerHeightMm, ...cargoBoxZ.map(bz => bz.topWorldZ))
+                    : tgZTrailerHeightMm;
+                const totalHeightX = sideOffsetX - 34;
+                const totalHeightTopY = sz(overallTopWorldZ);
+                const totalHeightMidY = (sideGroundY + totalHeightTopY) / 2;
+                dimSvg += `<g opacity="0.9">` +
+                    `<line x1="${totalHeightX}" y1="${sideGroundY}" x2="${totalHeightX}" y2="${totalHeightTopY}" stroke="var(--accent-purple, #a78bfa)" stroke-width="1" stroke-dasharray="2 2"/>` +
+                    `<line x1="${totalHeightX - 4}" y1="${sideGroundY}" x2="${totalHeightX + 4}" y2="${sideGroundY}" stroke="var(--accent-purple, #a78bfa)" stroke-width="1"/>` +
+                    `<line x1="${totalHeightX - 4}" y1="${totalHeightTopY}" x2="${totalHeightX + 4}" y2="${totalHeightTopY}" stroke="var(--accent-purple, #a78bfa)" stroke-width="1"/>` +
+                    `<text x="${totalHeightX - 8}" y="${totalHeightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-purple, #a78bfa)" transform="rotate(-90 ${totalHeightX - 8} ${totalHeightMidY})">${Math.round(overallTopWorldZ)} (Total height)</text>` +
+                    `</g>`;
                 // Deck width dimension — drawn only in the LEFT END
                 // VIEW. Removed from the right end view since that
                 // panel is now reserved for the stability angle
                 // triangles + their arm/angle call-outs below; keeping
                 // the deck-width dimension there as well just added
                 // visual clutter competing with those.
+                // Relocated to the LOWEST position in the panel — just
+                // below the ground line (still inside the panel's own
+                // border, whose bottom edge sits at endGroundY + 12),
+                // under every other end-view dimension/marker — instead
+                // of hugging the deck top.
                 [sy1].forEach(syFn => {
                     trailerGenTrains.forEach(t => {
                         if (!t.deckWidth) return;
                         const oy = parseFloat(t.y) || 0;
                         const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
-                        const y = deckTopYEnd - 16;
+                        const y = endGroundY + 8;
                         dimSvg += `<g opacity="0.9">` +
                             `<line x1="${dx1}" y1="${y}" x2="${dx2}" y2="${y}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
                             `<line x1="${dx1}" y1="${y - 3}" x2="${dx1}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
