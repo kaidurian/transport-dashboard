@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.108.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.109)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8366,8 +8366,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // cargo-to-cargo pair (n·(n-1)/2) — the extra direct X
             // dimension added, per KKai's spec, for every pair of cargo
             // items that sit at different world-Y ("side") positions.
+            const frontTrailerSpanCount = trailerGenTrains.filter(t => t.deckLength).length;
+            const TG_FRONT_CHAIN_SPAN_COUNT = cargoItems.length + frontTrailerSpanCount;
+            // Worst case reserves one tier per span (cargo item OR
+            // individual trailer section — per KKai's spec the chain
+            // now runs left-of-trailer-or-cargo -> next trailer-or-
+            // cargo -> ... -> right-of-trailer-or-cargo, so a gap
+            // between two trailers in a multi-trailer combination is
+            // its own segment too), one tier per possible gap segment
+            // around each span, PLUS one tier per possible cargo-to-
+            // cargo pair (n·(n-1)/2) — the extra direct X dimension
+            // added, per KKai's spec, for every pair of cargo items
+            // that sit at different world-Y ("side") positions.
             const TG_FRONT_CHAIN_PAIR_MAX = cargoItems.length > 1 ? (cargoItems.length * (cargoItems.length - 1)) / 2 : 0;
-            const TG_FRONT_CHAIN_MAX_TIERS = cargoItems.length > 0 ? (2 * cargoItems.length + 1 + TG_FRONT_CHAIN_PAIR_MAX) : 1;
+            const TG_FRONT_CHAIN_MAX_TIERS = TG_FRONT_CHAIN_SPAN_COUNT > 0 ? (2 * TG_FRONT_CHAIN_SPAN_COUNT + 1 + TG_FRONT_CHAIN_PAIR_MAX) : 1;
             const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
             const padT = 30 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
@@ -9065,11 +9077,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             const endChainUniqBreaksY = [...new Set(endChainBreaksRaw)].sort((a, b) => a - b);
             const endChainTierCount = Math.max(0, endChainUniqBreaksY.length - 1);
+            // Dedicated "Top deck width" row — one extra tier at the
+            // very bottom of the stack (the lowest point), directly
+            // above the train-number label, regardless of how the
+            // segmented chain above happens to break the deck width up
+            // across cargo items. Only reserved when there's an actual
+            // deck to measure.
+            const endChainDeckWidthRowY = endChainDeckY1 != null ? (endChainRowY + endChainTierCount * TG_END_CHAIN_TIER_STEP) : null;
             // Lowest Y actually reached by the tiered chain (or just
             // endChainRowY itself when there's nothing to chain), used
             // below so the train-number labels/captions always sit
             // clear of every tier, not just the first one.
-            const endChainMaxY = endChainRowY + Math.max(0, endChainTierCount - 1) * TG_END_CHAIN_TIER_STEP;
+            const endChainMaxY = endChainDeckWidthRowY != null ? endChainDeckWidthRowY : (endChainRowY + Math.max(0, endChainTierCount - 1) * TG_END_CHAIN_TIER_STEP);
 
             // ---- Dimensions ----
             let dimSvg = '';
@@ -9126,25 +9145,41 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                     // ---- Continuous local chain — same convention as
                     // the Left/Right End View width-direction chain
-                    // (renderEndWidthChain above): ONE row per segment
-                    // (deck-edge -> cargo-edge -> cargo-edge -> ... ->
-                    // deck-edge), each consecutive segment given its own
-                    // dedicated Y-level tier (stepped down by
-                    // TG_FRONT_CHAIN_TIER_STEP) so neighboring segments'
-                    // dimension lines/labels never interfere with each
-                    // other — no separate standalone "per cargo length"
-                    // row is drawn; each cargo's own length is labeled
-                    // inline as its own chain segment instead, exactly
-                    // like the end view's per-cargo/deck segments.
+                    // (renderEndWidthChain above): walk every
+                    // breakpoint left -> right across BOTH every
+                    // individual trailer's own edges AND every cargo
+                    // item's edges (not just one merged "whole deck"
+                    // span), so — per KKai's spec — the chain now runs
+                    // left-of-trailer-or-cargo -> next trailer-or-cargo
+                    // -> next trailer-or-cargo -> ... -> right-of-
+                    // trailer-or-cargo. A gap between two trailers in a
+                    // multi-trailer combination shows up as its own
+                    // segment, exactly like a gap between two cargo
+                    // items. Each consecutive segment still gets its
+                    // own dedicated Y-level tier so neighboring
+                    // segments' dimension lines/labels never interfere.
                     let chainSegIdx = 0;
                     const nextChainY = () => rowChainY + (chainSegIdx++) * TG_FRONT_CHAIN_TIER_STEP;
-                    let cursorX = deckX1o;
-                    sortedCargoX.forEach(cg => {
-                        if (cg.left - cursorX > 1) dimSvg += dimHFront(cursorX, cg.left, nextChainY(), chainColor, `${Math.round(cg.left - cursorX)}`);
-                        dimSvg += dimHFront(cg.left, cg.right, nextChainY(), cg.color, `${Math.round(cg.right - cg.left)} (${cg.name})`);
-                        cursorX = cg.right;
+                    const trailerSpansX = deckTrainsFront.map((t, i) => {
+                        const left = parseFloat(t.x) || 0, right = left + (parseFloat(t.deckLength) || 0);
+                        return { left, right, color: 'var(--accent-blue, #38bdf8)', name: t.name || `Trailer ${i + 1}` };
                     });
-                    if (deckX2o - cursorX > 1) dimSvg += dimHFront(cursorX, deckX2o, nextChainY(), chainColor, `${Math.round(deckX2o - cursorX)}`);
+                    const allSpansX = [
+                        ...trailerSpansX.map(sp => ({ ...sp, kind: 'trailer' })),
+                        ...sortedCargoX.map(cg => ({ ...cg, kind: 'cargo' })),
+                    ];
+                    const chainBreaksX = [];
+                    allSpansX.forEach(sp => chainBreaksX.push(Math.round(sp.left), Math.round(sp.right)));
+                    const uniqBreaksX = [...new Set(chainBreaksX)].sort((a, b) => a - b);
+                    for (let i = 0; i < uniqBreaksX.length - 1; i++) {
+                        const a = uniqBreaksX[i], b = uniqBreaksX[i + 1];
+                        const spanMatch = allSpansX.find(sp => Math.round(sp.left) === a && Math.round(sp.right) === b);
+                        if (spanMatch) {
+                            dimSvg += dimHFront(a, b, nextChainY(), spanMatch.color, `${b - a} (${spanMatch.name})`);
+                        } else {
+                            dimSvg += dimHFront(a, b, nextChainY(), chainColor, `${b - a}`);
+                        }
+                    }
 
                     // ---- Cargo-to-cargo dimensions for items with a
                     // "side" (Y) offset ----
@@ -9264,6 +9299,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (endChainUniqBreaksY.length > 1) {
                     dimSvg += renderEndWidthChain(sy1);
                     dimSvg += renderEndWidthChain(sy2);
+                }
+                // ---- Dedicated "Top deck width" dimension — always
+                // drawn at the lowest point of the stack (right above
+                // the train-number label), spanning the full deck width
+                // in one shot, regardless of how many cargo items break
+                // the segmented chain above up. ----
+                if (endChainDeckWidthRowY != null) {
+                    const deckWidthLabel = `${endChainDeckY2 - endChainDeckY1} (Top deck width)`;
+                    dimSvg += dimHEnd(sy1(endChainDeckY1), sy1(endChainDeckY2), endChainDeckWidthRowY, 'var(--accent-blue, #38bdf8)', deckWidthLabel);
+                    dimSvg += dimHEnd(sy2(endChainDeckY1), sy2(endChainDeckY2), endChainDeckWidthRowY, 'var(--accent-blue, #38bdf8)', deckWidthLabel);
                 }
 
                 // Vertical (Z) dim helper — shared by the cargo-CoG and
