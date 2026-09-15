@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.106)</h1>
+            <h1>🚂 Transport Dashboard (Rev.107)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7773,7 +7773,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // below candidates (the first two in the array above) —
                 // used for markers whose label must stay directly over
                 // or under the dot rather than drift to the side.
-                const pool = opts.verticalOnly ? candidates.slice(0, 2) : candidates;
+                // cornersOnly restricts the search to just the four
+                // diagonal corner candidates (top-left/top-right/
+                // bottom-left/bottom-right, requires opts.diagonals) —
+                // used for labels that should tuck into whichever
+                // corner is emptiest rather than sit flush against one
+                // of the four cardinal sides.
+                const pool = opts.verticalOnly ? candidates.slice(0, 2)
+                    : opts.cornersOnly ? candidates.slice(4)
+                    : candidates;
                 let chosen = pool[0], bestScore = Infinity;
                 for (const cand of pool) {
                     const score = blockedRects.reduce((s, b) => s + overlapArea(cand, b), 0) +
@@ -7950,7 +7958,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const cRect = { x1: cCx - 9, y1: cCy - 9, x2: cCx + 9, y2: cCy + 9 };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
-                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 5 }) +
+                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 5, diagonals: true, cornersOnly: true }) +
                     `</g>`;
                 blockedRects.push(cRect);
             }
@@ -8352,7 +8360,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // for each possible gap segment on either side of it (before
             // the first item, between items, after the last item).
             const TG_FRONT_CHAIN_TIER_STEP = 13;
-            const TG_FRONT_CHAIN_MAX_TIERS = cargoItems.length > 0 ? (2 * cargoItems.length + 1) : 1;
+            // Worst case reserves one tier per cargo item, one tier per
+            // possible gap segment around it (see the deck->cargo->
+            // cargo->deck chain below), PLUS one tier per possible
+            // cargo-to-cargo pair (n·(n-1)/2) — the extra direct X
+            // dimension added, per KKai's spec, for every pair of cargo
+            // items that sit at different world-Y ("side") positions.
+            const TG_FRONT_CHAIN_PAIR_MAX = cargoItems.length > 1 ? (cargoItems.length * (cargoItems.length - 1)) / 2 : 0;
+            const TG_FRONT_CHAIN_MAX_TIERS = cargoItems.length > 0 ? (2 * cargoItems.length + 1 + TG_FRONT_CHAIN_PAIR_MAX) : 1;
             const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
             const padT = 30 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
@@ -8510,7 +8525,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const sideGroundY = padT + panelH;
             const endPadT = padT + panelH + padGap;
             const endGroundY = endPadT + panelH;
-            const svgH = endGroundY + padB;
+            // svgH is finalized further below, once the end-view Y-chain
+            // dimension row (endChainRowY) and everything stacked under
+            // it (train-number labels, Left/Right End View captions) are
+            // known — those can now sit lower than a fixed padB when a
+            // stability triangle's arm-distance label is the deepest
+            // element in the panel. See endChainRowY/captionY below.
 
             const sx = x => sideOffsetX + (x - minX) * scale;          // side view local X — identical formula to the plan view's sx()
             const sy1 = y => endOffsetX1 + (y - minY) * scale;         // left end view local X (world Y)
@@ -8559,8 +8579,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // border rects further down) before the caption text, so
             // the label reads clearly separate from the panel outline
             // instead of crowding right up against it.
-            groundSvg += `<text x="${endOffsetX1 + endW / 2}" y="${endGroundY + 36}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
-            groundSvg += `<text x="${endOffsetX2 + endW / 2}" y="${endGroundY + 36}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
+            // "◀ Left End View" / "Right End View ▶" captions themselves
+            // are appended to groundSvg further below (see captionY),
+            // once the end-view width-direction X-chain dimension row
+            // has staked out its own Y so these captions always land
+            // BELOW it instead of at a fixed offset.
 
             // Y / Z axis sign — one per end-view panel, tucked just
             // inside its own inner-bottom corner (clear of the CoG Z
@@ -8697,6 +8720,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             function buildEndViewPanel(syFn, isLeftPanel) {
                 let wheels = '', decks = '';
+                const labels = [];
                 const seen = new Set();
                 const groupsAtY = {};
                 const panelRows = rows.filter(r => isLeftPanel ? groupPanelShow[r.groupNumber].left : groupPanelShow[r.groupNumber].right);
@@ -8721,13 +8745,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const oy = parseFloat(t.y) || 0;
                     const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
                     decks += `<rect x="${Math.min(dx1, dx2)}" y="${deckTopYEnd}" width="${Math.abs(dx2 - dx1)}" height="${deckThickPx}" rx="3" fill="var(--panel-bg, #161d26)" stroke="var(--text-main, #e2e8f0)" stroke-width="1"/>`;
-                    // Train number label relocated to sit BETWEEN the
-                    // (now lowest, just-below-ground) width dimension
-                    // and the "Left/Right End View" caption further
-                    // below, instead of hugging the deck top.
-                    decks += `<text x="${(dx1 + dx2) / 2}" y="${endGroundY + 24}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(t.name)}</text>`;
+                    // Train number label's actual Y now depends on where
+                    // the end-view width-direction X-chain dimension row
+                    // (endChainRowY, computed later once the stability
+                    // triangles' own lowest label is known) lands, so
+                    // only its X midpoint + name are captured here; the
+                    // <text> itself is drawn further below under
+                    // "Train-number + Left/Right End View captions".
+                    labels.push({ dx1, dx2, name: t.name });
                 });
-                return { wheels, decks };
+                return { wheels, decks, labels };
             }
             const endPanel1 = buildEndViewPanel(sy1, true);
             const endPanel2 = buildEndViewPanel(sy2, false);
@@ -8876,6 +8903,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const TG_STAB_LABEL_STEP = 16; // extra outward offset per system index, so single/combined labels never collide
             let stabTriSvg = '';
             let stabTriSvgLeft = '';
+            // Lowest Y (screen) reached by any "Distance from CoG to side
+            // of triangle" arm-distance label — same value in both end
+            // panels since armY only depends on stabilityArmHeightMm, not
+            // on the panel's own syFn. Feeds endChainRowY below, which
+            // positions the end-view width-direction X-chain dimension
+            // (and everything stacked under it) just under whichever of
+            // these two things — the arm label, or a plain below-ground
+            // fallback — actually sits lowest.
+            let stabArmLabelMaxY = null;
             const stabGroupCenters = computeAxleGroupCenters(rows);
             if ((stabilityArmLoaded && stabilityAngleLoaded && stabilityArmHeightLoaded) || (stabGroupCenters[3] && stabGroupCenters[4] && stabilityArmHeightLoaded)) {
                 const armY = szEnd(stabilityArmHeightMm);
@@ -8916,6 +8952,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         label: 'Combined',
                     });
                 }
+                if (stabSystems.length) stabArmLabelMaxY = armY + 14 + (stabSystems.length - 1) * TG_STAB_LABEL_STEP;
                 // Renders the full triangle set for one end-view panel,
                 // given that panel's own horizontal-axis mapping (sy1 for
                 // the left panel, sy2 for the right one) — factored out
@@ -8995,6 +9032,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 stabTriSvgLeft = renderStabSystems(sy1);
             }
 
+            // Row Y for the end-view width-direction X-chain dimension —
+            // computed unconditionally (not gated by tgShowDimensions)
+            // since the train-number labels and Left/Right End View
+            // captions below always need to sit under it, even when the
+            // dimension toggle itself is off and the chain isn't drawn.
+            const endChainRowY = stabArmLabelMaxY != null ? (stabArmLabelMaxY + 14) : (endGroundY + 8);
+
             // ---- Dimensions ----
             let dimSvg = '';
             if (tgShowDimensions) {
@@ -9065,6 +9109,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         cursorX = cg.right;
                     });
                     if (deckX2o - cursorX > 1) dimSvg += dimHFront(cursorX, deckX2o, nextChainY(), chainColor, `${Math.round(deckX2o - cursorX)}`);
+
+                    // ---- Cargo-to-cargo dimensions for items with a
+                    // "side" (Y) offset ----
+                    // The sequential chain above orders cargo purely by
+                    // X and can't show how two items actually relate to
+                    // each other when they sit side by side across the
+                    // trailer's width (different world-Y) rather than
+                    // nose-to-tail along one line. For every such pair,
+                    // add its own direct CoG-to-CoG X dimension row,
+                    // continuing the same tier stack as the chain above.
+                    // Pairs on the SAME Y (no side difference) are
+                    // skipped — the sequential chain already covers
+                    // those directly.
+                    const cargoWithY = cargoItems.map((c, i) => ({
+                        name: c.name,
+                        yMm: Math.round((parseFloat(c.tlY) || 0) * 1000),
+                        cogXMm: (parseFloat(c.x) || 0) * 1000,
+                    }));
+                    for (let i = 0; i < cargoWithY.length; i++) {
+                        for (let j = i + 1; j < cargoWithY.length; j++) {
+                            const cgA = cargoWithY[i], cgB = cargoWithY[j];
+                            if (cgA.yMm === cgB.yMm) continue;
+                            const dist = Math.abs(cgB.cogXMm - cgA.cogXMm);
+                            dimSvg += dimHFront(cgA.cogXMm, cgB.cogXMm, nextChainY(), chainColor, `${Math.round(dist)} (${cgA.name}↔${cgB.name})`);
+                        }
+                    }
                 }
                 // Deck-height dimension — drawn on the side view panel;
                 // labeled "(typ.)" since the same shared Z scale/height
@@ -9096,31 +9166,70 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `<line x1="${totalHeightX - 4}" y1="${totalHeightTopY}" x2="${totalHeightX + 4}" y2="${totalHeightTopY}" stroke="var(--accent-purple, #a78bfa)" stroke-width="1"/>` +
                     `<text x="${totalHeightX - 8}" y="${totalHeightMidY}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-purple, #a78bfa)" transform="rotate(-90 ${totalHeightX - 8} ${totalHeightMidY})">${Math.round(overallTopWorldZ)} (Total height)</text>` +
                     `</g>`;
-                // Deck width dimension — drawn only in the LEFT END
-                // VIEW. Removed from the right end view since that
-                // panel is now reserved for the stability angle
-                // triangles + their arm/angle call-outs below; keeping
-                // the deck-width dimension there as well just added
-                // visual clutter competing with those.
-                // Relocated to the LOWEST position in the panel — just
-                // below the ground line (still inside the panel's own
-                // border, whose bottom edge sits at endGroundY + 12),
-                // under every other end-view dimension/marker — instead
-                // of hugging the deck top.
-                [sy1].forEach(syFn => {
-                    trailerGenTrains.forEach(t => {
-                        if (!t.deckWidth) return;
-                        const oy = parseFloat(t.y) || 0;
-                        const dx1 = syFn(oy), dx2 = syFn(oy + t.deckWidth);
-                        const y = endGroundY + 8;
-                        dimSvg += `<g opacity="0.9">` +
-                            `<line x1="${dx1}" y1="${y}" x2="${dx2}" y2="${y}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" stroke-dasharray="2 2"/>` +
-                            `<line x1="${dx1}" y1="${y - 3}" x2="${dx1}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                            `<line x1="${dx2}" y1="${y - 3}" x2="${dx2}" y2="${y + 3}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
-                            `<text x="${(dx1 + dx2) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="var(--accent-blue, #38bdf8)">${Math.round(t.deckWidth)}</text>` +
-                            `</g>`;
-                    });
+                // Standalone "trailer/deck width" dimension removed —
+                // its distance now lives as the "(Deck width)" segment
+                // inside the continuous width-direction X chain below,
+                // per KKai's spec. That chain is drawn in BOTH end-view
+                // panels (mirrored via sy1/sy2), continuous across:
+                // left-cargo edge -> across the left cargo item -> gap
+                // -> deck edge -> across the full deck -> deck edge ->
+                // gap -> across the right cargo item -> right-cargo
+                // edge — i.e. every cargo footprint edge and both deck
+                // edges, in world-Y order, each consecutive pair drawn
+                // as its own segment (cargo segments keep that item's
+                // own color + name; the segment spanning exactly the
+                // two deck edges is labeled "(Deck width)"; anything
+                // else is a plain gap distance). Generalizes cleanly to
+                // 0, 1, or more than 2 cargo items.
+                // Positioned just under the LOWEST "Distance from CoG to
+                // side of triangle" (arm-distance) label from the
+                // stability triangles above (stabArmLabelMaxY), so it
+                // never collides with those; falls back to the old
+                // just-below-ground position when no stability triangle
+                // is shown at all.
+                const chainColorEnd = 'var(--text-muted, #94a3b8)';
+                const dimHEnd = (sxa, sxb, y, color, label) => {
+                    const lo = Math.min(sxa, sxb), hi = Math.max(sxa, sxb);
+                    const boxW = Math.max(20, String(label).length * 5.2);
+                    return `<g opacity="0.9">` +
+                        `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="${color}">${escapeHtml(String(label))}</text>` +
+                        `</g>`;
+                };
+                const chainCargoSpansY = cargoItems.map((c, i) => {
+                    const tlYMm = (parseFloat(c.tlY) || 0) * 1000, halfWMm = ((parseFloat(c.width) || 0) * 1000) / 2;
+                    return { left: Math.round(tlYMm - halfWMm), right: Math.round(tlYMm + halfWMm), color: cargoColorFor(i), name: c.name };
                 });
+                const chainDeckTrainsEnd = trailerGenTrains.filter(t => t.deckWidth);
+                let chainDeckY1 = null, chainDeckY2 = null;
+                const chainBreaksY = [];
+                chainCargoSpansY.forEach(cg => { chainBreaksY.push(cg.left, cg.right); });
+                if (chainDeckTrainsEnd.length) {
+                    chainDeckY1 = Math.round(Math.min(...chainDeckTrainsEnd.map(t => parseFloat(t.y) || 0)));
+                    chainDeckY2 = Math.round(Math.max(...chainDeckTrainsEnd.map(t => (parseFloat(t.y) || 0) + t.deckWidth)));
+                    chainBreaksY.push(chainDeckY1, chainDeckY2);
+                }
+                const uniqBreaksY = [...new Set(chainBreaksY)].sort((a, b) => a - b);
+                const renderEndWidthChain = syFn => {
+                    let svg = '';
+                    for (let i = 0; i < uniqBreaksY.length - 1; i++) {
+                        const a = uniqBreaksY[i], b = uniqBreaksY[i + 1];
+                        const cargoMatch = chainCargoSpansY.find(cg => cg.left === a && cg.right === b);
+                        const isDeckSpan = chainDeckY1 != null && a === chainDeckY1 && b === chainDeckY2;
+                        let color = chainColorEnd, label = `${b - a}`;
+                        if (cargoMatch) { color = cargoMatch.color; label = `${b - a} (${cargoMatch.name})`; }
+                        else if (isDeckSpan) { color = 'var(--accent-blue, #38bdf8)'; label = `${b - a} (Deck width)`; }
+                        svg += dimHEnd(syFn(a), syFn(b), endChainRowY, color, label);
+                    }
+                    return svg;
+                };
+                if (uniqBreaksY.length > 1) {
+                    dimSvg += renderEndWidthChain(sy1);
+                    dimSvg += renderEndWidthChain(sy2);
+                }
 
                 // Vertical (Z) dim helper — shared by the cargo-CoG and
                 // trailer/CCoG-Z stacks below. dir = +1 draws the tier
@@ -9208,11 +9317,29 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
             }
 
+            // ---- Train-number labels + Left/Right End View captions —
+            // stacked directly under the end-view width-direction X-chain
+            // row (endChainRowY) instead of at fixed offsets, so they
+            // always read below it (see buildEndViewPanel's `labels` and
+            // the removed groundSvg caption lines above).
+            const trainLabelY = endChainRowY + 16;
+            const captionY = trainLabelY + 16;
+            let endLabelsSvg = '';
+            [...endPanel1.labels, ...endPanel2.labels].forEach(l => {
+                endLabelsSvg += `<text x="${(l.dx1 + l.dx2) / 2}" y="${trainLabelY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(l.name)}</text>`;
+            });
+            endLabelsSvg += `<text x="${endOffsetX1 + endW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
+            endLabelsSvg += `<text x="${endOffsetX2 + endW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
+            // svgH now accounts for however low endChainRowY/captionY
+            // actually landed (can sit well past the old fixed padB when
+            // a stability triangle's arm label is the deepest element).
+            const svgH = Math.max(endGroundY + padB, captionY + 16);
+
             return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvgLeft}${stabTriSvg}${dimSvg}
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvgLeft}${stabTriSvg}${dimSvg}${endLabelsSvg}
             </svg>`;
         }
 
