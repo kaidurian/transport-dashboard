@@ -756,7 +756,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.110.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.110.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9922,12 +9922,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const widM = Math.max(0.05, (deckY2 - deckY1) * S);
                 const thickM = Math.max(0.02, TG_ELEV_DECK_THICK * S);
                 const geo = new THREE.BoxGeometry(lenM, thickM, widM);
-                // Transparent deck — so wheels, cargo, CoG markers and
-                // the stability triangle/Group 3-4 signs underneath or
-                // behind it stay visible instead of being hidden by a
-                // solid deck plate (opacity tuned so the deck outline
-                // still reads clearly against the grid).
-                const mat = new THREE.MeshStandardMaterial({ color: 0x2b3646, metalness: 0.1, roughness: 0.85, transparent: true, opacity: 0.3, depthWrite: false });
+                // Solid deck (matches the trailer/cargo reference image —
+                // no transparency).
+                const mat = new THREE.MeshStandardMaterial({ color: 0x2b3646, metalness: 0.1, roughness: 0.85 });
                 const mesh = new THREE.Mesh(geo, mat);
                 mesh.position.set(
                     (deckX1 + deckX2) / 2 * S,
@@ -9968,7 +9965,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                 if (lenMm > 0 && widMm > 0 && topWorldZ > baseWorldZ) {
                     const geo = new THREE.BoxGeometry(lenMm * S, (topWorldZ - baseWorldZ) * S, widMm * S);
-                    const mat = new THREE.MeshStandardMaterial({ color: hex, transparent: true, opacity: 0.32, metalness: 0.05, roughness: 0.7 });
+                    const mat = new THREE.MeshStandardMaterial({ color: hex, metalness: 0.05, roughness: 0.7 });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(tlXMm * S, (baseWorldZ + topWorldZ) / 2 * S, tlYMm * S);
                     world3dGroupTG.add(mesh);
@@ -9985,22 +9982,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
 
             // ---- Header/Dbar accessory block(s) — see
-            // computeHeaderDbarBlocks. Solid (not transparent like the
-            // deck/cargo boxes) in a fixed amber, matching the 2D
-            // preview's TG_HEADER_DBAR_COLOR, since there's normally only
-            // one (or two, for &PPU) of these per train.
+            // computeHeaderDbarBlocks. Solid, fixed amber, matching the
+            // 2D preview's TG_HEADER_DBAR_COLOR, since there's normally
+            // only one (or two, for &PPU) of these per train.
             const headerDbarHex = 0xeab308;
             trailerGenTrains.forEach(train => {
                 computeHeaderDbarBlocks(train).forEach(b => {
                     extend(b.xCenter - b.lengthMm / 2, b.yCenter - b.widthMm / 2, b.zTop);
                     extend(b.xCenter + b.lengthMm / 2, b.yCenter + b.widthMm / 2, b.zTop);
                     const geo = new THREE.BoxGeometry(b.lengthMm * S, b.heightMm * S, b.widthMm * S);
-                    // Transparent, like the deck/cargo boxes above, so
-                    // anything sitting behind or underneath the
-                    // Header/Dbar block (deck edge, axle wheels, CoG
-                    // markers) stays visible instead of being hidden by
-                    // a solid amber block.
-                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6, transparent: true, opacity: 0.35, depthWrite: false });
+                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6 });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(b.xCenter * S, (b.zBase + b.zTop) / 2 * S, b.yCenter * S);
                     world3dGroupTG.add(mesh);
