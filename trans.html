@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.108)</h1>
+            <h1>🚂 Transport Dashboard (Rev.108.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8367,12 +8367,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // dimension added, per KKai's spec, for every pair of cargo
             // items that sit at different world-Y ("side") positions.
             const TG_FRONT_CHAIN_PAIR_MAX = cargoItems.length > 1 ? (cargoItems.length * (cargoItems.length - 1)) / 2 : 0;
-            // PLUS one row per cargo item for its own standalone overall
-            // length call-out (the "first step" in KKai's two-step
-            // spec — see rowCargoLenY below): total deck length, then
-            // each cargo's own length as its own row, THEN the
-            // continuous local chain (the "second step") underneath.
-            const TG_FRONT_CHAIN_MAX_TIERS = cargoItems.length > 0 ? (2 * cargoItems.length + 1 + TG_FRONT_CHAIN_PAIR_MAX + cargoItems.length) : 1;
+            const TG_FRONT_CHAIN_MAX_TIERS = cargoItems.length > 0 ? (2 * cargoItems.length + 1 + TG_FRONT_CHAIN_PAIR_MAX) : 1;
             const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
             const padT = 30 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
@@ -9120,6 +9115,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // that, still comfortably clear of the border line —
                     // so the two never interfere with each other.
                     const rowTotalY = 12;
+                    const rowChainY = 28;
                     const chainColor = 'var(--text-muted, #94a3b8)';
                     dimSvg += dimHFront(deckX1o, deckX2o, rowTotalY, 'var(--accent-blue, #38bdf8)', `${Math.round(deckX2o - deckX1o)} (Top deck length)`);
                     const sortedCargoX = cargoItems.map((c, i) => {
@@ -9128,39 +9124,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         return { left: tlXMm - halfL, right: tlXMm + halfL, color: cargoColorFor(i), name: c.name };
                     }).sort((a, b) => a.left - b.left);
 
-                    // ---- "First step" — each cargo item's own overall
-                    // (standalone, non-chained) X-length call-out, per
-                    // KKai's spec: total deck length above, then every
-                    // cargo's own length gets its OWN row, longest span
-                    // closest to the total-deck row (so a longer cargo
-                    // that another, shorter cargo nests inside of —
-                    // e.g. stacked cargo sharing the same X footprint —
-                    // reads as the "outer" row, same convention as the
-                    // reference drawing). The "second step" continuous
-                    // deck->cargo->cargo->deck chain (below) still shows
-                    // every individual segment, including each cargo's
-                    // own length again inline, so nothing here needs to
-                    // repeat those gap distances — only the standalone
-                    // overall span per cargo item.
-                    const rowCargoLenStep = 13;
-                    const cargoLenRows = sortedCargoX.length;
-                    sortedCargoX.slice().sort((a, b) => (b.right - b.left) - (a.right - a.left))
-                        .forEach((cg, idx) => {
-                            const y = rowTotalY + 14 + idx * rowCargoLenStep;
-                            dimSvg += dimHFront(cg.left, cg.right, y, cg.color, `${Math.round(cg.right - cg.left)} (${cg.name} length)`);
-                        });
-                    const rowChainY = rowTotalY + 14 + cargoLenRows * rowCargoLenStep + 6;
-
-                    // ---- "Second step" — the continuous local chain.
-                    // Each successive chain segment — including each
-                    // cargo item's own X-direction (length) dimension —
-                    // now gets its own dedicated Y tier, stepped down by
-                    // TG_FRONT_CHAIN_TIER_STEP per segment, instead of
-                    // sharing one row with only the text alternating.
-                    // This keeps every cargo item's dimension on a
-                    // different Y level so neighboring cargo call-outs
-                    // never interfere with each other, however close
-                    // together (or short) the segments are in X.
+                    // ---- Continuous local chain — same convention as
+                    // the Left/Right End View width-direction chain
+                    // (renderEndWidthChain above): ONE row per segment
+                    // (deck-edge -> cargo-edge -> cargo-edge -> ... ->
+                    // deck-edge), each consecutive segment given its own
+                    // dedicated Y-level tier (stepped down by
+                    // TG_FRONT_CHAIN_TIER_STEP) so neighboring segments'
+                    // dimension lines/labels never interfere with each
+                    // other — no separate standalone "per cargo length"
+                    // row is drawn; each cargo's own length is labeled
+                    // inline as its own chain segment instead, exactly
+                    // like the end view's per-cargo/deck segments.
                     let chainSegIdx = 0;
                     const nextChainY = () => rowChainY + (chainSegIdx++) * TG_FRONT_CHAIN_TIER_STEP;
                     let cursorX = deckX1o;
