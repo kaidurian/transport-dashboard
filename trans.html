@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.109.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.109.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8383,12 +8383,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
             // Fixed clearance between the LAST (lowest) dimension row of
             // the header band above and the panel's own top border —
-            // tightened from 30 to 14px so the chain sits closer to the
-            // cargo/trailer artwork underneath it, while still leaving
-            // enough room for that row's own text box (which extends
-            // ~13px above, ~3px below its dimension line) to clear the
-            // border line cleanly.
-            const padT = 14 + TG_FRONT_DIM_HEADER_H, padB = 60;
+            // tightened to 8px (from 30, then 14) so the chain sits as
+            // close as reasonably possible to the cargo/trailer artwork
+            // underneath it, while still leaving enough room for that
+            // row's own tick marks (extending ±3px past the dimension
+            // line) to clear the border line cleanly.
+            const padT = 8 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
             // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
@@ -9214,6 +9214,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         }
                     }
                 }
+                // ---- Cargo length dimension — drawn directly above
+                // each cargo box's own top edge, close to the box
+                // itself, independent of (and in addition to) the
+                // continuous chain up in the header band above. Reads
+                // right where the box is instead of having to trace
+                // all the way up to the header to find that cargo's
+                // segment. Runs regardless of whether a trailer/deck is
+                // present, since it only depends on the cargo item's
+                // own geometry.
+                cargoItems.forEach((c, cargoLenIdx) => {
+                    const lMm = (parseFloat(c.length) || 0) * 1000;
+                    const tlXMm = (parseFloat(c.tlX) || 0) * 1000;
+                    const boxTopWorldZ = cargoBoxZ[cargoLenIdx].topWorldZ;
+                    const yLen = sz(boxTopWorldZ) - 10;
+                    dimSvg += dimHFront(tlXMm - lMm / 2, tlXMm + lMm / 2, yLen, cargoColorFor(cargoLenIdx), `${Math.round(lMm)} (${c.name} length)`);
+                });
                 // Deck-height dimension — drawn on the side view panel;
                 // labeled "(typ.)" since the same shared Z scale/height
                 // applies to the end view panel below it.
