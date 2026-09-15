@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.109)</h1>
+            <h1>🚂 Transport Dashboard (Rev.109.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8381,7 +8381,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const TG_FRONT_CHAIN_PAIR_MAX = cargoItems.length > 1 ? (cargoItems.length * (cargoItems.length - 1)) / 2 : 0;
             const TG_FRONT_CHAIN_MAX_TIERS = TG_FRONT_CHAIN_SPAN_COUNT > 0 ? (2 * TG_FRONT_CHAIN_SPAN_COUNT + 1 + TG_FRONT_CHAIN_PAIR_MAX) : 1;
             const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
-            const padT = 30 + TG_FRONT_DIM_HEADER_H, padB = 60;
+            // Fixed clearance between the LAST (lowest) dimension row of
+            // the header band above and the panel's own top border —
+            // tightened from 30 to 14px so the chain sits closer to the
+            // cargo/trailer artwork underneath it, while still leaving
+            // enough room for that row's own text box (which extends
+            // ~13px above, ~3px below its dimension line) to clear the
+            // border line cleanly.
+            const padT = 14 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
             // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
