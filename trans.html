@@ -756,7 +756,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.110)</h1>
+            <h1>🚂 Transport Dashboard (Rev.110.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9632,7 +9632,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         let current3DCameraTG = 'iso';
 
         const TG3D_CAM_PRESETS = {
-            iso:   { az: -40, el: 26 },
+            iso:   { az: -140, el: 26 },  // Top-Front-Right — mirrors the old -40 (Top-Front-Left) across the Front axis (-90) so the visible faces match the dashboard's own FRONT/RIGHT convention (2D preview, HLoads legend), instead of FRONT/LEFT
             top:   { az: 0,   el: 89 },
             side:  { az: 0,   el: 10 },   // viewed from world +Y (Left side)
             front: { az: -90, el: 10 },   // viewed from world -X (Front)
