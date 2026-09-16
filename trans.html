@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.111.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.111.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9478,11 +9478,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // perspective angle that still reads as a pseudo-isometric shot).
         let perspCamera3dTG = null, orthoCamera3dTG = null;
         let world3dGroupTG = null;   // everything EXCEPT the ground slab — rebuilt every renderTrailerGen3D() call
-        // Solid ground slab (road bed) — sits under world3dGroupTG inside
-        // groundTiltGroup3dTG, sized to the train's own bounding box + 1m
-        // margin on every side, and tilted to match the Longitudinal/
-        // Transverse road gradient (%) fields (see renderTrailerGen3D).
+        // Solid ground slab (road bed) — sized to the train's own bounding
+        // box + 1m margin on every side, shown as a wedge (varying
+        // thickness) tilted to match the Longitudinal/Transverse road
+        // gradient fields (see renderTrailerGen3D). The train itself
+        // (world3dGroupTG) is rotated to the same slope, pivoting about
+        // trainTiltPivotTG so it visually rests on that sloped surface.
         let groundTiltGroup3dTG = null;
+        let trainTiltPivotTG = null;
         let groundMesh3dTG = null, groundEdges3dTG = null;
         const TG3D_ORTHO_VIEWS = new Set(['top', 'side', 'front', 'rear']);
         let tg3dInitialized = false;
@@ -9695,15 +9698,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             dirLight3dTG2 = dir2;
             update3DDayNightTG(); // apply the current day/night theme right away, instead of defaulting to the fixed dark colors above
 
-            // Ground + train share one tilt group, rotated together to
-            // the road's longitudinal/transverse gradient each render —
-            // see the "solid ground slab" block in renderTrailerGen3D().
-            // (Replaces the old flat, untilted GridHelper floor.)
+            // groundTiltGroup3dTG holds the ground slab (a wedge — its own
+            // geometry carries the slope, see renderTrailerGen3D) and stays
+            // level itself. The train sits inside trainTiltPivotTG, which
+            // IS rotated to the slope each render, pivoting about the same
+            // front-right corner the ground's slope is measured from, so
+            // the train visually rests on the sloped ground surface.
             groundTiltGroup3dTG = new THREE.Group();
             scene3dTG.add(groundTiltGroup3dTG);
 
+            trainTiltPivotTG = new THREE.Group();
+            groundTiltGroup3dTG.add(trainTiltPivotTG);
+
             world3dGroupTG = new THREE.Group();
-            groundTiltGroup3dTG.add(world3dGroupTG);
+            trainTiltPivotTG.add(world3dGroupTG);
 
             updateCamera3DPositionTG();
 
@@ -10176,7 +10184,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const topH = (xMm, yMm) => Math.tan(longRad) * (xMm - gndX1) + Math.tan(transRad) * (yMm - gndY1);
             const cornersXY = [[gndX1, gndY1], [gndX2, gndY1], [gndX2, gndY2], [gndX1, gndY2]]; // FR, RR, RL, FL (X=long, Y=trans)
             const topHMm = cornersXY.map(([x, y]) => topH(x, y));
-            const minBaseThickMm = 300; // thinnest edge of the wedge is never less than this
+            const minBaseThickMm = 200; // thinnest edge of the wedge is never less than this
             const bottomYMm = Math.min(0, ...topHMm) - minBaseThickMm; // one flat bottom plane for the whole slab
 
             // ---- Build the wedge as a custom, non-indexed BufferGeometry
@@ -10212,13 +10220,41 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const gndEdges = new THREE.LineSegments(new THREE.EdgesGeometry(gndGeo), new THREE.LineBasicMaterial({ color: 0x2b2118 }));
             groundTiltGroup3dTG.add(gndEdges);
             groundEdges3dTG = gndEdges;
-            // No rotation applied to groundTiltGroup3dTG — the slab's own
-            // geometry carries the slope, so the group stays level.
+            // No rotation applied to groundTiltGroup3dTG itself — the
+            // slab's own geometry carries the slope, so the ground group
+            // stays level. The TRAIN, however, rotates to the same slope
+            // (per your request) so it visually rests on the sloped
+            // surface: trainTiltPivotTG is positioned at the same
+            // front-right corner (gndX1, gndY1) the ground's slope is
+            // measured from, and rotated by the same angles; world3dGroupTG
+            // is offset by the inverse of that corner so the net effect is
+            // "rotate the train about that ground corner", not about the
+            // train's own (unrelated) coordinate origin.
+            const tiltEuler = new THREE.Euler(transRad, 0, -longRad, 'XYZ');
+            const pivotXm = gndX1 * S, pivotZm = gndY1 * S;
+            trainTiltPivotTG.position.set(pivotXm, 0, pivotZm);
+            trainTiltPivotTG.rotation.copy(tiltEuler);
+            world3dGroupTG.position.set(-pivotXm, 0, -pivotZm);
 
-            // ---- Frame camera to fit the current model ----
+            // ---- Frame camera to fit the current (now-tilted) train ----
             const spanMm = Math.max(bMaxX - bMinX, bMaxY - bMinY, 4000);
             const centerXMm = (bMinX + bMaxX) / 2, centerYMm = (bMinY + bMaxY) / 2;
-            lookAt3dTG = { x: centerXMm * S, y: (bMaxZ * 0.35) * S, z: centerYMm * S };
+            // The look-at target is expressed in the (level) groundTiltGroup3dTG
+            // frame, but the train now sits inside the rotated
+            // trainTiltPivotTG — rotate the same point about the same
+            // pivot so the camera still frames the train's true on-screen
+            // center instead of its pre-tilt position.
+            const lookRel = new THREE.Vector3(centerXMm * S - pivotXm, (bMaxZ * 0.35) * S, centerYMm * S - pivotZm);
+            lookRel.applyEuler(tiltEuler);
+            lookAt3dTG = { x: lookRel.x + pivotXm, y: lookRel.y, z: lookRel.z + pivotZm };
+            // Floating HTML labels (stability triangle callouts etc., see
+            // labelAnchors3dTG / renderLabels3DTG) were pushed with
+            // positions local to world3dGroupTG's PRE-tilt frame — now
+            // that the group has a real offset + rotation, carry each
+            // anchor through the finished world matrix once so the
+            // labels re-align with the tilted geometry.
+            scene3dTG.updateMatrixWorld(true);
+            labelAnchors3dTG.forEach(a => { a.pos.applyMatrix4(world3dGroupTG.matrixWorld); });
             // Only auto-set the orbit radius the FIRST time (or if it's
             // still at the tiny init default) — once the user has
             // zoomed/orbited, further field edits shouldn't yank the
