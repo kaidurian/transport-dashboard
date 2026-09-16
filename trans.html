@@ -755,7 +755,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.113.5)</h1>
+            <h1>🚂 Transport Dashboard (Rev.113.6)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10179,7 +10179,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const gPlaneV = new THREE.Vector3().crossVectors(gPlaneNormal, gPlaneU).normalize();
                     const gPlaneOffset = gPlaneNormal.clone().multiplyScalar(0.03);
                     [[gv1, 1], [gv2, 2], [gv3, 3]].forEach(([v, gn]) => {
-                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.36, true);
+                        // Rotated an extra 90° about the world Y (vertical)
+                        // axis vs. the stability triangle's own in-plane
+                        // labels, per request — see addPlaneLabelTG's
+                        // extraYRotRad param.
+                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.36, true, Math.PI / 2);
                     });
                 }
             }
@@ -10537,7 +10541,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // (pre-tilt) space — uAxis is the plane's own "horizontal"
         // direction, vAxis its "up" direction (Gram-Schmidt'd against
         // uAxis so the two don't need to already be exactly orthogonal).
-        function addPlaneLabelTG(text, cssColor, position, uAxis, vAxis, heightM, mirror) {
+        function addPlaneLabelTG(text, cssColor, position, uAxis, vAxis, heightM, mirror, extraYRotRad) {
             // "🏷 Hide all labels" also hides these on-surface plane
             // labels, not just the camera-facing billboards (see
             // toggle3DLabelsTG) — skip creating the mesh entirely.
@@ -10573,6 +10577,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const v = vAxis.clone().sub(u.clone().multiplyScalar(vAxis.dot(u))).normalize();
             const n = new THREE.Vector3().crossVectors(u, v).normalize();
             mesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(u, v, n));
+            // Optional extra spin about the WORLD (vertical) Y axis, on
+            // top of the plane's own u/v/n orientation above — used by
+            // the G1/G2/G3 support-triangle labels so they stand
+            // perpendicular to the triangle's edge rather than lying
+            // flush along it.
+            if (extraYRotRad) mesh.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), extraYRotRad);
             world3dGroupTG.add(mesh);
             return mesh;
         }
@@ -10596,13 +10606,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ]);
                 world3dGroupTG.add(new THREE.Line(g, lineMat));
             });
-            // Cargo-name / CoG-name labels are laid FLAT on the surface
-            // (same in-plane, non-billboard technique as the stability
-            // triangle's own angle/arm labels above — see
-            // addPlaneLabelTG) instead of a camera-facing billboard, so
-            // they rotate with the model (ground slope tilt etc.) rather
-            // than always turning to face the viewer.
-            if (label) addPlaneLabelTG(label, hex, mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1), 0.3);
+            // Cargo-name / CoG-name labels use the SAME in-plane,
+            // non-billboard technique as the stability triangle's own
+            // angle/arm labels (see addPlaneLabelTG) instead of a
+            // camera-facing billboard — but now standing upright in a
+            // vertical plane (uAxis = world X, vAxis = world Y) rather
+            // than lying flat on a horizontal plane, matching the same
+            // "stability angle" surface family (apex/arm/foot) that the
+            // stability triangle's own labels sit in, so all of these
+            // in-plane labels read the same way and rotate together with
+            // the model (ground slope tilt etc.) rather than always
+            // turning to face the viewer.
+            if (label) addPlaneLabelTG(label, hex, mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), 0.3);
         }
 
         // Group support "sign" — a thin pole + small flag-like cone
