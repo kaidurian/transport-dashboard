@@ -526,10 +526,10 @@
         /* Horizontal Loads readout overlaid on the 3D viewer itself
            (⚠ Show Horizontal Loads toggle) — reuses the same
            .tg-hloads-panel markup as the 2D preview's own panel (see
-           renderTrailerGenHLoadsPanel()), just smaller and pinned to a
-           corner so it doesn't cover the model. */
+           renderTrailerGenHLoadsPanel()), just smaller and pinned to the
+           top-left corner so it doesn't cover the model. */
         .tg-3d-hloads-overlay {
-            position: absolute; bottom: 8px; left: 8px; max-width: 250px;
+            position: absolute; top: 8px; left: 8px; max-width: 250px;
             z-index: 4; pointer-events: none; display: none;
         }
         .tg-3d-hloads-overlay.tg-3d-hloads-overlay-visible { display: block; }
@@ -755,7 +755,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.113.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.113.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1045,14 +1045,10 @@
                             <div class="tg-preview-toggles-right">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
-                                    ⚠⊕ Show stability triangle &amp; CoG markers
+                                    ⚠⊕▲ Show stability &amp; support triangles + CoG markers
                                 </label>
                                 <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tg3dGroupPlanToggle" checked onchange="renderTrailerGen3D()">
-                                    ▲ Show support triangle
-                                </label>
-                                <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tg3dHideLabelsToggle" onchange="toggle3DLabelsTG()">
+                                    <input type="checkbox" id="tg3dHideLabelsToggle" onchange="toggle3DLabelsTG(); renderTrailerGen3D();">
                                     🏷 Hide all labels
                                 </label>
                                 <label class="tg-preview-toggle">
@@ -9728,8 +9724,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
         // ---- 🏷 Hide all labels toggle — flips tg3dLabelsHiddenTG and
-        // re-runs renderLabels3DTG() immediately so the overlay clears
-        // (or reappears) without needing a full model rebuild. ----
+        // re-runs renderLabels3DTG() immediately so the camera-facing
+        // billboard overlay clears (or reappears) without needing a
+        // full model rebuild. The flat "on-surface" plane labels (G1/
+        // G2/G3, cargo/CoG names, stability arm/angle callouts — see
+        // addPlaneLabelTG) are actual 3D meshes rebuilt every
+        // renderTrailerGen3D() call rather than overlay divs, so THIS
+        // toggle also needs to trigger that rebuild (see the onchange
+        // handler) for "Hide all labels" to hide those too, not just
+        // the billboards.
         function toggle3DLabelsTG() {
             tg3dLabelsHiddenTG = document.getElementById('tg3dHideLabelsToggle')?.checked === true;
             renderLabels3DTG();
@@ -9843,7 +9846,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // any, before the first frame — swap in the ortho camera too
             // when the saved view was one of the locked Top/Side/Front/
             // Rear presets, and reflect it on the camera preset buttons.
-            if (restore3DViewTG()) {
+            // Falls back to the fixed Iso preset only when nothing was
+            // ever saved, so the panel always OPENS on the saved view
+            // once one exists instead of resetting to Iso every time.
+            const hasSavedView3dTG = restore3DViewTG();
+            if (hasSavedView3dTG) {
                 if (orthoCamera3dTG && perspCamera3dTG) {
                     camera3dTG = TG3D_ORTHO_VIEWS.has(current3DCameraTG) ? orthoCamera3dTG : perspCamera3dTG;
                 }
@@ -9931,7 +9938,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             window.addEventListener('resize', resize3DViewerTG);
 
-            set3DCameraTG('iso');
+            if (!hasSavedView3dTG) set3DCameraTG('iso');
 
             function animate3dTG() {
                 requestAnimationFrame(animate3dTG);
@@ -10148,7 +10155,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // position). This replaces the earlier per-group footprint
             // box — the correct shape here is a single triangle spanning
             // all three groups, not one box per group.
-            const showGroupPlan = document.getElementById('tg3dGroupPlanToggle')?.checked !== false;
+            const showGroupPlan = document.getElementById('tg3dStabilityToggle')?.checked !== false; // merged into the same "Show stability & support triangles + CoG markers" toggle
             if (showGroupPlan && stabilityArmHeightLoaded && stabilityArmHeightMm > 0) {
                 const g1 = stabGroupCentersTG[1], g2 = stabGroupCentersTG[2], g3 = stabGroupCentersTG[3];
                 if (g1 && g2 && g3) {
@@ -10172,7 +10179,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const gPlaneV = new THREE.Vector3().crossVectors(gPlaneNormal, gPlaneU).normalize();
                     const gPlaneOffset = gPlaneNormal.clone().multiplyScalar(0.03);
                     [[gv1, 1], [gv2, 2], [gv3, 3]].forEach(([v, gn]) => {
-                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.36);
+                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.36, true);
                     });
                 }
             }
@@ -10222,7 +10229,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         label: 'CCoG',
                     });
                 }
-                stabSystems.forEach(s => {
+                stabSystems.forEach((s, sIdx) => {
                     const apex = toV(s.cogXMm, s.cogZMm, s.cogYMm);
                     const footPt = toV(s.cogXMm, stabilityArmHeightMm, s.cogYMm); // directly below apex
                     let armPt;
@@ -10283,16 +10290,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const sPlaneNormal = new THREE.Vector3().crossVectors(sPlaneU, apex.clone().sub(footPt)).normalize();
                     const sPlaneV = new THREE.Vector3().crossVectors(sPlaneNormal, sPlaneU).normalize();
                     const sPlaneOffset = sPlaneNormal.clone().multiplyScalar(0.02);
+                    // When more than one stability system is shown at
+                    // once (Cargo CoG AND CCoG), their arm/angle
+                    // dimension callouts would otherwise land on nearly
+                    // the same spot and overlap — stagger each
+                    // additional system's labels along the triangle's
+                    // own "up" (sPlaneV) direction so every system's
+                    // dimension reads as its own separate callout.
+                    const dimStagger = stabSystems.length > 1 ? sPlaneV.clone().multiplyScalar(0.22 * sIdx) : new THREE.Vector3();
                     addPlaneLabelTG(
                         `${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}`,
                         s.color,
-                        apex.clone().lerp(armPt, 0.5).add(sPlaneOffset),
+                        apex.clone().lerp(armPt, 0.5).add(sPlaneOffset).add(dimStagger),
                         sPlaneU, sPlaneV, 0.3
                     );
                     addPlaneLabelTG(
                         `${(s.armMm / 1000).toFixed(2)} m`,
                         s.color,
-                        armPt.clone().add(sPlaneOffset),
+                        armPt.clone().add(sPlaneOffset).add(dimStagger),
                         sPlaneU, sPlaneV, 0.26
                     );
 
@@ -10413,50 +10428,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // Horizontal Loads" toggle as the corner overlay. All values
             // are read straight from tgHLoads so their sign (+/-) shows
             // as typed/pulled from Excel — nothing is re-derived here. ----
+            // NOTE: per-value Horizontal Loads text labels that used to be
+            // drawn flat on the deck/ground/side faces here (Trailer v,
+            // a_acc/a_dec, cd, Wind v, Gr_trans/Gr_long, M_u, C_j) have
+            // been removed — the ⚠ Show Horizontal Loads toggle now only
+            // surfaces those values in the single corner "Horizontal
+            // Loads" overlay window (tg3dHLoadsOverlay / updateTg3DHLoadsOverlay()),
+            // not duplicated as labels on the 3D geometry itself. The C_j
+            // turning-radius arrow is a plain geometric indicator (no
+            // text), so it stays; only its accompanying label was removed.
             if (document.getElementById('tg3dShowHLoadsToggle')?.checked) {
-                const hlCenterX = (bMinX + bMaxX) / 2;
-                const hlCenterY = (bMinY + bMaxY) / 2;
-                const hlTopZ = bMaxZ + 400; // just clear of the tallest point, so it reads over the Top view
                 const hlSpanX = Math.max(bMaxX - bMinX, 2000);
-                // Fixed world axes used to lay each label FLAT on the
-                // surface it belongs to (in-plane canvas-texture planes,
-                // same technique as the G1/G2/G3 support-triangle labels
-                // above) instead of camera-facing billboards.
-                const AX_X = new THREE.Vector3(1, 0, 0); // world X — longitudinal
-                const AX_Y = new THREE.Vector3(0, 1, 0); // world height
-                const AX_Z = new THREE.Vector3(0, 0, 1); // world Y — lateral
-
-                // Trailer v / a_acc (toward front/-X) / a_dec (toward
-                // rear/+X) — flat on the Top surface, at the load's own
-                // lateral center ("middle top view"), reading along the
-                // trailer's length.
-                addPlaneLabelTG(`➡ Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`, '#38bdf8', toV(hlCenterX, hlTopZ, hlCenterY), AX_X, AX_Z, 0.4);
-                addPlaneLabelTG(`⏩ a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`, '#22c55e', toV(hlCenterX - hlSpanX * 0.18, hlTopZ, hlCenterY), AX_X, AX_Z, 0.4);
-                addPlaneLabelTG(`⏪ a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`, '#f97316', toV(hlCenterX + hlSpanX * 0.18, hlTopZ, hlCenterY), AX_X, AX_Z, 0.4);
-
-                // cd — flat on the Top surface too, offset to one side
-                // of the Trailer v / a_acc / a_dec stack.
-                addPlaneLabelTG(`◐ cd ${tgHLoads.cd.toFixed(2)}`, '#a78bfa', toV(hlCenterX, hlTopZ, bMinY - 300), AX_X, AX_Z, 0.4);
-
-                // Wind v — flat against both the Front face (world -X)
-                // and the Side face (world -Y), level with deck top.
-                addPlaneLabelTG(`💨 Wind v ${tgHLoads.vWind.toFixed(1)} m/s`, '#38bdf8', toV(bMinX - 20, deckTopWorldZ + 600, hlCenterY), AX_Z, AX_Y, 0.4);
-                addPlaneLabelTG(`💨 Wind v ${tgHLoads.vWind.toFixed(1)} m/s`, '#38bdf8', toV(hlCenterX, deckTopWorldZ + 600, bMinY - 20), AX_X, AX_Y, 0.4);
-
-                // Gr_trans / Gr_long — flat on the ground surface at the
-                // ground angle corner (the same front-right corner,
-                // gndX1/gndY1, the slope wedge above is measured from).
-                addPlaneLabelTG(`⤢ Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`, '#facc15', toV(gndX1, 20, gndY1), AX_X, AX_Z, 0.32);
-                addPlaneLabelTG(`⤡ Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`, '#facc15', toV(gndX1 + 700, 20, gndY1), AX_X, AX_Z, 0.32);
-
-                // M_u — flat on the ground surface, front side corner
-                // (the other lateral corner on the front edge).
-                addPlaneLabelTG(`⛓ M_u ${tgHLoads.muFriction.toFixed(2)}`, '#94a3b8', toV(gndX1, 20, gndY2), AX_X, AX_Z, 0.32);
 
                 // C_j (curve impact) — drawn as a turning-radius style
-                // curve with an arrowhead at the end, near the same
-                // front corner; the C_j label itself sits flat on the
-                // ground at the START of the arrow (the corner end).
+                // curve with an arrowhead at the end, near the front
+                // corner. Geometry only; its text label now lives solely
+                // in the corner overlay window.
                 const cjRadiusMm = Math.max(1500, hlSpanX * 0.4);
                 const cjSteps = 24;
                 const cjPts = [];
@@ -10472,7 +10459,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const cjDir = cjEnd.clone().sub(cjPrev).normalize();
                 const cjArrow = new THREE.ArrowHelper(cjDir, cjEnd, 0.25, 0xfacc15, 0.12, 0.07);
                 world3dGroupTG.add(cjArrow);
-                addPlaneLabelTG(`↻ C_j ${tgHLoads.curveImpact.toFixed(1)}%`, '#facc15', cjPts[0].clone(), AX_X, AX_Z, 0.32);
             }
 
             // ---- Frame camera to fit the current (now-tilted) train ----
@@ -10551,8 +10537,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // (pre-tilt) space — uAxis is the plane's own "horizontal"
         // direction, vAxis its "up" direction (Gram-Schmidt'd against
         // uAxis so the two don't need to already be exactly orthogonal).
-        function addPlaneLabelTG(text, cssColor, position, uAxis, vAxis, heightM) {
+        function addPlaneLabelTG(text, cssColor, position, uAxis, vAxis, heightM, mirror) {
+            // "🏷 Hide all labels" also hides these on-surface plane
+            // labels, not just the camera-facing billboards (see
+            // toggle3DLabelsTG) — skip creating the mesh entirely.
+            if (tg3dLabelsHiddenTG) return null;
             const { texture, aspect } = tg3dMakeLabelTexture(text, cssColor || '#94a3b8');
+            // Group labels (G1/G2/G3 on the support triangle) sit flat in
+            // a roughly-horizontal plane and are read by someone standing
+            // at the trailer's FRONT looking rearward, which is the
+            // mirror image of how the u/v basis below naturally lays the
+            // text out. `mirror` flips the texture horizontally (instead
+            // of re-deriving the whole basis) so the text is legible
+            // right-way-round for that front-view eye.
+            if (mirror) {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.repeat.x = -1;
+                texture.offset.x = 1;
+            }
             const h = heightM || 0.3;
             const w = h * aspect;
             const geo = new THREE.PlaneGeometry(w, h);
@@ -10594,7 +10596,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ]);
                 world3dGroupTG.add(new THREE.Line(g, lineMat));
             });
-            if (label) labelAnchors3dTG.push({ pos: mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), text: label, color: hex });
+            // Cargo-name / CoG-name labels are laid FLAT on the surface
+            // (same in-plane, non-billboard technique as the stability
+            // triangle's own angle/arm labels above — see
+            // addPlaneLabelTG) instead of a camera-facing billboard, so
+            // they rotate with the model (ground slope tilt etc.) rather
+            // than always turning to face the viewer.
+            if (label) addPlaneLabelTG(label, hex, mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1), 0.3);
         }
 
         // Group support "sign" — a thin pole + small flag-like cone
