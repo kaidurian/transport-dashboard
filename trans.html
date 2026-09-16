@@ -755,7 +755,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.113.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.113.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9968,6 +9968,47 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const deckTopWorldZ = tgZTrailerHeightMm;
             const S = TG3D_SCALE;
             const toV = (xMm, zMmHeight, yMm) => new THREE.Vector3(xMm * S, zMmHeight * S, yMm * S);
+            // Computed early (rather than down by the Group 3/4 support
+            // signs, where this used to live) so the cargo/CoG name
+            // labels below can also use it to lay themselves flat on
+            // the same tilted "stability angle" surface as the real
+            // stability triangle, instead of only the triangle itself
+            // knowing where Group 3/Group 4 are.
+            const stabGroupCentersTG = computeAxleGroupCenters(rows);
+            // Shared by any CoG-type point (individual cargo items,
+            // Transport beam CoG, Cargo CoG, CCoG …) that needs to lay
+            // its name label flat on the SAME tilted plane the visible
+            // stability triangle for that arm would sit in — i.e. the
+            // vertical plane through the point, perpendicular to the
+            // Group 3–4 line (or the old lateral-offset fallback when
+            // Group 3/4 aren't both available), same geometry as the
+            // stabSystems.forEach triangle build further down. Only the
+            // ORIENTATION is needed here (not a specific arm length), so
+            // the fallback direction below uses an arbitrary 1m offset
+            // purely to fix a sign/direction.
+            function computeCogPlaneBasisTG(cXMm, cYMm, cZWorldMm) {
+                const apex = toV(cXMm, cZWorldMm, cYMm);
+                const footPt = toV(cXMm, stabilityArmHeightMm, cYMm);
+                let armPt;
+                const p3 = stabGroupCentersTG[3], p4 = stabGroupCentersTG[4];
+                if (p3 && p4) {
+                    const dx = p4.x - p3.x, dy = p4.y - p3.y;
+                    const lenSq = dx * dx + dy * dy || 1;
+                    const t = ((cXMm - p3.x) * dx + (cYMm - p3.y) * dy) / lenSq;
+                    armPt = toV(p3.x + t * dx, stabilityArmHeightMm, p3.y + t * dy);
+                } else {
+                    const armSign = cYMm < 0 ? -1 : 1;
+                    armPt = toV(cXMm, stabilityArmHeightMm, cYMm + armSign * 1000);
+                }
+                let u = armPt.clone().sub(footPt);
+                if (u.lengthSq() < 1e-6) u = new THREE.Vector3(1, 0, 0); // degenerate guard (point sits ON the Group 3-4 line)
+                const rise = apex.clone().sub(footPt);
+                let normal = new THREE.Vector3().crossVectors(u, rise);
+                if (normal.lengthSq() < 1e-6) normal = new THREE.Vector3(0, 0, 1); // degenerate guard (apex directly above footPt only)
+                normal.normalize();
+                const v = new THREE.Vector3().crossVectors(normal, u).normalize();
+                return { u: u.normalize(), v, normal, apex, footPt };
+            }
 
             // ---- bounding box (world mm) — drives camera framing + grid size ----
             let bMinX = 0, bMaxX = 0, bMinY = 0, bMaxY = 0, bMaxZ = deckTopWorldZ + 1000;
@@ -10122,7 +10163,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // computeAxleGroupCenters/computeGroup34ArmMm above) —
             // useful for sanity-checking that math even when the
             // triangle itself isn't shown.
-            const stabGroupCentersTG = computeAxleGroupCenters(rows);
+            // (stabGroupCentersTG itself now computed earlier, up by
+            // computeCogPlaneBasisTG, so the cargo/CoG labels above can
+            // also use it.)
             // Group 3's own flag label removed per request — it's now
             // redundant with the "G3" vertex label on the support
             // triangle above. Group 4 doesn't appear on that triangle,
@@ -10179,7 +10222,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const gPlaneV = new THREE.Vector3().crossVectors(gPlaneNormal, gPlaneU).normalize();
                     const gPlaneOffset = gPlaneNormal.clone().multiplyScalar(0.03);
                     [[gv1, 1], [gv2, 2], [gv3, 3]].forEach(([v, gn]) => {
-                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.36, true);
+                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.36, true, true);
                     });
                 }
             }
@@ -10537,7 +10580,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // (pre-tilt) space — uAxis is the plane's own "horizontal"
         // direction, vAxis its "up" direction (Gram-Schmidt'd against
         // uAxis so the two don't need to already be exactly orthogonal).
-        function addPlaneLabelTG(text, cssColor, position, uAxis, vAxis, heightM, mirror) {
+        function addPlaneLabelTG(text, cssColor, position, uAxis, vAxis, heightM, mirror, rotateY90) {
             // "🏷 Hide all labels" also hides these on-surface plane
             // labels, not just the camera-facing billboards (see
             // toggle3DLabelsTG) — skip creating the mesh entirely.
@@ -10573,6 +10616,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const v = vAxis.clone().sub(u.clone().multiplyScalar(vAxis.dot(u))).normalize();
             const n = new THREE.Vector3().crossVectors(u, v).normalize();
             mesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(u, v, n));
+            // Group labels (G1/G2/G3) additionally spin 90° about the
+            // world Y (vertical) axis, per request — turns the text to
+            // read across the trailer's width instead of along its
+            // length, on top of whatever u/v plane it was already laid
+            // flat in.
+            if (rotateY90) mesh.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI / 2);
             world3dGroupTG.add(mesh);
             return mesh;
         }
@@ -10596,13 +10645,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ]);
                 world3dGroupTG.add(new THREE.Line(g, lineMat));
             });
-            // Cargo-name / CoG-name labels are laid FLAT on the surface
-            // (same in-plane, non-billboard technique as the stability
-            // triangle's own angle/arm labels above — see
-            // addPlaneLabelTG) instead of a camera-facing billboard, so
-            // they rotate with the model (ground slope tilt etc.) rather
-            // than always turning to face the viewer.
-            if (label) addPlaneLabelTG(label, hex, mesh.position.clone().add(new THREE.Vector3(0, 0.16, 0)), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1), 0.3);
+            // Cargo-name / CoG-name labels are laid FLAT on the SAME
+            // tilted "stability angle" surface the real stability
+            // triangle for that point would sit in (see
+            // computeCogPlaneBasisTG above) — not just a flat horizontal
+            // plane — instead of a camera-facing billboard, so they
+            // rotate with the model (ground slope tilt, arm angle) the
+            // same way the triangle's own angle/arm labels do.
+            if (label) {
+                const basis = computeCogPlaneBasisTG(xMm, yMm, zMmHeight);
+                addPlaneLabelTG(label, hex, mesh.position.clone().add(basis.normal.clone().multiplyScalar(0.02)), basis.u, basis.v, 0.3);
+            }
         }
 
         // Group support "sign" — a thin pole + small flag-like cone
