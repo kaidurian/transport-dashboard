@@ -514,8 +514,8 @@
         #tgLabels3d { position: absolute; inset: 0; pointer-events: none; }
         .tg-3d-label {
             position: absolute; transform: translate(-50%, -50%);
-            font-size: 10.5px; font-weight: 700; white-space: nowrap;
-            padding: 2px 7px 2px 6px; border-radius: 4px;
+            font-size: 13px; font-weight: 700; white-space: nowrap;
+            padding: 3px 9px 3px 7px; border-radius: 4px;
             background: rgba(8,10,14,0.9);
             color: #f4f6f8;
             border-left: 3px solid var(--lbl-color, #94a3b8);
@@ -755,7 +755,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.112)</h1>
+            <h1>🚂 Transport Dashboard (Rev.113)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1037,6 +1037,7 @@
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-side" onclick="set3DCameraTG('side')">Side</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-front" onclick="set3DCameraTG('front')">Front</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-rear" onclick="set3DCameraTG('rear')">Rear</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-load" onclick="set3DCameraTG('load')" title="Steep 3/4 angle looking down onto the deck/load">Load</button>
                                 <button type="button" class="tg-3d-btn tg-3d-lock-btn tg-3d-locked" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔒 Locked</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dSaveViewBtn" onclick="save3DViewTG()" title="Save the current camera angle, zoom and pan as the view this panel opens with next time">💾 Save View</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dSolidBtn" onclick="toggle3DSolidModeTG()" title="Toggle the deck, cargo and header/dbar blocks between transparent (see-through) and solid rendering">◻ Transparent</button>
@@ -1055,7 +1056,7 @@
                                     🏷 Hide all labels
                                 </label>
                                 <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tg3dShowHLoadsToggle" onchange="updateTg3DHLoadsOverlay()">
+                                    <input type="checkbox" id="tg3dShowHLoadsToggle" onchange="updateTg3DHLoadsOverlay(); renderTrailerGen3D();">
                                     ⚠ Show Horizontal Loads
                                 </label>
                             </div>
@@ -9555,6 +9556,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             side:  { az: 0,   el: 10 },   // viewed from world +Y (Left side)
             front: { az: -90, el: 10 },   // viewed from world -X (Front)
             rear:  { az: 90,  el: 10 },   // viewed from world +X (Rear)
+            load:  { az: -40, el: 55 },   // steep 3/4 angle looking down onto the deck/load
         };
 
         // Floating (HTML-overlay) labels — used for the stability
@@ -10152,7 +10154,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const gPlaneV = new THREE.Vector3().crossVectors(gPlaneNormal, gPlaneU).normalize();
                     const gPlaneOffset = gPlaneNormal.clone().multiplyScalar(0.03);
                     [[gv1, 1], [gv2, 2], [gv3, 3]].forEach(([v, gn]) => {
-                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.26);
+                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.36);
                     });
                 }
             }
@@ -10385,6 +10387,71 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             trainTiltPivotTG.rotation.copy(tiltEuler);
             world3dGroupTG.position.set(-pivotXm, 0, -pivotZm);
 
+            // ---- ⚠ Horizontal Loads, drawn directly into the 3D scene
+            // (same tgHLoads values/icons as the ⚠ Horizontal Loads panel
+            // and its flat corner overlay — see tgHLoadsFields /
+            // updateTg3DHLoadsOverlay), positioned against the view each
+            // value is meaningful from. Gated on the same "⚠ Show
+            // Horizontal Loads" toggle as the corner overlay. All values
+            // are read straight from tgHLoads so their sign (+/-) shows
+            // as typed/pulled from Excel — nothing is re-derived here. ----
+            if (document.getElementById('tg3dShowHLoadsToggle')?.checked) {
+                const hlCenterX = (bMinX + bMaxX) / 2;
+                const hlCenterY = (bMinY + bMaxY) / 2;
+                const hlTopZ = bMaxZ + 400; // just clear of the tallest point, so it reads over the Top view
+                const hlSpanX = Math.max(bMaxX - bMinX, 2000);
+
+                // Trailer v / a_acc (above, toward front/-X) / a_dec
+                // (below, toward rear/+X) — stacked along the
+                // longitudinal axis at the load's own lateral center,
+                // i.e. the "middle top view".
+                labelAnchors3dTG.push({ pos: toV(hlCenterX, hlTopZ, hlCenterY), text: `➡ Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`, color: '#38bdf8' });
+                labelAnchors3dTG.push({ pos: toV(hlCenterX - hlSpanX * 0.18, hlTopZ, hlCenterY), text: `⏩ a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`, color: '#22c55e' });
+                labelAnchors3dTG.push({ pos: toV(hlCenterX + hlSpanX * 0.18, hlTopZ, hlCenterY), text: `⏪ a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`, color: '#f97316' });
+
+                // cd — Top view, offset to one side of the Trailer
+                // v / a_acc / a_dec stack so it doesn't overlap them.
+                labelAnchors3dTG.push({ pos: toV(hlCenterX, hlTopZ, bMinY - 300), text: `◐ cd ${tgHLoads.cd.toFixed(2)}`, color: '#a78bfa' });
+
+                // Wind v — shown against both the Front (world -X) and
+                // Side (world -Y) faces, level with the top of the deck.
+                labelAnchors3dTG.push({ pos: toV(bMinX - 300, deckTopWorldZ + 600, hlCenterY), text: `💨 Wind v ${tgHLoads.vWind.toFixed(1)} m/s`, color: '#38bdf8' });
+                labelAnchors3dTG.push({ pos: toV(hlCenterX, deckTopWorldZ + 600, bMinY - 300), text: `💨 Wind v ${tgHLoads.vWind.toFixed(1)} m/s`, color: '#38bdf8' });
+
+                // Gr_trans / Gr_long — at the ground angle corner (the
+                // same front-right corner, gndX1/gndY1, the slope wedge
+                // above is measured from), stacked at two heights so the
+                // two labels don't overlap.
+                labelAnchors3dTG.push({ pos: toV(gndX1, 150, gndY1), text: `⤢ Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`, color: '#facc15' });
+                labelAnchors3dTG.push({ pos: toV(gndX1, 420, gndY1), text: `⤡ Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`, color: '#facc15' });
+
+                // M_u — ground top surface, front side corner (the other
+                // lateral corner on the front edge, so it clears the
+                // Gr_trans/Gr_long labels above).
+                labelAnchors3dTG.push({ pos: toV(gndX1, 150, gndY2), text: `⛓ M_u ${tgHLoads.muFriction.toFixed(2)}`, color: '#94a3b8' });
+
+                // C_j (curve impact) — drawn as a turning-radius style
+                // curve with an arrowhead at the end, near the same
+                // front corner; the C_j label itself sits at the START
+                // of the arrow (the corner end), per request.
+                const cjRadiusMm = Math.max(1500, hlSpanX * 0.4);
+                const cjSteps = 24;
+                const cjPts = [];
+                for (let i = 0; i <= cjSteps; i++) {
+                    const t = (i / cjSteps) * (Math.PI / 3); // 60° sweep
+                    cjPts.push(toV(gndX1 + cjRadiusMm * Math.sin(t), 20, gndY1 - cjRadiusMm + cjRadiusMm * Math.cos(t)));
+                }
+                const cjGeo = new THREE.BufferGeometry().setFromPoints(cjPts);
+                const cjMat = new THREE.LineBasicMaterial({ color: 0xfacc15 });
+                world3dGroupTG.add(new THREE.Line(cjGeo, cjMat));
+                const cjEnd = cjPts[cjPts.length - 1];
+                const cjPrev = cjPts[cjPts.length - 2];
+                const cjDir = cjEnd.clone().sub(cjPrev).normalize();
+                const cjArrow = new THREE.ArrowHelper(cjDir, cjEnd, 0.25, 0xfacc15, 0.12, 0.07);
+                world3dGroupTG.add(cjArrow);
+                labelAnchors3dTG.push({ pos: cjPts[0].clone(), text: `↻ C_j ${tgHLoads.curveImpact.toFixed(1)}%`, color: '#facc15' });
+            }
+
             // ---- Frame camera to fit the current (now-tilted) train ----
             const spanMm = Math.max(bMaxX - bMinX, bMaxY - bMinY, 4000);
             const centerXMm = (bMinX + bMaxX) / 2, centerYMm = (bMinY + bMaxY) / 2;
@@ -10438,7 +10505,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function tg3dMakeLabelTexture(text, cssColor) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const fontPx = 48;
+            const fontPx = 64; // bumped up from 48 so in-plane labels (G1/G2/G3, arm/angle callouts) read clearly
             ctx.font = `bold ${fontPx}px Arial, sans-serif`;
             const textW = Math.max(1, Math.ceil(ctx.measureText(text).width));
             const padX = 22, padY = 16, barW = 6;
@@ -10466,8 +10533,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const h = heightM || 0.3;
             const w = h * aspect;
             const geo = new THREE.PlaneGeometry(w, h);
-            const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+            // depthTest disabled + a high renderOrder so these text
+            // planes always draw on top of the (also-transparent)
+            // support/stability triangle planes they sit flush against —
+            // without this, same-depth transparent surfaces sort
+            // unpredictably and only one of several co-planar labels
+            // (e.g. G1/G2/G3 on the support triangle) would end up
+            // visible, with the others hidden behind the triangle fill.
+            const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
             const mesh = new THREE.Mesh(geo, mat);
+            mesh.renderOrder = 999;
             mesh.position.copy(position);
             const u = uAxis.clone().normalize();
             const v = vAxis.clone().sub(u.clone().multiplyScalar(vAxis.dot(u))).normalize();
