@@ -523,6 +523,20 @@
             text-shadow: none;
         }
         .tg-3d-hint { font-size: 10px; color: var(--text-muted); padding: 4px 8px 0; opacity: 0.75; }
+        /* Horizontal Loads readout overlaid on the 3D viewer itself
+           (⚠ Show Horizontal Loads toggle) — reuses the same
+           .tg-hloads-panel markup as the 2D preview's own panel (see
+           renderTrailerGenHLoadsPanel()), just smaller and pinned to a
+           corner so it doesn't cover the model. */
+        .tg-3d-hloads-overlay {
+            position: absolute; bottom: 8px; left: 8px; max-width: 250px;
+            z-index: 4; pointer-events: none; display: none;
+        }
+        .tg-3d-hloads-overlay.tg-3d-hloads-overlay-visible { display: block; }
+        .tg-3d-hloads-overlay .tg-hloads-panel { padding: 6px 8px; border-radius: 6px; opacity: 0.94; }
+        .tg-3d-hloads-overlay .tg-hloads-panel-title { font-size: 10px; margin-bottom: 4px; }
+        .tg-3d-hloads-overlay .tg-hloads-panel-grid { grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 3px 8px; }
+        .tg-3d-hloads-overlay .tg-hloads-panel-row { font-size: 9.5px; }
 
         /* Group detail legend — shown below the preview instead of the
            on-canvas labels when "Show group label in preview" is off.
@@ -741,7 +755,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.111.4)</h1>
+            <h1>🚂 Transport Dashboard (Rev.112)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1023,26 +1037,33 @@
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-side" onclick="set3DCameraTG('side')">Side</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-front" onclick="set3DCameraTG('front')">Front</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-rear" onclick="set3DCameraTG('rear')">Rear</button>
-                                <button type="button" class="tg-3d-btn tg-3d-lock-btn" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔓 Unlocked</button>
+                                <button type="button" class="tg-3d-btn tg-3d-lock-btn tg-3d-locked" id="tg3dLockBtn" onclick="toggle3DViewLockTG()" title="Lock/unlock orbit, pan and zoom on the 3D view">🔒 Locked</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dSaveViewBtn" onclick="save3DViewTG()" title="Save the current camera angle, zoom and pan as the view this panel opens with next time">💾 Save View</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dSolidBtn" onclick="toggle3DSolidModeTG()" title="Toggle the deck, cargo and header/dbar blocks between transparent (see-through) and solid rendering">◻ Transparent</button>
                             </div>
                             <div class="tg-preview-toggles-right">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dStabilityToggle" checked onchange="renderTrailerGen3D()">
-                                    ⚠ Show stability triangle
-                                </label>
-                                <label class="tg-preview-toggle">
-                                    <input type="checkbox" id="tg3dCogToggle" checked onchange="renderTrailerGen3D()">
-                                    ⊕ Show CoG markers
+                                    ⚠⊕ Show stability triangle &amp; CoG markers
                                 </label>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tg3dGroupPlanToggle" checked onchange="renderTrailerGen3D()">
                                     ▲ Show support triangle
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dHideLabelsToggle" onchange="toggle3DLabelsTG()">
+                                    🏷 Hide all labels
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tg3dShowHLoadsToggle" onchange="updateTg3DHLoadsOverlay()">
+                                    ⚠ Show Horizontal Loads
                                 </label>
                             </div>
                         </div>
                         <div id="tgViewer3dWrap">
                             <div id="tgViewer3d"></div>
                             <div id="tgLabels3d"></div>
+                            <div id="tg3dHLoadsOverlay" class="tg-3d-hloads-overlay"></div>
                         </div>
                         <div class="tg-3d-hint">Drag = orbit · middle-drag / two-finger drag = pan · scroll / pinch = zoom</div>
                     </div>
@@ -9517,8 +9538,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         let panOffset3dTG = { x: 0, y: 0, z: 0 };
         let isDragging3dTG = false, isPanning3dTG = false;
         let lastX3dTG = 0, lastY3dTG = 0, lastPanX3dTG = 0, lastPanY3dTG = 0;
-        let is3DViewLockedTG = false;
+        let is3DViewLockedTG = true; // starts locked per request — orbit/pan/zoom stay off until explicitly unlocked via the toolbar button
         let current3DCameraTG = 'iso';
+        // Hides every floating HTML label (labelAnchors3dTG) when on —
+        // see toggle3DLabelsTG() / the 🏷 Hide all labels toggle.
+        let tg3dLabelsHiddenTG = false;
+        // Renders the deck/cargo/header-dbar blocks fully opaque instead
+        // of their default see-through opacity — see
+        // toggle3DSolidModeTG() / the ◻ Transparent / 🧱 Solid toolbar
+        // button.
+        let tg3dSolidModeTG = false;
 
         const TG3D_CAM_PRESETS = {
             iso:   { az: -40, el: 26 },
@@ -9550,8 +9579,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             obj.traverse((node) => {
                 if (node.geometry) node.geometry.dispose();
                 if (node.material) {
-                    if (Array.isArray(node.material)) node.material.forEach(m => m.dispose());
-                    else node.material.dispose();
+                    const mats = Array.isArray(node.material) ? node.material : [node.material];
+                    // Dispose each material's own canvas texture too (see
+                    // addPlaneLabelTG's in-plane text labels) — otherwise
+                    // every renderTrailerGen3D() rebuild leaks one canvas
+                    // texture per label.
+                    mats.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
                 }
             });
         }
@@ -9635,6 +9668,79 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             btn.textContent = is3DViewLockedTG ? '🔒 Locked' : '🔓 Unlocked';
         }
 
+        // ---- Save/restore camera view — 💾 Save View button. Persists
+        // orbit angle, zoom, look-at and pan to localStorage so the 3D
+        // panel reopens (next session, next page load) framed the way
+        // the user last saved it instead of always resetting to the
+        // iso default. restore3DViewTG() is called once from
+        // init3DSceneTG(), before the first render. ----
+        const TG3D_SAVED_VIEW_KEY = 'tg3dSavedView';
+        function save3DViewTG() {
+            try {
+                const data = {
+                    theta: theta3dTG, phi: phi3dTG, radius: radius3dTG,
+                    lookAt: lookAt3dTG, pan: panOffset3dTG, cam: current3DCameraTG,
+                };
+                localStorage.setItem(TG3D_SAVED_VIEW_KEY, JSON.stringify(data));
+                const btn = document.getElementById('tg3dSaveViewBtn');
+                if (btn) {
+                    const orig = btn.textContent;
+                    btn.textContent = '✅ Saved';
+                    setTimeout(() => { if (btn.textContent === '✅ Saved') btn.textContent = orig; }, 1200);
+                }
+            } catch (e) { console.warn('Could not save the 3D view', e); }
+        }
+        function restore3DViewTG() {
+            try {
+                const raw = localStorage.getItem(TG3D_SAVED_VIEW_KEY);
+                if (!raw) return false;
+                const data = JSON.parse(raw);
+                if (!data) return false;
+                if (Number.isFinite(data.theta)) theta3dTG = data.theta;
+                if (Number.isFinite(data.phi)) phi3dTG = data.phi;
+                if (Number.isFinite(data.radius)) radius3dTG = data.radius;
+                if (data.lookAt) lookAt3dTG = { x: data.lookAt.x || 0, y: data.lookAt.y || 0, z: data.lookAt.z || 0 };
+                if (data.pan) panOffset3dTG = { x: data.pan.x || 0, y: data.pan.y || 0, z: data.pan.z || 0 };
+                if (data.cam && TG3D_CAM_PRESETS[data.cam]) current3DCameraTG = data.cam;
+                tg3dUserAdjustedCamera = true; // stop renderTrailerGen3D()'s auto-framing from overriding the restored view
+                return true;
+            } catch (e) { console.warn('Could not restore the saved 3D view', e); return false; }
+        }
+
+        // ---- 🏷 Hide all labels toggle — flips tg3dLabelsHiddenTG and
+        // re-runs renderLabels3DTG() immediately so the overlay clears
+        // (or reappears) without needing a full model rebuild. ----
+        function toggle3DLabelsTG() {
+            tg3dLabelsHiddenTG = document.getElementById('tg3dHideLabelsToggle')?.checked === true;
+            renderLabels3DTG();
+        }
+
+        // ---- ◻ Transparent / 🧱 Solid toggle — flips tg3dSolidModeTG
+        // (read by the deck/cargo/header-dbar material setup in
+        // renderTrailerGen3D()) and rebuilds the model. ----
+        function toggle3DSolidModeTG() {
+            tg3dSolidModeTG = !tg3dSolidModeTG;
+            const btn = document.getElementById('tg3dSolidBtn');
+            if (btn) {
+                btn.textContent = tg3dSolidModeTG ? '🧱 Solid' : '◻ Transparent';
+                btn.classList.toggle('tg-3d-btn-active', tg3dSolidModeTG);
+            }
+            renderTrailerGen3D();
+        }
+
+        // ---- ⚠ Show Horizontal Loads toggle — mirrors the same panel
+        // markup the 2D preview uses (renderTrailerGenHLoadsPanel()) into
+        // a small corner overlay on the 3D viewer. Called from the
+        // checkbox's onchange AND from the end of renderTrailerGen3D()
+        // so the values stay live as fields change. ----
+        function updateTg3DHLoadsOverlay() {
+            const overlay = document.getElementById('tg3dHLoadsOverlay');
+            if (!overlay) return;
+            const show = document.getElementById('tg3dShowHLoadsToggle')?.checked === true;
+            overlay.classList.toggle('tg-3d-hloads-overlay-visible', show);
+            if (show) overlay.innerHTML = renderTrailerGenHLoadsPanel();
+        }
+
         function resize3DViewerTG() {
             const container = document.getElementById('tgViewer3d');
             if (!container || !container.clientWidth || !renderer3dTG) return;
@@ -9648,7 +9754,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const layer = document.getElementById('tgLabels3d');
             const container = document.getElementById('tgViewer3d');
             if (!layer || !container || !camera3dTG) return;
-            if (!labelAnchors3dTG.length) { layer.innerHTML = ''; return; }
+            if (tg3dLabelsHiddenTG || !labelAnchors3dTG.length) { layer.innerHTML = ''; return; }
             const w = container.clientWidth, h = container.clientHeight;
             const v = new THREE.Vector3();
             let html = '';
@@ -9712,6 +9818,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             world3dGroupTG = new THREE.Group();
             trainTiltPivotTG.add(world3dGroupTG);
+
+            // Restore a previously-saved camera view (💾 Save View), if
+            // any, before the first frame — swap in the ortho camera too
+            // when the saved view was one of the locked Top/Side/Front/
+            // Rear presets, and reflect it on the camera preset buttons.
+            if (restore3DViewTG()) {
+                if (orthoCamera3dTG && perspCamera3dTG) {
+                    camera3dTG = TG3D_ORTHO_VIEWS.has(current3DCameraTG) ? orthoCamera3dTG : perspCamera3dTG;
+                }
+                Object.keys(TG3D_CAM_PRESETS).forEach((k) => {
+                    const b = document.getElementById('tg3dcam-' + k);
+                    if (b) b.classList.toggle('tg-3d-btn-active', k === current3DCameraTG);
+                });
+            }
 
             updateCamera3DPositionTG();
 
@@ -9853,7 +9973,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // behind it stay visible instead of being hidden by a
                 // solid deck plate (opacity tuned so the deck outline
                 // still reads clearly against the grid).
-                const mat = new THREE.MeshStandardMaterial({ color: 0x2b3646, metalness: 0.1, roughness: 0.85, transparent: true, opacity: 0.3, depthWrite: false });
+                const mat = new THREE.MeshStandardMaterial({ color: 0x2b3646, metalness: 0.1, roughness: 0.85, transparent: !tg3dSolidModeTG, opacity: tg3dSolidModeTG ? 1 : 0.3, depthWrite: tg3dSolidModeTG });
                 const mesh = new THREE.Mesh(geo, mat);
                 mesh.position.set(
                     (deckX1 + deckX2) / 2 * S,
@@ -9882,7 +10002,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
 
             // ---- Cargo boxes + per-item CoG markers ----
-            const showCog = document.getElementById('tg3dCogToggle')?.checked !== false;
+            const showCog = document.getElementById('tg3dStabilityToggle')?.checked !== false; // merged into the same "Show stability triangle & CoG markers" toggle
             const cargoBoxZ = computeCargoZSpans();
             cargoItems.forEach((c, idx) => {
                 const hex = tg3dResolveColor(cargoColorFor(idx), '#f97316');
@@ -9894,7 +10014,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                 if (lenMm > 0 && widMm > 0 && topWorldZ > baseWorldZ) {
                     const geo = new THREE.BoxGeometry(lenMm * S, (topWorldZ - baseWorldZ) * S, widMm * S);
-                    const mat = new THREE.MeshStandardMaterial({ color: hex, transparent: true, opacity: 0.32, metalness: 0.05, roughness: 0.7 });
+                    const mat = new THREE.MeshStandardMaterial({ color: hex, transparent: !tg3dSolidModeTG, opacity: tg3dSolidModeTG ? 1 : 0.32, metalness: 0.05, roughness: 0.7 });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(tlXMm * S, (baseWorldZ + topWorldZ) / 2 * S, tlYMm * S);
                     world3dGroupTG.add(mesh);
@@ -9926,7 +10046,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // Header/Dbar block (deck edge, axle wheels, CoG
                     // markers) stays visible instead of being hidden by
                     // a solid amber block.
-                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6, transparent: true, opacity: 0.35, depthWrite: false });
+                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6, transparent: !tg3dSolidModeTG, opacity: tg3dSolidModeTG ? 1 : 0.35, depthWrite: tg3dSolidModeTG });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(b.xCenter * S, (b.zBase + b.zTop) / 2 * S, b.yCenter * S);
                     world3dGroupTG.add(mesh);
@@ -10020,12 +10140,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // per-vertex anchors below.
                     addGroupTriangleTG(g1, g2, g3, stabilityArmHeightMm, 0x38bdf8, null);
                     const S = TG3D_SCALE;
-                    [[g1, 1], [g2, 2], [g3, 3]].forEach(([g, gn]) => {
-                        labelAnchors3dTG.push({
-                            pos: new THREE.Vector3(g.x * S, stabilityArmHeightMm * S + 0.2, g.y * S),
-                            text: `G${gn}`,
-                            color: tg3dResolveColor(getGroupColor(gn), '#38bdf8'),
-                        });
+                    // G1/G2/G3 labels laid FLAT within the support
+                    // triangle's own plane (see addPlaneLabelTG above)
+                    // instead of camera-facing billboards, so they read
+                    // as part of the triangle rather than floating tags.
+                    const gv1 = new THREE.Vector3(g1.x * S, stabilityArmHeightMm * S, g1.y * S);
+                    const gv2 = new THREE.Vector3(g2.x * S, stabilityArmHeightMm * S, g2.y * S);
+                    const gv3 = new THREE.Vector3(g3.x * S, stabilityArmHeightMm * S, g3.y * S);
+                    const gPlaneU = gv2.clone().sub(gv1);
+                    const gPlaneNormal = new THREE.Vector3().crossVectors(gPlaneU, gv3.clone().sub(gv1)).normalize();
+                    const gPlaneV = new THREE.Vector3().crossVectors(gPlaneNormal, gPlaneU).normalize();
+                    const gPlaneOffset = gPlaneNormal.clone().multiplyScalar(0.03);
+                    [[gv1, 1], [gv2, 2], [gv3, 3]].forEach(([v, gn]) => {
+                        addPlaneLabelTG(`G${gn}`, tg3dResolveColor(getGroupColor(gn), '#38bdf8'), v.clone().add(gPlaneOffset), gPlaneU, gPlaneV, 0.26);
                     });
                 }
             }
@@ -10125,16 +10252,29 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     dashLine.computeLineDistances();
                     world3dGroupTG.add(dashLine);
 
-                    labelAnchors3dTG.push({
-                        pos: apex.clone().lerp(armPt, 0.5).add(new THREE.Vector3(0, 0.3, 0)),
-                        text: `${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}`,
-                        color: s.color,
-                    });
-                    labelAnchors3dTG.push({
-                        pos: armPt.clone(),
-                        text: `${(s.armMm / 1000).toFixed(2)} m`,
-                        color: s.color,
-                    });
+                    // Both labels below are laid FLAT within the
+                    // stability triangle's own plane (apex/armPt/footPt
+                    // — see addPlaneLabelTG above) instead of the usual
+                    // camera-facing billboard, so they rotate with the
+                    // model at the same stability angle as the triangle
+                    // itself rather than always turning to face the
+                    // viewer.
+                    const sPlaneU = armPt.clone().sub(footPt);
+                    const sPlaneNormal = new THREE.Vector3().crossVectors(sPlaneU, apex.clone().sub(footPt)).normalize();
+                    const sPlaneV = new THREE.Vector3().crossVectors(sPlaneNormal, sPlaneU).normalize();
+                    const sPlaneOffset = sPlaneNormal.clone().multiplyScalar(0.02);
+                    addPlaneLabelTG(
+                        `${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}`,
+                        s.color,
+                        apex.clone().lerp(armPt, 0.5).add(sPlaneOffset),
+                        sPlaneU, sPlaneV, 0.3
+                    );
+                    addPlaneLabelTG(
+                        `${(s.armMm / 1000).toFixed(2)} m`,
+                        s.color,
+                        armPt.clone().add(sPlaneOffset),
+                        sPlaneU, sPlaneV, 0.26
+                    );
 
                     // Plan-view perpendicularity proof (green CoG->foot
                     // line + right-angle arc/90° callout near ground
@@ -10272,6 +10412,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 radius3dTG = Math.max(8, spanMm * S * 1.6);
             }
             updateCamera3DPositionTG();
+            updateTg3DHLoadsOverlay(); // ⚠ Show Horizontal Loads toggle — keep the corner overlay's values live
         }
 
         // Set the first time the user manually orbits/pans/zooms the 3D
@@ -10284,6 +10425,57 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (e.target && e.target.closest && e.target.closest('#tgViewer3dWrap')) tg3dUserAdjustedCamera = true;
             }, { passive: true });
         });
+
+        // ---- In-plane text labels — canvas-texture planes added
+        // directly to world3dGroupTG (unlike labelAnchors3dTG's
+        // HTML-overlay labels, which always billboard to face the
+        // camera). Used specifically for the stability triangle's own
+        // name/angle + arm-dimension labels and the support triangle's
+        // G1/G2/G3 labels, per request: those should lie FLAT within
+        // the triangle's own plane and rotate with the model as the
+        // user orbits, instead of always facing the camera like every
+        // other 3D label. ----
+        function tg3dMakeLabelTexture(text, cssColor) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const fontPx = 48;
+            ctx.font = `bold ${fontPx}px Arial, sans-serif`;
+            const textW = Math.max(1, Math.ceil(ctx.measureText(text).width));
+            const padX = 22, padY = 16, barW = 6;
+            canvas.width = textW + padX * 2 + barW;
+            canvas.height = fontPx + padY * 2;
+            ctx.font = `bold ${fontPx}px Arial, sans-serif`; // canvas resize above resets context state
+            ctx.fillStyle = 'rgba(8,10,14,0.88)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = cssColor;
+            ctx.fillRect(0, 0, barW, canvas.height);
+            ctx.fillStyle = '#f4f6f8';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, barW + padX - 6, canvas.height / 2 + 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return { texture, aspect: canvas.width / canvas.height };
+        }
+
+        // position/uAxis/vAxis/normal are all in world3dGroupTG's local
+        // (pre-tilt) space — uAxis is the plane's own "horizontal"
+        // direction, vAxis its "up" direction (Gram-Schmidt'd against
+        // uAxis so the two don't need to already be exactly orthogonal).
+        function addPlaneLabelTG(text, cssColor, position, uAxis, vAxis, heightM) {
+            const { texture, aspect } = tg3dMakeLabelTexture(text, cssColor || '#94a3b8');
+            const h = heightM || 0.3;
+            const w = h * aspect;
+            const geo = new THREE.PlaneGeometry(w, h);
+            const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(position);
+            const u = uAxis.clone().normalize();
+            const v = vAxis.clone().sub(u.clone().multiplyScalar(vAxis.dot(u))).normalize();
+            const n = new THREE.Vector3().crossVectors(u, v).normalize();
+            mesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(u, v, n));
+            world3dGroupTG.add(mesh);
+            return mesh;
+        }
 
         function addCogMarkerTG(xMm, zMmHeight, yMm, hex, label) {
             const S = TG3D_SCALE;
