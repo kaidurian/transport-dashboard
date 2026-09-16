@@ -445,21 +445,6 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .tg-hloads-panel-icon { margin-right: 4px; }
-        /* Isometric load diagram — schematic Top/Front/Left view of the
-           trailer+cargo block with the Horizontal Loads values drawn on
-           as labeled force arrows, stacked directly under the existing
-           text readout grid inside the same ⚠ Horizontal Loads card.
-           It's illustrative only (fixed generic box proportions, not
-           driven by actual cargo/trailer dimensions) — the numbers on
-           each arrow are the live tgHLoads values, everything else
-           (box size, arrow lengths/positions) is fixed layout. */
-        .tg-hloads-iso-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--panel-border, #242f41); }
-        .tg-hloads-iso-title {
-            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-            color: var(--text-muted); margin-bottom: 4px;
-        }
-        .tg-hloads-iso-svg-box { width: 100%; display: flex; justify-content: center; }
-        .tg-hloads-iso-svg-box svg { max-width: 460px; width: 100%; height: auto; display: block; }
         /* Orientation cube overlaid in the top-left corner of the whole
            preview (plan + elevation stack), instead of taking up its
            own stacked section or being scoped to just the plan view.
@@ -756,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.111)</h1>
+            <h1>🚂 Transport Dashboard (Rev.101.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1033,7 +1018,7 @@
                         </div>
                         <div class="tg-3d-toolbar">
                             <div class="tg-3d-cam-btns">
-                                <button type="button" class="tg-3d-btn" id="tg3dcam-iso" onclick="set3DCameraTG('iso')" title="Fixed Top-Front-Right reference angle — also engages 🔒 view lock so it stays put; unlock to free-orbit again.">Iso</button>
+                                <button type="button" class="tg-3d-btn" id="tg3dcam-iso" onclick="set3DCameraTG('iso')">Iso</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-top" onclick="set3DCameraTG('top')">Top</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-side" onclick="set3DCameraTG('side')">Side</button>
                                 <button type="button" class="tg-3d-btn" id="tg3dcam-front" onclick="set3DCameraTG('front')">Front</button>
@@ -7562,119 +7547,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     <div class="tg-hloads-panel-grid">
                         ${hlRows.map(row => `<div class="tg-hloads-panel-row"><span class="tg-hloads-panel-icon">${row[0]}</span>${escapeHtml(row[1])}</div>`).join('')}
                     </div>
-                    <div class="tg-hloads-iso-wrap">
-                        <div class="tg-hloads-iso-title">Isometric — Top / Front / Left view</div>
-                        <div class="tg-hloads-iso-svg-box">${buildHLoadsIsometricSvg()}</div>
-                    </div>
                 </div>`;
-        }
-
-        // ---- Horizontal Loads isometric — schematic Top/Front/Left
-        // axonometric drawing of the trailer+cargo block with every
-        // ⚠ Horizontal Loads value drawn on as a labeled force arrow,
-        // instead of just the plain text rows above. Viewpoint/axis
-        // convention matches the rest of the dashboard (world +X =
-        // REAR/-X = FRONT, lower Y = RIGHT/higher Y = LEFT, +Z = TOP —
-        // see the orientation-cube comment above buildOrientationCubeSvg)
-        // but this cube is built from its own proj() (not shared with
-        // the cube) because here the camera looks from the TOP-FRONT-
-        // LEFT corner, so the FRONT and LEFT faces are the two near/
-        // visible side faces (rather than FRONT/RIGHT as in the small
-        // overlay legend) — i.e. u:+1=FRONT, l:+1=LEFT, w:+1=TOP, and
-        // the near faces are simply the u=+1, l=+1 and w=+1 faces with
-        // no relabeling trick needed. The box itself is a fixed generic
-        // proportion (not derived from actual train/cargo geometry) —
-        // this diagram is about *load directions*, not a scaled GA
-        // drawing, so arrow lengths/positions are schematic too; only
-        // the printed numbers are the live tgHLoads values.
-        function buildHLoadsIsometricSvg() {
-            const S = 54; // px per unit — screen scale of the iso basis
-            const cos30 = Math.cos(Math.PI / 6), sin30 = Math.sin(Math.PI / 6);
-            const eFront = { x: cos30 * S, y: sin30 * S };   // +u (FRONT) → screen down-right
-            const eLeft  = { x: -cos30 * S, y: sin30 * S };  // +l (LEFT)  → screen down-left
-            const eUp    = { x: 0, y: -S };                  // +w (TOP)   → screen up
-            const proj = (u, l, w) => ({ x: u * eFront.x + l * eLeft.x, y: u * eFront.y + l * eLeft.y + w * eUp.y });
-            const pt = (u, l, w) => { const p = proj(u, l, w); return `${p.x.toFixed(1)},${p.y.toFixed(1)}`; };
-
-            // Generic box proportions: longer FRONT–REAR (trailer length),
-            // narrower LEFT–RIGHT, moderate height.
-            const U = 1.7, LH = 0.95, W = 0.65;
-            const edgeStroke = 'var(--text-muted, #94a3b8)';
-            const faceFill = 'var(--panel-border, #242f41)';
-            const labelFill = 'var(--text-main, #e2e8f0)';
-
-            let g = '';
-            const face = (corners, opacity) => `<polygon points="${corners.map(c => pt(c[0], c[1], c[2])).join(' ')}" fill="${faceFill}" fill-opacity="${opacity}" stroke="${edgeStroke}" stroke-width="1"/>`;
-            g += face([[U, -LH, W], [U, LH, W], [-U, LH, W], [-U, -LH, W]], 0.5);   // TOP
-            g += face([[U, -LH, -W], [U, LH, -W], [U, LH, W], [U, -LH, W]], 0.85);  // FRONT (u = +U)
-            g += face([[-U, LH, -W], [U, LH, -W], [U, LH, W], [-U, LH, W]], 0.65);  // LEFT (l = +LH)
-            g += `<text x="0" y="${(proj(0, 0, W).y - 6).toFixed(1)}" font-size="12" font-weight="700" text-anchor="middle" fill="${labelFill}">CARGO</text>`;
-
-            // Small helper: a straight arrow between two (u,l,w) points,
-            // with its own arrowhead marker id and an optional text
-            // label placed at the tail end.
-            let markers = '';
-            let arrowsG = '';
-            const arrow = (id, p0, p1, color, label, labelAnchor, dash) => {
-                markers += `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${color}"/></marker>`;
-                const a = proj(p0[0], p0[1], p0[2]), b = proj(p1[0], p1[1], p1[2]);
-                arrowsG += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${color}" stroke-width="2" ${dash ? `stroke-dasharray="${dash}"` : ''} marker-end="url(#${id})"/>`;
-                if (label) {
-                    const dx = labelAnchor === 'end' ? -6 : 6;
-                    arrowsG += `<text x="${(a.x + dx).toFixed(1)}" y="${(a.y - 4).toFixed(1)}" font-size="10.5" font-weight="600" text-anchor="${labelAnchor}" fill="${color}">${escapeHtml(label)}</text>`;
-                }
-            };
-
-            // 1) Wind — lateral, hits the near LEFT face at a height
-            // derived from H_CoW (schematic mapping, not to scale: 0–4m
-            // clamped across the box's own height band).
-            const hFrac = Math.max(0, Math.min(1, tgHLoads.hCow / 4));
-            const windW = -W * 0.8 + hFrac * (W * 1.6);
-            arrow('tgHLIsoWind', [0, LH + 1.3, windW], [0, LH + 0.12, windW], 'var(--accent-blue, #38bdf8)',
-                `💨 Wind ${tgHLoads.vWind.toFixed(1)} m/s, cd ${tgHLoads.cd.toFixed(2)} (@H_CoW ${tgHLoads.hCow.toFixed(2)}m)`, 'end', null);
-
-            // 2) Direction of travel / trailer speed — thin dashed arrow
-            // along the ground, +u = FRONT = direction of travel.
-            arrow('tgHLIsoTravel', [-U - 0.15, -LH - 0.35, -W], [U + 0.55, -LH - 0.35, -W], 'var(--text-muted, #94a3b8)',
-                `➡ Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`, 'start', '3 2');
-
-            // 3) Acceleration — along +u (FRONT), above the box.
-            arrow('tgHLIsoAcc', [-0.55, 0, W + 1.0], [1.05, 0, W + 1.0], 'var(--accent-green, #10b981)',
-                `⏩ a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`, 'start', null);
-
-            // 4) Deceleration — along -u (REAR), stacked above the
-            // acceleration arrow so the two opposing arrows don't overlap.
-            arrow('tgHLIsoDec', [0.55, 0, W + 1.4], [-1.05, 0, W + 1.4], '#f59e0b',
-                `⏪ a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`, 'end', null);
-
-            // 5) Friction at the ground contact patch — opposes the
-            // direction of travel.
-            arrow('tgHLIsoFric', [U + 0.05, LH * 0.4, -W], [U - 0.55, LH * 0.4, -W], '#ef4444',
-                `⛓ M_u ${tgHLoads.muFriction.toFixed(2)}`, 'start', null);
-
-            // 6/7) Road gradients — short angled ticks at the base
-            // corners standing in for a tilt/ramp indicator, transverse
-            // (LEFT edge) and longitudinal (FRONT edge).
-            const tgP0 = proj(-U, LH, -W), tgP1 = proj(-U, LH + 0.7, -W - 0.55);
-            arrowsG += `<line x1="${tgP0.x.toFixed(1)}" y1="${tgP0.y.toFixed(1)}" x2="${tgP1.x.toFixed(1)}" y2="${tgP1.y.toFixed(1)}" stroke="${labelFill}" stroke-width="1.5"/>`;
-            arrowsG += `<text x="${(tgP1.x - 4).toFixed(1)}" y="${(tgP1.y + 3).toFixed(1)}" font-size="10.5" font-weight="600" text-anchor="end" fill="${labelFill}">⤢ Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°</text>`;
-            const lgP0 = proj(U, -LH, -W), lgP1 = proj(U + 0.7, -LH - 0.7, -W - 0.55);
-            arrowsG += `<line x1="${lgP0.x.toFixed(1)}" y1="${lgP0.y.toFixed(1)}" x2="${lgP1.x.toFixed(1)}" y2="${lgP1.y.toFixed(1)}" stroke="${labelFill}" stroke-width="1.5"/>`;
-            arrowsG += `<text x="${(lgP1.x + 4).toFixed(1)}" y="${(lgP1.y + 3).toFixed(1)}" font-size="10.5" font-weight="600" text-anchor="start" fill="${labelFill}">⤡ Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°</text>`;
-
-            // 8) Curve impact — a curved (centrifugal-swing) arrow above
-            // the TOP face.
-            const cp0 = proj(0, -0.65, W + 1.55), cp1 = proj(0, 0.65, W + 1.55), cMid = proj(0, 0, W + 2.1);
-            markers += `<marker id="tgHLIsoCurve" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/></marker>`;
-            arrowsG += `<path d="M${cp0.x.toFixed(1)},${cp0.y.toFixed(1)} Q${cMid.x.toFixed(1)},${cMid.y.toFixed(1)} ${cp1.x.toFixed(1)},${cp1.y.toFixed(1)}" fill="none" stroke="#a78bfa" stroke-width="2" marker-end="url(#tgHLIsoCurve)"/>`;
-            arrowsG += `<text x="${cMid.x.toFixed(1)}" y="${(cMid.y - 6).toFixed(1)}" font-size="10.5" font-weight="600" text-anchor="middle" fill="#a78bfa">↻ C_j ${tgHLoads.curveImpact.toFixed(1)}%</text>`;
-
-            const svgW = 460, svgH = 340;
-            return `<svg viewBox="-230 -175 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">
-                <defs>${markers}</defs>
-                ${g}
-                ${arrowsG}
-            </svg>`;
         }
 
 
@@ -9597,10 +9470,21 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const TG3D_SCALE = 1 / 1000; // mm -> m
 
         let scene3dTG = null, camera3dTG = null, renderer3dTG = null;
-        let world3dGroupTG = null;   // everything EXCEPT the ground grid — rebuilt every renderTrailerGen3D() call
-        let gridHelper3dTG = null;
-        let groundMesh3dTG = null;   // solid ground plane, sits just under the grid lines — see updateGroundTilt3DTG()
-        let groundTiltGroupTG = null; // parent of gridHelper3dTG + groundMesh3dTG + world3dGroupTG — its rotation carries the road's longitudinal/transverse gradient (see updateGroundTilt3DTG)
+        // camera3dTG is the ACTIVE camera pointer, swapped between these
+        // two fixed camera objects by set3DCameraTG(): perspCamera3dTG for
+        // 'iso' (a natural 3D look), orthoCamera3dTG for the locked
+        // Top/Side/Front/Rear views (true flat/orthographic engineering
+        // views — no perspective distortion — instead of just a steep
+        // perspective angle that still reads as a pseudo-isometric shot).
+        let perspCamera3dTG = null, orthoCamera3dTG = null;
+        let world3dGroupTG = null;   // everything EXCEPT the ground slab — rebuilt every renderTrailerGen3D() call
+        // Solid ground slab (road bed) — sits under world3dGroupTG inside
+        // groundTiltGroup3dTG, sized to the train's own bounding box + 1m
+        // margin on every side, and tilted to match the Longitudinal/
+        // Transverse road gradient (%) fields (see renderTrailerGen3D).
+        let groundTiltGroup3dTG = null;
+        let groundMesh3dTG = null, groundEdges3dTG = null;
+        const TG3D_ORTHO_VIEWS = new Set(['top', 'side', 'front', 'rear']);
         let tg3dInitialized = false;
         let ambientLight3dTG = null, dirLight3dTG = null, dirLight3dTG2 = null;
 
@@ -9612,8 +9496,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // unaffected. ----
         const TG3D_SKY_DAY = 0xbfdcf0;
         const TG3D_SKY_NIGHT = 0x0f1115;
-        const TG3D_GROUND_DAY = 0x8a9a7c;
-        const TG3D_GROUND_NIGHT = 0x1b2333;
         function update3DDayNightTG() {
             if (!scene3dTG) return;
             const isLight = document.body.classList.contains('tg-light-theme');
@@ -9621,7 +9503,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (ambientLight3dTG) ambientLight3dTG.intensity = isLight ? 0.85 : 0.55;
             if (dirLight3dTG) dirLight3dTG.intensity = isLight ? 0.95 : 0.55;
             if (dirLight3dTG2) dirLight3dTG2.intensity = isLight ? 0.4 : 0.25;
-            if (groundMesh3dTG) groundMesh3dTG.material.color.setHex(isLight ? TG3D_GROUND_DAY : TG3D_GROUND_NIGHT);
         }
 
         // Manual orbit/pan/zoom camera state — same scheme as the Barge
@@ -9637,7 +9518,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         let current3DCameraTG = 'iso';
 
         const TG3D_CAM_PRESETS = {
-            iso:   { az: -140, el: 26 },  // Top-Front-Right — mirrors the old -40 (Top-Front-Left) across the Front axis (-90) so the visible faces match the dashboard's own FRONT/RIGHT convention (2D preview, HLoads legend), instead of FRONT/LEFT
+            iso:   { az: -40, el: 26 },
             top:   { az: 0,   el: 89 },
             side:  { az: 0,   el: 10 },   // viewed from world +Y (Left side)
             front: { az: -90, el: 10 },   // viewed from world -X (Front)
@@ -9676,8 +9557,26 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return { theta: (az * Math.PI) / 180, phi: ((90 - el) * Math.PI) / 180 };
         }
 
+        // Orthographic cameras have no perspective falloff, so "zoom" has
+        // to come from the frustum size (left/right/top/bottom) rather
+        // than camera distance. Ties the frustum half-height to the same
+        // radius3dTG the perspective camera uses for distance, so the
+        // mouse wheel / pinch zoom (which only ever touches radius3dTG)
+        // keeps working identically for both camera types.
+        function updateOrthoFrustumTG() {
+            if (!orthoCamera3dTG) return;
+            const container = document.getElementById('tgViewer3d');
+            const aspect = (container && container.clientWidth) ? container.clientWidth / Math.max(container.clientHeight, 1) : 1;
+            const halfH = Math.max(0.1, radius3dTG * 0.62);
+            const halfW = halfH * aspect;
+            orthoCamera3dTG.left = -halfW; orthoCamera3dTG.right = halfW;
+            orthoCamera3dTG.top = halfH; orthoCamera3dTG.bottom = -halfH;
+            orthoCamera3dTG.updateProjectionMatrix();
+        }
+
         function updateCamera3DPositionTG() {
             if (!camera3dTG) return;
+            updateOrthoFrustumTG();
             const bx = lookAt3dTG.x + radius3dTG * Math.sin(phi3dTG) * Math.sin(theta3dTG);
             const bz = lookAt3dTG.z + radius3dTG * Math.sin(phi3dTG) * Math.cos(theta3dTG);
             const by = lookAt3dTG.y + radius3dTG * Math.cos(phi3dTG);
@@ -9712,59 +9611,34 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const tp = azElToThetaPhi3DTG(p.az, p.el);
             theta3dTG = tp.theta; phi3dTG = tp.phi;
             panOffset3dTG = { x: 0, y: 0, z: 0 };
+            // Top/Side/Front/Rear switch to the orthographic camera (a
+            // true flat engineering view, no vanishing-point distortion);
+            // Iso keeps the perspective camera for a natural 3D look.
+            if (orthoCamera3dTG && perspCamera3dTG) {
+                camera3dTG = TG3D_ORTHO_VIEWS.has(name) ? orthoCamera3dTG : perspCamera3dTG;
+            }
             updateCamera3DPositionTG();
             Object.keys(TG3D_CAM_PRESETS).forEach((k) => {
                 const b = document.getElementById('tg3dcam-' + k);
                 if (b) b.classList.toggle('tg-3d-btn-active', k === name);
             });
-            // Isometric is a fixed Top-Front-Right reference angle (see
-            // TG3D_CAM_PRESETS.iso comment above), not a free-orbit
-            // starting point, so selecting it also engages the view lock
-            // — an accidental drag can no longer drift it off that
-            // reference angle. Unlock via the 🔒/🔓 button to free-orbit.
-            if (name === 'iso') setLock3DTG(true);
         }
 
-        function setLock3DTG(locked) {
-            is3DViewLockedTG = locked;
+        function toggle3DViewLockTG() {
+            is3DViewLockedTG = !is3DViewLockedTG;
             const btn = document.getElementById('tg3dLockBtn');
             if (!btn) return;
             btn.classList.toggle('tg-3d-locked', is3DViewLockedTG);
             btn.textContent = is3DViewLockedTG ? '🔒 Locked' : '🔓 Unlocked';
         }
 
-        function toggle3DViewLockTG() {
-            setLock3DTG(!is3DViewLockedTG);
-        }
-
         function resize3DViewerTG() {
             const container = document.getElementById('tgViewer3d');
-            if (!container || !container.clientWidth || !camera3dTG || !renderer3dTG) return;
-            camera3dTG.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
-            camera3dTG.updateProjectionMatrix();
+            if (!container || !container.clientWidth || !renderer3dTG) return;
+            const aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+            if (perspCamera3dTG) { perspCamera3dTG.aspect = aspect; perspCamera3dTG.updateProjectionMatrix(); }
+            updateOrthoFrustumTG();
             renderer3dTG.setSize(container.clientWidth, container.clientHeight);
-        }
-
-        // ---- Ground slope — tilts groundTiltGroupTG (the solid ground
-        // plane + grid + the ENTIRE train/cargo world group, as one
-        // rigid body) so the train visually sits on a sloped road
-        // matching the 🔗 Longitudinal road gradient (%) and
-        // 🔗 Transverse road gradient (%) fields (tgHLoads.longGrad /
-        // tgHLoads.transGrad — Horizontal Loads card), instead of always
-        // sitting on flat ground. Called every renderTrailerGen3D() pass,
-        // so it re-syncs live as those two fields are edited.
-        // Sign convention (a starting assumption — flag it with a
-        // concrete gradient value + expected tilt direction if it should
-        // flip): positive Longitudinal % tilts the ground up toward +X;
-        // positive Transverse % tilts it up toward +Y (world "Left" —
-        // same "higher world Y = LEFT" convention as TG3D_CAM_PRESETS.iso).
-        function updateGroundTilt3DTG() {
-            if (!groundTiltGroupTG) return;
-            const longPct = Number.isFinite(tgHLoads && tgHLoads.longGrad) ? tgHLoads.longGrad : 0;
-            const transPct = Number.isFinite(tgHLoads && tgHLoads.transGrad) ? tgHLoads.transGrad : 0;
-            const longAngle = Math.atan(longPct / 100);
-            const transAngle = Math.atan(transPct / 100);
-            groundTiltGroupTG.rotation.set(-transAngle, 0, longAngle);
         }
 
         function renderLabels3DTG() {
@@ -9800,7 +9674,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             scene3dTG = new THREE.Scene();
             scene3dTG.background = new THREE.Color(0x0f1115);
-            camera3dTG = new THREE.PerspectiveCamera(45, container.clientWidth / Math.max(container.clientHeight, 1), 0.05, 5000);
+            const aspect0 = container.clientWidth / Math.max(container.clientHeight, 1);
+            perspCamera3dTG = new THREE.PerspectiveCamera(45, aspect0, 0.05, 5000);
+            orthoCamera3dTG = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.05, 5000);
+            camera3dTG = perspCamera3dTG; // active camera pointer — see set3DCameraTG()
             renderer3dTG = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer3dTG.setSize(container.clientWidth, container.clientHeight);
             renderer3dTG.setPixelRatio(window.devicePixelRatio || 1);
@@ -9818,29 +9695,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             dirLight3dTG2 = dir2;
             update3DDayNightTG(); // apply the current day/night theme right away, instead of defaulting to the fixed dark colors above
 
-            // Ground tilt group — holds the grid, the solid ground plane,
-            // and the whole train/cargo world group as one rigid body, so
-            // the train visually sits ON the sloped ground rather than the
-            // ground tilting independently underneath it. Its rotation is
-            // set from the 🔗 Longitudinal/Transverse road gradient (%)
-            // fields every renderTrailerGen3D() call — see
-            // updateGroundTilt3DTG().
-            groundTiltGroupTG = new THREE.Group();
-            scene3dTG.add(groundTiltGroupTG);
-
-            gridHelper3dTG = new THREE.GridHelper(200, 40, 0x2a3446, 0x1c2432);
-            groundTiltGroupTG.add(gridHelper3dTG);
-
-            groundMesh3dTG = new THREE.Mesh(
-                new THREE.PlaneGeometry(200, 200),
-                new THREE.MeshStandardMaterial({ color: 0x1b2333, metalness: 0.05, roughness: 0.95, side: THREE.DoubleSide })
-            );
-            groundMesh3dTG.rotation.x = -Math.PI / 2; // PlaneGeometry is XY by default — lay it flat in the XZ (ground) plane
-            groundMesh3dTG.position.y = -0.01; // just under the grid lines, avoids z-fighting
-            groundTiltGroupTG.add(groundMesh3dTG);
+            // Ground + train share one tilt group, rotated together to
+            // the road's longitudinal/transverse gradient each render —
+            // see the "solid ground slab" block in renderTrailerGen3D().
+            // (Replaces the old flat, untilted GridHelper floor.)
+            groundTiltGroup3dTG = new THREE.Group();
+            scene3dTG.add(groundTiltGroup3dTG);
 
             world3dGroupTG = new THREE.Group();
-            groundTiltGroupTG.add(world3dGroupTG);
+            groundTiltGroup3dTG.add(world3dGroupTG);
 
             updateCamera3DPositionTG();
 
@@ -9940,8 +9803,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!tg3dInitialized) init3DSceneTG();
             if (!tg3dInitialized || !world3dGroupTG) return; // three.js unavailable
 
-            updateGroundTilt3DTG();
-
             while (world3dGroupTG.children.length) {
                 const child = world3dGroupTG.children.pop();
                 tg3dDisposeObject(child);
@@ -9979,9 +9840,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const widM = Math.max(0.05, (deckY2 - deckY1) * S);
                 const thickM = Math.max(0.02, TG_ELEV_DECK_THICK * S);
                 const geo = new THREE.BoxGeometry(lenM, thickM, widM);
-                // Solid deck (matches the trailer/cargo reference image —
-                // no transparency).
-                const mat = new THREE.MeshStandardMaterial({ color: 0x2b3646, metalness: 0.1, roughness: 0.85 });
+                // Transparent deck — so wheels, cargo, CoG markers and
+                // the stability triangle/Group 3-4 signs underneath or
+                // behind it stay visible instead of being hidden by a
+                // solid deck plate (opacity tuned so the deck outline
+                // still reads clearly against the grid).
+                const mat = new THREE.MeshStandardMaterial({ color: 0x2b3646, metalness: 0.1, roughness: 0.85, transparent: true, opacity: 0.3, depthWrite: false });
                 const mesh = new THREE.Mesh(geo, mat);
                 mesh.position.set(
                     (deckX1 + deckX2) / 2 * S,
@@ -10022,7 +9886,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                 if (lenMm > 0 && widMm > 0 && topWorldZ > baseWorldZ) {
                     const geo = new THREE.BoxGeometry(lenMm * S, (topWorldZ - baseWorldZ) * S, widMm * S);
-                    const mat = new THREE.MeshStandardMaterial({ color: hex, metalness: 0.05, roughness: 0.7 });
+                    const mat = new THREE.MeshStandardMaterial({ color: hex, transparent: true, opacity: 0.32, metalness: 0.05, roughness: 0.7 });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(tlXMm * S, (baseWorldZ + topWorldZ) / 2 * S, tlYMm * S);
                     world3dGroupTG.add(mesh);
@@ -10039,16 +9903,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
 
             // ---- Header/Dbar accessory block(s) — see
-            // computeHeaderDbarBlocks. Solid, fixed amber, matching the
-            // 2D preview's TG_HEADER_DBAR_COLOR, since there's normally
-            // only one (or two, for &PPU) of these per train.
+            // computeHeaderDbarBlocks. Solid (not transparent like the
+            // deck/cargo boxes) in a fixed amber, matching the 2D
+            // preview's TG_HEADER_DBAR_COLOR, since there's normally only
+            // one (or two, for &PPU) of these per train.
             const headerDbarHex = 0xeab308;
             trailerGenTrains.forEach(train => {
                 computeHeaderDbarBlocks(train).forEach(b => {
                     extend(b.xCenter - b.lengthMm / 2, b.yCenter - b.widthMm / 2, b.zTop);
                     extend(b.xCenter + b.lengthMm / 2, b.yCenter + b.widthMm / 2, b.zTop);
                     const geo = new THREE.BoxGeometry(b.lengthMm * S, b.heightMm * S, b.widthMm * S);
-                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6 });
+                    // Transparent, like the deck/cargo boxes above, so
+                    // anything sitting behind or underneath the
+                    // Header/Dbar block (deck edge, axle wheels, CoG
+                    // markers) stays visible instead of being hidden by
+                    // a solid amber block.
+                    const mat = new THREE.MeshStandardMaterial({ color: headerDbarHex, metalness: 0.15, roughness: 0.6, transparent: true, opacity: 0.35, depthWrite: false });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(b.xCenter * S, (b.zBase + b.zTop) / 2 * S, b.yCenter * S);
                     world3dGroupTG.add(mesh);
@@ -10265,22 +10135,72 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
             }
 
-            // ---- Frame camera + resize grid to fit the current model ----
+            // ---- Solid ground slab — sized to the train's own bounding
+            // box (bMinX/bMaxX/bMinY/bMaxY, world mm) plus a fixed 1m
+            // margin on every side, so the train always sits comfortably
+            // inside the visible ground regardless of configuration.
+            // Lives inside groundTiltGroup3dTG together with world3dGroupTG
+            // (the train itself), and that shared group is what actually
+            // tilts — so the train visually rests on the sloped road,
+            // matching the reference photo, instead of the road tilting
+            // under a train that stays flat. ----
+            const groundMarginMm = 1000; // 1 m each side
+            const gndX1 = bMinX - groundMarginMm, gndX2 = bMaxX + groundMarginMm;
+            const gndY1 = bMinY - groundMarginMm, gndY2 = bMaxY + groundMarginMm;
+            const gndLenM = Math.max(0.2, (gndX2 - gndX1) * S);
+            const gndWidM = Math.max(0.2, (gndY2 - gndY1) * S);
+            const gndThickM = Math.max(0.3, Math.min(gndLenM, gndWidM) * 0.12);
+            if (groundMesh3dTG) { groundTiltGroup3dTG.remove(groundMesh3dTG); tg3dDisposeObject(groundMesh3dTG); groundMesh3dTG = null; }
+            if (groundEdges3dTG) { groundTiltGroup3dTG.remove(groundEdges3dTG); tg3dDisposeObject(groundEdges3dTG); groundEdges3dTG = null; }
+            const gndGeo = new THREE.BoxGeometry(gndLenM, gndThickM, gndWidM);
+            // Face order for a THREE.BoxGeometry material array is
+            // [+x, -x, +y (top), -y (bottom), +z, -z] — give the top
+            // face a road-like tone and the sides/bottom an earth tone,
+            // echoing the "cut block of ground" look in the reference photo.
+            const gndTopMat = new THREE.MeshStandardMaterial({ color: 0x5b6472, roughness: 0.95, metalness: 0.03 });
+            const gndSideMat = new THREE.MeshStandardMaterial({ color: 0x8a5a35, roughness: 1, metalness: 0 });
+            const gndMesh = new THREE.Mesh(gndGeo, [gndSideMat, gndSideMat, gndTopMat, gndSideMat, gndSideMat, gndSideMat]);
+            // Top surface at local y=0 — the same ground level the wheel
+            // meshes already sit on (see the axle-wheel loop above).
+            const gndCenterXMm = (gndX1 + gndX2) / 2, gndCenterYMm = (gndY1 + gndY2) / 2;
+            gndMesh.position.set(gndCenterXMm * S, -gndThickM / 2, gndCenterYMm * S);
+            groundTiltGroup3dTG.add(gndMesh);
+            groundMesh3dTG = gndMesh;
+            const gndEdges = new THREE.LineSegments(new THREE.EdgesGeometry(gndGeo), new THREE.LineBasicMaterial({ color: 0x2b2118 }));
+            gndEdges.position.copy(gndMesh.position);
+            groundTiltGroup3dTG.add(gndEdges);
+            groundEdges3dTG = gndEdges;
+
+            // ---- Tilt the ground+train group to match the Longitudinal
+            // road gradient (%) and Transverse road gradient (%) fields
+            // (tgHLoads.longGrad / tgHLoads.transGrad — the same 🔗-synced
+            // Excel-linked inputs shown in the Horizontal Loads panel).
+            // World X = longitudinal (length) axis -> tilting that axis'
+            // height is a rotation about world Z (Three's "depth" axis,
+            // which carries world Y/width — see the toV() mapping above),
+            // so longitudinal grade drives rotation.z. World Y = transverse
+            // (width) axis -> tilting IT is a rotation about world X, so
+            // transverse grade drives rotation.x. Both angles are derived
+            // straight from the % grade (angle = atan(grade/100)) rather
+            // than relying on the Excel-computed Gr_trans/Gr_long degree
+            // read-outs, so the ground still tilts correctly in the
+            // standalone (no-Excel) browser dashboard too. ----
+            const longRad = Math.atan((tgHLoads.longGrad || 0) / 100);
+            const transRad = Math.atan((tgHLoads.transGrad || 0) / 100);
+            const tiltEuler = new THREE.Euler(transRad, 0, -longRad, 'XYZ');
+            groundTiltGroup3dTG.rotation.copy(tiltEuler);
+
+            // ---- Frame camera to fit the current (now-tilted) model ----
             const spanMm = Math.max(bMaxX - bMinX, bMaxY - bMinY, 4000);
             const centerXMm = (bMinX + bMaxX) / 2, centerYMm = (bMinY + bMaxY) / 2;
-            lookAt3dTG = { x: centerXMm * S, y: (bMaxZ * 0.35) * S, z: centerYMm * S };
-            if (gridHelper3dTG && groundTiltGroupTG) {
-                const gridSizeM = Math.max(20, spanMm * S * 2.4);
-                groundTiltGroupTG.remove(gridHelper3dTG);
-                tg3dDisposeObject(gridHelper3dTG);
-                gridHelper3dTG = new THREE.GridHelper(gridSizeM, Math.round(gridSizeM / 2), 0x2a3446, 0x1c2432);
-                gridHelper3dTG.position.y = 0;
-                groundTiltGroupTG.add(gridHelper3dTG);
-                if (groundMesh3dTG) {
-                    groundMesh3dTG.geometry.dispose();
-                    groundMesh3dTG.geometry = new THREE.PlaneGeometry(gridSizeM, gridSizeM);
-                }
-            }
+            // The look-at target is expressed in world space, but the
+            // model itself now lives inside a rotated group — rotate the
+            // same point through the group's tilt so the camera still
+            // orbits/frames the model's true on-screen center instead of
+            // its pre-tilt local position.
+            const lookLocal = new THREE.Vector3(centerXMm * S, (bMaxZ * 0.35) * S, centerYMm * S);
+            lookLocal.applyEuler(tiltEuler);
+            lookAt3dTG = { x: lookLocal.x, y: lookLocal.y, z: lookLocal.z };
             // Only auto-set the orbit radius the FIRST time (or if it's
             // still at the tiny init default) — once the user has
             // zoomed/orbited, further field edits shouldn't yank the
