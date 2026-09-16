@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.111.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.111.4)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10230,7 +10230,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // is offset by the inverse of that corner so the net effect is
             // "rotate the train about that ground corner", not about the
             // train's own (unrelated) coordinate origin.
-            const tiltEuler = new THREE.Euler(transRad, 0, -longRad, 'XYZ');
+            // Rotation signs verified against the ground wedge's own
+            // topH(x,y) = tan(long)*(x-x0) + tan(trans)*(y-y0) formula: a
+            // point offset +dx (world X / longitudinal) from the pivot
+            // must gain height +dx*tan(long), and a point offset +dz
+            // (world Y / transverse, Three's Z axis) must gain height
+            // +dz*tan(trans) — which requires rotation.z = +longRad (not
+            // -longRad) and rotation.x = -transRad (not +transRad) here,
+            // so the train tilts the SAME way as the ground wedge instead
+            // of the opposite way.
+            const tiltEuler = new THREE.Euler(-transRad, 0, longRad, 'XYZ');
             const pivotXm = gndX1 * S, pivotZm = gndY1 * S;
             trainTiltPivotTG.position.set(pivotXm, 0, pivotZm);
             trainTiltPivotTG.rotation.copy(tiltEuler);
