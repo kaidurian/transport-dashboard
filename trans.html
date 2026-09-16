@@ -741,7 +741,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.111.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.111.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10139,68 +10139,86 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // box (bMinX/bMaxX/bMinY/bMaxY, world mm) plus a fixed 1m
             // margin on every side, so the train always sits comfortably
             // inside the visible ground regardless of configuration.
-            // Lives inside groundTiltGroup3dTG together with world3dGroupTG
-            // (the train itself), and that shared group is what actually
-            // tilts — so the train visually rests on the sloped road,
-            // matching the reference photo, instead of the road tilting
-            // under a train that stays flat. ----
+            //
+            // The slope is shown by VARYING THE SLAB'S THICKNESS across
+            // its footprint (a wedge — thicker on the "uphill" side,
+            // thinner on the "downhill" side) rather than by rigidly
+            // rotating the whole ground+train group. This keeps the
+            // train and its footprint level/undistorted (so the locked
+            // Top view still reads as a true, undistorted plan, and
+            // Side/Front show the slope purely as the ground's own
+            // changing thickness) while still syncing with the exact
+            // Gr_trans/Gr_long values shown in the Horizontal Loads panel.
+            //
+            // Angle origin: the FRONT-RIGHT corner of the ground footprint
+            // (world -X = FRONT, world -Y = RIGHT — same convention as the
+            // orientation cube legend) is the pivot the slope is measured
+            // from, i.e. the ground's top surface sits at the reference
+            // height (0) there, and rises/falls linearly from that corner
+            // in the +X (longitudinal) and +Y (transverse) directions.
             const groundMarginMm = 1000; // 1 m each side
             const gndX1 = bMinX - groundMarginMm, gndX2 = bMaxX + groundMarginMm;
             const gndY1 = bMinY - groundMarginMm, gndY2 = bMaxY + groundMarginMm;
             const gndLenM = Math.max(0.2, (gndX2 - gndX1) * S);
             const gndWidM = Math.max(0.2, (gndY2 - gndY1) * S);
-            const gndThickM = Math.max(0.3, Math.min(gndLenM, gndWidM) * 0.12);
             if (groundMesh3dTG) { groundTiltGroup3dTG.remove(groundMesh3dTG); tg3dDisposeObject(groundMesh3dTG); groundMesh3dTG = null; }
             if (groundEdges3dTG) { groundTiltGroup3dTG.remove(groundEdges3dTG); tg3dDisposeObject(groundEdges3dTG); groundEdges3dTG = null; }
-            const gndGeo = new THREE.BoxGeometry(gndLenM, gndThickM, gndWidM);
-            // Face order for a THREE.BoxGeometry material array is
-            // [+x, -x, +y (top), -y (bottom), +z, -z] — give the top
-            // face a road-like tone and the sides/bottom an earth tone,
-            // echoing the "cut block of ground" look in the reference photo.
-            const gndTopMat = new THREE.MeshStandardMaterial({ color: 0x5b6472, roughness: 0.95, metalness: 0.03 });
-            const gndSideMat = new THREE.MeshStandardMaterial({ color: 0x8a5a35, roughness: 1, metalness: 0 });
-            const gndMesh = new THREE.Mesh(gndGeo, [gndSideMat, gndSideMat, gndTopMat, gndSideMat, gndSideMat, gndSideMat]);
-            // Top surface at local y=0 — the same ground level the wheel
-            // meshes already sit on (see the axle-wheel loop above).
-            const gndCenterXMm = (gndX1 + gndX2) / 2, gndCenterYMm = (gndY1 + gndY2) / 2;
-            gndMesh.position.set(gndCenterXMm * S, -gndThickM / 2, gndCenterYMm * S);
+
+            // Slope angles read straight from the Horizontal Loads panel's
+            // own Excel-computed Gr_trans/Gr_long read-outs (⤢/⤡, tgHLoads.
+            // transGrDeg/longGrDeg — already in degrees), so the ground
+            // matches those exact numbers rather than being re-derived.
+            const longRad = (tgHLoads.longGrDeg || 0) * Math.PI / 180;
+            const transRad = (tgHLoads.transGrDeg || 0) * Math.PI / 180;
+            // Front-right corner (gndX1, gndY1) is the origin — top height
+            // there is 0 by construction; the other 3 corners follow the
+            // tilted-plane equation h(x,y) = tan(long)*(x-x0) + tan(trans)*(y-y0).
+            const topH = (xMm, yMm) => Math.tan(longRad) * (xMm - gndX1) + Math.tan(transRad) * (yMm - gndY1);
+            const cornersXY = [[gndX1, gndY1], [gndX2, gndY1], [gndX2, gndY2], [gndX1, gndY2]]; // FR, RR, RL, FL (X=long, Y=trans)
+            const topHMm = cornersXY.map(([x, y]) => topH(x, y));
+            const minBaseThickMm = 300; // thinnest edge of the wedge is never less than this
+            const bottomYMm = Math.min(0, ...topHMm) - minBaseThickMm; // one flat bottom plane for the whole slab
+
+            // ---- Build the wedge as a custom, non-indexed BufferGeometry
+            // (flat-shaded quads) — 4 top corners + 4 bottom corners at the
+            // same footprint, top face sloped per topHMm, bottom face flat. ----
+            const P = cornersXY.map(([x, y], i) => ({
+                top: new THREE.Vector3(x * S, topHMm[i] * S, y * S),
+                bot: new THREE.Vector3(x * S, bottomYMm * S, y * S),
+            }));
+            const pos = [];
+            const pushTri = (v0, v1, v2) => { pos.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z); };
+            const pushQuad = (v0, v1, v2, v3) => { pushTri(v0, v1, v2); pushTri(v0, v2, v3); }; // two tris across a planar quad
+            const topStart = pos.length / 3;
+            pushQuad(P[0].top, P[1].top, P[2].top, P[3].top); // top face (+Y-ish, sloped)
+            const topCount = pos.length / 3 - topStart;
+            const restStart = pos.length / 3;
+            pushQuad(P[3].bot, P[2].bot, P[1].bot, P[0].bot); // bottom face (flat, reversed winding)
+            for (let i = 0; i < 4; i++) { // 4 side walls, front/right/rear/left
+                const j = (i + 1) % 4;
+                pushQuad(P[i].bot, P[j].bot, P[j].top, P[i].top);
+            }
+            const restCount = pos.length / 3 - restStart;
+            const gndGeo = new THREE.BufferGeometry();
+            gndGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            gndGeo.addGroup(topStart, topCount, 0);   // road-toned top surface
+            gndGeo.addGroup(restStart, restCount, 1); // earth-toned bottom + sides
+            gndGeo.computeVertexNormals();
+            const gndTopMat = new THREE.MeshStandardMaterial({ color: 0x5b6472, roughness: 0.95, metalness: 0.03, side: THREE.DoubleSide });
+            const gndSideMat = new THREE.MeshStandardMaterial({ color: 0x8a5a35, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+            const gndMesh = new THREE.Mesh(gndGeo, [gndTopMat, gndSideMat]);
             groundTiltGroup3dTG.add(gndMesh);
             groundMesh3dTG = gndMesh;
             const gndEdges = new THREE.LineSegments(new THREE.EdgesGeometry(gndGeo), new THREE.LineBasicMaterial({ color: 0x2b2118 }));
-            gndEdges.position.copy(gndMesh.position);
             groundTiltGroup3dTG.add(gndEdges);
             groundEdges3dTG = gndEdges;
+            // No rotation applied to groundTiltGroup3dTG — the slab's own
+            // geometry carries the slope, so the group stays level.
 
-            // ---- Tilt the ground+train group to match the Longitudinal
-            // road gradient (%) and Transverse road gradient (%) fields
-            // (tgHLoads.longGrad / tgHLoads.transGrad — the same 🔗-synced
-            // Excel-linked inputs shown in the Horizontal Loads panel).
-            // World X = longitudinal (length) axis -> tilting that axis'
-            // height is a rotation about world Z (Three's "depth" axis,
-            // which carries world Y/width — see the toV() mapping above),
-            // so longitudinal grade drives rotation.z. World Y = transverse
-            // (width) axis -> tilting IT is a rotation about world X, so
-            // transverse grade drives rotation.x. Both angles are derived
-            // straight from the % grade (angle = atan(grade/100)) rather
-            // than relying on the Excel-computed Gr_trans/Gr_long degree
-            // read-outs, so the ground still tilts correctly in the
-            // standalone (no-Excel) browser dashboard too. ----
-            const longRad = Math.atan((tgHLoads.longGrad || 0) / 100);
-            const transRad = Math.atan((tgHLoads.transGrad || 0) / 100);
-            const tiltEuler = new THREE.Euler(transRad, 0, -longRad, 'XYZ');
-            groundTiltGroup3dTG.rotation.copy(tiltEuler);
-
-            // ---- Frame camera to fit the current (now-tilted) model ----
+            // ---- Frame camera to fit the current model ----
             const spanMm = Math.max(bMaxX - bMinX, bMaxY - bMinY, 4000);
             const centerXMm = (bMinX + bMaxX) / 2, centerYMm = (bMinY + bMaxY) / 2;
-            // The look-at target is expressed in world space, but the
-            // model itself now lives inside a rotated group — rotate the
-            // same point through the group's tilt so the camera still
-            // orbits/frames the model's true on-screen center instead of
-            // its pre-tilt local position.
-            const lookLocal = new THREE.Vector3(centerXMm * S, (bMaxZ * 0.35) * S, centerYMm * S);
-            lookLocal.applyEuler(tiltEuler);
-            lookAt3dTG = { x: lookLocal.x, y: lookLocal.y, z: lookLocal.z };
+            lookAt3dTG = { x: centerXMm * S, y: (bMaxZ * 0.35) * S, z: centerYMm * S };
             // Only auto-set the orbit radius the FIRST time (or if it's
             // still at the tiny init default) — once the user has
             // zoomed/orbited, further field edits shouldn't yank the
