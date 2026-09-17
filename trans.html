@@ -325,7 +325,7 @@
            .tg-cad-split-row uses in the 🚂 Generate Trailer card — see
            renderCargoList()'s tg-cargo-subgroup wrapper divs. First
            group has no divider (nothing above it to separate from). */
-        .tg-cargo-field-groups .tg-cargo-subgroup { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
+        .tg-cargo-field-groups .tg-cargo-subgroup { margin-top: 10px; padding-top: 10px; border-top: 1.5px solid var(--text-muted); }
         .tg-cargo-field-groups .tg-cargo-subgroup:first-child { margin-top: 0; padding-top: 0; border-top: none; }
         .tg-cargo-subgroup-title {
             font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
@@ -559,11 +559,7 @@
            groups of fields (e.g. Horizontal Loads) — spans every column
            regardless of the grid's current column count (3-per-row, or
            1-per-row in the narrow side-layout mode). */
-        .tg-field-divider { grid-column: 1 / -1; border: none; border-top: 3px solid var(--text-muted); opacity: 0.75; margin: 4px 0; }
-        /* Header-level separator — a full line directly under a card's
-           title row, used on the Horizontal Loads card to visually split
-           its title from the help text/fields below. */
-        .tg-card-header-divider { border-bottom: 3px solid var(--text-muted); padding-bottom: 8px; }
+        .tg-field-divider { grid-column: 1 / -1; border: none; border-top: 1.5px solid var(--text-muted); opacity: 0.75; margin: 4px 0; }
         .tg-field label {
             display: flex; align-items: center; gap: 3px;
             font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
@@ -774,7 +770,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.115)</h1>
+            <h1>🚂 Transport Dashboard (Rev.115.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -936,7 +932,7 @@
                     </div>
 
                     <div class="tg-cargo-card tg-card-hloads">
-                        <div class="tg-train-card-header tg-card-header-clickable tg-card-header-divider" onclick="handleTgCardHeaderClick(event, this)">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
                             <button type="button" class="tg-help-btn" title="Help" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
@@ -8451,12 +8447,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
             // Fixed clearance between the LAST (lowest) dimension row of
             // the header band above and the panel's own top border —
-            // tightened to 8px (from 30, then 14) so the chain sits as
-            // close as reasonably possible to the cargo/trailer artwork
-            // underneath it, while still leaving enough room for that
-            // row's own tick marks (extending ±3px past the dimension
-            // line) to clear the border line cleanly.
-            const padT = 8 + TG_FRONT_DIM_HEADER_H, padB = 60;
+            // tightened to 5px (from 30, then 14, then 8) so the chain
+            // sits as close as reasonably possible to the cargo/trailer
+            // artwork underneath it — specifically the per-item "cargo
+            // length" call-out drawn just above each box — while still
+            // leaving enough room for that row's own tick marks
+            // (extending ±3px past the dimension line) to clear the
+            // border line cleanly.
+            const padT = 5 + TG_FRONT_DIM_HEADER_H, padB = 60;
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
             // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
@@ -8606,8 +8604,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 padL + leftDimMargin + contentW + rightDimMargin + padR,
                 sideOffsetX + sideW + cargoHgtOutwardMargin + padR // room for the relocated cargo-height dimension stack past the side view's own right edge
             );
-            const endOffsetX1 = padL + leftDimMargin + (contentW - endsTotalW) / 2; // left end-view panel
-            const endOffsetX2 = endOffsetX1 + endW + endGap;        // right end-view panel
+            // Pinned to the far left/right edges of the available content
+            // width (not centered together) — any extra width beyond the
+            // two panels' own combined width + gap (e.g. when the side
+            // view above is wider) pushes Left End View out to the left
+            // edge and Right End View out to the right edge instead of
+            // padding both sides equally, so the two stay visually
+            // separated instead of reading as one crowded middle group.
+            const endOffsetX1 = padL + leftDimMargin;                           // left end-view panel — pinned left
+            const endOffsetX2 = padL + leftDimMargin + contentW - endW;         // right end-view panel — pinned right
 
             const sideGroundY = padT + panelH;
             const endPadT = padT + panelH + padGap;
@@ -9300,7 +9305,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const lMm = (parseFloat(c.length) || 0) * 1000;
                     const tlXMm = (parseFloat(c.tlX) || 0) * 1000;
                     const boxTopWorldZ = cargoBoxZ[cargoLenIdx].topWorldZ;
-                    const yLen = sz(boxTopWorldZ) - 10;
+                    const yLen = sz(boxTopWorldZ) - 7;
                     dimSvg += dimHFront(tlXMm - lMm / 2, tlXMm + lMm / 2, yLen, cargoColorFor(cargoLenIdx), `${Math.round(lMm)} (${c.name} length)`);
                 });
                 // Deck-height dimension — drawn on the side view panel;
