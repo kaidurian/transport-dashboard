@@ -555,6 +555,15 @@
         .tg-remove-train:hover { border-color: #ef4444; }
 
         .tg-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; }
+        /* Thin full-width separator dropped into a .tg-field-grid between
+           groups of fields (e.g. Horizontal Loads) — spans every column
+           regardless of the grid's current column count (3-per-row, or
+           1-per-row in the narrow side-layout mode). */
+        .tg-field-divider { grid-column: 1 / -1; border: none; border-top: 1px solid var(--panel-border); margin: 2px 0; }
+        /* Header-level separator — a full line directly under a card's
+           title row, used on the Horizontal Loads card to visually split
+           its title from the help text/fields below. */
+        .tg-card-header-divider { border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; }
         .tg-field label {
             display: flex; align-items: center; gap: 3px;
             font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
@@ -688,24 +697,26 @@
         /* Applied to a button while its own push/pull to Excel is in
            flight (see setBtnSyncing/flashBtnResult), independent of the
            header's global "autoSyncStatus" text. */
-        @keyframes tgBtnSyncPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+        @keyframes tgBtnSyncPulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.9); } 50% { opacity: 0.55; box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); } }
         .tg-add-train-btn.tg-btn-syncing, .tg-lc-push-btn.tg-btn-syncing {
             background: #eab308 !important;
-            border-color: #eab308 !important;
+            border: 3px solid #eab308 !important;
             color: #3a2c00 !important;
-            animation: tgBtnSyncPulse 0.9s ease-in-out infinite;
+            animation: tgBtnSyncPulse 0.7s ease-in-out infinite;
         }
+        @keyframes tgBtnFlashOkBlink { 0%, 100% { box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.95); } 50% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+        @keyframes tgBtnFlashErrBlink { 0%, 100% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.95); } 50% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
         .tg-add-train-btn.tg-btn-flash-ok, .tg-lc-push-btn.tg-btn-flash-ok {
             background: var(--accent-green) !important;
-            border-color: var(--accent-green) !important;
+            border: 3px solid var(--accent-green) !important;
             color: #06202e !important;
-            transition: background 0.15s ease, border-color 0.15s ease;
+            animation: tgBtnFlashOkBlink 0.35s ease-in-out 2;
         }
         .tg-add-train-btn.tg-btn-flash-err, .tg-lc-push-btn.tg-btn-flash-err {
             background: #ef4444 !important;
-            border-color: #ef4444 !important;
+            border: 3px solid #ef4444 !important;
             color: #fff !important;
-            transition: background 0.15s ease, border-color 0.15s ease;
+            animation: tgBtnFlashErrBlink 0.35s ease-in-out 2;
         }
         /* ---- Whole-card echo of the same sync indicator ---- */
         /* The button-level pulse above is easy to miss once its card
@@ -720,23 +731,31 @@
            box-shadow (not a border/outline) so it never shifts layout
            or fights the card's own border-left accent color. */
         .tg-card-syncing {
-            box-shadow: inset 0 0 0 2px #eab308;
+            box-shadow: inset 0 0 0 4px #eab308;
             background: color-mix(in srgb, var(--tank-box-bg) 85%, #eab308 15%) !important;
-            animation: tgCardSyncPulse 0.9s ease-in-out infinite;
+            animation: tgCardSyncPulse 0.7s ease-in-out infinite;
         }
         @keyframes tgCardSyncPulse {
-            0%, 100% { box-shadow: inset 0 0 0 2px #eab308; }
-            50% { box-shadow: inset 0 0 0 2px rgba(234, 179, 8, 0.35); }
+            0%, 100% { box-shadow: inset 0 0 0 4px #eab308; }
+            50% { box-shadow: inset 0 0 0 4px rgba(234, 179, 8, 0.25); }
         }
         .tg-card-flash-ok {
-            box-shadow: inset 0 0 0 2px var(--accent-green);
+            box-shadow: inset 0 0 0 4px var(--accent-green);
             background: color-mix(in srgb, var(--tank-box-bg) 85%, var(--accent-green) 15%) !important;
-            transition: box-shadow 0.15s ease, background 0.15s ease;
+            animation: tgCardFlashOkBlink 0.35s ease-in-out 2;
+        }
+        @keyframes tgCardFlashOkBlink {
+            0%, 100% { box-shadow: inset 0 0 0 4px var(--accent-green); }
+            50% { box-shadow: inset 0 0 0 4px rgba(16, 185, 129, 0.2); }
         }
         .tg-card-flash-err {
-            box-shadow: inset 0 0 0 2px #ef4444;
+            box-shadow: inset 0 0 0 4px #ef4444;
             background: color-mix(in srgb, var(--tank-box-bg) 85%, #ef4444 15%) !important;
-            transition: box-shadow 0.15s ease, background 0.15s ease;
+            animation: tgCardFlashErrBlink 0.35s ease-in-out 2;
+        }
+        @keyframes tgCardFlashErrBlink {
+            0%, 100% { box-shadow: inset 0 0 0 4px #ef4444; }
+            50% { box-shadow: inset 0 0 0 4px rgba(239, 68, 68, 0.2); }
         }
         /* Small 📤 push-to-Excel button appended after the Z value on
            each LC1-4 row of the 📊 CoG Envelope Table — compact so it
@@ -755,7 +774,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.113.6)</h1>
+            <h1>🚂 Transport Dashboard (Rev.114)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -917,7 +936,7 @@
                     </div>
 
                     <div class="tg-cargo-card tg-card-hloads">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                        <div class="tg-train-card-header tg-card-header-clickable tg-card-header-divider" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
                             <button type="button" class="tg-help-btn" title="Help" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
@@ -1016,6 +1035,7 @@
                                     <select id="tgMagnifierSizeSelect" onchange="setTgMagnifierSize(this.value)" title="Size of the floating magnifier lens window">
                                         <option value="1">1x (220px)</option>
                                         <option value="2">2x (440px)</option>
+                                        <option value="3">3x (660px)</option>
                                     </select>
                                 </label>
                             </div>
@@ -7013,15 +7033,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     ${field('hCow', 'Centre of Wind height (H_CoW)', 'm')}
                     ${field('vWind', 'Operational allowable wind speed (v)', 'm/s')}
                     ${field('cd', 'Drag coefficient (cd)', '')}
+                    <hr class="tg-field-divider">
                     ${field('vTrailer', 'Trailer speed (v)', 'km/h')}
                     ${field('aAcc', 'Max. acceleration (a_acc)', 'm/sec\u00b2')}
                     ${field('aDec', 'Max. deceleration (a_dec)', 'm/sec\u00b2')}
+                    <hr class="tg-field-divider">
                     ${field('transGrad', 'Transverse road gradient', '%')}
                     ${field('transStroke', 'Transverse — inc. stroke compensation', '%')}
                     ${field('transGrDeg', 'Transverse gradient (Gr_trans)', 'deg')}
                     ${field('longGrad', 'Longitudinal road gradient', '%')}
                     ${field('longStroke', 'Longitudinal — inc. stroke compensation', '%')}
                     ${field('longGrDeg', 'Longitudinal gradient (Gr_long)', 'deg')}
+                    <hr class="tg-field-divider">
                     ${field('curveImpact', 'Curve impact (C_j)', '%')}
                     ${field('muFriction', 'Friction Steel/Wood (M_u)', '')}
                 </div>`;
@@ -7944,6 +7967,34 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
                     `</g>`;
                 blockedRects.push(rect);
+
+                // 🔗 Top view: CoG to Left (m) / CoG to Rear (m) — short
+                // local call-outs drawn straight between this item's own
+                // CoG sign and the two box edges those fields measure to
+                // ("Left" = -X edge, "Rear" = -Y edge), so the field
+                // values in the Cargo panel can be read directly off the
+                // drawing instead of only the baseline origin→CoG dims
+                // above. Uses the same dashed-line/tick-mark style as the
+                // baseline dims but drawn directly (not tiered) since
+                // both ends are already close together.
+                if (tgShowDimensions) {
+                    const offLeftM = cargoOffsetLeft(c);
+                    const offRearM = cargoOffsetRear(c);
+                    const leftDimY = cogCy - 11;
+                    cargoSvg += `<g opacity="0.85">` +
+                        `<line x1="${rect.x1.toFixed(1)}" y1="${leftDimY.toFixed(1)}" x2="${cogCx.toFixed(1)}" y2="${leftDimY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${rect.x1.toFixed(1)}" y1="${(leftDimY - 3).toFixed(1)}" x2="${rect.x1.toFixed(1)}" y2="${(leftDimY + 3).toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<line x1="${cogCx.toFixed(1)}" y1="${(leftDimY - 3).toFixed(1)}" x2="${cogCx.toFixed(1)}" y2="${(leftDimY + 3).toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<text x="${((rect.x1 + cogCx) / 2).toFixed(1)}" y="${(leftDimY - 4).toFixed(1)}" font-size="8" text-anchor="middle" fill="${cargoColor}">${offLeftM.toFixed(3)} (CoG to Left)</text>` +
+                        `</g>`;
+                    const rearDimX = cogCx + 11;
+                    cargoSvg += `<g opacity="0.85">` +
+                        `<line x1="${rearDimX.toFixed(1)}" y1="${rect.y1.toFixed(1)}" x2="${rearDimX.toFixed(1)}" y2="${cogCy.toFixed(1)}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                        `<line x1="${(rearDimX - 3).toFixed(1)}" y1="${rect.y1.toFixed(1)}" x2="${(rearDimX + 3).toFixed(1)}" y2="${rect.y1.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<line x1="${(rearDimX - 3).toFixed(1)}" y1="${cogCy.toFixed(1)}" x2="${(rearDimX + 3).toFixed(1)}" y2="${cogCy.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
+                        `<text x="${(rearDimX + 4).toFixed(1)}" y="${((rect.y1 + cogCy) / 2).toFixed(1)}" font-size="8" fill="${cargoColor}" transform="rotate(-90 ${(rearDimX + 4).toFixed(1)} ${((rect.y1 + cogCy) / 2).toFixed(1)})">${offRearM.toFixed(3)} (CoG to Rear)</text>` +
+                        `</g>`;
+                }
             });
 
             // Trailer CoG + Combined CoG signs — read live from Excel
@@ -8859,6 +8910,23 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // No adjacent name text here — the end views identify
                     // this point purely from the Z-dimension stack (see
                     // dimSvg below), matching the reference drawing.
+
+                    // 🔗 Side view: CoG to Bottom (m) — drawn directly in
+                    // BOTH end views (not just the side view), from this
+                    // item's CoG symbol straight down to the box's own
+                    // base, offset a few px to the side of the CoG/box
+                    // column so it doesn't sit on top of either.
+                    if (tgShowDimensions) {
+                        const offBottomM = cargoOffsetBottom(cargoElevIdx, cargoBoxZ);
+                        const botDimX = syFn(cyMm) + 10;
+                        const botTopY = szEnd(cogWorldZ), botBotY = szEnd(baseWorldZ);
+                        cargoElevSvg += `<g opacity="0.85">` +
+                            `<line x1="${botDimX.toFixed(1)}" y1="${botTopY.toFixed(1)}" x2="${botDimX.toFixed(1)}" y2="${botBotY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
+                            `<line x1="${(botDimX - 3).toFixed(1)}" y1="${botTopY.toFixed(1)}" x2="${(botDimX + 3).toFixed(1)}" y2="${botTopY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
+                            `<line x1="${(botDimX - 3).toFixed(1)}" y1="${botBotY.toFixed(1)}" x2="${(botDimX + 3).toFixed(1)}" y2="${botBotY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
+                            `<text x="${(botDimX + 4).toFixed(1)}" y="${((botTopY + botBotY) / 2).toFixed(1)}" font-size="8" fill="${cargoColor}" transform="rotate(-90 ${(botDimX + 4).toFixed(1)} ${((botTopY + botBotY) / 2).toFixed(1)})">${offBottomM.toFixed(3)} (CoG to Bottom)</text>` +
+                            `</g>`;
+                    }
                 });
             });
 
