@@ -770,7 +770,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.115.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.116)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -997,6 +997,36 @@
                                     onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
                             <button type="button" class="tg-add-train-btn" id="tgCalcCogEnvBtn" title="Compute the 📊 CoG Envelope Table below (CoG envelope 5%, LC1-4, and the with-slope versions) from the fields above, then push the numeric data to Excel 'Check CASE A & CASE B'!B67:E73 and B75:E81"
                                     onclick="calculateCogEnvelope()">🧮 Calculate CoG Envelope</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-lashing">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">⚓ Lashing</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgLashingHelpToggleBtn" onclick="toggleTgLashingHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgLashingHelpPanel">
+                            Sea-fastening lashing point list — one row/group per lashing point, matching the
+                            reference workbook <strong>"Lashing calculation"</strong> sheet (<strong>A3:F20</strong>,
+                            up to 18 points). Per point: <strong>SWL</strong> (Safe Working Load of one
+                            lashing/chain, mTe), <strong>QTY</strong> (number of identical lashings at this
+                            point), and <strong>dx / dy / dz</strong> (mm — offset from the cargo attachment
+                            point to the deck/lashing-eye anchor point). <strong>Length</strong>,
+                            <strong>alfa</strong> (angle off horizontal), and <strong>beta</strong> (plan angle
+                            off the longitudinal axis) are computed live from dx/dy/dz, not entered by hand —
+                            🔒 read-only, and provisional: the reference workbook's own angle formulas are
+                            blank, so this dashboard's convention hasn't been cross-checked against it yet.
+                            This card is <strong>local-only for now</strong> — no Excel sync, and no
+                            capacity / Unity Check columns yet (those need the angle convention confirmed,
+                            plus how the Dynamic Load / 3 Group required-force block on the same sheet maps
+                            to this dashboard's G1-G3 hydraulic groups). Both come next.
+                        </p>
+                        <div id="tgLashingList"><!-- Lashing point group rows rendered by JS --></div>
+                        <div class="tg-group-summary" id="tgLashingTotals"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-group-btn" title="Add another lashing point (up to 18 — Excel 'Lashing calculation'!A3:F20)"
+                                    onclick="addLashingPoint()">+ Add Lashing Point</button>
                         </div>
                     </div>
                 </div>
@@ -1284,6 +1314,16 @@
         function toggleTgCogEnvHelp() {
             const panel = document.getElementById('tgCogEnvHelpPanel');
             const btn = document.getElementById('tgCogEnvHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
+        }
+
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the ⚓ Lashing card.
+        function toggleTgLashingHelp() {
+            const panel = document.getElementById('tgLashingHelpPanel');
+            const btn = document.getElementById('tgLashingHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
             if (btn) btn.textContent = isOpen ? '✕' : '❓';
@@ -5232,6 +5272,144 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
         }
 
+        // ---- Lashing — sea-fastening lashing point list, one "group
+        // row" per lashing point (same visual pattern as Axle groups
+        // above: tg-group-row / tg-group-field-grid / tg-remove-group).
+        // Reproduces the reference workbook "Lashing calculation" sheet
+        // input columns A:F (No./SWL/QTY/dx/dy/dz, rows 3-20, 18 points
+        // max) — local-only for now, no Excel sync yet.
+        // Length/alfa/beta (workbook G:H:I) are computed live from
+        // dx/dy/dz rather than entered — see calcLashingGeometry's own
+        // comment for the angle convention (provisional: the
+        // reference workbook's own G:I formulas are blank/missing, so
+        // this hasn't been cross-checked against it yet). Capacity
+        // columns J:O and the Unity Check (J22) are NOT implemented
+        // yet — that needs the angle convention confirmed first, plus
+        // the Dynamic Load / 3 Group required-force side of the sheet
+        // (rows 37-45), which likely maps to this dashboard's existing
+        // G1-G3 hydraulic groups.
+        let lashingIdCounter = 1;
+        const LASHING_MAX_POINTS = 18; // Excel 'Lashing calculation'!A3:F20
+        function defaultLashingPoint(index) {
+            return {
+                id: lashingIdCounter++,
+                swl: 5,   // Safe Working Load of one lashing/chain at this point, mTe
+                qty: 2,   // number of identical lashings at this point
+                dx: 0,    // mm — X offset, cargo attachment point to deck/lashing-eye anchor
+                dy: 0,    // mm — Y offset
+                dz: 400   // mm — Z offset
+            };
+        }
+        let lashingPoints = [];
+
+        // Pure geometry from dx/dy/dz (mm): length is the straight-line
+        // lashing length; alfa is the angle off horizontal (0° = flat
+        // along the deck, 90° = straight up); beta is the plan-view
+        // angle off the longitudinal (X) axis. This is this dashboard's
+        // OWN convention for now — the reference workbook's G:I columns
+        // have no formulas to copy, so treat alfa/beta as provisional
+        // until confirmed against a filled-in reference example.
+        function calcLashingGeometry(dx, dy, dz) {
+            dx = Number.isFinite(dx) ? dx : 0;
+            dy = Number.isFinite(dy) ? dy : 0;
+            dz = Number.isFinite(dz) ? dz : 0;
+            const horiz = Math.sqrt(dx * dx + dy * dy);
+            const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const alfa = (horiz > 0 || dz !== 0) ? Math.atan2(Math.abs(dz), horiz) * 180 / Math.PI : 0;
+            const beta = (dx !== 0 || dy !== 0) ? Math.atan2(Math.abs(dy), Math.abs(dx)) * 180 / Math.PI : 0;
+            return { length, alfa, beta };
+        }
+
+        function addLashingPoint() {
+            if (lashingPoints.length >= LASHING_MAX_POINTS) {
+                alert(`Only ${LASHING_MAX_POINTS} lashing points are supported (Excel 'Lashing calculation'!A3:F20 has ${LASHING_MAX_POINTS} rows).`);
+                return;
+            }
+            lashingPoints.push(defaultLashingPoint(lashingPoints.length + 1));
+            renderLashingList();
+        }
+
+        function removeLashingPoint(id) {
+            lashingPoints = lashingPoints.filter(p => p.id !== id);
+            if (lashingPoints.length === 0) lashingPoints.push(defaultLashingPoint(1));
+            renderLashingList();
+        }
+
+        function updateLashingField(id, field, rawValue) {
+            const point = lashingPoints.find(p => p.id === id);
+            if (!point) return;
+            const v = parseFloat(rawValue);
+            point[field] = Number.isFinite(v) ? v : 0;
+            renderLashingList();
+        }
+
+        function renderLashingList() {
+            const el = document.getElementById('tgLashingList');
+            if (!el) return;
+            el.innerHTML = lashingPoints.map((point, idx) => {
+                const geo = calcLashingGeometry(point.dx, point.dy, point.dz);
+                return `
+                <div class="tg-group-row">
+                    <div class="tg-group-row-header">
+                        <strong>⚓ Lashing #${idx + 1}</strong>
+                        <button type="button" class="tg-remove-group" title="Remove lashing point"
+                                onclick="removeLashingPoint(${point.id})"
+                                ${lashingPoints.length <= 1 ? 'disabled' : ''}>✕</button>
+                    </div>
+                    <div class="tg-group-field-grid">
+                        <div class="tg-group-field">
+                            <label>SWL (mTe)</label>
+                            <input type="number" step="any" min="0" value="${point.swl}" title="Safe Working Load of one lashing/chain at this point"
+                                   onchange="updateLashingField(${point.id}, 'swl', this.value)">
+                        </div>
+                        <div class="tg-group-field">
+                            <label>QTY</label>
+                            <input type="number" step="1" min="1" value="${point.qty}" title="Number of identical lashings at this point"
+                                   onchange="updateLashingField(${point.id}, 'qty', this.value)">
+                        </div>
+                        <div class="tg-group-field">
+                            <label>dx (mm)</label>
+                            <input type="number" step="any" value="${point.dx}" title="X offset, cargo attachment point to deck/lashing-eye anchor"
+                                   onchange="updateLashingField(${point.id}, 'dx', this.value)">
+                        </div>
+                        <div class="tg-group-field">
+                            <label>dy (mm)</label>
+                            <input type="number" step="any" value="${point.dy}" title="Y offset, cargo attachment point to deck/lashing-eye anchor"
+                                   onchange="updateLashingField(${point.id}, 'dy', this.value)">
+                        </div>
+                        <div class="tg-group-field">
+                            <label>dz (mm)</label>
+                            <input type="number" step="any" value="${point.dz}" title="Z offset, cargo attachment point to deck/lashing-eye anchor"
+                                   onchange="updateLashingField(${point.id}, 'dz', this.value)">
+                        </div>
+                        <div class="tg-group-field">
+                            <label title="Computed from dx/dy/dz — not editable">📐 Length (mm)</label>
+                            <input type="number" value="${geo.length.toFixed(0)}" readonly class="tg-group-field-readonly-input" title="sqrt(dx²+dy²+dz²) — read-only">
+                        </div>
+                        <div class="tg-group-field">
+                            <label title="Computed from dx/dy/dz — not editable, provisional convention">📐 alfa (deg)</label>
+                            <input type="number" value="${geo.alfa.toFixed(1)}" readonly class="tg-group-field-readonly-input" title="Angle from horizontal — read-only, provisional convention">
+                        </div>
+                        <div class="tg-group-field">
+                            <label title="Computed from dx/dy/dz — not editable, provisional convention">📐 beta (deg)</label>
+                            <input type="number" value="${geo.beta.toFixed(1)}" readonly class="tg-group-field-readonly-input" title="Plan angle from longitudinal axis — read-only, provisional convention">
+                        </div>
+                    </div>
+                    <div class="tg-group-summary">
+                        ${point.qty} × SWL ${point.swl} mTe · length ${geo.length.toFixed(0)} mm · alfa ${geo.alfa.toFixed(1)}° · beta ${geo.beta.toFixed(1)}°
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            const totalPoints = lashingPoints.reduce((s, p) => s + (parseFloat(p.qty) || 0), 0);
+            const totalSwl = lashingPoints.reduce((s, p) => s + (parseFloat(p.qty) || 0) * (parseFloat(p.swl) || 0), 0);
+            const totalsEl = document.getElementById('tgLashingTotals');
+            if (totalsEl) {
+                totalsEl.textContent = `${lashingPoints.length} lashing point(s) · ${totalPoints} lashing(s) total · ${totalSwl.toFixed(1)} mTe combined SWL — capacity/Unity Check not yet computed, see help.`;
+            }
+        }
+
         // ---- Horizontal Loads — editing a field updates the local
         // value and re-renders (the plan-view readout below the origin
         // sign depends on it); pullHorizontalLoadsFromExcel() re-reads
@@ -7051,6 +7229,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTgDrawingTable();
             renderTgCogEnvFields();
             renderTgCogEnvTable();
+            renderLashingList();
             // Auto-refresh each train's AutoCAD split on every dashboard
             // load/refresh, so a stale split (axle groups changed by
             // hand, a preset swap, an Excel pull, etc.) never needs a
@@ -12680,6 +12859,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 cargoItems: cargoItems,
                 cargoIdCounter: cargoIdCounter,
                 cargoGroupAll: cargoGroupAll,
+                // ⚓ Lashing — local-only lashing point list (see its
+                // own section comment above pushHLoads for scope/status).
+                lashingPoints: lashingPoints,
+                lashingIdCounter: lashingIdCounter,
                 tgZTrailerHeightMm: tgZTrailerHeightMm,
                 tgShowGroupLabels: tgShowGroupLabels,
                 tgShowDimensions: tgShowDimensions,
@@ -12768,6 +12951,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             cargoGroupAll[k] = Number.isFinite(v) ? v : 0;
                         });
                     }
+                    if (Array.isArray(state.lashingPoints)) lashingPoints = state.lashingPoints;
+                    if (Number.isFinite(parseInt(state.lashingIdCounter, 10))) {
+                        lashingIdCounter = parseInt(state.lashingIdCounter, 10);
+                    }
                     // 📐 CoG Envelope card — restore every key (both the
                     // local upSlope/downSlope/cargoRow inputs AND the
                     // normally pull-only dim/cog cells — see
@@ -12833,12 +13020,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const maxTrainId = trailerGenTrains.reduce((m, t) => Math.max(m, t.id || 0), 0);
                     const maxGroupId = trailerGenTrains.reduce((m, t) => Math.max(m, (t.groups || []).reduce((gm, g) => Math.max(gm, g.id || 0), 0)), 0);
                     const maxCargoId = cargoItems.reduce((m, c) => Math.max(m, c.id || 0), 0);
+                    const maxLashingId = lashingPoints.reduce((m, p) => Math.max(m, p.id || 0), 0);
                     trailerGenNextId = Math.max(parseInt(state.trailerGenNextId, 10) || 0, maxTrainId + 1, 1);
                     trailerGenNextGroupId = Math.max(parseInt(state.trailerGenNextGroupId, 10) || 0, maxGroupId + 1, 1);
                     cargoIdCounter = Math.max(parseInt(state.cargoIdCounter, 10) || 0, maxCargoId + 1, 1);
+                    lashingIdCounter = Math.max(lashingIdCounter, maxLashingId + 1, 1);
 
                     if (trailerGenTrains.length === 0) trailerGenTrains.push(defaultTrailerGenTrain(1));
                     if (cargoItems.length === 0) cargoItems.push(newCargoItem(1));
+                    if (lashingPoints.length === 0) lashingPoints.push(defaultLashingPoint(1));
 
                     const dirSelect = document.getElementById('tgLoadDirectionSelect');
                     if (dirSelect) dirSelect.value = trailerGenLoadDirection;
@@ -12875,6 +13065,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             if (cargoItems.length === 0) {
                 cargoItems.push(newCargoItem(1));
+            }
+            if (lashingPoints.length === 0) {
+                lashingPoints.push(defaultLashingPoint(1));
             }
             renderTrailerDashboard();
             init3DSceneTG();
