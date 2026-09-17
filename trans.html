@@ -559,11 +559,11 @@
            groups of fields (e.g. Horizontal Loads) — spans every column
            regardless of the grid's current column count (3-per-row, or
            1-per-row in the narrow side-layout mode). */
-        .tg-field-divider { grid-column: 1 / -1; border: none; border-top: 1px solid var(--panel-border); margin: 2px 0; }
+        .tg-field-divider { grid-column: 1 / -1; border: none; border-top: 3px solid var(--text-muted); opacity: 0.75; margin: 4px 0; }
         /* Header-level separator — a full line directly under a card's
            title row, used on the Horizontal Loads card to visually split
            its title from the help text/fields below. */
-        .tg-card-header-divider { border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; }
+        .tg-card-header-divider { border-bottom: 3px solid var(--text-muted); padding-bottom: 8px; }
         .tg-field label {
             display: flex; align-items: center; gap: 3px;
             font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
@@ -774,7 +774,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.114)</h1>
+            <h1>🚂 Transport Dashboard (Rev.115)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7967,34 +7967,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
                     `</g>`;
                 blockedRects.push(rect);
-
-                // 🔗 Top view: CoG to Left (m) / CoG to Rear (m) — short
-                // local call-outs drawn straight between this item's own
-                // CoG sign and the two box edges those fields measure to
-                // ("Left" = -X edge, "Rear" = -Y edge), so the field
-                // values in the Cargo panel can be read directly off the
-                // drawing instead of only the baseline origin→CoG dims
-                // above. Uses the same dashed-line/tick-mark style as the
-                // baseline dims but drawn directly (not tiered) since
-                // both ends are already close together.
-                if (tgShowDimensions) {
-                    const offLeftM = cargoOffsetLeft(c);
-                    const offRearM = cargoOffsetRear(c);
-                    const leftDimY = cogCy - 11;
-                    cargoSvg += `<g opacity="0.85">` +
-                        `<line x1="${rect.x1.toFixed(1)}" y1="${leftDimY.toFixed(1)}" x2="${cogCx.toFixed(1)}" y2="${leftDimY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
-                        `<line x1="${rect.x1.toFixed(1)}" y1="${(leftDimY - 3).toFixed(1)}" x2="${rect.x1.toFixed(1)}" y2="${(leftDimY + 3).toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<line x1="${cogCx.toFixed(1)}" y1="${(leftDimY - 3).toFixed(1)}" x2="${cogCx.toFixed(1)}" y2="${(leftDimY + 3).toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<text x="${((rect.x1 + cogCx) / 2).toFixed(1)}" y="${(leftDimY - 4).toFixed(1)}" font-size="8" text-anchor="middle" fill="${cargoColor}">${offLeftM.toFixed(3)} (CoG to Left)</text>` +
-                        `</g>`;
-                    const rearDimX = cogCx + 11;
-                    cargoSvg += `<g opacity="0.85">` +
-                        `<line x1="${rearDimX.toFixed(1)}" y1="${rect.y1.toFixed(1)}" x2="${rearDimX.toFixed(1)}" y2="${cogCy.toFixed(1)}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
-                        `<line x1="${(rearDimX - 3).toFixed(1)}" y1="${rect.y1.toFixed(1)}" x2="${(rearDimX + 3).toFixed(1)}" y2="${rect.y1.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<line x1="${(rearDimX - 3).toFixed(1)}" y1="${cogCy.toFixed(1)}" x2="${(rearDimX + 3).toFixed(1)}" y2="${cogCy.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
-                        `<text x="${(rearDimX + 4).toFixed(1)}" y="${((rect.y1 + cogCy) / 2).toFixed(1)}" font-size="8" fill="${cargoColor}" transform="rotate(-90 ${(rearDimX + 4).toFixed(1)} ${((rect.y1 + cogCy) / 2).toFixed(1)})">${offRearM.toFixed(3)} (CoG to Rear)</text>` +
-                        `</g>`;
-                }
+                // 🔗 Top view: CoG to Left (m) / CoG to Rear (m) are drawn
+                // further below, inside the tgShowDimensions block, as
+                // part of the same outside-the-assembly tiered dimension
+                // stack as every other call-out (see dimH/dimV usage
+                // there) — not here — so they always land clear of the
+                // cargo box and the trailer deck instead of overlapping
+                // whatever's directly next to this item's own CoG sign.
             });
 
             // Trailer CoG + Combined CoG signs — read live from Excel
@@ -8178,6 +8157,26 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         yLabel: `${(parseFloat(c.y) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`,
                         color: cargoColor
                     });
+                });
+
+                // 🔗 Top view: CoG to Left (m) / CoG to Rear (m) — drawn
+                // immediately (own tier, not queued in baselineItems)
+                // using the SAME dimH/dimV bars as the corner/axle chains
+                // above, so they render on the shared front/back rows
+                // fully OUTSIDE the whole trailer+cargo assembly instead
+                // of anywhere near the cargo box or trailer deck itself.
+                cargoItems.forEach((c) => {
+                    const cargoColor = cargoColorFor(cargoItems.indexOf(c));
+                    const lMm = (parseFloat(c.length) || 0) * 1000, wMm = (parseFloat(c.width) || 0) * 1000;
+                    const tlXMm = (parseFloat(c.tlX) || 0) * 1000, tlYMm = (parseFloat(c.tlY) || 0) * 1000;
+                    const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
+                    const zone = zoneOf(cxMm);
+                    const offLeftM = cargoOffsetLeft(c);
+                    const offRearM = cargoOffsetRear(c);
+                    const tierX = zone === 'front' ? frontTier++ : backTier++;
+                    dimensionsSvg += dimH(tlXMm - lMm / 2, cxMm, zone, tierX, `${offLeftM.toFixed(3)} (${c.name} CoG to Left)`, cargoColor);
+                    const tierY = zone === 'front' ? frontTier++ : backTier++;
+                    dimensionsSvg += dimV(tlYMm - wMm / 2, cyMm, zone, tierY, `${offRearM.toFixed(3)} (${c.name} CoG to Rear)`, cargoColor);
                 });
 
                 // World origin (0,0) → Trailer CoG and → Combined CoG —
@@ -8909,24 +8908,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     cargoElevSvg += cogSymbolSvg(syFn(cyMm), szEnd(cogWorldZ), 6, cargoColor);
                     // No adjacent name text here — the end views identify
                     // this point purely from the Z-dimension stack (see
-                    // dimSvg below), matching the reference drawing.
-
-                    // 🔗 Side view: CoG to Bottom (m) — drawn directly in
-                    // BOTH end views (not just the side view), from this
-                    // item's CoG symbol straight down to the box's own
-                    // base, offset a few px to the side of the CoG/box
-                    // column so it doesn't sit on top of either.
-                    if (tgShowDimensions) {
-                        const offBottomM = cargoOffsetBottom(cargoElevIdx, cargoBoxZ);
-                        const botDimX = syFn(cyMm) + 10;
-                        const botTopY = szEnd(cogWorldZ), botBotY = szEnd(baseWorldZ);
-                        cargoElevSvg += `<g opacity="0.85">` +
-                            `<line x1="${botDimX.toFixed(1)}" y1="${botTopY.toFixed(1)}" x2="${botDimX.toFixed(1)}" y2="${botBotY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1" stroke-dasharray="2 2"/>` +
-                            `<line x1="${(botDimX - 3).toFixed(1)}" y1="${botTopY.toFixed(1)}" x2="${(botDimX + 3).toFixed(1)}" y2="${botTopY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
-                            `<line x1="${(botDimX - 3).toFixed(1)}" y1="${botBotY.toFixed(1)}" x2="${(botDimX + 3).toFixed(1)}" y2="${botBotY.toFixed(1)}" stroke="${cargoColor}" stroke-width="1"/>` +
-                            `<text x="${(botDimX + 4).toFixed(1)}" y="${((botTopY + botBotY) / 2).toFixed(1)}" font-size="8" fill="${cargoColor}" transform="rotate(-90 ${(botDimX + 4).toFixed(1)} ${((botTopY + botBotY) / 2).toFixed(1)})">${offBottomM.toFixed(3)} (CoG to Bottom)</text>` +
-                            `</g>`;
-                    }
+                    // dimSvg below), matching the reference drawing. The
+                    // 🔗 Side view: CoG to Bottom (m) call-out for this
+                    // item is ALSO drawn as part of that same outside-
+                    // the-panels Z-dimension stack (see dimZStack usage
+                    // further below) rather than here, so it never lands
+                    // on top of the box/CoG symbol itself.
                 });
             });
 
@@ -9453,6 +9440,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     dimSvg += dimZStack(endOffsetX1 + endW + 15, 1, dimYTop, dimYBot, cargoColor, label, dimCargoIdx);
                     dimSvg += dimZStack(endOffsetX2 - 15, -1, dimYTop, dimYBot, cargoColor, label, dimCargoIdx);
                 });
+
+                // 🔗 Side view: CoG to Bottom (m) — same inward-gap Z
+                // stack as the cargo CoG-height dims just above, tiered
+                // one step further OUT per item (continuing past the
+                // cargoItems.length tiers already used there) so it
+                // reads cleanly alongside them without ever landing back
+                // on top of the cargo box or the trailer deck.
+                if (tgShowDimensions) {
+                    cargoItems.forEach((c, dimCargoIdx) => {
+                        const cargoColor = cargoColorFor(dimCargoIdx);
+                        const { baseWorldZ, cogWorldZ } = cargoBoxZ[dimCargoIdx];
+                        const offBottomM = cargoOffsetBottom(dimCargoIdx, cargoBoxZ);
+                        const label = `${offBottomM.toFixed(3)} m (${c.name} CoG to Bottom)`;
+                        const tierIdx = cargoItems.length + dimCargoIdx;
+                        dimSvg += dimZStack(endOffsetX1 + endW + 15, 1, szEnd(cogWorldZ), szEnd(baseWorldZ), cargoColor, label, tierIdx);
+                        dimSvg += dimZStack(endOffsetX2 - 15, -1, szEnd(cogWorldZ), szEnd(baseWorldZ), cargoColor, label, tierIdx);
+                    });
+                }
 
                 // Trailer CoG + Combined CoG height (Z) — ground (world
                 // Z = 0) up to each sign's own CoG point, same style as
