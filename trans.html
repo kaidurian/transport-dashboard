@@ -770,7 +770,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.115.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.115.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8424,26 +8424,34 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // for each possible gap segment on either side of it (before
             // the first item, between items, after the last item).
             const TG_FRONT_CHAIN_TIER_STEP = 13;
-            // Worst case reserves one tier per cargo item, one tier per
-            // possible gap segment around it (see the deck->cargo->
-            // cargo->deck chain below), PLUS one tier per possible
-            // cargo-to-cargo pair (n·(n-1)/2) — the extra direct X
-            // dimension added, per KKai's spec, for every pair of cargo
-            // items that sit at different world-Y ("side") positions.
-            const frontTrailerSpanCount = trailerGenTrains.filter(t => t.deckLength).length;
-            const TG_FRONT_CHAIN_SPAN_COUNT = cargoItems.length + frontTrailerSpanCount;
-            // Worst case reserves one tier per span (cargo item OR
-            // individual trailer section — per KKai's spec the chain
-            // now runs left-of-trailer-or-cargo -> next trailer-or-
-            // cargo -> ... -> right-of-trailer-or-cargo, so a gap
-            // between two trailers in a multi-trailer combination is
-            // its own segment too), one tier per possible gap segment
-            // around each span, PLUS one tier per possible cargo-to-
-            // cargo pair (n·(n-1)/2) — the extra direct X dimension
-            // added, per KKai's spec, for every pair of cargo items
-            // that sit at different world-Y ("side") positions.
-            const TG_FRONT_CHAIN_PAIR_MAX = cargoItems.length > 1 ? (cargoItems.length * (cargoItems.length - 1)) / 2 : 0;
-            const TG_FRONT_CHAIN_MAX_TIERS = TG_FRONT_CHAIN_SPAN_COUNT > 0 ? (2 * TG_FRONT_CHAIN_SPAN_COUNT + 1 + TG_FRONT_CHAIN_PAIR_MAX) : 1;
+            // EXACT tier count actually drawn by the chain below (not a
+            // worst-case estimate) — mirrors the same breakpoint/pair
+            // logic used later to render the deck->cargo->deck chain
+            // and the cargo-to-cargo pair rows, so the header band is
+            // sized to fit only the rows that really get drawn. The old
+            // "2*spanCount+1+pairMax" formula over-reserved whenever
+            // breakpoints coincided (no gap before/after a span) or a
+            // cargo pair shared the same world-Y, leaving a big blank
+            // gap between the last visible dimension row and the cargo
+            // length call-out / box artwork sitting right below it.
+            const frontChainSpansX = [
+                ...trailerGenTrains.filter(t => t.deckLength).map(t => {
+                    const left = parseFloat(t.x) || 0;
+                    return { left, right: left + (parseFloat(t.deckLength) || 0) };
+                }),
+                ...cargoItems.map(c => {
+                    const halfL = ((parseFloat(c.length) || 0) * 1000) / 2, tlXMm = (parseFloat(c.tlX) || 0) * 1000;
+                    return { left: tlXMm - halfL, right: tlXMm + halfL };
+                }),
+            ];
+            const frontChainBreaksX = [...new Set(frontChainSpansX.flatMap(sp => [Math.round(sp.left), Math.round(sp.right)]))].sort((a, b) => a - b);
+            const frontChainSegCount = Math.max(0, frontChainBreaksX.length - 1);
+            const frontCargoYsMm = cargoItems.map(c => Math.round((parseFloat(c.tlY) || 0) * 1000));
+            let frontChainPairCount = 0;
+            for (let i = 0; i < frontCargoYsMm.length; i++)
+                for (let j = i + 1; j < frontCargoYsMm.length; j++)
+                    if (frontCargoYsMm[i] !== frontCargoYsMm[j]) frontChainPairCount++;
+            const TG_FRONT_CHAIN_MAX_TIERS = Math.max(1, frontChainSegCount + frontChainPairCount);
             const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
             // Fixed clearance between the LAST (lowest) dimension row of
             // the header band above and the panel's own top border —
