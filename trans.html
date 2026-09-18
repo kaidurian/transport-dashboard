@@ -3052,38 +3052,29 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // (X,Y) dot in the TOP view; Right/Left share one (X,Z) dot in
         // the SIDE view) into one dot with a "/"-joined label, so the
         // same leaf-point data drives every 2D view without needing
-        // per-view pairing logic. `labelFn` picks what text represents
-        // each point before joining (defaults to the full "L1A"-style
-        // label); the SPMT declutter below passes `p => p.sub` instead,
-        // so a shared dot reads as the short "A/D" rather than the
-        // denser "L1A/L1D". Values are de-duped (a dot combining two
-        // points that resolve to the same text, e.g. two sides' "A"
-        // sub-point, shows "A" once, not "A/A").
-        function groupLashingPointsByScreenPos(points, cxFn, cyFn, labelFn) {
-            const getLabel = labelFn || (p => p.label);
+        // per-view pairing logic.
+        function groupLashingPointsByScreenPos(points, cxFn, cyFn) {
             const groups = new Map();
             points.forEach(p => {
                 const cx = cxFn(p), cy = cyFn(p);
                 const key = `${Math.round(cx * 2)}:${Math.round(cy * 2)}`; // half-pixel tolerance
-                if (!groups.has(key)) groups.set(key, { cx, cy, side: p.side, labels: [] });
-                groups.get(key).labels.push(getLabel(p));
+                if (!groups.has(key)) groups.set(key, { cx, cy, side: p.side, labels: [], subs: [], groupLabel: p.groupLabel });
+                groups.get(key).labels.push(p.label);
+                if (p.sub) groups.get(key).subs.push(p.sub);
             });
-            return Array.from(groups.values()).map(g => ({ cx: g.cx, cy: g.cy, side: g.side, text: [...new Set(g.labels)].join('/') }));
-        }
-        // One shared station-number label (e.g. "L1") per SPMT bracket
-        // station, instead of repeating it inside every one of that
-        // station's 2-4 dot labels — see the TOP/SIDE view lashing-sign
-        // blocks below, which draw this once per station "under" the
-        // sign cluster while each individual dot only carries its bare
-        // A/B/C/D sub-letter "beside" it (KKai's density/placement
-        // request — the old "L1A/L1D" style repeated the station number
-        // on every dot in a crowded SPMT deck).
-        function lashingSpmtStationCenters(points) {
-            const byStation = new Map();
-            points.forEach(p => {
-                if (!byStation.has(p.groupLabel)) byStation.set(p.groupLabel, { groupLabel: p.groupLabel, side: p.side, xWorld: p.xWorld, yWorld: p.yWorld, zWorld: p.zWorld });
-            });
-            return Array.from(byStation.values());
+            // subText: just the sub-letter(s) ("A" or "A/D") for SPMT
+            // bracket points sharing this screen spot — groupLabel: the
+            // shared station number ("L5") those sub-letters belong to
+            // — both used to de-clutter the SPMT top-view labels (show
+            // "L5" once per station, "A"/"D" beside each individual
+            // dot) instead of the full repeated "L5A"/"L5D" text. Plain
+            // (non-SPMT) points have no sub, so subText falls back to
+            // the full label, same as `text`.
+            return Array.from(groups.values()).map(g => ({
+                cx: g.cx, cy: g.cy, side: g.side, text: g.labels.join('/'),
+                subText: g.subs.length ? g.subs.join('/') : g.labels.join('/'),
+                groupLabel: g.groupLabel
+            }));
         }
         const LASHING_SIGN_COLOR = '#f97316';
 
@@ -3097,40 +3088,45 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // label's own world X/Y/Z (already computed by
         // computeLashingSignsForTrain/computeAllLashingSigns — SPMT
         // sub-points like "L5B" included) out to
-        // (pointX+dx, pointY+dy, pointZ+dz). Reused as-is by the top
-        // view, the side/end views, and the 3D scene, so a chain can
-        // never disagree between them. NOTE — the reference sketch's
-        // +Y (RIGHT) reads as pointing UP the page, while this file's
-        // own top view already draws +Y DOWN the screen with no flip
-        // (see renderTrailerGenTopView's sy()) — that WAS the "Y
-        // reverses in the 2D view" KKai flagged to double check.
-        // CONFIRMED backwards once drawn (chains ran the wrong way in
-        // 2D and 3D alike, since both share this function) — dy is
-        // now negated below, so a positive Excel dy moves the cargo-
-        // side attachment toward the sketch's "RIGHT" direction. dx/dz
-        // were not reported backwards and are unchanged.
+        // (pointX+dx, pointY-dy, pointZ+dz) — dy REVERSED, confirmed
+        // against KKai's own render (see the function body for why).
+        // Reused as-is by the top view, the side/end views, and the 3D
+        // scene, so a chain can never disagree between them.
         function computeLashingChainSegments() {
-            const pointByLabel = new Map();
+            // Map each label to EVERY point that carries it, not just
+            // one — every train numbers its own signs independently
+            // starting at "L1" (see computeAllLashingSigns), so with
+            // more than one train, "L5B" exists once PER train and a
+            // single Map slot would silently keep only the last train's
+            // point, dropping any chain aimed at an earlier train's
+            // point of the same name. This is very likely why some
+            // chains weren't showing in the 3D view (and, less visibly,
+            // in the 2D views too) with a multi-train setup — every
+            // matching point across every train now gets its own chain.
+            const pointsByLabel = new Map();
             computeAllLashingSigns().forEach(({ points }) => {
-                points.forEach(p => pointByLabel.set(p.label.toUpperCase(), p));
+                points.forEach(p => {
+                    const key = p.label.toUpperCase();
+                    if (!pointsByLabel.has(key)) pointsByLabel.set(key, []);
+                    pointsByLabel.get(key).push(p);
+                });
             });
             const segments = [];
             lashingPoints.forEach((type, typeIndex) => {
                 const dx = parseFloat(type.dx) || 0, dy = parseFloat(type.dy) || 0, dz = parseFloat(type.dz) || 0;
                 parseLashingSignLabelsList(type.signLabels).forEach(label => {
-                    const p = pointByLabel.get(label);
-                    if (!p) return; // label doesn't match any drawn L# sign (e.g. typo, or wrong train) — silently skipped, same as the QTY mismatch note in renderLashingList
-                    segments.push({
+                    const matches = pointsByLabel.get(label);
+                    if (!matches) return; // label doesn't match any drawn L# sign (e.g. typo) — silently skipped, same as the QTY mismatch note in renderLashingList
+                    matches.forEach(p => segments.push({
                         typeIndex, label: p.label,
                         startX: p.xWorld, startY: p.yWorld, startZ: p.zWorld,
-                        // Y NEGATED — see the comment above this function:
-                        // confirmed backwards vs. the reference sketch in
-                        // both the 2D views and the 3D scene (this one
-                        // function drives all of them), so a positive
-                        // Excel dy now moves toward the sketch's "RIGHT"
-                        // instead of raw unflipped world +Y.
+                        // dy REVERSED (subtracted) — KKai confirmed the
+                        // chains rendered mirrored on Y against the
+                        // reference sketch (+Y=RIGHT), so this un-does
+                        // that. dx/dz stay as given (REAR=+X/FRONT=-X,
+                        // UP=+Z already read correctly).
                         endX: p.xWorld + dx, endY: p.yWorld - dy, endZ: p.zWorld + dz
-                    });
+                    }));
                 });
             });
             return segments;
@@ -5573,14 +5569,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
         let lashingPoints = [];
 
-        // NOTE — both functions below push to Excel (scheduleAutoPush),
-        // same as every other lashing field edit. Previously they only
-        // updated the local `lashingPoints` array and re-rendered the
-        // local list, WITHOUT pushing — so a newly-added type's B:F row
-        // stayed blank in Excel, meaning Excel's own auto-increment
-        // "No." formula (column A) never had anything to number and
-        // the new row silently never showed up in the read-only
-        // Lashing calculation table. That's the bug KKai reported.
         function addLashingPoint() {
             if (lashingPoints.length >= LASHING_MAX_POINTS) {
                 alert(`Only ${LASHING_MAX_POINTS} lashing types are supported (Excel 'Lashing calculation'!A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW} has ${LASHING_MAX_POINTS} rows).`);
@@ -5588,6 +5576,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             lashingPoints.push(defaultLashingPoint(lashingPoints.length + 1));
             renderLashingList();
+            // Push immediately — a freshly-added type sits at its
+            // default SWL/QTY/dx/dy/dz until the user actually edits a
+            // field, so without this the new row never reaches Excel
+            // (and its "No." formula never gets data to key off of)
+            // until something is typed into one of its inputs.
             scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
         }
 
@@ -5595,6 +5588,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             lashingPoints = lashingPoints.filter(p => p.id !== id);
             if (lashingPoints.length === 0) lashingPoints.push(defaultLashingPoint(1));
             renderLashingList();
+            // Same reasoning as addLashingPoint — a removed row needs to
+            // clear its old data out of Excel right away, not wait for
+            // an unrelated field edit elsewhere to trigger the push.
             scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
         }
 
@@ -5624,44 +5620,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return raw.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
         }
 
-        // Captures which field (by lashing-row id + field name) is
-        // currently focused inside #tgLashingList, plus its caret
-        // position, right before the innerHTML rebuild below destroys
-        // and recreates every input node in the list.
-        function captureLashingListFocus(el) {
-            const active = document.activeElement;
-            if (!active || !el.contains(active) || !active.dataset || !active.dataset.lashingField) return null;
-            return {
-                id: active.dataset.lashingId,
-                field: active.dataset.lashingField,
-                selStart: (typeof active.selectionStart === 'number') ? active.selectionStart : null,
-                selEnd: (typeof active.selectionEnd === 'number') ? active.selectionEnd : null
-            };
-        }
-        // Re-focuses the same field (and restores its caret position)
-        // after renderLashingList's innerHTML rebuild recreated it as a
-        // brand-new DOM node. Without this, the 600ms typing-pause
-        // auto-commit (see FIELD COMMIT SAFETY NET above) fires
-        // onchange mid-typing, this function rebuilds the whole list,
-        // and the field the user is still typing into loses focus —
-        // the "freezes when you type a lashing point" KKai reported.
-        // Most noticeable on the free-text "Lashing point #s" field
-        // since a multi-character entry (e.g. "L1, L2, L5") is far more
-        // likely to have a >600ms pause mid-entry than a short number.
-        function restoreLashingListFocus(el, saved) {
-            if (!saved) return;
-            const sel = `[data-lashing-id="${saved.id}"][data-lashing-field="${saved.field}"]`;
-            const target = el.querySelector(sel);
-            if (!target) return;
-            target.focus();
-            if (saved.selStart !== null && typeof target.setSelectionRange === 'function') {
-                try { target.setSelectionRange(saved.selStart, saved.selEnd); } catch (e) { /* not a text-selectable input type */ }
-            }
-        }
         function renderLashingList() {
             const el = document.getElementById('tgLashingList');
             if (!el) return;
-            const savedFocus = captureLashingListFocus(el);
+            // Every edit rebuilds this whole list's innerHTML (simplest
+            // way to keep row numbering/summary text in sync), which
+            // normally kicks focus out of whichever input the user was
+            // just typing in (it's now a brand-new DOM node) — reported
+            // as the "Lashing point #s" field feeling laggy/freezing.
+            // Captured here (by lashing-type id + field name, via the
+            // data-lid/data-field attributes on each input below) and
+            // restored after the rebuild so typing — including pressing
+            // Enter, which commits the value via onchange mid-edit —
+            // never knocks the user out of the field.
+            const active = document.activeElement;
+            let focusInfo = null;
+            if (active && el.contains(active) && active.tagName === 'INPUT') {
+                focusInfo = {
+                    lid: active.getAttribute('data-lid'),
+                    field: active.getAttribute('data-field'),
+                    selStart: active.selectionStart, selEnd: active.selectionEnd
+                };
+            }
             el.innerHTML = lashingPoints.map((point, idx) => `
                 <div class="tg-group-row">
                     <div class="tg-group-row-header">
@@ -5674,41 +5654,45 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         <div class="tg-group-field" style="grid-column: 1 / -1;">
                             <label>Lashing point #s <span style="font-weight:400;opacity:.7;">(optional)</span></label>
                             <input type="text" value="${escapeHtml(point.signLabels || '')}"
-                                   data-lashing-id="${point.id}" data-lashing-field="signLabels"
+                                   data-lid="${point.id}" data-field="signLabels"
                                    placeholder="e.g. L1, L2, L5, L23 — or L3A, L4C, L23D for SPMT"
                                    title="Which drawn L# sign(s) this lashing type is physically installed at — comma/space separated, matching the labels drawn in the 2D views. QTY below auto-fills to the count of entries here once you type any."
                                    onchange="updateLashingField(${point.id}, 'signLabels', this.value)">
                         </div>
                         <div class="tg-group-field">
                             <label>SWL (mTe)</label>
-                            <input type="number" step="any" min="0" value="${point.swl}" title="Safe Working Load of one lashing/chain of this type"
-                                   data-lashing-id="${point.id}" data-lashing-field="swl"
+                            <input type="number" step="any" min="0" value="${point.swl}"
+                                   data-lid="${point.id}" data-field="swl"
+                                   title="Safe Working Load of one lashing/chain of this type"
                                    onchange="updateLashingField(${point.id}, 'swl', this.value)">
                         </div>
                         <div class="tg-group-field">
                             <label>QTY</label>
                             <input type="number" step="1" min="1" value="${point.qty}"
+                                   data-lid="${point.id}" data-field="qty"
                                    title="${point.signLabels ? 'Auto-set from the Lashing point #s list above (count of entries) — clear that field to edit QTY by hand again' : 'Number of identical lashings of this type (used for SWL/capacity — independent of the L# signs auto-placed in the 2D drawing from deck geometry)'}"
-                                   data-lashing-id="${point.id}" data-lashing-field="qty"
                                    ${point.signLabels ? 'readonly' : ''}
                                    onchange="updateLashingField(${point.id}, 'qty', this.value)">
                         </div>
                         <div class="tg-group-field">
                             <label>dx (mm)</label>
-                            <input type="number" step="any" value="${point.dx}" title="X offset, cargo attachment point to deck/lashing-eye anchor"
-                                   data-lashing-id="${point.id}" data-lashing-field="dx"
+                            <input type="number" step="any" value="${point.dx}"
+                                   data-lid="${point.id}" data-field="dx"
+                                   title="X offset, cargo attachment point to deck/lashing-eye anchor"
                                    onchange="updateLashingField(${point.id}, 'dx', this.value)">
                         </div>
                         <div class="tg-group-field">
                             <label>dy (mm)</label>
-                            <input type="number" step="any" value="${point.dy}" title="Y offset, cargo attachment point to deck/lashing-eye anchor"
-                                   data-lashing-id="${point.id}" data-lashing-field="dy"
+                            <input type="number" step="any" value="${point.dy}"
+                                   data-lid="${point.id}" data-field="dy"
+                                   title="Y offset, cargo attachment point to deck/lashing-eye anchor"
                                    onchange="updateLashingField(${point.id}, 'dy', this.value)">
                         </div>
                         <div class="tg-group-field">
                             <label>dz (mm)</label>
-                            <input type="number" step="any" value="${point.dz}" title="Z offset, cargo attachment point to deck/lashing-eye anchor"
-                                   data-lashing-id="${point.id}" data-lashing-field="dz"
+                            <input type="number" step="any" value="${point.dz}"
+                                   data-lid="${point.id}" data-field="dz"
+                                   title="Z offset, cargo attachment point to deck/lashing-eye anchor"
                                    onchange="updateLashingField(${point.id}, 'dz', this.value)">
                         </div>
                     </div>
@@ -5717,7 +5701,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </div>
                 </div>
                 `).join('');
-            restoreLashingListFocus(el, savedFocus);
+
+            if (focusInfo && focusInfo.lid) {
+                const next = el.querySelector(`[data-lid="${focusInfo.lid}"][data-field="${focusInfo.field}"]`);
+                if (next) {
+                    next.focus();
+                    if (next.type === 'text' && typeof focusInfo.selStart === 'number') {
+                        try { next.setSelectionRange(focusInfo.selStart, focusInfo.selEnd); } catch (e) { /* ignore — some input types don't support selection ranges */ }
+                    }
+                }
+            }
 
             const totalPoints = lashingPoints.reduce((s, p) => s + (parseFloat(p.qty) || 0), 0);
             const totalSwl = lashingPoints.reduce((s, p) => s + (parseFloat(p.qty) || 0) * (parseFloat(p.swl) || 0), 0);
@@ -5791,13 +5784,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     sheet.getRange(LASHING_INPUT_RANGE).values = rows;
                     await context.sync();
                 });
-                // Immediately read back the row(s) just written, incl.
-                // Excel's own computed "No." (col A) and length/alfa/
-                // beta/capacity (G:O) — otherwise the read-only Lashing
-                // calculation table only catches up on the next 5s
-                // auto-poll tick, which reads as "the new No. doesn't
-                // get created" right after adding a type.
-                await pullLashingCalcTableFromExcel({ silent: true });
                 if (!silent) logMsg(`📤 Pushed Lashing types to '${LASHING_SHEET_NAME}'!${LASHING_INPUT_RANGE}.`);
             } catch (e) {
                 console.warn(`Could not push Lashing types to '${LASHING_SHEET_NAME}' (${LASHING_INPUT_RANGE})`, e);
@@ -8572,49 +8558,41 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // this drawing) gets its label offset downward/outward, so
             // neither label sits on top of the deck rectangle's own
             // dashed border.
-            // SPMT declutter (KKai's "very dense" report): a plain
-            // train shows the full "L1"-style label on every dot, same
-            // as always. An SPMT bracket train instead shows only the
-            // bare sub-letter (A/B/C/D) BESIDE each dot, plus one
-            // shared "L1" station number drawn once, UNDER the front
-            // dot of that station — so a 4-point station reads as one
-            // "L1" tag plus two short "A/D" / "B/C" dot labels instead
-            // of repeating "L1A/L1D" and "L1B/L1C" in full.
             const allLashingSigns = computeAllLashingSigns();
             let lashingSignsSvg = '';
-            allLashingSigns.forEach(({ points, isSpmtBracket }) => {
-                const labelFn = isSpmtBracket ? (p => p.sub) : undefined;
-                const dots = groupLashingPointsByScreenPos(points, p => sx(p.xWorld), p => sy(p.yWorld), labelFn);
+            allLashingSigns.forEach(({ points, isSpmtBracket, stations, train }) => {
+                const dots = groupLashingPointsByScreenPos(points, p => sx(p.xWorld), p => sy(p.yWorld));
                 dots.forEach(d => {
-                    const outward = d.side === 'right' ? -1 : 1; // right row's labels point up/out (-Y screen), left row's point down/out
-                    let labelX, labelY, fontSize, anchor;
-                    if (isSpmtBracket) {
-                        // Bare sub-letter (A/B/C/D), placed BESIDE the dot.
-                        labelX = d.cx + outward * 8;
-                        labelY = d.cy + 2.2;
-                        fontSize = 5.5;
-                        anchor = outward < 0 ? 'end' : 'start';
-                    } else {
-                        // Unchanged plain-train placement — full label UNDER/OVER the dot.
-                        labelX = d.cx;
-                        labelY = d.cy + (d.side === 'right' ? -7 : 12);
-                        fontSize = 6.5;
-                        anchor = 'middle';
-                    }
+                    const labelDy = d.side === 'right' ? -7 : 12;
+                    // SPMT: just the sub-letter(s) beside the dot (e.g.
+                    // "A" or "A/D") — the shared station number ("L5")
+                    // is drawn once below, in the stations loop further
+                    // down, instead of being repeated in every dot's own
+                    // label ("L5A"/"L5D") — that repetition was the
+                    // reported "very dense" SPMT clutter. Non-SPMT keeps
+                    // the original single full label per dot.
+                    const labelText = isSpmtBracket ? d.subText : d.text;
                     lashingSignsSvg += `<g>` +
                         `<circle cx="${d.cx.toFixed(1)}" cy="${d.cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.8"/>` +
-                        `<text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="${fontSize}" font-weight="700" text-anchor="${anchor}" fill="${LASHING_SIGN_COLOR}">${d.text}</text>` +
+                        `<text x="${d.cx.toFixed(1)}" y="${(d.cy + labelDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${labelText}</text>` +
                         `<title>${d.text} — lashing point sign (${d.side} side)</title>` +
                         `</g>`;
                 });
-                if (isSpmtBracket) {
-                    lashingSpmtStationCenters(points).forEach(st => {
-                        const cx = sx(st.xWorld), cy = sy(st.yWorld);
-                        const stationDy = st.side === 'right' ? -13 : 18; // further out than the per-dot letters, "under" the sign cluster
-                        lashingSignsSvg += `<text x="${cx.toFixed(1)}" y="${(cy + stationDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.9">${escapeHtml(st.groupLabel)}</text>`;
+                // SPMT stations — one shared "L#" group label per
+                // station per side, placed further out (past the A/B/
+                // C/D letters above) so it reads as the station number
+                // for that whole bracket instead of repeating on every
+                // one of its 2 dots.
+                if (isSpmtBracket && stations && stations.length) {
+                    const oy = parseFloat(train.y) || 0;
+                    stations.forEach(st => {
+                        const gx = sx(st.xWorld).toFixed(1);
+                        lashingSignsSvg += `<text x="${gx}" y="${(sy(oy) - 16).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.rightLabel}</text>`;
+                        lashingSignsSvg += `<text x="${gx}" y="${(sy(oy + train.deckWidth) + 20).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.leftLabel}</text>`;
                     });
                 }
             });
+
 
             // ---- Lashing CHAINS — one diagonal line per L# point per
             // type, from that point out to its cargo attachment (see
@@ -9386,33 +9364,46 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const lashingSignDot = (cx, cy, txt) =>
                 `<g><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.8"/>` +
                 `<text x="${cx.toFixed(1)}" y="${(cy - 7).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${escapeHtml(txt)}</text></g>`;
-            // SPMT declutter (same request as the TOP view above): a
-            // side-view dot here already collapses Right+Left (no Y
-            // axis in this view), so for a plain train it reads e.g.
-            // "L1/L26" — fine. For an SPMT bracket train that collapse
-            // ALSO happens per sub-letter, so it used to read
-            // "L1A/L26A" on every one of the 4 dots; now each dot shows
-            // just the bare sub-letter, and the two station numbers for
-            // that X position are shown once, together, under the
-            // bottom-row dots — reusing `stations` (Right/Left label
-            // pairs per X), computed but unused until now.
-            const lashingSpmtBotZ = tgZTrailerHeightMm - SPMT_LASHING_BRACKET.topBottomSpacing;
-            lashingSigns.forEach(({ train, n, isSpmtBracket, points, stations }) => {
-                const labelFn = isSpmtBracket ? (p => p.sub) : undefined;
-                const sideDots = groupLashingPointsByScreenPos(points, p => sx(p.xWorld), p => sz(p.zWorld), labelFn);
-                sideDots.forEach(d => {
-                    if (isSpmtBracket) {
-                        lashingElevSvg += `<g><circle cx="${d.cx.toFixed(1)}" cy="${d.cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.8"/>` +
-                            `<text x="${(d.cx + 6).toFixed(1)}" y="${(d.cy + 2.2).toFixed(1)}" font-size="5.5" font-weight="700" text-anchor="start" fill="${LASHING_SIGN_COLOR}">${escapeHtml(d.text)}</text></g>`;
-                    } else {
-                        lashingElevSvg += lashingSignDot(d.cx, d.cy, d.text);
-                    }
-                });
-                if (isSpmtBracket && stations && stations.length) {
-                    const stationLabelY = sz(lashingSpmtBotZ) + 9; // once per station, under the bottom-row dots
-                    stations.forEach(st => {
-                        lashingElevSvg += `<text x="${sx(st.xWorld).toFixed(1)}" y="${stationLabelY.toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.9">${escapeHtml(st.rightLabel + '/' + st.leftLabel)}</text>`;
+            lashingSigns.forEach(({ train, n, isSpmtBracket, points }) => {
+                if (isSpmtBracket) {
+                    // ---- SPMT side view declutter (same idea as the
+                    // top view) — the side view has no Y axis, so
+                    // Right and Left side points at the same station
+                    // index land on the exact same (X,Z) spot here and
+                    // already merge; group by that spot directly (not
+                    // via groupLashingPointsByScreenPos's single
+                    // groupLabel) so we can keep BOTH sides' station
+                    // numbers. Each dot shows only its sub-letter(s);
+                    // the merged station number(s) ("L13/L14") print
+                    // once per X column (front-pair / rear-pair),
+                    // below the lowest (bottom-row) dot in that column,
+                    // instead of being repeated on every one of the 4
+                    // dots ("L13A/L14A" style).
+                    const byPos = new Map();
+                    points.forEach(p => {
+                        const cx = sx(p.xWorld), cz = sz(p.zWorld);
+                        const key = `${Math.round(cx * 2)}:${Math.round(cz * 2)}`;
+                        if (!byPos.has(key)) byPos.set(key, { cx, cz, subs: new Set(), groupLabels: new Set() });
+                        const g = byPos.get(key);
+                        g.subs.add(p.sub); g.groupLabels.add(p.groupLabel);
                     });
+                    byPos.forEach(g => {
+                        lashingElevSvg += lashingSignDot(g.cx, g.cz, [...g.subs].join('/'));
+                    });
+                    const byX = new Map();
+                    byPos.forEach(g => {
+                        const kx = Math.round(g.cx * 2);
+                        if (!byX.has(kx)) byX.set(kx, { cx: g.cx, cz: g.cz, groupLabels: new Set() });
+                        const col = byX.get(kx);
+                        col.cz = Math.max(col.cz, g.cz); // lowest (bottom-row) dot in this column
+                        g.groupLabels.forEach(gl => col.groupLabels.add(gl));
+                    });
+                    byX.forEach(col => {
+                        lashingElevSvg += `<text x="${col.cx.toFixed(1)}" y="${(col.cz + 13).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${[...col.groupLabels].join('/')}</text>`;
+                    });
+                } else {
+                    const sideDots = groupLashingPointsByScreenPos(points, p => sx(p.xWorld), p => sz(p.zWorld));
+                    sideDots.forEach(d => { lashingElevSvg += lashingSignDot(d.cx, d.cy, d.text); });
                 }
                 if (n <= 0) return;
                 const oy = parseFloat(train.y) || 0;
