@@ -770,7 +770,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.117)</h1>
+            <h1>🚂 Transport Dashboard (Rev.117.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7797,9 +7797,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // matching the exact convention used throughout the plan + side +
         // end views above:
         //   • World +X = REAR, world -X = FRONT (the low-X end renders on
-        //     the LEFT of the plan/side view and drives the "Left End
-        //     View" panel — see the Left/Right End View split further
-        //     below; the high-X end drives the "Right End View").
+        //     the LEFT of the plan/side view and drives the "Front View"
+        //     end panel — see the Front/Rear View split further below
+        //     (renamed from Left/Right End View to match the 3D camera
+        //     preset names — TG3D_CAM_PRESETS); the high-X end drives
+        //     the "Rear View" end panel).
         //   • Lower world Y = RIGHT, higher world Y = LEFT (a preset
         //     trailer's 'right' row group sits at the lower Y, 'left' at
         //     Y + axlePairOffsetY — see computeTrailerGenRows).
@@ -8671,7 +8673,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
             });
 
-            const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
+            const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH + 20}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-blue, #38bdf8)"/>
@@ -8682,6 +8684,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}
+                <text x="${svgW / 2}" y="${svgH + 14}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
@@ -9859,8 +9862,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             [...endPanel1.labels, ...endPanel2.labels].forEach(l => {
                 endLabelsSvg += `<text x="${(l.dx1 + l.dx2) / 2}" y="${trainLabelY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(l.name)}</text>`;
             });
-            endLabelsSvg += `<text x="${endOffsetX1 + endW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Left End View</text>`;
-            endLabelsSvg += `<text x="${endOffsetX2 + endW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Right End View ▶</text>`;
+            endLabelsSvg += `<text x="${endOffsetX1 + endW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">◀ Front View</text>`;
+            endLabelsSvg += `<text x="${endOffsetX2 + endW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Rear View ▶</text>`;
+            // "Side View" caption for the elevation panel — same row as
+            // the Front/Rear View captions above, matching the 3D
+            // camera preset names (Top/Side/Front/Rear — see
+            // TG3D_CAM_PRESETS) so every 2D + 3D view uses one shared
+            // naming convention.
+            endLabelsSvg += `<text x="${sideOffsetX + sideW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Side View</text>`;
             // svgH now accounts for however low endChainRowY/captionY
             // actually landed (can sit well past the old fixed padB when
             // a stability triangle's arm label is the deepest element).
@@ -12040,7 +12049,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const gapMm = longestTrailerLengthMm + 10000;
                     endViewXm = (trainAnchorXm * CAD_UNIT_SCALE) + gapMm + endViewYDeltaMm;
                     inserts.push({
-                        trainName: `${train.name} — Right End View`,
+                        trainName: `${train.name} — Rear View`,
                         view: 'end',
                         endSide: 'right',
                         blockName: CAD_END_VIEW_BLOCK_NAME,
@@ -12054,7 +12063,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const gapMm = longestTrailerLengthMm - 10000;
                     endViewXm = (trainAnchorXm * CAD_UNIT_SCALE) - gapMm + endViewYDeltaMm;
                     inserts.push({
-                        trainName: `${train.name} — Left End View`,
+                        trainName: `${train.name} — Front View`,
                         view: 'end',
                         endSide: 'left',
                         blockName: CAD_END_VIEW_BLOCK_NAME,
