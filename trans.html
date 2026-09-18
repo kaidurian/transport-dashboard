@@ -770,7 +770,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.117.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.119)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1009,30 +1009,36 @@
                         <p class="tg-modal-sub" id="tgLashingHelpPanel">
                             Sea-fastening lashing TYPE list — one row/group per lashing type, matching the
                             reference workbook <strong>"Lashing calculation"</strong> sheet
-                            (<strong>A18:F41</strong>, up to 24 types). Per type: <strong>SWL</strong> (Safe
-                            Working Load of one lashing/chain of this type, mTe), <strong>QTY</strong>
-                            (number of identical lashings of this type), and
+                            (<strong>A18:F41</strong>, up to 24 types). Per type: <strong>Lashing point #s</strong>
+                            (optional — which drawn L# sign(s) this type is installed at, e.g. "L1, L2, L5, L23"
+                            or "L3A, L4C, L23D" for SPMT; QTY auto-fills to the count once you type any — local
+                            only, not part of the Excel schema so a pull from Excel can't restore it if the row
+                            order changed), <strong>SWL</strong> (Safe Working Load of one lashing/chain of this
+                            type, mTe), <strong>QTY</strong> (number of identical lashings of this type), and
                             <strong>dx / dy / dz</strong> (mm — offset from the cargo attachment point to the
-                            deck/lashing-eye anchor point). <strong>Length</strong>, <strong>alfa</strong>,
-                            <strong>beta</strong>, and the capacity / Unity Check columns are genuine Excel
-                            formulas in the reference sheet now — see the read-only
-                            <strong>Lashing calculation table</strong> under 🚚 Transport Data w/ CoG Env for
-                            those. Synced with Excel: pulls <strong>B18:F41</strong> (column A's "No." is
-                            Excel's own auto-numbering formula, never written here), pushes the same range on
-                            every edit.<br><br>
+                            deck/lashing-eye anchor point, same for every point listed under "Lashing point #s").
+                            <strong>Length</strong>, <strong>alfa</strong>, <strong>beta</strong>, and the
+                            capacity / Unity Check columns are genuine Excel formulas in the reference sheet now
+                            — see the read-only <strong>Lashing calculation table</strong> under 🚚 Transport
+                            Data w/ CoG Env for those. Synced with Excel: pulls <strong>B18:F41</strong> (column
+                            A's "No." is Excel's own auto-numbering formula, never written here), pushes the same
+                            range on every edit.<br><br>
                             <strong>L# signs (2D drawing):</strong> placed automatically from each train's own
                             deck length/width and type (Goldhofer/SPMT) — NOT from the rows above. First sign
                             1500&nbsp;mm (Goldhofer) / 700&nbsp;mm (SPMT) from the FRONT edge of the top deck,
                             then every 1500&nbsp;mm / 1400&nbsp;mm toward the rear, on both long edges, never
                             past the rear edge. Numbered clockwise from the Right side (front→rear, L1..Ln)
                             then the Left side (rear→front, L{n+1}..L{2n}) — e.g. a 14AL Goldhofer draws
-                            L1-L13 on the Right, L14-L26 on the Left. Shown as small dots in the Top View
-                            (both sides), Side View (one dot per station, labeled with both side numbers,
-                            e.g. "L1/L26"), and both end views (Front/Rear View — a composite dot per side
-                            with the full range, e.g. "L1-L13"). The totals line below flags if this drawn
-                            count doesn't match the QTY sum above — the two are independent by design (QTY is
-                            physical lashing hardware count for the capacity calc; L# signs are the deck
-                            layout), so a mismatch is just informational, not an error.
+                            L1-L13 on the Right, L14-L26 on the Left. For SPMT, each station is a 4-point
+                            bracket — L#A (Top-Front), L#B (Top-Rear), L#C (Bottom-Rear), L#D (Bottom-Front),
+                            480&nbsp;mm front↔rear, 210&nbsp;mm top↔bottom, centered on the station's own X.
+                            Shown as small dots in Top View (Goldhofer: one dot/side/station; SPMT: two, front
+                            and rear), Side View (dots wherever two points coincide once Y collapses, joined
+                            "/"-labeled), and both end views (Front/Rear View — composite range dots per side,
+                            e.g. "L1-L13", doubled top+bottom for SPMT). The totals line below flags if the
+                            drawn sign count doesn't match the QTY sum above — the two are independent by
+                            design (QTY is physical lashing hardware count for the capacity calc; L# signs are
+                            the deck layout), so a mismatch is just informational, not an error.
                         </p>
                         <div id="tgLashingList"><!-- Lashing type group rows rendered by JS --></div>
                         <div class="tg-group-summary" id="tgLashingTotals"></div>
@@ -2959,13 +2965,29 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (train.trailerType === 'spmt') return LASHING_SIGN_SPACING.spmt;
             return null; // custom/manual trailers have no deck rectangle to place signs on
         }
+        // SPMT lashing bracket — per KKai's reference drawing, each
+        // "L#" station on an SPMT deck is actually a 4-point bracket
+        // (not a single sign): A = Top-Front, B = Top-Rear, C =
+        // Bottom-Rear, D = Bottom-Front. frontRearSpacing (480mm) is
+        // the A/D <-> B/C gap; topBottomSpacing (210mm) is the A/B <->
+        // D/C gap. The 480mm split is centered on the station's own X
+        // (the same 700/1400-spaced X used before) — the drawing's own
+        // "460" callout wasn't given a stated meaning, so that's an
+        // assumption, flag if wrong. Top row sits level with the deck
+        // top (tgZTrailerHeightMm); bottom row is 210mm below it.
+        // Goldhofer has no equivalent spec yet, so it keeps the single-
+        // point-per-station model.
+        const SPMT_LASHING_BRACKET = { frontRearSpacing: 480, topBottomSpacing: 210 };
         // Numbering — clockwise from top-left of the TOP VIEW drawing:
         // the top edge of that drawing is the LOWER-Y ("Right") side
         // (see the plan view's own sy() — higher world Y draws lower on
         // screen), so clockwise order is Right side front->rear (L1..Ln),
         // then Left side rear->front (L{n+1}..L{2n}) — confirmed against
         // KKai's 14AL Goldhofer example: Right = L1-L13, Left = L14-L26.
-        // Returns null if this train has no known spacing rule or deck.
+        // Each station's group label (e.g. "L1") expands to 4 leaf
+        // points (L1A/L1B/L1C/L1D) for SPMT, or stays a single leaf
+        // point ("L1") for everything else. Returns null if this train
+        // has no known spacing rule or deck.
         function computeLashingSignsForTrain(train) {
             const spacing = trailerLashingSignSpacing(train);
             if (!spacing || !train.deckLength || !train.deckWidth) return null;
@@ -2973,28 +2995,47 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const xOffsets = [];
             for (let pos = spacing.first; pos < train.deckLength; pos += spacing.step) xOffsets.push(pos);
             const n = xOffsets.length;
-            if (n === 0) return { train, n, positions: [], stations: [] };
-            const positions = [];
-            xOffsets.forEach((xOff, i) => {
-                positions.push({ k: i + 1, side: 'right', xWorld: ox + xOff, yWorld: oy, label: `L${i + 1}` });
-            });
-            xOffsets.slice().reverse().forEach((xOff, i) => {
-                positions.push({ k: n + i + 1, side: 'left', xWorld: ox + xOff, yWorld: oy + train.deckWidth, label: `L${n + i + 1}` });
-            });
-            // One "station" per X position — both the Right (front->rear,
-            // L1..Ln) and Left (rear->front, L{n+1}..L{2n}) sign at that
-            // same X collapse onto a single dot in the side view (which
-            // has no Y axis), so it's labeled with both numbers.
+            const isSpmtBracket = train.trailerType === 'spmt';
+            if (n === 0) return { train, n, isSpmtBracket, points: [], stations: [] };
+
+            // "points" — every individual, physically distinct lashing
+            // point (leaf level, used by the TOP/SIDE view drawing —
+            // see groupLashingPointsByScreenPos, which combines any
+            // that land on the same spot in a given 2D projection).
+            const points = [];
+            function addStationSide(groupLabel, xOff, yWorld, side) {
+                const baseX = ox + xOff;
+                if (!isSpmtBracket) {
+                    points.push({ groupLabel, sub: null, side, label: groupLabel, xWorld: baseX, yWorld, zWorld: tgZTrailerHeightMm });
+                    return;
+                }
+                const half = SPMT_LASHING_BRACKET.frontRearSpacing / 2;
+                const topZ = tgZTrailerHeightMm;
+                const botZ = tgZTrailerHeightMm - SPMT_LASHING_BRACKET.topBottomSpacing;
+                points.push({ groupLabel, sub: 'A', side, label: `${groupLabel}A`, xWorld: baseX - half, yWorld, zWorld: topZ }); // Top-Front
+                points.push({ groupLabel, sub: 'B', side, label: `${groupLabel}B`, xWorld: baseX + half, yWorld, zWorld: topZ }); // Top-Rear
+                points.push({ groupLabel, sub: 'C', side, label: `${groupLabel}C`, xWorld: baseX + half, yWorld, zWorld: botZ }); // Bottom-Rear
+                points.push({ groupLabel, sub: 'D', side, label: `${groupLabel}D`, xWorld: baseX - half, yWorld, zWorld: botZ }); // Bottom-Front
+            }
+            xOffsets.forEach((xOff, i) => addStationSide(`L${i + 1}`, xOff, oy, 'right'));
+            xOffsets.slice().reverse().forEach((xOff, i) => addStationSide(`L${n + i + 1}`, xOff, oy + train.deckWidth, 'left'));
+
+            // One "station" per X position — used only by the END VIEW,
+            // which shows a Right-side range label and a Left-side
+            // range label (e.g. "L1-L13" / "L14-L26") regardless of the
+            // A/B/C/D bracket detail (that's visually conveyed by the
+            // Top-row/Bottom-row split drawn there instead — see
+            // renderTrailerGenElevationCombined).
             const stations = xOffsets.map((xOff, i) => ({
                 xWorld: ox + xOff,
                 rightLabel: `L${i + 1}`,
                 leftLabel: `L${2 * n - i}`
             }));
-            return { train, n, positions, stations };
+            return { train, n, isSpmtBracket, points, stations };
         }
         // Every train's own sign set, each train numbered independently
-        // starting at L1 — shared by the top view (plots each position)
-        // and the elevation view (side-view X-stations + end-view
+        // starting at L1 — shared by the top view (plots each point)
+        // and the elevation view (side-view X/Z stations + end-view
         // composite Right/Left range labels), so both always agree.
         function computeAllLashingSigns() {
             return trailerGenTrains.map(computeLashingSignsForTrain).filter(Boolean);
@@ -3006,7 +3047,72 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (side === 'right') return n === 1 ? 'L1' : `L1-L${n}`;
             return n === 1 ? `L${n + 1}` : `L${n + 1}-L${2 * n}`;
         }
+        // Combines lashing points that land on the same screen spot in
+        // a given 2D projection (e.g. Top-Front/Bottom-Front share one
+        // (X,Y) dot in the TOP view; Right/Left share one (X,Z) dot in
+        // the SIDE view) into one dot with a "/"-joined label, so the
+        // same leaf-point data drives every 2D view without needing
+        // per-view pairing logic.
+        function groupLashingPointsByScreenPos(points, cxFn, cyFn) {
+            const groups = new Map();
+            points.forEach(p => {
+                const cx = cxFn(p), cy = cyFn(p);
+                const key = `${Math.round(cx * 2)}:${Math.round(cy * 2)}`; // half-pixel tolerance
+                if (!groups.has(key)) groups.set(key, { cx, cy, side: p.side, labels: [] });
+                groups.get(key).labels.push(p.label);
+            });
+            return Array.from(groups.values()).map(g => ({ cx: g.cx, cy: g.cy, side: g.side, text: g.labels.join('/') }));
+        }
         const LASHING_SIGN_COLOR = '#f97316';
+
+        // ---- Lashing CHAINS — the actual diagonal lashing lines from
+        // each trailer "L#" point (an origin — see the reference sketch:
+        // top view, REAR=+X/FRONT=-X, RIGHT=+Y/LEFT=-Y, vertical UP=+Z,
+        // all in world mm, same axes already used everywhere else in
+        // this file) out to its cargo attachment point. Per lashing
+        // TYPE (each row in `lashingPoints`, see below): every "L#"
+        // label in that row's `signLabels` gets ONE chain, from that
+        // label's own world X/Y/Z (already computed by
+        // computeLashingSignsForTrain/computeAllLashingSigns — SPMT
+        // sub-points like "L5B" included) out to
+        // (pointX+dx, pointY+dy, pointZ+dz). Reused as-is by the top
+        // view, the side/end views, and the 3D scene, so a chain can
+        // never disagree between them. NOTE — the reference sketch's
+        // +Y (RIGHT) reads as pointing UP the page, while this file's
+        // own top view already draws +Y DOWN the screen with no flip
+        // (see renderTrailerGenTopView's sy()) — that's the "Y reverses
+        // in the 2D view" KKai flagged, and it falls out automatically
+        // from the existing sy()/sy1()/sy2() below, so dy is added here
+        // exactly as given, unflipped, in true world terms (also what
+        // the 3D scene needs). Flag if this reads backwards once drawn.
+        function computeLashingChainSegments() {
+            const pointByLabel = new Map();
+            computeAllLashingSigns().forEach(({ points }) => {
+                points.forEach(p => pointByLabel.set(p.label.toUpperCase(), p));
+            });
+            const segments = [];
+            lashingPoints.forEach((type, typeIndex) => {
+                const dx = parseFloat(type.dx) || 0, dy = parseFloat(type.dy) || 0, dz = parseFloat(type.dz) || 0;
+                parseLashingSignLabelsList(type.signLabels).forEach(label => {
+                    const p = pointByLabel.get(label);
+                    if (!p) return; // label doesn't match any drawn L# sign (e.g. typo, or wrong train) — silently skipped, same as the QTY mismatch note in renderLashingList
+                    segments.push({
+                        typeIndex, label: p.label,
+                        startX: p.xWorld, startY: p.yWorld, startZ: p.zWorld,
+                        endX: p.xWorld + dx, endY: p.yWorld + dy, endZ: p.zWorld + dz
+                    });
+                });
+            });
+            return segments;
+        }
+        // One color per lashing TYPE (cycled), so multiple types stay
+        // visually distinguishable in a crowded drawing — chain #1's
+        // dots/lines always render in the same color across top/side/
+        // end/3D.
+        const LASHING_CHAIN_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#38bdf8', '#a78bfa', '#f472b6'];
+        function lashingChainColor(typeIndex) {
+            return LASHING_CHAIN_COLORS[typeIndex % LASHING_CHAIN_COLORS.length];
+        }
 
         // ============================================================
         let trailerGenTrains = [];
@@ -5427,6 +5533,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function defaultLashingPoint(index) {
             return {
                 id: lashingIdCounter++,
+                signLabels: '', // e.g. "L1, L2, L5, L23" — which drawn L# signs use this type; local-only, not in the Excel schema
                 swl: 5,   // Safe Working Load of one lashing/chain at this point, mTe
                 qty: 2,   // number of identical lashings of this type
                 dx: 0,    // mm — X offset, cargo attachment point to deck/lashing-eye anchor
@@ -5454,11 +5561,27 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function updateLashingField(id, field, rawValue) {
             const point = lashingPoints.find(p => p.id === id);
             if (!point) return;
+            if (field === 'signLabels') {
+                point.signLabels = rawValue;
+                const list = parseLashingSignLabelsList(rawValue);
+                if (list.length > 0) point.qty = list.length; // auto-fill QTY from the count of entries
+                renderLashingList();
+                renderTrailerGenPreview();
+                scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
+                return;
+            }
             const v = parseFloat(rawValue);
             point[field] = Number.isFinite(v) ? v : 0;
             renderLashingList();
             renderTrailerGenPreview(); // L# sign count/placement depends on QTY
             scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
+        }
+        // "L1, L2, L5, L23" / "L3A, L4C, L23D" -> ['L1','L2','L5','L23'] —
+        // comma AND/OR whitespace separated, case-insensitive (normalized
+        // to upper-case to match the drawn L# labels).
+        function parseLashingSignLabelsList(raw) {
+            if (!raw) return [];
+            return raw.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
         }
 
         function renderLashingList() {
@@ -5467,12 +5590,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             el.innerHTML = lashingPoints.map((point, idx) => `
                 <div class="tg-group-row">
                     <div class="tg-group-row-header">
-                        <strong>⚓ Lashing type${idx + 1}</strong>
+                        <strong>⚓ Lashing #${idx + 1}</strong>
                         <button type="button" class="tg-remove-group" title="Remove lashing type"
                                 onclick="removeLashingPoint(${point.id})"
                                 ${lashingPoints.length <= 1 ? 'disabled' : ''}>✕</button>
                     </div>
                     <div class="tg-group-field-grid">
+                        <div class="tg-group-field" style="grid-column: 1 / -1;">
+                            <label>Lashing point #s <span style="font-weight:400;opacity:.7;">(optional)</span></label>
+                            <input type="text" value="${escapeHtml(point.signLabels || '')}"
+                                   placeholder="e.g. L1, L2, L5, L23 — or L3A, L4C, L23D for SPMT"
+                                   title="Which drawn L# sign(s) this lashing type is physically installed at — comma/space separated, matching the labels drawn in the 2D views. QTY below auto-fills to the count of entries here once you type any."
+                                   onchange="updateLashingField(${point.id}, 'signLabels', this.value)">
+                        </div>
                         <div class="tg-group-field">
                             <label>SWL (mTe)</label>
                             <input type="number" step="any" min="0" value="${point.swl}" title="Safe Working Load of one lashing/chain of this type"
@@ -5480,7 +5610,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         </div>
                         <div class="tg-group-field">
                             <label>QTY</label>
-                            <input type="number" step="1" min="1" value="${point.qty}" title="Number of identical lashings of this type (used for SWL/capacity — independent of the L# signs auto-placed in the 2D drawing from deck geometry)"
+                            <input type="number" step="1" min="1" value="${point.qty}"
+                                   title="${point.signLabels ? 'Auto-set from the Lashing point #s list above (count of entries) — clear that field to edit QTY by hand again' : 'Number of identical lashings of this type (used for SWL/capacity — independent of the L# signs auto-placed in the 2D drawing from deck geometry)'}"
+                                   ${point.signLabels ? 'readonly' : ''}
                                    onchange="updateLashingField(${point.id}, 'qty', this.value)">
                         </div>
                         <div class="tg-group-field">
@@ -5500,7 +5632,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         </div>
                     </div>
                     <div class="tg-group-summary">
-                        ${point.qty} × SWL ${point.swl} mTe
+                        ${point.qty} × SWL ${point.swl} mTe${point.signLabels ? ` · ${escapeHtml(point.signLabels)}` : ''}
                     </div>
                 </div>
                 `).join('');
@@ -5541,8 +5673,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
                 const rows = (values || []).filter(r => r.slice(0, 4).some(v => v !== null && v !== '' && v !== undefined));
                 if (rows.length) {
-                    lashingPoints = rows.map(r => ({
+                    const prevSignLabels = lashingPoints.map(p => p.signLabels || ''); // preserved by row position — not part of the Excel schema
+                    lashingPoints = rows.map((r, i) => ({
                         id: lashingIdCounter++,
+                        signLabels: prevSignLabels[i] || '',
                         swl: parseFloat(r[0]) || 0,
                         qty: parseFloat(r[1]) || 0,
                         dx: parseFloat(r[2]) || 0,
@@ -8120,6 +8254,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 xs.push((parseFloat(c.x) || 0) * 1000);
                 ys.push((parseFloat(c.y) || 0) * 1000);
             });
+            // Lashing chain cargo-side endpoints — computed once here
+            // so the plan view auto-scales to keep every chain in view
+            // (a chain's cargo end can land outside the deck rectangle
+            // itself), then reused below instead of recomputing.
+            const lashingChainSegmentsTop = computeLashingChainSegments();
+            lashingChainSegmentsTop.forEach(seg => { xs.push(seg.endX); ys.push(seg.endY); });
             xs.push(0); ys.push(0);
             const rawMinX = Math.min(...xs), rawMaxX = Math.max(...xs);
             const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
@@ -8345,16 +8485,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // dashed border.
             const allLashingSigns = computeAllLashingSigns();
             let lashingSignsSvg = '';
-            allLashingSigns.forEach(({ positions }) => {
-                positions.forEach(p => {
-                    const cx = sx(p.xWorld), cy = sy(p.yWorld);
-                    const labelDy = p.side === 'right' ? -7 : 12;
+            allLashingSigns.forEach(({ points }) => {
+                const dots = groupLashingPointsByScreenPos(points, p => sx(p.xWorld), p => sy(p.yWorld));
+                dots.forEach(d => {
+                    const labelDy = d.side === 'right' ? -7 : 12;
                     lashingSignsSvg += `<g>` +
-                        `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.8"/>` +
-                        `<text x="${cx.toFixed(1)}" y="${(cy + labelDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${p.label}</text>` +
-                        `<title>${p.label} — lashing point sign (${p.side} side)</title>` +
+                        `<circle cx="${d.cx.toFixed(1)}" cy="${d.cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.8"/>` +
+                        `<text x="${d.cx.toFixed(1)}" y="${(d.cy + labelDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${d.text}</text>` +
+                        `<title>${d.text} — lashing point sign (${d.side} side)</title>` +
                         `</g>`;
                 });
+            });
+
+            // ---- Lashing CHAINS — one diagonal line per L# point per
+            // type, from that point out to its cargo attachment (see
+            // computeLashingChainSegments above); endpoint dot marks
+            // the cargo-side attachment. Colored per lashing TYPE.
+            let lashingChainSvg = '';
+            lashingChainSegmentsTop.forEach(seg => {
+                const color = lashingChainColor(seg.typeIndex);
+                const x1 = sx(seg.startX).toFixed(1), y1 = sy(seg.startY).toFixed(1);
+                const x2 = sx(seg.endX).toFixed(1), y2 = sy(seg.endY).toFixed(1);
+                lashingChainSvg += `<g>` +
+                    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.4" opacity="0.85"/>` +
+                    `<circle cx="${x2}" cy="${y2}" r="2.4" fill="${color}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.6"/>` +
+                    `<title>Lashing type ${seg.typeIndex + 1} — ${escapeHtml(seg.label)} to cargo attachment</title>` +
+                    `</g>`;
             });
 
             // Header/Dbar accessory block(s) (plan view) — see
@@ -8799,7 +8955,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${lashingSignsSvg}
+                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${lashingSignsSvg}${lashingChainSvg}
                 <text x="${svgW / 2}" y="${svgH + 14}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
@@ -8820,7 +8976,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // X mapping (offsetX + (x - minX) * scale) and canvas
                 // width, so axle positions line up vertically between
                 // the two stacked drawings.
-                minX, offsetX, padL, padR, plotW, svgW, lashingSigns: allLashingSigns
+                minX, offsetX, padL, padR, plotW, svgW, lashingSigns: allLashingSigns, lashingChainSegments: lashingChainSegmentsTop
             };
         }
 
@@ -8847,6 +9003,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Y-scale (width) — only the shared Z axis has to match between
         // the two for the projection to line up. ----
         function renderTrailerGenElevationCombined(rows, topView) {
+            // Lashing chains — reuse the top view's own segment list
+            // when available (guarantees the two never disagree),
+            // else recompute (e.g. if this is ever called standalone).
+            const lashingChainSegmentsElev = (topView && topView.lashingChainSegments) || computeLashingChainSegments();
             // padT reserves, ABOVE the front-view border itself, a small
             // header band (TG_FRONT_DIM_HEADER_H) for the relocated
             // "left deck -> cargo -> right deck" X chain + standalone
@@ -8942,7 +9102,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // necessarily line up) — not just the fixed 260mm clearance
             // used for wheels/labels alone.
             const cargoMaxHeightAboveDeckMm = cargoBoxZ.reduce((m, bz) => Math.max(m, bz.topWorldZ - deckTopWorldZ, bz.cogWorldZ - deckTopWorldZ), 0);
-            const zSpanMm = tgZTrailerHeightMm + Math.max(260, cargoMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
+            const lashingChainMaxHeightAboveDeckMm = lashingChainSegmentsElev.reduce((m, s) => Math.max(m, s.endZ - deckTopWorldZ), 0);
+            const zSpanMm = tgZTrailerHeightMm + Math.max(260, cargoMaxHeightAboveDeckMm + 100, lashingChainMaxHeightAboveDeckMm + 100); // ground(0) to just above deck top (or cargo top)
             // Reuse the plan (top) view's own X mapping wholesale — same
             // scale, same left offset, same canvas width — so an axle's
             // horizontal position in the side view lands at the exact
@@ -8971,6 +9132,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ys.push(tlYMm - halfWMm, tlYMm + halfWMm);
                 ys.push((parseFloat(c.y) || 0) * 1000);
             });
+            lashingChainSegmentsElev.forEach(seg => ys.push(seg.endY));
             ys.push(0);
             const rawMinY = Math.min(...ys), rawMaxY = Math.max(...ys);
             const marginY = Math.max((rawMaxY - rawMinY) * 0.10, 350);
@@ -9084,35 +9246,60 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // ---- Lashing point ("L#") signs — reuses the exact same
             // per-train sign set the top view just plotted (topView.
             // lashingSigns), so the two views can never disagree. Side
-            // view: one dot per X-station, right on the deck-top line,
-            // labeled with BOTH the Right and Left sign numbers that
-            // land at that X (the side view has no Y axis, so the two
-            // collapse onto one dot). Both end views: two dots (Right/
-            // Left), same for the Front and Rear panel since neither
-            // end view depends on X — each labeled with the full L#
-            // range for that side (e.g. "L1-L13" / "L14-L26").
+            // view: one dot per (X,Z) position — points sharing an X/Z
+            // spot (e.g. Right + Left at the same station, or Goldhofer's
+            // single-point-per-station) collapse onto one dot, joined
+            // "/"-labeled, via groupLashingPointsByScreenPos (the side
+            // view has no Y axis). Both end views: for a plain (non-
+            // SPMT) train, two dots (Right/Left range) same as before;
+            // for an SPMT bracket train, FOUR dots (Right-Top/Right-
+            // Bottom/Left-Top/Left-Bottom), each still labeled with the
+            // station RANGE for that side (not spelling out every A/B/
+            // C/D — the Top/Bottom split is already shown by the dot's
+            // own vertical position) since a train's end view is the
+            // same for the Front and Rear panel (a width cross-section
+            // doesn't depend on which end it's taken from).
             const lashingSigns = (topView && topView.lashingSigns) || [];
             let lashingElevSvg = '';
-            const deckTopSideY = sz(deckTopWorldZ);
-            const deckTopEndY = szEnd(deckTopWorldZ);
+            const deckTopSideY = sz(tgZTrailerHeightMm);
+            const deckTopEndY = szEnd(tgZTrailerHeightMm);
+            const deckBotEndY = szEnd(tgZTrailerHeightMm - SPMT_LASHING_BRACKET.topBottomSpacing);
             const lashingSignDot = (cx, cy, txt) =>
                 `<g><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.8"/>` +
                 `<text x="${cx.toFixed(1)}" y="${(cy - 7).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${escapeHtml(txt)}</text></g>`;
-            lashingSigns.forEach(({ train, n, stations }) => {
-                stations.forEach(st => {
-                    lashingElevSvg += lashingSignDot(sx(st.xWorld), deckTopSideY, `${st.rightLabel}/${st.leftLabel}`);
-                });
+            lashingSigns.forEach(({ train, n, isSpmtBracket, points }) => {
+                const sideDots = groupLashingPointsByScreenPos(points, p => sx(p.xWorld), p => sz(p.zWorld));
+                sideDots.forEach(d => { lashingElevSvg += lashingSignDot(d.cx, d.cy, d.text); });
                 if (n <= 0) return;
                 const oy = parseFloat(train.y) || 0;
                 const rightRange = lashingSideRangeLabel(n, 'right');
                 const leftRange = lashingSideRangeLabel(n, 'left');
-                // Both end views show the same Right/Left dots (a width
-                // cross-section doesn't depend on which end it's taken
-                // from) — sy1 for the Front panel, sy2 for the Rear panel.
-                lashingElevSvg += lashingSignDot(sy1(oy), deckTopEndY, rightRange);
-                lashingElevSvg += lashingSignDot(sy1(oy + train.deckWidth), deckTopEndY, leftRange);
-                lashingElevSvg += lashingSignDot(sy2(oy), deckTopEndY, rightRange);
-                lashingElevSvg += lashingSignDot(sy2(oy + train.deckWidth), deckTopEndY, leftRange);
+                const endRows = isSpmtBracket ? [deckTopEndY, deckBotEndY] : [deckTopEndY];
+                endRows.forEach(endY => {
+                    lashingElevSvg += lashingSignDot(sy1(oy), endY, rightRange);
+                    lashingElevSvg += lashingSignDot(sy1(oy + train.deckWidth), endY, leftRange);
+                    lashingElevSvg += lashingSignDot(sy2(oy), endY, rightRange);
+                    lashingElevSvg += lashingSignDot(sy2(oy + train.deckWidth), endY, leftRange);
+                });
+            });
+
+            // ---- Lashing CHAINS — side view shows X-Z only (one line
+            // per chain); each end view shows Y-Z, drawn on BOTH the
+            // left panel (sy1) and the mirrored right panel (sy2), same
+            // as the L# signs just above. Colored per lashing TYPE —
+            // see computeLashingChainSegments/lashingChainColor.
+            lashingChainSegmentsElev.forEach(seg => {
+                const color = lashingChainColor(seg.typeIndex);
+                const sX1 = sx(seg.startX), sZ1 = sz(seg.startZ);
+                const sX2 = sx(seg.endX), sZ2 = sz(seg.endZ);
+                lashingElevSvg += `<line x1="${sX1.toFixed(1)}" y1="${sZ1.toFixed(1)}" x2="${sX2.toFixed(1)}" y2="${sZ2.toFixed(1)}" stroke="${color}" stroke-width="1.2" opacity="0.85"/>` +
+                    `<circle cx="${sX2.toFixed(1)}" cy="${sZ2.toFixed(1)}" r="2.2" fill="${color}"/>`;
+                const eZ1 = szEnd(seg.startZ), eZ2 = szEnd(seg.endZ);
+                [sy1, sy2].forEach(syFn => {
+                    const eY1 = syFn(seg.startY), eY2 = syFn(seg.endY);
+                    lashingElevSvg += `<line x1="${eY1.toFixed(1)}" y1="${eZ1.toFixed(1)}" x2="${eY2.toFixed(1)}" y2="${eZ2.toFixed(1)}" stroke="${color}" stroke-width="1.2" opacity="0.85"/>` +
+                        `<circle cx="${eY2.toFixed(1)}" cy="${eZ2.toFixed(1)}" r="2.2" fill="${color}"/>`;
+                });
             });
 
             // Text in this SVG is sized in local viewBox units, which get
@@ -10650,6 +10837,21 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     edges.position.copy(mesh.position);
                     world3dGroupTG.add(edges);
                 });
+            });
+
+            // ---- Lashing CHAINS — one 3D line per L# point per type,
+            // from that point (world mm) out to its cargo attachment —
+            // see computeLashingChainSegments (shared with the 2D
+            // views, so this can never disagree with them). Colored
+            // per lashing TYPE via lashingChainColor.
+            computeLashingChainSegments().forEach(seg => {
+                const hex = tg3dResolveColor(lashingChainColor(seg.typeIndex), '#ef4444');
+                const p1 = toV(seg.startX, seg.startZ, seg.startY);
+                const p2 = toV(seg.endX, seg.endZ, seg.endY);
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+                const lineMat = new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity: 0.9 });
+                world3dGroupTG.add(new THREE.Line(lineGeo, lineMat));
+                extend(seg.endX, seg.endY, seg.endZ);
             });
 
             if (showCog) {
