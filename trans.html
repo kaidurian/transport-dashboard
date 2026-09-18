@@ -770,7 +770,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.116)</h1>
+            <h1>🚂 Transport Dashboard (Rev.117)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1007,26 +1007,31 @@
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgLashingHelpPanel">
-                            Sea-fastening lashing point list — one row/group per lashing point, matching the
-                            reference workbook <strong>"Lashing calculation"</strong> sheet (<strong>A3:F20</strong>,
-                            up to 18 points). Per point: <strong>SWL</strong> (Safe Working Load of one
-                            lashing/chain, mTe), <strong>QTY</strong> (number of identical lashings at this
-                            point), and <strong>dx / dy / dz</strong> (mm — offset from the cargo attachment
-                            point to the deck/lashing-eye anchor point). <strong>Length</strong>,
-                            <strong>alfa</strong> (angle off horizontal), and <strong>beta</strong> (plan angle
-                            off the longitudinal axis) are computed live from dx/dy/dz, not entered by hand —
-                            🔒 read-only, and provisional: the reference workbook's own angle formulas are
-                            blank, so this dashboard's convention hasn't been cross-checked against it yet.
-                            This card is <strong>local-only for now</strong> — no Excel sync, and no
-                            capacity / Unity Check columns yet (those need the angle convention confirmed,
-                            plus how the Dynamic Load / 3 Group required-force block on the same sheet maps
-                            to this dashboard's G1-G3 hydraulic groups). Both come next.
+                            Sea-fastening lashing TYPE list — one row/group per lashing type, matching the
+                            reference workbook <strong>"Lashing calculation"</strong> sheet
+                            (<strong>A18:F41</strong>, up to 24 types). Per type: <strong>SWL</strong> (Safe
+                            Working Load of one lashing/chain of this type, mTe), <strong>QTY</strong>
+                            (number of identical lashings of this type — also the number of <strong>L#</strong>
+                            signs of this type shown in the 2D top/front/end views; the sum of QTY across
+                            every type below equals the total number of L# signs), and
+                            <strong>dx / dy / dz</strong> (mm — offset from the cargo attachment point to the
+                            deck/lashing-eye anchor point). <strong>Length</strong>, <strong>alfa</strong>,
+                            <strong>beta</strong>, and the capacity / Unity Check columns are genuine Excel
+                            formulas in the reference sheet now — see the read-only
+                            <strong>Lashing calculation table</strong> under 🚚 Transport Data w/ CoG Env for
+                            those. Synced with Excel: pulls <strong>B18:F41</strong> (column A's "No." is
+                            Excel's own auto-numbering formula, never written here), pushes the same range on
+                            every edit.
                         </p>
-                        <div id="tgLashingList"><!-- Lashing point group rows rendered by JS --></div>
+                        <div id="tgLashingList"><!-- Lashing type group rows rendered by JS --></div>
                         <div class="tg-group-summary" id="tgLashingTotals"></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-group-btn" title="Add another lashing point (up to 18 — Excel 'Lashing calculation'!A3:F20)"
-                                    onclick="addLashingPoint()">+ Add Lashing Point</button>
+                            <button type="button" class="tg-add-group-btn" title="Add another lashing type (up to 24 — Excel 'Lashing calculation'!A18:F41)"
+                                    onclick="addLashingPoint()">+ Add Lashing Type</button>
+                            <button type="button" class="tg-add-train-btn" title="Pull SWL/QTY/dx/dy/dz from Excel 'Lashing calculation'!B18:F41"
+                                    onclick="pullLashingFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" title="Push SWL/QTY/dx/dy/dz to Excel 'Lashing calculation'!B18:F41"
+                                    onclick="pushLashingToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
                 </div>
@@ -1240,6 +1245,26 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull all 4 TRANSPORT TABLE LC1-4 tables from Excel 'Drawing_table_LC'"
                                     onclick="pullAllTransportLcTables()">⇩ Refresh All from Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-cogenv-bg" id="tgLashingCalcCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">⚓ Lashing calculation table</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgLashingCalcHelpToggleBtn" onclick="toggleTgLashingCalcHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgLashingCalcHelpPanel">
+                            Read-only mirror of Excel <strong>"Lashing calculation"</strong>!<strong>A17:O43</strong>
+                            — the header row, all 24 lashing-type rows (SWL/QTY/dx/dy/dz plus the
+                            Excel-computed Length/alfa/beta and the Eff./Long./Trans./Vertical capacity
+                            columns), the Total row, and the Unity Check row. Pull-only, never pushed — the
+                            ⚓ Lashing card above is what writes SWL/QTY/dx/dy/dz back to B18:F41.
+                        </p>
+                        <div id="tgLashingCalcTable" class="tg-drawing-table-wrap"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the full table from Excel 'Lashing calculation'!A17:O43"
+                                    onclick="pullLashingCalcTableFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
 
@@ -1688,6 +1713,8 @@
                     await pullLoadPerAxleFromExcel();
                     await pullDrawingTableFromExcel({ silent: true });
                     await pullCogEnvSummaryFromExcel({ silent: true }); // independent pull — see that function's own comment for why this deliberately never touches tgCogEnvComputed/the 📊 CoG Envelope Table
+                    await pullLashingFromExcel({ silent: true });
+                    await pullLashingCalcTableFromExcel({ silent: true });
                 }
                 renderTrailerGenPreview();
             } catch (e) {
@@ -2438,6 +2465,24 @@
             const m = /LC(\d)/i.exec(name || '');
             return m ? parseInt(m[1], 10) : null;
         }
+
+        // ---- Lashing calculation sheet — "Lashing calculation"!A17:O43.
+        // Row 17 is the header, rows 18-41 (24 rows) are the lashing
+        // point data (No./SWL/QTY/dx/dy/dz entered — cols A:F — length/
+        // alfa/beta/capacity cols G:O are Excel-computed formulas), row
+        // 42 is the Total row, row 43 is the Unity Check row. Column A
+        // ("No.") is an Excel formula (=A{prev}+1, seeded 1 at A18) —
+        // never written by this dashboard, only read; each lashing point
+        // "type" card is numbered by its position in the list instead.
+        const LASHING_SHEET_NAME = "Lashing calculation";
+        const LASHING_HEADER_ROW = 17;
+        const LASHING_DATA_START_ROW = 18;
+        const LASHING_DATA_END_ROW = 41; // 24 rows max (18-41)
+        const LASHING_TOTAL_ROW = 42;
+        const LASHING_UNITY_ROW = 43;
+        const LASHING_INPUT_RANGE = `B${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`; // SWL/QTY/dx/dy/dz — column A left alone (Excel's own formula)
+        const LASHING_FULL_TABLE_RANGE = `A${LASHING_HEADER_ROW}:O${LASHING_UNITY_ROW}`; // header + 24 data rows + Total + Unity Check — read-only mirror
+        let tgLashingCalcRows = []; // raw 2D array pulled from LASHING_FULL_TABLE_RANGE, row-major
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
         // AZ34 = "LOAD DETAILS" header, BA34:BD34 = column headers
@@ -5272,29 +5317,35 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
         }
 
-        // ---- Lashing — sea-fastening lashing point list, one "group
-        // row" per lashing point (same visual pattern as Axle groups
+        // ---- Lashing — sea-fastening lashing TYPE list, one "group
+        // row" per lashing type (same visual pattern as Axle groups
         // above: tg-group-row / tg-group-field-grid / tg-remove-group).
         // Reproduces the reference workbook "Lashing calculation" sheet
-        // input columns A:F (No./SWL/QTY/dx/dy/dz, rows 3-20, 18 points
-        // max) — local-only for now, no Excel sync yet.
-        // Length/alfa/beta (workbook G:H:I) are computed live from
-        // dx/dy/dz rather than entered — see calcLashingGeometry's own
-        // comment for the angle convention (provisional: the
-        // reference workbook's own G:I formulas are blank/missing, so
-        // this hasn't been cross-checked against it yet). Capacity
-        // columns J:O and the Unity Check (J22) are NOT implemented
-        // yet — that needs the angle convention confirmed first, plus
-        // the Dynamic Load / 3 Group required-force side of the sheet
-        // (rows 37-45), which likely maps to this dashboard's existing
-        // G1-G3 hydraulic groups.
+        // input columns A:F (No./SWL/QTY/dx/dy/dz, rows 18-41, 24 types
+        // max) and is now LIVE-SYNCED with Excel (pullLashingFromExcel/
+        // pushLashingToExcel) — column A ("No.") is Excel's own
+        // =A{prev}+1 formula and is never written here, each card is
+        // just numbered "Lashing type{n}" by its position in the list.
+        // Length/alfa/beta/capacity (workbook G:O) are NOT computed
+        // locally any more — they're genuine Excel formulas now (see
+        // the uploaded reference workbook), so they're shown read-only
+        // straight from Excel in the 🚚 Transport Data w/ CoG Env
+        // "Lashing calculation table" (tgLashingCalcRows /
+        // pullLashingCalcTableFromExcel) instead of being duplicated/
+        // reapproximated here.
+        // QTY is also the number of identical physical lashing points
+        // of this type — it drives how many "L#" signs of this type are
+        // placed in the 2D top/front/end views (see the lashing-sign
+        // placement code near renderTrailerGenPreview); the total sign
+        // count across every type below should sum to the total number
+        // of L# signs shown in the drawing.
         let lashingIdCounter = 1;
-        const LASHING_MAX_POINTS = 18; // Excel 'Lashing calculation'!A3:F20
+        const LASHING_MAX_POINTS = LASHING_DATA_END_ROW - LASHING_DATA_START_ROW + 1; // 24 — Excel 'Lashing calculation'!A18:F41
         function defaultLashingPoint(index) {
             return {
                 id: lashingIdCounter++,
                 swl: 5,   // Safe Working Load of one lashing/chain at this point, mTe
-                qty: 2,   // number of identical lashings at this point
+                qty: 2,   // number of identical lashings of this type (= number of L# signs of this type in the 2D drawing)
                 dx: 0,    // mm — X offset, cargo attachment point to deck/lashing-eye anchor
                 dy: 0,    // mm — Y offset
                 dz: 400   // mm — Z offset
@@ -5302,27 +5353,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
         let lashingPoints = [];
 
-        // Pure geometry from dx/dy/dz (mm): length is the straight-line
-        // lashing length; alfa is the angle off horizontal (0° = flat
-        // along the deck, 90° = straight up); beta is the plan-view
-        // angle off the longitudinal (X) axis. This is this dashboard's
-        // OWN convention for now — the reference workbook's G:I columns
-        // have no formulas to copy, so treat alfa/beta as provisional
-        // until confirmed against a filled-in reference example.
-        function calcLashingGeometry(dx, dy, dz) {
-            dx = Number.isFinite(dx) ? dx : 0;
-            dy = Number.isFinite(dy) ? dy : 0;
-            dz = Number.isFinite(dz) ? dz : 0;
-            const horiz = Math.sqrt(dx * dx + dy * dy);
-            const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            const alfa = (horiz > 0 || dz !== 0) ? Math.atan2(Math.abs(dz), horiz) * 180 / Math.PI : 0;
-            const beta = (dx !== 0 || dy !== 0) ? Math.atan2(Math.abs(dy), Math.abs(dx)) * 180 / Math.PI : 0;
-            return { length, alfa, beta };
-        }
-
         function addLashingPoint() {
             if (lashingPoints.length >= LASHING_MAX_POINTS) {
-                alert(`Only ${LASHING_MAX_POINTS} lashing points are supported (Excel 'Lashing calculation'!A3:F20 has ${LASHING_MAX_POINTS} rows).`);
+                alert(`Only ${LASHING_MAX_POINTS} lashing types are supported (Excel 'Lashing calculation'!A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW} has ${LASHING_MAX_POINTS} rows).`);
                 return;
             }
             lashingPoints.push(defaultLashingPoint(lashingPoints.length + 1));
@@ -5341,30 +5374,30 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const v = parseFloat(rawValue);
             point[field] = Number.isFinite(v) ? v : 0;
             renderLashingList();
+            renderTrailerGenPreview(); // L# sign count/placement depends on QTY
+            scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
         }
 
         function renderLashingList() {
             const el = document.getElementById('tgLashingList');
             if (!el) return;
-            el.innerHTML = lashingPoints.map((point, idx) => {
-                const geo = calcLashingGeometry(point.dx, point.dy, point.dz);
-                return `
+            el.innerHTML = lashingPoints.map((point, idx) => `
                 <div class="tg-group-row">
                     <div class="tg-group-row-header">
-                        <strong>⚓ Lashing #${idx + 1}</strong>
-                        <button type="button" class="tg-remove-group" title="Remove lashing point"
+                        <strong>⚓ Lashing type${idx + 1}</strong>
+                        <button type="button" class="tg-remove-group" title="Remove lashing type"
                                 onclick="removeLashingPoint(${point.id})"
                                 ${lashingPoints.length <= 1 ? 'disabled' : ''}>✕</button>
                     </div>
                     <div class="tg-group-field-grid">
                         <div class="tg-group-field">
                             <label>SWL (mTe)</label>
-                            <input type="number" step="any" min="0" value="${point.swl}" title="Safe Working Load of one lashing/chain at this point"
+                            <input type="number" step="any" min="0" value="${point.swl}" title="Safe Working Load of one lashing/chain of this type"
                                    onchange="updateLashingField(${point.id}, 'swl', this.value)">
                         </div>
                         <div class="tg-group-field">
                             <label>QTY</label>
-                            <input type="number" step="1" min="1" value="${point.qty}" title="Number of identical lashings at this point"
+                            <input type="number" step="1" min="1" value="${point.qty}" title="Number of identical lashings of this type — also the number of L# signs of this type shown in the 2D drawing; the sum of QTY across every type below equals the total number of L# signs"
                                    onchange="updateLashingField(${point.id}, 'qty', this.value)">
                         </div>
                         <div class="tg-group-field">
@@ -5382,31 +5415,136 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             <input type="number" step="any" value="${point.dz}" title="Z offset, cargo attachment point to deck/lashing-eye anchor"
                                    onchange="updateLashingField(${point.id}, 'dz', this.value)">
                         </div>
-                        <div class="tg-group-field">
-                            <label title="Computed from dx/dy/dz — not editable">📐 Length (mm)</label>
-                            <input type="number" value="${geo.length.toFixed(0)}" readonly class="tg-group-field-readonly-input" title="sqrt(dx²+dy²+dz²) — read-only">
-                        </div>
-                        <div class="tg-group-field">
-                            <label title="Computed from dx/dy/dz — not editable, provisional convention">📐 alfa (deg)</label>
-                            <input type="number" value="${geo.alfa.toFixed(1)}" readonly class="tg-group-field-readonly-input" title="Angle from horizontal — read-only, provisional convention">
-                        </div>
-                        <div class="tg-group-field">
-                            <label title="Computed from dx/dy/dz — not editable, provisional convention">📐 beta (deg)</label>
-                            <input type="number" value="${geo.beta.toFixed(1)}" readonly class="tg-group-field-readonly-input" title="Plan angle from longitudinal axis — read-only, provisional convention">
-                        </div>
                     </div>
                     <div class="tg-group-summary">
-                        ${point.qty} × SWL ${point.swl} mTe · length ${geo.length.toFixed(0)} mm · alfa ${geo.alfa.toFixed(1)}° · beta ${geo.beta.toFixed(1)}°
+                        ${point.qty} × SWL ${point.swl} mTe
                     </div>
                 </div>
-                `;
-            }).join('');
+                `).join('');
 
             const totalPoints = lashingPoints.reduce((s, p) => s + (parseFloat(p.qty) || 0), 0);
             const totalSwl = lashingPoints.reduce((s, p) => s + (parseFloat(p.qty) || 0) * (parseFloat(p.swl) || 0), 0);
             const totalsEl = document.getElementById('tgLashingTotals');
             if (totalsEl) {
-                totalsEl.textContent = `${lashingPoints.length} lashing point(s) · ${totalPoints} lashing(s) total · ${totalSwl.toFixed(1)} mTe combined SWL — capacity/Unity Check not yet computed, see help.`;
+                totalsEl.textContent = `${lashingPoints.length} lashing type(s) · ${totalPoints} lashing point(s) total (= total L# signs in the 2D drawing) · ${totalSwl.toFixed(1)} mTe combined SWL — see 🚚 Transport Data w/ CoG Env → Lashing calculation table for length/alfa/beta/capacity/Unity Check.`;
+            }
+        }
+
+        // ---- Lashing Excel sync — pull/push A:F (No./SWL/QTY/dx/dy/dz).
+        // Column A ("No.") is Excel's own auto-increment formula and is
+        // NEVER written here — only read as a sanity check for row
+        // count on pull. Follows the same silent-pull/scheduleAutoPush
+        // pattern as Horizontal Loads above.
+        async function pullLashingFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Lashing data.');
+                return;
+            }
+            try {
+                let values = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
+                    const range = sheet.getRange(LASHING_INPUT_RANGE);
+                    range.load('values');
+                    await context.sync();
+                    values = range.values;
+                });
+                const rows = (values || []).filter(r => r.slice(0, 4).some(v => v !== null && v !== '' && v !== undefined));
+                if (rows.length) {
+                    lashingPoints = rows.map(r => ({
+                        id: lashingIdCounter++,
+                        swl: parseFloat(r[0]) || 0,
+                        qty: parseFloat(r[1]) || 0,
+                        dx: parseFloat(r[2]) || 0,
+                        dy: parseFloat(r[3]) || 0,
+                        dz: parseFloat(r[4]) || 0
+                    }));
+                    renderLashingList();
+                    renderTrailerGenPreview();
+                }
+                if (!silent) logMsg(`↺ Pulled Lashing types from '${LASHING_SHEET_NAME}'!${LASHING_INPUT_RANGE}.`);
+            } catch (e) {
+                console.warn(`Could not read '${LASHING_SHEET_NAME}' sheet (${LASHING_INPUT_RANGE})`, e);
+                if (!silent) alert(`Could not read sheet "${LASHING_SHEET_NAME}". Make sure it exists.`);
+            }
+        }
+        async function pushLashingToExcel(opts) {
+            const silent = !!(opts && opts.silent);
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push Lashing data.');
+                return;
+            }
+            try {
+                const rows = [];
+                for (let i = 0; i < LASHING_MAX_POINTS; i++) {
+                    const p = lashingPoints[i];
+                    rows.push(p ? [p.swl, p.qty, p.dx, p.dy, p.dz] : [null, null, null, null, null]);
+                }
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
+                    sheet.getRange(LASHING_INPUT_RANGE).values = rows;
+                    await context.sync();
+                });
+                if (!silent) logMsg(`📤 Pushed Lashing types to '${LASHING_SHEET_NAME}'!${LASHING_INPUT_RANGE}.`);
+            } catch (e) {
+                console.warn(`Could not push Lashing types to '${LASHING_SHEET_NAME}' (${LASHING_INPUT_RANGE})`, e);
+                if (!silent) alert(`Could not push to sheet "${LASHING_SHEET_NAME}". Make sure it exists and isn't protected.`);
+            }
+        }
+
+        // ---- 🚚 Transport Data w/ CoG Env — Lashing calculation table:
+        // a read-only mirror of 'Lashing calculation'!A17:O43 (header +
+        // 24 data rows + Total row 42 + Unity Check row 43), including
+        // the Excel-computed length/alfa/beta/capacity columns G:O.
+        // Pull-only, exactly like 📋 Drawing Table — nothing here is
+        // ever pushed; column A:F is what pushLashingToExcel() writes,
+        // but this table always re-reads the live formula results.
+        function buildLashingCalcTableHtml(rows) {
+            const fmt = v => {
+                if (v === null || v === undefined || v === '') return '';
+                if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+                return escapeHtml(String(v));
+            };
+            let html = '<table class="tg-drawing-table">';
+            rows.forEach((row, i) => {
+                const excelRow = LASHING_HEADER_ROW + i;
+                const isBold = excelRow === LASHING_HEADER_ROW || excelRow === LASHING_TOTAL_ROW || excelRow === LASHING_UNITY_ROW;
+                html += `<tr${isBold ? ' class="tg-dt-bold"' : ''}>${row.map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
+            });
+            html += '</table>';
+            return html;
+        }
+        function renderTgLashingCalcTable() {
+            const el = document.getElementById('tgLashingCalcTable');
+            if (!el) return;
+            if (!tgLashingCalcRows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${LASHING_SHEET_NAME}'!${LASHING_FULL_TABLE_RANGE}.</div>`;
+                return;
+            }
+            el.innerHTML = buildLashingCalcTableHtml(tgLashingCalcRows);
+        }
+        async function pullLashingCalcTableFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Lashing calculation table.');
+                return;
+            }
+            try {
+                let values = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
+                    const range = sheet.getRange(LASHING_FULL_TABLE_RANGE);
+                    range.load('values');
+                    await context.sync();
+                    values = range.values;
+                });
+                tgLashingCalcRows = values || [];
+                renderTgLashingCalcTable();
+                if (!silent) logMsg(`↺ Pulled Lashing calculation table from '${LASHING_SHEET_NAME}'!${LASHING_FULL_TABLE_RANGE}.`);
+            } catch (e) {
+                console.warn(`Could not read '${LASHING_SHEET_NAME}' sheet (${LASHING_FULL_TABLE_RANGE})`, e);
+                if (!silent) alert(`Could not read sheet "${LASHING_SHEET_NAME}". Make sure it exists.`);
             }
         }
 
@@ -5652,6 +5790,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function toggleTgTransportLcHelp() {
             const panel = document.getElementById('tgTransportLcHelpPanel');
             const btn = document.getElementById('tgTransportLcHelpToggleBtn');
+            if (!panel || !btn) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            btn.textContent = isOpen ? '✕' : '❓';
+        }
+        function toggleTgLashingCalcHelp() {
+            const panel = document.getElementById('tgLashingCalcHelpPanel');
+            const btn = document.getElementById('tgLashingCalcHelpToggleBtn');
             if (!panel || !btn) return;
             const isOpen = panel.classList.toggle('tg-help-open');
             btn.textContent = isOpen ? '✕' : '❓';
@@ -13085,6 +13230,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // is blank, per "Pull data when first load of side panel
                 // or refresh."
                 await pullCargoFromExcel({ silent: true });
+                await pullLashingFromExcel({ silent: true });
+                await pullLashingCalcTableFromExcel({ silent: true });
                 if (autoSyncEnabled) startAutoPullPolling();
             }
         }
