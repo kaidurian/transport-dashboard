@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+f<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -785,7 +785,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.122.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.122.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1756,7 +1756,22 @@
                     // pushed field with Excel's still-old value the
                     // moment focus leaves the input, well before the
                     // user gets to press "📤 Push to Excel".
-                    if (!lashingDirty) await pullLashingFromExcel({ silent: true });
+                    // Calls the UNWRAPPED impl (not pullLashingFromExcel)
+                    // deliberately — withBtnSyncIndicator flashes the
+                    // ⇩ Refresh button/card amber-then-green on every
+                    // completed call regardless of {silent:true}, which
+                    // for a background poll tick firing every
+                    // AUTO_PULL_POLL_MS meant the button/card flashed
+                    // green/orange continuously even with nothing to
+                    // show for it. The wrapped version (with its flash
+                    // feedback) is still used for the manual button
+                    // press and the one-time panel-open pull — only
+                    // this recurring poll call bypasses it, leaving the
+                    // steady tg-card-pending orange ring (set by
+                    // markLashingDirty when a field is actually edited)
+                    // as the only Lashing-card indicator during normal
+                    // background sync.
+                    if (!lashingDirty) await pullLashingFromExcelImpl({ silent: true });
                     await pullLashingCalcTableFromExcel({ silent: true });
                 }
                 renderTrailerGenPreview();
@@ -5719,7 +5734,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             el.innerHTML = lashingPoints.map((point, idx) => `
                 <div class="tg-group-row">
                     <div class="tg-group-row-header">
-                        <strong>⚓ Lashing #${idx + 1}</strong>
+                        <strong>⚓ Lashing No. ${idx + 1}</strong>
                         <button type="button" class="tg-remove-group" title="Remove lashing type"
                                 onclick="removeLashingPoint(${point.id})"
                                 ${lashingPoints.length <= 1 ? 'disabled' : ''}>✕</button>
