@@ -811,7 +811,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.123)</h1>
+            <h1>🚂 Transport Dashboard (Rev.124)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1126,6 +1126,10 @@
                                     📏 Show dimensions
                                 </label>
                                 <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tgShowLashingToggle" checked onchange="toggleTgShowLashing(this.checked)">
+                                    ⚓ Show lashing
+                                </label>
+                                <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgMagnifierToggle" onchange="toggleTgMagnifier(this.checked)">
                                     🔍 Magnifier
                                 </label>
@@ -1316,7 +1320,7 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-cogenv-bg" id="tgLashingCalcCard">
+                    <div class="tg-cargo-card tg-card-lashing" id="tgLashingCalcCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">⚓ Lashing calculation table</h2>
                             <button type="button" class="tg-help-btn" title="Help" id="tgLashingCalcHelpToggleBtn" onclick="toggleTgLashingCalcHelp()">❓</button>
@@ -8199,6 +8203,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTrailerGenPreview();
         }
 
+        // When true (default), the L# lashing point signs, station
+        // labels, and lashing chains are drawn in the 2D top/side/end
+        // views (see the lashingSignsSvg/lashingChainSvg/lashingElevSvg
+        // insertion points in renderTrailerGenPreview/
+        // renderTrailerGenElevationCombined). Purely a display toggle —
+        // it never changes the underlying lashingPoints data, so
+        // turning it back on shows exactly what was there before.
+        let tgShowLashing = true;
+
+        function toggleTgShowLashing(checked) {
+            tgShowLashing = checked;
+            renderTrailerGenPreview();
+        }
+
         // ============================================================
         // 🔍 MAGNIFIER — hover the preview to see a zoomed lens follow
         // the cursor. The lens content is a scaled clone of #tgPreview's
@@ -8843,33 +8861,54 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const dots = groupLashingPointsByScreenPos(points, p => sx(p.xWorld), p => sy(p.yWorld));
                 dots.forEach(d => {
                     const labelDy = d.side === 'right' ? -7 : 12;
-                    // SPMT: just the sub-letter(s) beside the dot (e.g.
-                    // "A" or "A/D") — the shared station number ("L5")
-                    // is drawn once below, in the stations loop further
-                    // down, instead of being repeated in every dot's own
-                    // label ("L5A"/"L5D") — that repetition was the
-                    // reported "very dense" SPMT clutter. Non-SPMT keeps
-                    // the original single full label per dot.
-                    const labelText = isSpmtBracket ? d.subText : d.text;
+                    // SPMT: no adjacent text at all — the per-station
+                    // 3-row label (No. / A/B / D/C, drawn once per
+                    // station just below) already carries every A/B/C/D
+                    // letter for both dots of that station, so a second
+                    // copy here would just be clutter (this is what the
+                    // "very dense" SPMT clutter feedback was about).
+                    // Non-SPMT keeps its own single full label per dot,
+                    // same as before.
+                    const labelText = isSpmtBracket ? '' : d.text;
                     const dotTokens = d.text.split('/');
                     const isActiveAssigned = dotTokens.some(t => activeSignTokens.has(t));
                     lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${d.text.replace(/'/g, "\\'")}')">` +
                         `<circle cx="${d.cx.toFixed(1)}" cy="${d.cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="${isActiveAssigned ? 'var(--accent-blue, #38bdf8)' : 'var(--tank-box-bg, #0b1220)'}" stroke-width="${isActiveAssigned ? '2' : '0.8'}"/>` +
-                        `<text x="${d.cx.toFixed(1)}" y="${(d.cy + labelDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${labelText}</text>` +
+                        `${labelText ? `<text x="${d.cx.toFixed(1)}" y="${(d.cy + labelDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${labelText}</text>` : ''}` +
                         `<title>${d.text} — lashing point sign (${d.side} side) — click to toggle for the active lashing type</title>` +
                         `</g>`;
                 });
-                // SPMT stations — one shared "L#" group label per
-                // station per side, placed further out (past the A/B/
-                // C/D letters above) so it reads as the station number
-                // for that whole bracket instead of repeating on every
-                // one of its 2 dots.
+                // SPMT stations — one shared 3-row label per station per
+                // side, placed past the dots above (row 1: station No.,
+                // e.g. "L5" — same position the old single-line label
+                // used, so this is a drop-in replacement, not an extra
+                // element; row 2: "A/B", the two TOP-plate points
+                // (Top-Front/Top-Rear); row 3: "D/C", the two BOTTOM-
+                // plate points (Bottom-Front/Bottom-Rear) — grouped by
+                // top/bottom rather than by the dots' own front/rear X
+                // position, since that's not visible to read off the
+                // dots themselves in a top view). Clicking the label
+                // toggles all 4 sub-points of that station at once.
                 if (isSpmtBracket && stations && stations.length) {
                     const oy = parseFloat(train.y) || 0;
                     stations.forEach(st => {
                         const gx = sx(st.xWorld).toFixed(1);
-                        lashingSignsSvg += `<text x="${gx}" y="${(sy(oy) - 16).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.rightLabel}</text>`;
-                        lashingSignsSvg += `<text x="${gx}" y="${(sy(oy + train.deckWidth) + 20).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.leftLabel}</text>`;
+                        const rightBaseY = sy(oy) - 16;
+                        const leftBaseY = sy(oy + train.deckWidth) + 20;
+                        const rightTarget = `${st.rightLabel}A/${st.rightLabel}B/${st.rightLabel}C/${st.rightLabel}D`;
+                        const leftTarget = `${st.leftLabel}A/${st.leftLabel}B/${st.leftLabel}C/${st.leftLabel}D`;
+                        lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${rightTarget}')">` +
+                            `<title>${st.rightLabel} (A/B/C/D) — click to toggle all 4 for the active lashing type</title>` +
+                            `<text x="${gx}" y="${rightBaseY.toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.rightLabel}</text>` +
+                            `<text x="${gx}" y="${(rightBaseY - 7).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">A/B</text>` +
+                            `<text x="${gx}" y="${(rightBaseY - 14).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">D/C</text>` +
+                            `</g>`;
+                        lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${leftTarget}')">` +
+                            `<title>${st.leftLabel} (A/B/C/D) — click to toggle all 4 for the active lashing type</title>` +
+                            `<text x="${gx}" y="${leftBaseY.toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.leftLabel}</text>` +
+                            `<text x="${gx}" y="${(leftBaseY + 7).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">A/B</text>` +
+                            `<text x="${gx}" y="${(leftBaseY + 14).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">D/C</text>` +
+                            `</g>`;
                     });
                 }
             });
@@ -9333,7 +9372,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${lashingSignsSvg}${lashingChainSvg}
+                ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}
                 <text x="${svgW / 2}" y="${svgH + 14}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
@@ -10650,7 +10689,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvgLeft}${stabTriSvg}${dimSvg}${lashingElevSvg}${endLabelsSvg}
+                ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvgLeft}${stabTriSvg}${dimSvg}${tgShowLashing ? lashingElevSvg : ''}${endLabelsSvg}
             </svg>`;
         }
 
@@ -13827,6 +13866,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 tgZTrailerHeightMm: tgZTrailerHeightMm,
                 tgShowGroupLabels: tgShowGroupLabels,
                 tgShowDimensions: tgShowDimensions,
+                tgShowLashing: tgShowLashing,
                 tgHLoads: tgHLoads,
                 // 📐 CoG Envelope card — local inputs (upSlope/downSlope,
                 // cargoRow) AND the pull-only dim/cog cells, so the card
@@ -13899,6 +13939,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     }
                     if (typeof state.tgShowGroupLabels === 'boolean') tgShowGroupLabels = state.tgShowGroupLabels;
                     if (typeof state.tgShowDimensions === 'boolean') tgShowDimensions = state.tgShowDimensions;
+                    if (typeof state.tgShowLashing === 'boolean') tgShowLashing = state.tgShowLashing;
                     if (state.tgHLoads && typeof state.tgHLoads === 'object') {
                         Object.keys(tgHLoads).forEach(key => {
                             const v = parseFloat(state.tgHLoads[key]);
