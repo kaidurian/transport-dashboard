@@ -811,7 +811,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.126)</h1>
+            <h1>🚂 Transport Dashboard (Rev.126.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1131,7 +1131,7 @@
                                 </label>
                                 <label class="tg-preview-toggle">
                                     Scale:
-                                    <select id="tgPreviewScaleSelect" onchange="setTgPreviewScale(this.value)" title="Renders the Top/Side/End drawings bigger on screen for long trailers — world scale and every dimension value stay exactly the same, only the on-screen size grows (scrolls if wider than the panel)">
+                                    <select id="tgPreviewScaleSelect" onchange="setTgPreviewScale(this.value)" title="Enlarges only the distances (deck/axle spacing, cargo positions, heights) in the Top/Side/End drawings for long trailers — dots, line thickness, labels and text stay at 1x size, and every dimension value stays the same (scrolls if wider than the panel)">
                                         <option value="1">1x</option>
                                         <option value="2">2x</option>
                                         <option value="4">4x</option>
@@ -8545,17 +8545,23 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
 
-        // ---- 2D preview on-screen scale (1x/2x/4x) — purely a display
-        // size control for very long trailers, NOT a world/dimension
-        // change: the Top/Side/End SVGs' own viewBox and internal mm
-        // scale (renderTrailerGenTopView/renderTrailerGenElevationCombined)
-        // are completely untouched, so every dimension value stays
-        // exactly what it always was. This only widens the CSS box the
-        // two width:100% SVGs render into (see tgPreviewScaleInner
-        // below) — 2x/4x that width makes each SVG render 2x/4x bigger
-        // on screen (same viewBox, more CSS px per viewBox unit), with
-        // #tgPreview's own existing `overflow: auto` providing the
-        // scrollbars for whatever no longer fits.
+        // ---- 2D preview distance scale (1x/2x/4x) — scales ONLY the
+        // real-world distances (deck/axle spacing, cargo positions,
+        // heights, wheel/deck sizes drawn to scale). Dots, line
+        // thickness, labels, text, arrows and every other fixed-size
+        // annotation stay at their 1x on-screen size. Dimension VALUES
+        // never change (they're computed from mm, not from pixels).
+        //
+        // How: renderTrailerGenTopView/renderTrailerGenElevationCombined
+        // take the multiplier and grow their plot area (plotW/plotH) —
+        // and therefore the mm→viewBox `scale` — by exactly that factor,
+        // while padL/padR/padT/padB, dimension tiers, marker sizes,
+        // stroke widths and font sizes stay in the same viewBox units as
+        // 1x. The SVG's CSS width is then grown by the same ratio as its
+        // viewBox (svgW / svgW at 1x), so one viewBox unit is still the
+        // same number of screen pixels as at 1x — that is what keeps
+        // every non-distance element at 1x on screen. #tgPreview's own
+        // existing `overflow: auto` provides the scrollbars.
         let tgPreviewScaleMult = 1;
         function setTgPreviewScale(val) {
             tgPreviewScaleMult = parseFloat(val) || 1;
@@ -8591,30 +8597,50 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // the same layout convention as a standard GA drawing (plan
             // above, elevation below with the end view projected off the
             // side view at a shared height scale).
-            const topResult = renderTrailerGenTopView(rows);
-            // Side view reuses the top view's own X mapping (scale +
-            // offset + canvas width) so every axle line's horizontal
-            // position sits directly below its position in the plan
-            // view above, instead of the elevation panel picking its
-            // own independent horizontal layout.
-            const elevResult = renderTrailerGenElevationCombined(rows, topResult);
-            const elevationHtml = elevResult.svg;
-            // Both SVGs render at width:100%, so each one's own declared
-            // viewBox width sets its px-per-mm on screen independently —
-            // if the elevation sheet needed extra room (end-view panels,
-            // cargo-height dimension stack, etc.) and grew past the plan
-            // view's fixed 680, the two would silently drift out of
-            // scale even though they share the exact same internal X
-            // mapping (see renderTrailerGenTopView/renderTrailerGenElevationCombined).
-            // Re-running the plan view widened to match — pass 2, same
-            // scale/offsetX/minX, only the outer canvas grows — is what
-            // keeps every trailer/cargo X lined up vertically between
-            // the two stacked drawings.
-            const topHtml = elevResult.svgW > topResult.svgW
-                ? renderTrailerGenTopView(rows, elevResult.svgW).svg
-                : topResult.svg;
+            // Builds the plan + elevation markup at a given distance
+            // multiplier. fontRefW (only passed for mult > 1) is the
+            // 1x canvas width, so the elevation's width-relative font
+            // sizes stay exactly what they are at 1x.
+            const buildPreviewViews = (mult, fontRefW) => {
+                const topResult = renderTrailerGenTopView(rows, 0, mult, fontRefW);
+                // Side view reuses the top view's own X mapping (scale +
+                // offset + canvas width) so every axle line's horizontal
+                // position sits directly below its position in the plan
+                // view above, instead of the elevation panel picking its
+                // own independent horizontal layout.
+                const elevResult = renderTrailerGenElevationCombined(rows, topResult);
+                // Both SVGs render at width:100%, so each one's own declared
+                // viewBox width sets its px-per-mm on screen independently —
+                // if the elevation sheet needed extra room (end-view panels,
+                // cargo-height dimension stack, etc.) and grew past the plan
+                // view's own canvas, the two would silently drift out of
+                // scale even though they share the exact same internal X
+                // mapping (see renderTrailerGenTopView/renderTrailerGenElevationCombined).
+                // Re-running the plan view widened to match — pass 2, same
+                // scale/offsetX/minX, only the outer canvas grows — is what
+                // keeps every trailer/cargo X lined up vertically between
+                // the two stacked drawings.
+                const topHtml = elevResult.svgW > topResult.svgW
+                    ? renderTrailerGenTopView(rows, elevResult.svgW, mult, fontRefW).svg
+                    : topResult.svg;
+                return { topHtml, elevationHtml: elevResult.svg, svgW: Math.max(topResult.svgW, elevResult.svgW) };
+            };
+            const scaleMult = Math.max(1, tgPreviewScaleMult || 1);
+            let views = buildPreviewViews(1);
+            // CSS width of the two SVGs relative to the panel: 100% at
+            // 1x; at 2x/4x grown by the same ratio as the viewBox, so a
+            // viewBox unit keeps its 1x pixel size (dots, strokes and
+            // text don't grow — only the mm→px distance scale does).
+            let widthPct = 100;
+            if (scaleMult > 1) {
+                const refSvgW = views.svgW;
+                views = buildPreviewViews(scaleMult, refSvgW);
+                widthPct = Math.max(100, (views.svgW / refSvgW) * 100);
+            }
+            const topHtml = views.topHtml;
+            const elevationHtml = views.elevationHtml;
             wrap.innerHTML = `
-                <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * 100}%; min-width:100%;">
+                <div id="tgPreviewScaleInner" style="width:${widthPct.toFixed(3)}%; min-width:100%;">
                     <div class="tg-view-section">${topHtml}</div>
                     <div class="tg-view-section">${elevationHtml}</div>
                 </div>
@@ -8646,7 +8672,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // ---- Top (plan) view — original live axle-line preview ----
         // Returns an SVG markup string (rather than writing to wrap
         // directly) so all three views can be stacked together.
-        function renderTrailerGenTopView(rows, forcedSvgW) {
+        // distMult (1/2/4): scales ONLY the plot area — i.e. the mm→viewBox
+        // `scale` — so real-world distances grow, while paddings, marker
+        // radii, stroke widths, font sizes and dimension tiers stay in the
+        // same viewBox units as 1x (see the preview-scale note above
+        // renderTrailerGenPreview). fontRefW is the 1x canvas width, passed
+        // through to the elevation view so its width-relative font sizes
+        // don't grow with the canvas either.
+        function renderTrailerGenTopView(rows, forcedSvgW, distMult, fontRefW) {
             // layoutSvgW drives every internal position (padL/plotW/
             // scale/offsetX/minX) and must NEVER change between passes,
             // or the elevation view (which reuses this exact mapping —
@@ -8657,7 +8690,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // caption) grows to match forcedSvgW when the elevation
             // view below needs more room than this plan view does —
             // see renderTrailerGenPreview's two-pass call.
-            const layoutSvgW = 680;
+            const baseSvgW = 680;   // 1x design width
+            const dMult = Math.max(1, distMult || 1);
             // padT/padB grow with the number of stacked dimension tiers so
             // those callouts never get clipped off the canvas. Dimensions
             // are now split into a FRONT stack (drawn above the assembly,
@@ -8670,9 +8704,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const dimTierHalf = Math.ceil(dimTierCount / 2);
             const padT = Math.max(34, 24 + dimTierHalf * 13);
             const padB0 = Math.max(30, 24 + dimTierHalf * 13);
-            const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30);
+            const svgH1 = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30);   // 1x canvas height
             const padL = 55, padR = 50, padB = padB0;
-            const plotW = layoutSvgW - padL - padR, plotH = svgH - padT - padB;
+            // Only the plot area (the part that holds real-world
+            // geometry) grows with dMult; pads stay fixed so labels,
+            // dimension tiers and the border keep their 1x spacing.
+            const plotW = (baseSvgW - padL - padR) * dMult, plotH = (svgH1 - padT - padB) * dMult;
+            const layoutSvgW = padL + plotW + padR;    // == 680 at 1x
+            const svgH = padT + plotH + padB;          // == svgH1 at 1x
 
             // Bounding box always includes the world origin (0,0) — so
             // the origin sign/arrows are always in view — plus every
@@ -9478,7 +9517,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // X mapping (offsetX + (x - minX) * scale) and canvas
                 // width, so axle positions line up vertically between
                 // the two stacked drawings.
-                minX, offsetX, padL, padR, plotW, svgW, lashingSigns: allLashingSigns, lashingChainSegments: lashingChainSegmentsTop
+                minX, offsetX, padL, padR, plotW, svgW, fontRefW, lashingSigns: allLashingSigns, lashingChainSegments: lashingChainSegmentsTop
             };
         }
 
@@ -9866,8 +9905,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // make text here read at the SAME on-screen size as the plan
             // view (regardless of how wide/narrow this true-scale drawing
             // ends up being), font sizes are scaled by this view's actual
-            // width relative to that 680 reference.
-            const fontScale = svgW / 680;
+            // width relative to that 680 reference. When the plan view
+            // was rendered at a distance multiplier > 1 it hands down the
+            // 1x canvas width (topView.fontRefW) — the canvas grew only to
+            // fit the enlarged distances, not to enlarge text — so the
+            // font sizes stay at their 1x on-screen size.
+            const fontScale = ((topView && topView.fontRefW) || svgW) / 680;
             const fLabel = (9 * fontScale).toFixed(2);   // matches plan view's deck-label / axis-label size
             const fDim = (8 * fontScale).toFixed(2);     // matches plan view's dimension-text size
 
