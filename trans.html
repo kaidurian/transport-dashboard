@@ -811,7 +811,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.124)</h1>
+            <h1>🚂 Transport Dashboard (Rev.125)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8538,13 +8538,27 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // above, elevation below with the end view projected off the
             // side view at a shared height scale).
             const topResult = renderTrailerGenTopView(rows);
-            const topHtml = topResult.svg;
             // Side view reuses the top view's own X mapping (scale +
             // offset + canvas width) so every axle line's horizontal
             // position sits directly below its position in the plan
             // view above, instead of the elevation panel picking its
             // own independent horizontal layout.
-            const elevationHtml = renderTrailerGenElevationCombined(rows, topResult);
+            const elevResult = renderTrailerGenElevationCombined(rows, topResult);
+            const elevationHtml = elevResult.svg;
+            // Both SVGs render at width:100%, so each one's own declared
+            // viewBox width sets its px-per-mm on screen independently —
+            // if the elevation sheet needed extra room (end-view panels,
+            // cargo-height dimension stack, etc.) and grew past the plan
+            // view's fixed 680, the two would silently drift out of
+            // scale even though they share the exact same internal X
+            // mapping (see renderTrailerGenTopView/renderTrailerGenElevationCombined).
+            // Re-running the plan view widened to match — pass 2, same
+            // scale/offsetX/minX, only the outer canvas grows — is what
+            // keeps every trailer/cargo X lined up vertically between
+            // the two stacked drawings.
+            const topHtml = elevResult.svgW > topResult.svgW
+                ? renderTrailerGenTopView(rows, elevResult.svgW).svg
+                : topResult.svg;
             wrap.innerHTML = `
                 <div class="tg-view-section">${topHtml}</div>
                 <div class="tg-view-section">${elevationHtml}</div>
@@ -8576,8 +8590,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // ---- Top (plan) view — original live axle-line preview ----
         // Returns an SVG markup string (rather than writing to wrap
         // directly) so all three views can be stacked together.
-        function renderTrailerGenTopView(rows) {
-            const svgW = 680;
+        function renderTrailerGenTopView(rows, forcedSvgW) {
+            // layoutSvgW drives every internal position (padL/plotW/
+            // scale/offsetX/minX) and must NEVER change between passes,
+            // or the elevation view (which reuses this exact mapping —
+            // see the return object below) would end up laid out
+            // against a different scale than what this function itself
+            // draws. Only the OUTER declared canvas width (svgW, used
+            // solely for the <svg viewBox> and the centered "Top View"
+            // caption) grows to match forcedSvgW when the elevation
+            // view below needs more room than this plan view does —
+            // see renderTrailerGenPreview's two-pass call.
+            const layoutSvgW = 680;
             // padT/padB grow with the number of stacked dimension tiers so
             // those callouts never get clipped off the canvas. Dimensions
             // are now split into a FRONT stack (drawn above the assembly,
@@ -8592,7 +8616,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const padB0 = Math.max(30, 24 + dimTierHalf * 13);
             const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30);
             const padL = 55, padR = 50, padB = padB0;
-            const plotW = svgW - padL - padR, plotH = svgH - padT - padB;
+            const plotW = layoutSvgW - padL - padR, plotH = svgH - padT - padB;
 
             // Bounding box always includes the world origin (0,0) — so
             // the origin sign/arrows are always in view — plus every
@@ -9362,6 +9386,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
             });
 
+            // Outer canvas only — never feeds back into plotW/scale/
+            // offsetX above, so widening it (pass 2) never shifts any
+            // already-computed position; it just adds blank margin
+            // past the (fixed-size) bordered plot box.
+            const svgW = Math.max(layoutSvgW, forcedSvgW || 0);
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH + 20}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -10685,12 +10714,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // a stability triangle's arm label is the deepest element).
             const svgH = Math.max(endGroundY + padB, captionY + 16);
 
-            return `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
+            const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX1 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 <rect x="${endOffsetX2 - 15}" y="${endPadT}" width="${endW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 ${groundSvg}${sideDecksSvg}${sideWheelsSvg}${endDecksSvg}${endWheelsSvg}${cargoElevSvg}${stabTriSvgLeft}${stabTriSvg}${dimSvg}${tgShowLashing ? lashingElevSvg : ''}${endLabelsSvg}
             </svg>`;
+            // svgW exposed so the caller can re-render the top (plan)
+            // view wider when this elevation sheet needed more room —
+            // see renderTrailerGenPreview's two-pass call — keeping
+            // both SVGs' viewBox widths identical is what keeps a
+            // trailer/cargo's on-screen X lined up between the two
+            // stacked, independently width:100%-stretched drawings.
+            return { svg: svgMarkup, svgW };
         }
 
         // ============================================================
