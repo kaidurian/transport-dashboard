@@ -764,13 +764,28 @@
             color: var(--text-main); cursor: pointer;
         }
         .tg-lc-push-btn:hover { border-color: var(--accent-blue, #38bdf8); }
+
+        /* ---- "Unsaved changes" indicator (Lashing card) ---- */
+        /* Steady (non-pulsing) amber outline — distinct from the
+           .tg-btn-syncing pulse (push in flight) and .tg-btn-flash-ok
+           blink (just settled). Set the moment a Lashing field is
+           edited/added/removed, since that card no longer auto-pushes
+           on change (see markLashingDirty/clearLashingDirty) — cleared
+           once "📤 Push to Excel" is actually pressed and succeeds. */
+        .tg-add-train-btn.tg-btn-pending {
+            border: 2px solid #eab308 !important;
+            box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.35);
+        }
+        .tg-card-pending {
+            box-shadow: inset 0 0 0 3px rgba(234, 179, 8, 0.55);
+        }
     </style>
 </head>
 <body>
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.120)</h1>
+            <h1>🚂 Transport Dashboard (Rev.121)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1021,8 +1036,10 @@
                             capacity / Unity Check columns are genuine Excel formulas in the reference sheet now
                             — see the read-only <strong>Lashing calculation table</strong> under 🚚 Transport
                             Data w/ CoG Env for those. Synced with Excel: pulls <strong>B18:F41</strong> (column
-                            A's "No." is Excel's own auto-numbering formula, never written here), pushes the same
-                            range on every edit.<br><br>
+                            A's "No." is Excel's own auto-numbering formula, never written here). Unlike the other
+                            cards, this one does <strong>not</strong> auto-push on every edit — fields turn amber the
+                            moment you change them and stay that way until you press "📤 Push to Excel" below, which
+                            also pulses amber while the push is in flight, then flashes green/red.<br><br>
                             <strong>L# signs (2D drawing):</strong> placed automatically from each train's own
                             deck length/width and type (Goldhofer/SPMT) — NOT from the rows above. First sign
                             1500&nbsp;mm (Goldhofer) / 700&nbsp;mm (SPMT) from the FRONT edge of the top deck,
@@ -1045,9 +1062,9 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-group-btn" title="Add another lashing type (up to 24 — Excel 'Lashing calculation'!A18:F41)"
                                     onclick="addLashingPoint()">+ Add Lashing Type</button>
-                            <button type="button" class="tg-add-train-btn" title="Pull SWL/QTY/dx/dy/dz from Excel 'Lashing calculation'!B18:F41"
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshLashingBtn" title="Pull SWL/QTY/dx/dy/dz from Excel 'Lashing calculation'!B18:F41"
                                     onclick="pullLashingFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" title="Push SWL/QTY/dx/dy/dz to Excel 'Lashing calculation'!B18:F41"
+                            <button type="button" class="tg-add-train-btn" id="tgPushLashingBtn" title="Push SWL/QTY/dx/dy/dz to Excel 'Lashing calculation'!B18:F41. Fields turn amber the moment you edit them until you press this — Lashing no longer pushes automatically on change."
                                     onclick="pushLashingToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
@@ -1730,7 +1747,14 @@
                     await pullLoadPerAxleFromExcel();
                     await pullDrawingTableFromExcel({ silent: true });
                     await pullCogEnvSummaryFromExcel({ silent: true }); // independent pull — see that function's own comment for why this deliberately never touches tgCogEnvComputed/the 📊 CoG Envelope Table
-                    await pullLashingFromExcel({ silent: true });
+                    // Skipped while lashingDirty — Lashing no longer
+                    // auto-pushes on edit (button-push-only, see
+                    // markLashingDirty), so a background pull here could
+                    // otherwise silently overwrite an edited-but-not-yet-
+                    // pushed field with Excel's still-old value the
+                    // moment focus leaves the input, well before the
+                    // user gets to press "📤 Push to Excel".
+                    if (!lashingDirty) await pullLashingFromExcel({ silent: true });
                     await pullLashingCalcTableFromExcel({ silent: true });
                 }
                 renderTrailerGenPreview();
@@ -2499,6 +2523,18 @@
         const LASHING_UNITY_ROW = 43;
         const LASHING_INPUT_RANGE = `B${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`; // SWL/QTY/dx/dy/dz — column A left alone (Excel's own formula)
         const LASHING_FULL_TABLE_RANGE = `A${LASHING_HEADER_ROW}:O${LASHING_UNITY_ROW}`; // header + 24 data rows + Total + Unity Check — read-only mirror
+        // Cross-check only — per KKai's literal cell reference — reads
+        // column A ("No.") over A16:A41 (one row above the coded header
+        // row 17 through the last data row 41) purely to compare its
+        // filled-cell count against the local lashing type card count
+        // below. Deliberately NOT used to resize lashingPoints or as
+        // the push/pull range itself: LASHING_INPUT_RANGE/
+        // LASHING_FULL_TABLE_RANGE above are what every Excel read/
+        // write actually uses, and those stay as originally coded
+        // (header row 17) until confirmed otherwise — see
+        // tgLashingExcelNoCount/pullLashingCountCheckFromExcel.
+        const LASHING_COUNT_CHECK_RANGE = "A16:A41";
+        let tgLashingExcelNoCount = null; // non-blank cell count in LASHING_COUNT_CHECK_RANGE, or null if never pulled
         let tgLashingCalcRows = []; // raw 2D array pulled from LASHING_FULL_TABLE_RANGE, row-major
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
@@ -5569,6 +5605,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
         let lashingPoints = [];
 
+        // ---- "Unsaved changes" tracking (Lashing card only) ----
+        // Every other card auto-pushes on change (scheduleAutoPush), so
+        // there's nothing to sit "unpushed". Lashing is now
+        // button-push-only (see addLashingPoint/removeLashingPoint/
+        // updateLashingField below and pushLashingToExcelImpl/
+        // pullLashingFromExcelImpl further down), so this flag — and the
+        // amber .tg-btn-pending/.tg-card-pending it drives — is how the
+        // user can tell "I've changed something here but haven't
+        // pressed Push to Excel yet" apart from "this is in sync".
+        let lashingDirty = false;
+        function markLashingDirty() {
+            lashingDirty = true;
+            updateLashingDirtyIndicator();
+        }
+        function clearLashingDirty() {
+            lashingDirty = false;
+            updateLashingDirtyIndicator();
+        }
+        function updateLashingDirtyIndicator() {
+            const btn = document.getElementById('tgPushLashingBtn');
+            if (!btn) return;
+            btn.classList.toggle('tg-btn-pending', lashingDirty);
+            const card = findSyncCardFor(btn);
+            if (card) card.classList.toggle('tg-card-pending', lashingDirty);
+        }
+
         function addLashingPoint() {
             if (lashingPoints.length >= LASHING_MAX_POINTS) {
                 alert(`Only ${LASHING_MAX_POINTS} lashing types are supported (Excel 'Lashing calculation'!A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW} has ${LASHING_MAX_POINTS} rows).`);
@@ -5576,22 +5638,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             lashingPoints.push(defaultLashingPoint(lashingPoints.length + 1));
             renderLashingList();
-            // Push immediately — a freshly-added type sits at its
-            // default SWL/QTY/dx/dy/dz until the user actually edits a
-            // field, so without this the new row never reaches Excel
-            // (and its "No." formula never gets data to key off of)
-            // until something is typed into one of its inputs.
-            scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
+            // No longer auto-pushed — a freshly-added type sits at its
+            // default SWL/QTY/dx/dy/dz locally until the user presses
+            // "📤 Push to Excel" (marked pending in the meantime below).
+            markLashingDirty();
         }
 
         function removeLashingPoint(id) {
             lashingPoints = lashingPoints.filter(p => p.id !== id);
             if (lashingPoints.length === 0) lashingPoints.push(defaultLashingPoint(1));
             renderLashingList();
-            // Same reasoning as addLashingPoint — a removed row needs to
-            // clear its old data out of Excel right away, not wait for
-            // an unrelated field edit elsewhere to trigger the push.
-            scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
+            // Same reasoning as addLashingPoint — the cleared row stays
+            // local (marked pending) until "📤 Push to Excel" is pressed.
+            markLashingDirty();
         }
 
         function updateLashingField(id, field, rawValue) {
@@ -5603,14 +5662,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (list.length > 0) point.qty = list.length; // auto-fill QTY from the count of entries
                 renderLashingList();
                 renderTrailerGenPreview();
-                scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
+                markLashingDirty();
                 return;
             }
             const v = parseFloat(rawValue);
             point[field] = Number.isFinite(v) ? v : 0;
             renderLashingList();
             renderTrailerGenPreview(); // L# sign count/placement depends on QTY
-            scheduleAutoPush('pushLashingToExcel', pushLashingToExcel);
+            markLashingDirty();
         }
         // "L1, L2, L5, L23" / "L3A, L4C, L23D" -> ['L1','L2','L5','L23'] —
         // comma AND/OR whitespace separated, case-insensitive (normalized
@@ -5720,9 +5779,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 : (drawnSignCount === totalPoints)
                     ? ` · matches the ${drawnSignCount} L# sign(s) drawn in the 2D top/side/end views`
                     : ` · ⚠ ${drawnSignCount} L# sign(s) actually drawn in the 2D views (from deck length/spacing) — does not match QTY total`;
+            const excelCountNote = (tgLashingExcelNoCount === null) ? ''
+                : (tgLashingExcelNoCount === lashingPoints.length)
+                    ? ` · matches Excel '${LASHING_SHEET_NAME}'!${LASHING_COUNT_CHECK_RANGE} (${tgLashingExcelNoCount} filled row(s))`
+                    : ` · ⚠ Excel '${LASHING_SHEET_NAME}'!${LASHING_COUNT_CHECK_RANGE} shows ${tgLashingExcelNoCount} filled row(s) — does not match the ${lashingPoints.length} type card(s) here`;
             const totalsEl = document.getElementById('tgLashingTotals');
             if (totalsEl) {
-                totalsEl.textContent = `${lashingPoints.length} lashing type(s) · ${totalPoints} lashing point(s) total (QTY sum)${signCountNote} · ${totalSwl.toFixed(1)} mTe combined SWL — see 🚚 Transport Data w/ CoG Env → Lashing calculation table for length/alfa/beta/capacity/Unity Check.`;
+                totalsEl.textContent = `${lashingPoints.length} lashing type(s) · ${totalPoints} lashing point(s) total (QTY sum)${signCountNote}${excelCountNote} · ${totalSwl.toFixed(1)} mTe combined SWL — see 🚚 Transport Data w/ CoG Env → Lashing calculation table for length/alfa/beta/capacity/Unity Check.`;
             }
         }
 
@@ -5731,7 +5794,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // NEVER written here — only read as a sanity check for row
         // count on pull. Follows the same silent-pull/scheduleAutoPush
         // pattern as Horizontal Loads above.
-        async function pullLashingFromExcel(opts = {}) {
+        async function pullLashingFromExcelImpl(opts = {}) {
             const silent = opts.silent === true;
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Lashing data.');
@@ -5761,13 +5824,46 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     renderLashingList();
                     renderTrailerGenPreview();
                 }
+                clearLashingDirty(); // now matches Excel — nothing local left unpushed
                 if (!silent) logMsg(`↺ Pulled Lashing types from '${LASHING_SHEET_NAME}'!${LASHING_INPUT_RANGE}.`);
             } catch (e) {
                 console.warn(`Could not read '${LASHING_SHEET_NAME}' sheet (${LASHING_INPUT_RANGE})`, e);
                 if (!silent) alert(`Could not read sheet "${LASHING_SHEET_NAME}". Make sure it exists.`);
             }
+            await pullLashingCountCheckFromExcel(); // keep the A16:A41 cross-check current too
         }
-        async function pushLashingToExcel(opts) {
+        // Wrapped so the "⇩ Refresh from Excel" button itself pulses
+        // amber while in flight and flashes green/red on settle — same
+        // per-button sync indicator every other card's Push/Refresh
+        // button already has (see withBtnSyncIndicator).
+        const pullLashingFromExcel = withBtnSyncIndicator('tgRefreshLashingBtn', pullLashingFromExcelImpl);
+
+        // Read-only cross-check against Excel column A over
+        // LASHING_COUNT_CHECK_RANGE ("A16:A41") — counts non-blank
+        // cells and stores it for renderLashingList()'s totals line to
+        // compare against lashingPoints.length. Never throws to the
+        // caller (always silent) so it can't block the real pull/push
+        // above if the range or sheet is off in a given workbook.
+        async function pullLashingCountCheckFromExcel() {
+            if (!isOfficeInitialized) return;
+            try {
+                let values = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
+                    const range = sheet.getRange(LASHING_COUNT_CHECK_RANGE);
+                    range.load('values');
+                    await context.sync();
+                    values = range.values;
+                });
+                tgLashingExcelNoCount = (values || []).filter(r => r[0] !== null && r[0] !== '' && r[0] !== undefined).length;
+            } catch (e) {
+                console.warn(`Could not read '${LASHING_SHEET_NAME}'!${LASHING_COUNT_CHECK_RANGE} for the lashing count cross-check`, e);
+                tgLashingExcelNoCount = null;
+            }
+            renderLashingList(); // refresh the totals line with the new (or cleared) count
+        }
+
+        async function pushLashingToExcelImpl(opts) {
             const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push Lashing data.');
@@ -5784,12 +5880,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     sheet.getRange(LASHING_INPUT_RANGE).values = rows;
                     await context.sync();
                 });
+                clearLashingDirty(); // successfully pushed — nothing left unsaved
                 if (!silent) logMsg(`📤 Pushed Lashing types to '${LASHING_SHEET_NAME}'!${LASHING_INPUT_RANGE}.`);
             } catch (e) {
                 console.warn(`Could not push Lashing types to '${LASHING_SHEET_NAME}' (${LASHING_INPUT_RANGE})`, e);
                 if (!silent) alert(`Could not push to sheet "${LASHING_SHEET_NAME}". Make sure it exists and isn't protected.`);
             }
         }
+        // Wrapped for the same amber-pulse/green-flash indicator as every
+        // other "📤 Push to Excel" button (see withBtnSyncIndicator) —
+        // this is the "in progress" indicator requested for Lashing.
+        const pushLashingToExcel = withBtnSyncIndicator('tgPushLashingBtn', pushLashingToExcelImpl);
 
         // ---- 🚚 Transport Data w/ CoG Env — Lashing calculation table:
         // a read-only mirror of 'Lashing calculation'!A17:O43 (header +
@@ -10859,6 +10960,23 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const deckTopWorldZ = tgZTrailerHeightMm;
             const S = TG3D_SCALE;
             const toV = (xMm, zMmHeight, yMm) => new THREE.Vector3(xMm * S, zMmHeight * S, yMm * S);
+            // Thin THREE.Line segments render as a hairline (~1px) on
+            // most WebGL backends regardless of LineBasicMaterial's
+            // linewidth (a long-standing browser/ANGLE limitation), so
+            // a real "make it bigger" needs actual geometry — a thin
+            // cylinder oriented along the segment — not just a bigger
+            // linewidth number. Used for the lashing chains below.
+            const makeThickLineTG = (p1, p2, radiusM, hex, opacity) => {
+                const dir = new THREE.Vector3().subVectors(p2, p1);
+                const len = dir.length();
+                if (len < 1e-6) return null;
+                const geo = new THREE.CylinderGeometry(radiusM, radiusM, len, 6);
+                const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+                mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+                return mesh;
+            };
 
             // ---- bounding box (world mm) — drives camera framing + grid size ----
             let bMinX = 0, bMaxX = 0, bMinY = 0, bMaxY = 0, bMaxZ = deckTopWorldZ + 1000;
@@ -10979,13 +11097,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // see computeLashingChainSegments (shared with the 2D
             // views, so this can never disagree with them). Colored
             // per lashing TYPE via lashingChainColor.
+            // Rendered as thin cylinders (makeThickLineTG), not
+            // THREE.Line, so they actually read as thicker on screen —
+            // see the comment on makeThickLineTG above.
+            const LASHING_CHAIN_3D_RADIUS_M = 0.02; // 40mm diameter — was a 1px hairline
             computeLashingChainSegments().forEach(seg => {
                 const hex = tg3dResolveColor(lashingChainColor(seg.typeIndex), '#ef4444');
                 const p1 = toV(seg.startX, seg.startZ, seg.startY);
                 const p2 = toV(seg.endX, seg.endZ, seg.endY);
-                const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-                const lineMat = new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity: 0.9 });
-                world3dGroupTG.add(new THREE.Line(lineGeo, lineMat));
+                const mesh = makeThickLineTG(p1, p2, LASHING_CHAIN_3D_RADIUS_M, hex, 0.9);
+                if (mesh) world3dGroupTG.add(mesh);
                 extend(seg.endX, seg.endY, seg.endZ);
             });
 
