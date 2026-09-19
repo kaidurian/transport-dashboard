@@ -785,7 +785,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.122.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.122.4)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2529,24 +2529,25 @@
         // point data (No./SWL/QTY/dx/dy/dz entered — cols A:F — length/
         // alfa/beta/capacity cols G:O are Excel-computed formulas), row
         // 42 is the Total row, row 43 is the Unity Check row. Column A
-        // ("No.") is an Excel formula (=A{prev}+1, seeded 1 at A18) —
-        // never written by this dashboard, only read; each lashing point
-        // "type" card is numbered by its position in the list instead.
+        // ("No.") is a plain number written by this dashboard on every
+        // push — NOT an Excel formula — matching each lashing point
+        // "type" card's position in the list (1-based); cleared to ''
+        // right alongside B:F for a removed/unused row so a deleted
+        // type's whole row (No. + values) disappears from Excel, not
+        // just its values.
         const LASHING_SHEET_NAME = "Lashing calculation";
         const LASHING_HEADER_ROW = 17;
         const LASHING_DATA_START_ROW = 18;
         const LASHING_DATA_END_ROW = 41; // 24 rows max (18-41)
         const LASHING_TOTAL_ROW = 42;
         const LASHING_UNITY_ROW = 43;
-        const LASHING_INPUT_RANGE = `B${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`; // SWL/QTY/dx/dy/dz — write range; column A left alone (Excel's own formula)
+        const LASHING_INPUT_RANGE = `A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`; // No./SWL/QTY/dx/dy/dz — write range (column A included — see pushLashingToExcelImpl)
         const LASHING_FULL_TABLE_RANGE = `A${LASHING_HEADER_ROW}:O${LASHING_UNITY_ROW}`; // header + 24 data rows + Total + Unity Check — read-only mirror
-        // Pull range — includes column A ("No.") alongside B:F. Column
-        // A is still never written (Excel's own auto-increment formula
-        // — see pushLashingToExcelImpl), but on pull it's now what
-        // decides HOW MANY lashing type cards to show: KKai confirmed
-        // the type count should sync with 'Lashing calculation'!A18:A41
-        // (the non-blank count there), not with whichever of B:F happen
-        // to be non-blank — see pullLashingFromExcelImpl.
+        // Pull range — includes column A ("No.") alongside B:F, which on
+        // pull is what decides HOW MANY lashing type cards to show: the
+        // type count syncs with 'Lashing calculation'!A18:A41 (the
+        // non-blank count there — with a B:F-non-blank fallback for any
+        // row where A somehow isn't, see pullLashingFromExcelImpl).
         const LASHING_PULL_RANGE = `A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`;
         let tgLashingCalcRows = []; // raw 2D array pulled from LASHING_FULL_TABLE_RANGE, row-major
 
@@ -5898,12 +5899,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // row: the Excel JS API treats a null array element
                     // in range.values as "leave this cell unchanged",
                     // not "clear it" — so pushing null after removing a
-                    // lashing type silently left its old SWL/QTY/dx/dy/dz
-                    // sitting in Excel (and the read-only Lashing
-                    // calculation table mirror, since that's pulled from
-                    // the same never-actually-cleared cells). '' is a
-                    // real value assignment and blanks the cell for real.
-                    rows.push(p ? [p.swl, p.qty, p.dx, p.dy, p.dz] : ['', '', '', '', '']);
+                    // lashing type silently left its old No./SWL/QTY/
+                    // dx/dy/dz sitting in Excel (and the read-only
+                    // Lashing calculation table mirror, since that's
+                    // pulled from the same never-actually-cleared
+                    // cells). '' is a real value assignment and blanks
+                    // the cell for real — now including column A, so
+                    // removing a lashing type deletes its No. in Excel
+                    // too, not just its values.
+                    rows.push(p ? [i + 1, p.swl, p.qty, p.dx, p.dy, p.dz] : ['', '', '', '', '', '']);
                 }
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
