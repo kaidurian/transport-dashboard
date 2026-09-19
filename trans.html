@@ -811,7 +811,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.125)</h1>
+            <h1>🚂 Transport Dashboard (Rev.125.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -5691,42 +5691,71 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!p) { p = lashingPoints[0]; activeLashingPointId = p ? p.id : null; }
             return p;
         }
-        // Clicking an L# sign dot in the 2D top/side/end views toggles
-        // its label(s) into the active lashing type's "Lashing point"
+        // Clicking an L# sign dot in the 2D top/side/end views assigns
+        // its label(s) to the active lashing type's "Lashing point"
         // field — reuses parseLashingSignLabelsList (the same comma/
         // space/range parser that field's own onchange uses), after
         // normalizing '/' to ',' first so a merged-dot label like
         // "L5A/L5D" (top/side views, several physical points sharing
         // one screen spot) and a plain range like "L1-L13" (end-view
-        // dots) both expand the same way a typed value would. A label
-        // already on the active type is removed (toggle off); a label
-        // currently on a DIFFERENT type is moved onto the active type
-        // instead of duplicated — each physical L# sign is meant to
-        // belong to exactly one lashing type (renderLashingList's
-        // totals line already flags it when that invariant is broken).
+        // dots) both expand the same way a typed value would.
+        //
+        // A dot's label can carry MORE THAN ONE physically distinct
+        // point (an SPMT top view A/D or B/C pair sharing one pixel
+        // since the top view has no Z axis; the 4-way A/B/C/D station
+        // label) — clicking such a dot cycles ONE STEP through
+        // [none, tokens[0], tokens[1], ..., tokens[N-1], none, ...]
+        // rather than assigning every overlapping point to the active
+        // type at once, since a click is only ever really pointing at
+        // one of them. A plain single-token label (the normal case)
+        // is just the N=1 case of the same cycle — click to select,
+        // click again to deselect. Whichever token was previously the
+        // active type's member of this group is what "wasOnActive"
+        // toggling off; the newly-selected token is pulled off
+        // whichever type (active or not) currently holds it, same
+        // "moves rather than duplicates" rule as before — each
+        // physical L# sign is meant to belong to exactly one lashing
+        // type (renderLashingList's totals line flags it when that
+        // invariant is broken).
         function toggleLashingSignForActiveType(labelText) {
             const activePoint = activeLashingPoint();
             if (!activePoint) return;
             const tokens = parseLashingSignLabelsList((labelText || '').replace(/\//g, ','));
             if (!tokens.length) return;
-            tokens.forEach(tok => {
-                const wasOnActive = parseLashingSignLabelsList(activePoint.signLabels).includes(tok);
+            const activeList = () => parseLashingSignLabelsList(activePoint.signLabels);
+            // Cycle position 0 = none of this group selected; position
+            // i+1 = tokens[i] selected. curIdx looks at whichever group
+            // token (if any) is currently on the active type to find
+            // where in the cycle we are right now.
+            const curActiveIdx = activeList().findIndex(t => tokens.includes(t));
+            const curPos = curActiveIdx === -1 ? 0 : tokens.indexOf(activeList()[curActiveIdx]) + 1;
+            const nextPos = (curPos + 1) % (tokens.length + 1);
+            // Step 1 — deselect whichever group token is currently on
+            // the active type (there's normally at most one).
+            if (curActiveIdx !== -1) {
+                const list = activeList();
+                list.splice(curActiveIdx, 1);
+                activePoint.signLabels = list.join(', ');
+                if (list.length > 0) activePoint.qty = list.length;
+            }
+            // Step 2 — if the cycle landed on a real token (not "none"),
+            // select it.
+            if (nextPos > 0) {
+                const tok = tokens[nextPos - 1];
                 lashingPoints.forEach(p => {
                     const list = parseLashingSignLabelsList(p.signLabels);
                     const idx = list.indexOf(tok);
                     if (idx >= 0) {
                         list.splice(idx, 1);
                         p.signLabels = list.join(', ');
-                        if (list.length > 0) p.qty = list.length; // same as updateLashingField — QTY only auto-set while the field isn't empty
+                        if (list.length > 0) p.qty = list.length;
                     }
                 });
-                if (!wasOnActive) {
-                    const list = parseLashingSignLabelsList(activePoint.signLabels);
-                    list.push(tok);
-                    activePoint.signLabels = list.join(', ');
-                    activePoint.qty = list.length;
-                }
-            });
+                const list = activeList();
+                list.push(tok);
+                activePoint.signLabels = list.join(', ');
+                activePoint.qty = list.length;
+            }
             renderLashingList();
             renderTrailerGenPreview();
             markLashingDirty();
@@ -8899,7 +8928,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${d.text.replace(/'/g, "\\'")}')">` +
                         `<circle cx="${d.cx.toFixed(1)}" cy="${d.cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="${isActiveAssigned ? 'var(--accent-blue, #38bdf8)' : 'var(--tank-box-bg, #0b1220)'}" stroke-width="${isActiveAssigned ? '2' : '0.8'}"/>` +
                         `${labelText ? `<text x="${d.cx.toFixed(1)}" y="${(d.cy + labelDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${labelText}</text>` : ''}` +
-                        `<title>${d.text} — lashing point sign (${d.side} side) — click to toggle for the active lashing type</title>` +
+                        `<title>${d.text} — lashing point sign (${d.side} side) — click to select for the active lashing type (click again to cycle through the others sharing this spot)</title>` +
                         `</g>`;
                 });
                 // SPMT stations — one shared 3-row label per station per
@@ -8922,13 +8951,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const rightTarget = `${st.rightLabel}A/${st.rightLabel}B/${st.rightLabel}C/${st.rightLabel}D`;
                         const leftTarget = `${st.leftLabel}A/${st.leftLabel}B/${st.leftLabel}C/${st.leftLabel}D`;
                         lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${rightTarget}')">` +
-                            `<title>${st.rightLabel} (A/B/C/D) — click to toggle all 4 for the active lashing type</title>` +
+                            `<title>${st.rightLabel} (A/B/C/D) — click to cycle through A/B/C/D one at a time for the active lashing type</title>` +
                             `<text x="${gx}" y="${rightBaseY.toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.rightLabel}</text>` +
                             `<text x="${gx}" y="${(rightBaseY - 7).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">A/B</text>` +
                             `<text x="${gx}" y="${(rightBaseY - 14).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">D/C</text>` +
                             `</g>`;
                         lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${leftTarget}')">` +
-                            `<title>${st.leftLabel} (A/B/C/D) — click to toggle all 4 for the active lashing type</title>` +
+                            `<title>${st.leftLabel} (A/B/C/D) — click to cycle through A/B/C/D one at a time for the active lashing type</title>` +
                             `<text x="${gx}" y="${leftBaseY.toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">${st.leftLabel}</text>` +
                             `<text x="${gx}" y="${(leftBaseY + 7).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">A/B</text>` +
                             `<text x="${gx}" y="${(leftBaseY + 14).toFixed(1)}" font-size="6" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}" opacity="0.85">D/C</text>` +
@@ -9725,7 +9754,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${target.replace(/'/g, "\\'")}')">` +
                     `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="${isActiveAssigned ? 'var(--accent-blue, #38bdf8)' : 'var(--tank-box-bg, #0b1220)'}" stroke-width="${isActiveAssigned ? '2' : '0.8'}"/>` +
                     `<text x="${cx.toFixed(1)}" y="${(cy - 7).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${escapeHtml(txt)}</text>` +
-                    `<title>${escapeHtml(target)} — click to toggle for the active lashing type</title></g>`;
+                    `<title>${escapeHtml(target)} — click to select for the active lashing type (click again to cycle through the others sharing this spot)</title></g>`;
             };
             lashingSigns.forEach(({ train, n, isSpmtBracket, points }) => {
                 if (isSpmtBracket) {
