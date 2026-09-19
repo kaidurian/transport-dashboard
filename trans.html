@@ -811,7 +811,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.125.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.126)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1128,6 +1128,14 @@
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgShowLashingToggle" checked onchange="toggleTgShowLashing(this.checked)">
                                     ⚓ Show lashing
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    Scale:
+                                    <select id="tgPreviewScaleSelect" onchange="setTgPreviewScale(this.value)" title="Renders the Top/Side/End drawings bigger on screen for long trailers — world scale and every dimension value stay exactly the same, only the on-screen size grows (scrolls if wider than the panel)">
+                                        <option value="1">1x</option>
+                                        <option value="2">2x</option>
+                                        <option value="4">4x</option>
+                                    </select>
                                 </label>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgMagnifierToggle" onchange="toggleTgMagnifier(this.checked)">
@@ -8537,6 +8545,23 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
 
+        // ---- 2D preview on-screen scale (1x/2x/4x) — purely a display
+        // size control for very long trailers, NOT a world/dimension
+        // change: the Top/Side/End SVGs' own viewBox and internal mm
+        // scale (renderTrailerGenTopView/renderTrailerGenElevationCombined)
+        // are completely untouched, so every dimension value stays
+        // exactly what it always was. This only widens the CSS box the
+        // two width:100% SVGs render into (see tgPreviewScaleInner
+        // below) — 2x/4x that width makes each SVG render 2x/4x bigger
+        // on screen (same viewBox, more CSS px per viewBox unit), with
+        // #tgPreview's own existing `overflow: auto` providing the
+        // scrollbars for whatever no longer fits.
+        let tgPreviewScaleMult = 1;
+        function setTgPreviewScale(val) {
+            tgPreviewScaleMult = parseFloat(val) || 1;
+            renderTrailerGenPreview();
+        }
+
         function renderTrailerGenPreview() {
             let wrap;
             const inlineWrap = document.getElementById('tgPreview');
@@ -8589,8 +8614,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ? renderTrailerGenTopView(rows, elevResult.svgW).svg
                 : topResult.svg;
             wrap.innerHTML = `
-                <div class="tg-view-section">${topHtml}</div>
-                <div class="tg-view-section">${elevationHtml}</div>
+                <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * 100}%; min-width:100%;">
+                    <div class="tg-view-section">${topHtml}</div>
+                    <div class="tg-view-section">${elevationHtml}</div>
+                </div>
                 <div class="tg-view-section">${renderTrailerGenHLoadsPanel()}</div>
                 <div class="tg-unit-label-overlay">Unit: mm.</div>
             `;
