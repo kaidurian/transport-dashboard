@@ -1,4 +1,4 @@
-f<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -785,7 +785,7 @@ f<!DOCTYPE html>
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.122.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.122.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -5835,11 +5835,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     await context.sync();
                     values = range.values;
                 });
-                // Row count comes from column A ("No.") — Excel's own
-                // auto-increment formula — not from whether B:F happen
-                // to be non-blank, per KKai's explicit ask to sync the
-                // type count with 'Lashing calculation'!A18:A41.
-                const rowCount = (values || []).filter(r => r[0] !== null && r[0] !== '' && r[0] !== undefined).length;
+                // Row count is normally driven by column A ("No.") —
+                // Excel's own auto-increment formula — per KKai's ask
+                // to sync the type count with
+                // 'Lashing calculation'!A18:A41. BUT that formula isn't
+                // guaranteed to be filled all the way to row 41 in every
+                // copy of the workbook (e.g. it was never dragged down
+                // past the originally-used rows) — when that's the
+                // case, a freshly pushed row's B:F data lands correctly
+                // but its A cell stays blank, and the next pull (column
+                // A count only) would then undercount and silently drop
+                // that row's input card again, right after it was just
+                // pushed. So a row also counts as present here if ANY
+                // of B:F is non-blank, even with A blank — column A
+                // stays the primary/preferred signal (still used
+                // whenever it IS filled), this is only a fallback so a
+                // just-pushed row never disappears out from under the
+                // user.
+                const rowCount = (values || []).filter(r => {
+                    const aFilled = r[0] !== null && r[0] !== '' && r[0] !== undefined;
+                    const restFilled = r.slice(1).some(v => v !== null && v !== '' && v !== undefined);
+                    return aFilled || restFilled;
+                }).length;
                 if (rowCount > 0) {
                     const prevSignLabels = lashingPoints.map(p => p.signLabels || ''); // preserved by row position — not part of the Excel schema
                     lashingPoints = values.slice(0, rowCount).map((r, i) => ({
