@@ -785,7 +785,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.121)</h1>
+            <h1>🚂 Transport Dashboard (Rev.122)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1024,14 +1024,16 @@
                         <p class="tg-modal-sub" id="tgLashingHelpPanel">
                             Sea-fastening lashing TYPE list — one row/group per lashing type, matching the
                             reference workbook <strong>"Lashing calculation"</strong> sheet
-                            (<strong>A18:F41</strong>, up to 24 types). Per type: <strong>Lashing point #s</strong>
+                            (<strong>A18:F41</strong>, up to 24 types — the type count now follows column A's
+                            non-blank rows on pull). Per type: <strong>Lashing point</strong>
                             (optional — which drawn L# sign(s) this type is installed at, e.g. "L1, L2, L5, L23"
-                            or "L3A, L4C, L23D" for SPMT; QTY auto-fills to the count once you type any — local
+                            or "L3A, L4C, L23D" for SPMT; not case-sensitive (l1 = L1) and a range like "L1-L3"
+                            expands to L1, L2, L3; QTY auto-fills to the count once you type any — local
                             only, not part of the Excel schema so a pull from Excel can't restore it if the row
                             order changed), <strong>SWL</strong> (Safe Working Load of one lashing/chain of this
                             type, mTe), <strong>QTY</strong> (number of identical lashings of this type), and
                             <strong>dx / dy / dz</strong> (mm — offset from the cargo attachment point to the
-                            deck/lashing-eye anchor point, same for every point listed under "Lashing point #s").
+                            deck/lashing-eye anchor point, same for every point listed under "Lashing point").
                             <strong>Length</strong>, <strong>alfa</strong>, <strong>beta</strong>, and the
                             capacity / Unity Check columns are genuine Excel formulas in the reference sheet now
                             — see the read-only <strong>Lashing calculation table</strong> under 🚚 Transport
@@ -2521,20 +2523,16 @@
         const LASHING_DATA_END_ROW = 41; // 24 rows max (18-41)
         const LASHING_TOTAL_ROW = 42;
         const LASHING_UNITY_ROW = 43;
-        const LASHING_INPUT_RANGE = `B${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`; // SWL/QTY/dx/dy/dz — column A left alone (Excel's own formula)
+        const LASHING_INPUT_RANGE = `B${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`; // SWL/QTY/dx/dy/dz — write range; column A left alone (Excel's own formula)
         const LASHING_FULL_TABLE_RANGE = `A${LASHING_HEADER_ROW}:O${LASHING_UNITY_ROW}`; // header + 24 data rows + Total + Unity Check — read-only mirror
-        // Cross-check only — per KKai's literal cell reference — reads
-        // column A ("No.") over A16:A41 (one row above the coded header
-        // row 17 through the last data row 41) purely to compare its
-        // filled-cell count against the local lashing type card count
-        // below. Deliberately NOT used to resize lashingPoints or as
-        // the push/pull range itself: LASHING_INPUT_RANGE/
-        // LASHING_FULL_TABLE_RANGE above are what every Excel read/
-        // write actually uses, and those stay as originally coded
-        // (header row 17) until confirmed otherwise — see
-        // tgLashingExcelNoCount/pullLashingCountCheckFromExcel.
-        const LASHING_COUNT_CHECK_RANGE = "A16:A41";
-        let tgLashingExcelNoCount = null; // non-blank cell count in LASHING_COUNT_CHECK_RANGE, or null if never pulled
+        // Pull range — includes column A ("No.") alongside B:F. Column
+        // A is still never written (Excel's own auto-increment formula
+        // — see pushLashingToExcelImpl), but on pull it's now what
+        // decides HOW MANY lashing type cards to show: KKai confirmed
+        // the type count should sync with 'Lashing calculation'!A18:A41
+        // (the non-blank count there), not with whichever of B:F happen
+        // to be non-blank — see pullLashingFromExcelImpl.
+        const LASHING_PULL_RANGE = `A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`;
         let tgLashingCalcRows = []; // raw 2D array pulled from LASHING_FULL_TABLE_RANGE, row-major
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
@@ -5672,11 +5670,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             markLashingDirty();
         }
         // "L1, L2, L5, L23" / "L3A, L4C, L23D" -> ['L1','L2','L5','L23'] —
-        // comma AND/OR whitespace separated, case-insensitive (normalized
-        // to upper-case to match the drawn L# labels).
+        // comma AND/OR whitespace separated, case-insensitive (lower-case
+        // "l1"/"l3b" normalize to "L1"/"L3B"). Also expands a plain
+        // numeric range token like "L1-L3" (or "1-3", "l1-l3") into
+        // ['L1','L2','L3'] — sub-lettered tokens (L3A etc.) are never
+        // range-expanded, only taken as single literal signs, since a
+        // "range" across the A/B/C/D SPMT bracket letters has no single
+        // obvious meaning.
         function parseLashingSignLabelsList(raw) {
             if (!raw) return [];
-            return raw.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+            const tokens = raw.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+            const out = [];
+            tokens.forEach(tok => {
+                const m = tok.match(/^L?(\d+)\s*-\s*L?(\d+)$/i);
+                if (m) {
+                    let a = parseInt(m[1], 10), b = parseInt(m[2], 10);
+                    if (a > b) { const t = a; a = b; b = t; }
+                    for (let n = a; n <= b; n++) out.push('L' + n);
+                } else {
+                    out.push(tok.toUpperCase());
+                }
+            });
+            return out;
         }
 
         function renderLashingList() {
@@ -5686,7 +5701,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // way to keep row numbering/summary text in sync), which
             // normally kicks focus out of whichever input the user was
             // just typing in (it's now a brand-new DOM node) — reported
-            // as the "Lashing point #s" field feeling laggy/freezing.
+            // as the "Lashing point" field feeling laggy/freezing.
             // Captured here (by lashing-type id + field name, via the
             // data-lid/data-field attributes on each input below) and
             // restored after the rebuild so typing — including pressing
@@ -5711,11 +5726,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </div>
                     <div class="tg-group-field-grid">
                         <div class="tg-group-field" style="grid-column: 1 / -1;">
-                            <label>Lashing point #s <span style="font-weight:400;opacity:.7;">(optional)</span></label>
+                            <label>Lashing point</label>
                             <input type="text" value="${escapeHtml(point.signLabels || '')}"
                                    data-lid="${point.id}" data-field="signLabels"
-                                   placeholder="e.g. L1, L2, L5, L23 — or L3A, L4C, L23D for SPMT"
-                                   title="Which drawn L# sign(s) this lashing type is physically installed at — comma/space separated, matching the labels drawn in the 2D views. QTY below auto-fills to the count of entries here once you type any."
+                                   placeholder="e.g. L1-L3, L5, L23 — or L3A, L4C, L23D for SPMT (lower-case OK, e.g. l1, l3b)"
+                                   title="Which drawn L# sign(s) this lashing type is physically installed at — comma/space separated, matching the labels drawn in the 2D views (not case-sensitive; l1 = L1). A range like L1-L3 expands to L1, L2, L3. QTY below auto-fills to the count of entries here once you type any."
                                    onchange="updateLashingField(${point.id}, 'signLabels', this.value)">
                         </div>
                         <div class="tg-group-field">
@@ -5729,7 +5744,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             <label>QTY</label>
                             <input type="number" step="1" min="1" value="${point.qty}"
                                    data-lid="${point.id}" data-field="qty"
-                                   title="${point.signLabels ? 'Auto-set from the Lashing point #s list above (count of entries) — clear that field to edit QTY by hand again' : 'Number of identical lashings of this type (used for SWL/capacity — independent of the L# signs auto-placed in the 2D drawing from deck geometry)'}"
+                                   title="${point.signLabels ? 'Auto-set from the Lashing point list above (count of entries) — clear that field to edit QTY by hand again' : 'Number of identical lashings of this type (used for SWL/capacity — independent of the L# signs auto-placed in the 2D drawing from deck geometry)'}"
                                    ${point.signLabels ? 'readonly' : ''}
                                    onchange="updateLashingField(${point.id}, 'qty', this.value)">
                         </div>
@@ -5779,13 +5794,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 : (drawnSignCount === totalPoints)
                     ? ` · matches the ${drawnSignCount} L# sign(s) drawn in the 2D top/side/end views`
                     : ` · ⚠ ${drawnSignCount} L# sign(s) actually drawn in the 2D views (from deck length/spacing) — does not match QTY total`;
-            const excelCountNote = (tgLashingExcelNoCount === null) ? ''
-                : (tgLashingExcelNoCount === lashingPoints.length)
-                    ? ` · matches Excel '${LASHING_SHEET_NAME}'!${LASHING_COUNT_CHECK_RANGE} (${tgLashingExcelNoCount} filled row(s))`
-                    : ` · ⚠ Excel '${LASHING_SHEET_NAME}'!${LASHING_COUNT_CHECK_RANGE} shows ${tgLashingExcelNoCount} filled row(s) — does not match the ${lashingPoints.length} type card(s) here`;
             const totalsEl = document.getElementById('tgLashingTotals');
             if (totalsEl) {
-                totalsEl.textContent = `${lashingPoints.length} lashing type(s) · ${totalPoints} lashing point(s) total (QTY sum)${signCountNote}${excelCountNote} · ${totalSwl.toFixed(1)} mTe combined SWL — see 🚚 Transport Data w/ CoG Env → Lashing calculation table for length/alfa/beta/capacity/Unity Check.`;
+                totalsEl.textContent = `${lashingPoints.length} lashing type(s) · ${totalPoints} lashing point(s) total (QTY sum)${signCountNote} · ${totalSwl.toFixed(1)} mTe combined SWL — see 🚚 Transport Data w/ CoG Env → Lashing calculation table for length/alfa/beta/capacity/Unity Check.`;
             }
         }
 
@@ -5804,64 +5815,42 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 let values = null;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
-                    const range = sheet.getRange(LASHING_INPUT_RANGE);
+                    const range = sheet.getRange(LASHING_PULL_RANGE);
                     range.load('values');
                     await context.sync();
                     values = range.values;
                 });
-                const rows = (values || []).filter(r => r.slice(0, 4).some(v => v !== null && v !== '' && v !== undefined));
-                if (rows.length) {
+                // Row count comes from column A ("No.") — Excel's own
+                // auto-increment formula — not from whether B:F happen
+                // to be non-blank, per KKai's explicit ask to sync the
+                // type count with 'Lashing calculation'!A18:A41.
+                const rowCount = (values || []).filter(r => r[0] !== null && r[0] !== '' && r[0] !== undefined).length;
+                if (rowCount > 0) {
                     const prevSignLabels = lashingPoints.map(p => p.signLabels || ''); // preserved by row position — not part of the Excel schema
-                    lashingPoints = rows.map((r, i) => ({
+                    lashingPoints = values.slice(0, rowCount).map((r, i) => ({
                         id: lashingIdCounter++,
                         signLabels: prevSignLabels[i] || '',
-                        swl: parseFloat(r[0]) || 0,
-                        qty: parseFloat(r[1]) || 0,
-                        dx: parseFloat(r[2]) || 0,
-                        dy: parseFloat(r[3]) || 0,
-                        dz: parseFloat(r[4]) || 0
+                        swl: parseFloat(r[1]) || 0,
+                        qty: parseFloat(r[2]) || 0,
+                        dx: parseFloat(r[3]) || 0,
+                        dy: parseFloat(r[4]) || 0,
+                        dz: parseFloat(r[5]) || 0
                     }));
                     renderLashingList();
                     renderTrailerGenPreview();
                 }
                 clearLashingDirty(); // now matches Excel — nothing local left unpushed
-                if (!silent) logMsg(`↺ Pulled Lashing types from '${LASHING_SHEET_NAME}'!${LASHING_INPUT_RANGE}.`);
+                if (!silent) logMsg(`↺ Pulled ${rowCount} Lashing type(s) from '${LASHING_SHEET_NAME}'!${LASHING_PULL_RANGE} (row count from column A).`);
             } catch (e) {
-                console.warn(`Could not read '${LASHING_SHEET_NAME}' sheet (${LASHING_INPUT_RANGE})`, e);
+                console.warn(`Could not read '${LASHING_SHEET_NAME}' sheet (${LASHING_PULL_RANGE})`, e);
                 if (!silent) alert(`Could not read sheet "${LASHING_SHEET_NAME}". Make sure it exists.`);
             }
-            await pullLashingCountCheckFromExcel(); // keep the A16:A41 cross-check current too
         }
         // Wrapped so the "⇩ Refresh from Excel" button itself pulses
         // amber while in flight and flashes green/red on settle — same
         // per-button sync indicator every other card's Push/Refresh
         // button already has (see withBtnSyncIndicator).
         const pullLashingFromExcel = withBtnSyncIndicator('tgRefreshLashingBtn', pullLashingFromExcelImpl);
-
-        // Read-only cross-check against Excel column A over
-        // LASHING_COUNT_CHECK_RANGE ("A16:A41") — counts non-blank
-        // cells and stores it for renderLashingList()'s totals line to
-        // compare against lashingPoints.length. Never throws to the
-        // caller (always silent) so it can't block the real pull/push
-        // above if the range or sheet is off in a given workbook.
-        async function pullLashingCountCheckFromExcel() {
-            if (!isOfficeInitialized) return;
-            try {
-                let values = null;
-                await Excel.run(async (context) => {
-                    const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
-                    const range = sheet.getRange(LASHING_COUNT_CHECK_RANGE);
-                    range.load('values');
-                    await context.sync();
-                    values = range.values;
-                });
-                tgLashingExcelNoCount = (values || []).filter(r => r[0] !== null && r[0] !== '' && r[0] !== undefined).length;
-            } catch (e) {
-                console.warn(`Could not read '${LASHING_SHEET_NAME}'!${LASHING_COUNT_CHECK_RANGE} for the lashing count cross-check`, e);
-                tgLashingExcelNoCount = null;
-            }
-            renderLashingList(); // refresh the totals line with the new (or cleared) count
-        }
 
         async function pushLashingToExcelImpl(opts) {
             const silent = !!(opts && opts.silent);
@@ -5873,7 +5862,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const rows = [];
                 for (let i = 0; i < LASHING_MAX_POINTS; i++) {
                     const p = lashingPoints[i];
-                    rows.push(p ? [p.swl, p.qty, p.dx, p.dy, p.dz] : [null, null, null, null, null]);
+                    // '' (empty string), NOT null, for a removed/unused
+                    // row: the Excel JS API treats a null array element
+                    // in range.values as "leave this cell unchanged",
+                    // not "clear it" — so pushing null after removing a
+                    // lashing type silently left its old SWL/QTY/dx/dy/dz
+                    // sitting in Excel (and the read-only Lashing
+                    // calculation table mirror, since that's pulled from
+                    // the same never-actually-cleared cells). '' is a
+                    // real value assignment and blanks the cell for real.
+                    rows.push(p ? [p.swl, p.qty, p.dx, p.dy, p.dz] : ['', '', '', '', '']);
                 }
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
