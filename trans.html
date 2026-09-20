@@ -819,7 +819,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.128.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.129)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8761,6 +8761,63 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             wrap.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
         }
+        // ---- Mouse-wheel zoom (AutoCAD-style): scroll the wheel over the
+        // 2D drawing to zoom continuously in/out, centered on the cursor.
+        // This is a pure on-screen viewport zoom — separate from the
+        // "Scale" select above, which bakes a drafting/print scale into
+        // the SVG (counter-scaled strokes/dots) for export — so zooming
+        // here never changes exported/plotted geometry, only what's
+        // visible on screen. Applied via CSS `zoom` (not `transform:
+        // scale`) on #tgPreviewScaleInner so the element's real layout
+        // size — and therefore wrap's scrollWidth/scrollHeight, and the
+        // existing middle-button pan above — grow/shrink with it, instead
+        // of a transform that would leave scrolling out of sync. Level is
+        // held in tgPreviewZoom (module-level, so it survives the
+        // innerHTML replace on every re-render) and bound once per wrap
+        // element, same pattern as tgAttachMiddlePan.
+        let tgPreviewZoom = 1;
+        function tgAttachWheelZoom(wrap) {
+            if (!wrap || wrap.dataset.tgZoomBound === '1') return;
+            wrap.dataset.tgZoomBound = '1';
+            wrap.addEventListener('wheel', (e) => {
+                const inner = wrap.querySelector('#tgPreviewScaleInner');
+                if (!inner) return;
+                e.preventDefault();
+                const rect = wrap.getBoundingClientRect();
+                const cursorX = e.clientX - rect.left;
+                const cursorY = e.clientY - rect.top;
+                // Point under the cursor, in the drawing's own (pre-zoom-
+                // change) scrolled coordinate space.
+                const offsetX = wrap.scrollLeft + cursorX;
+                const offsetY = wrap.scrollTop + cursorY;
+                const oldZoom = tgPreviewZoom;
+                // Exponential step so equal-sized notches feel like equal
+                // zoom increments near both ends of the range (matches
+                // AutoCAD's feel better than a flat +/-0.1 per notch);
+                // also scales smoothly for trackpad deltaY values.
+                const factor = Math.pow(1.0015, -e.deltaY);
+                const newZoom = Math.min(8, Math.max(0.25, oldZoom * factor));
+                if (newZoom === oldZoom) return;
+                const ratio = newZoom / oldZoom;
+                tgPreviewZoom = newZoom;
+                inner.style.zoom = newZoom;
+                // Re-anchor so the same drawing point stays under the
+                // cursor (same math as the Scale select's width jump, but
+                // continuous).
+                wrap.scrollLeft = offsetX * ratio - cursorX;
+                wrap.scrollTop = offsetY * ratio - cursorY;
+            }, { passive: false });
+            // Middle-click already pans; double-middle-click resets zoom
+            // (AutoCAD "Zoom Extents" equivalent — quick way back to 1x
+            // after scrolling deep in/out).
+            wrap.addEventListener('dblclick', (e) => {
+                if (e.button !== 1) return;
+                const inner = wrap.querySelector('#tgPreviewScaleInner');
+                if (!inner) return;
+                tgPreviewZoom = 1;
+                inner.style.zoom = 1;
+            });
+        }
         function tgApplyFontScale(markup, k) {
             if (Math.abs(k - 1) < 1e-6) return markup;
             return markup.replace(/font-size="([0-9.]+)"/g, (m, v) => `font-size="${+(parseFloat(v) * k).toFixed(3)}"`);
@@ -8833,7 +8890,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 tgFontK = 1;
             }
             wrap.innerHTML = `
-                <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * 100}%; min-width:100%;">
+                <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * 100}%; min-width:100%; zoom:${tgPreviewZoom};">
                     <div class="tg-view-section">${topHtml}</div>
                     <div class="tg-view-section">${elevationHtml}</div>
                 </div>
@@ -8850,6 +8907,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // #tgPreviewExternalRoot) stays the same node, so re-observing
             // it every render would just pile up duplicate observers.
             tgAttachMiddlePan(wrap);
+            tgAttachWheelZoom(wrap);
             tgApplyOrientScale(wrap);
             if (tgOrientResizeObserver && !wrap.dataset.tgOrientObserved) {
                 wrap.dataset.tgOrientObserved = '1';
