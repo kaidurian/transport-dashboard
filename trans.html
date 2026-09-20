@@ -819,7 +819,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.129)</h1>
+            <h1>🚂 Transport Dashboard (Rev.129.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8800,7 +8800,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (newZoom === oldZoom) return;
                 const ratio = newZoom / oldZoom;
                 tgPreviewZoom = newZoom;
-                inner.style.zoom = newZoom;
+                // Real CSS width (%), same mechanism the Scale select
+                // already uses above — not `zoom`/`transform: scale`,
+                // which some Office WebView hosts don't support, silently
+                // no-op the resize, and leave the scroll math below
+                // panning a drawing that never actually got bigger.
+                inner.style.width = (Math.max(1, tgPreviewScaleMult || 1) * newZoom * 100) + '%';
                 // Re-anchor so the same drawing point stays under the
                 // cursor (same math as the Scale select's width jump, but
                 // continuous).
@@ -8815,7 +8820,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const inner = wrap.querySelector('#tgPreviewScaleInner');
                 if (!inner) return;
                 tgPreviewZoom = 1;
-                inner.style.zoom = 1;
+                inner.style.width = (Math.max(1, tgPreviewScaleMult || 1) * 100) + '%';
             });
         }
         function tgApplyFontScale(markup, k) {
@@ -8890,7 +8895,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 tgFontK = 1;
             }
             wrap.innerHTML = `
-                <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * 100}%; min-width:100%; zoom:${tgPreviewZoom};">
+                <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * tgPreviewZoom * 100}%; min-width:100%;">
                     <div class="tg-view-section">${topHtml}</div>
                     <div class="tg-view-section">${elevationHtml}</div>
                 </div>
