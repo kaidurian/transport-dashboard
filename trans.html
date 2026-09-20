@@ -811,7 +811,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.126.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.127)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1131,7 +1131,7 @@
                                 </label>
                                 <label class="tg-preview-toggle">
                                     Scale:
-                                    <select id="tgPreviewScaleSelect" onchange="setTgPreviewScale(this.value)" title="Enlarges only the distances (deck/axle spacing, cargo positions, heights) in the Top/Side/End drawings for long trailers — dots, line thickness, labels and text stay at 1x size, and every dimension value stays the same (scrolls if wider than the panel)">
+                                    <select id="tgPreviewScaleSelect" onchange="setTgPreviewScale(this.value)" title="Enlarges the Top/Side/End drawings for long trailers — distances, dimensions and text labels follow this scale; dots and line thickness stay at 1x. Dimension values never change (scrolls if wider than the panel)">
                                         <option value="1">1x</option>
                                         <option value="2">2x</option>
                                         <option value="4">4x</option>
@@ -2044,8 +2044,16 @@
         // Standard weight-and-balance "Center of Gravity" symbol — a
         // circle quartered into alternating filled/open quadrants, used
         // to mark a cargo item's CoG point in the plan/side/end views.
+        // Preview distance scale (1x/2x/4x) — see the note above
+        // setTgPreviewScale. While a preview is being built, tgDotDiv holds
+        // that multiplier so fixed-size markers ("dots": CoG symbols, point
+        // circles, axle boxes) can be drawn at r / tgDotDiv in layout units,
+        // which the uniformly enlarged SVG then shows at their 1x size.
+        // Always 1 outside renderTrailerGenPreview.
+        let tgDotDiv = 1;
+        function tgDot(v) { return tgDotDiv === 1 ? v : +(v / tgDotDiv).toFixed(3); }
         function cogSymbolSvg(cx, cy, r, color) {
-            r = r || 7;
+            r = tgDot(r || 7);
             return `<g>` +
                 `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${color}" opacity="0.85"/>` +
                 `<path d="M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${color}" opacity="0.85"/>` +
@@ -8545,24 +8553,26 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
 
-        // ---- 2D preview distance scale (1x/2x/4x) — scales ONLY the
-        // real-world distances (deck/axle spacing, cargo positions,
-        // heights, wheel/deck sizes drawn to scale). Dots, line
-        // thickness, labels, text, arrows and every other fixed-size
-        // annotation stay at their 1x on-screen size. Dimension VALUES
-        // never change (they're computed from mm, not from pixels).
+        // ---- 2D preview scale (1x/2x/4x) — scales the DRAWING, not the
+        // data. Distances, dimensions (lines, ticks, text) and text labels
+        // all follow the selected scale; dots (CoG symbols, point circles,
+        // axle boxes) and line thickness stay at their 1x on-screen size.
+        // Dimension VALUES never change (computed from mm, not pixels).
         //
-        // How: renderTrailerGenTopView/renderTrailerGenElevationCombined
-        // take the multiplier and grow their plot area (plotW/plotH) —
-        // and therefore the mm→viewBox `scale` — by exactly that factor,
-        // while padL/padR/padT/padB, dimension tiers, marker sizes,
-        // stroke widths and font sizes stay in the same viewBox units as
-        // 1x. The SVG's CSS width is then grown by the same ratio as its
-        // viewBox (svgW / svgW at 1x), so one viewBox unit is still the
-        // same number of screen pixels as at 1x — that is what keeps
-        // every non-distance element at 1x on screen. #tgPreview's own
+        // How: the two SVGs keep their 1x viewBox/layout (so nothing is
+        // re-laid out or can overlap differently) and the CSS box they
+        // render into is widened by the multiplier (see tgPreviewScaleInner
+        // below), which enlarges everything uniformly. Then, to hold dots
+        // and line thickness at 1x: every stroke-width is divided by the
+        // multiplier (tgCounterScaleStrokes — arrowheads follow, since
+        // marker size is in stroke-width units) and every dot is drawn at
+        // 1/multiplier of its size (tgDot / tgDotDiv). #tgPreview's own
         // existing `overflow: auto` provides the scrollbars.
         let tgPreviewScaleMult = 1;
+        function tgCounterScaleStrokes(markup, mult) {
+            if (!(mult > 1)) return markup;
+            return markup.replace(/stroke-width="([0-9.]+)"/g, (m, v) => `stroke-width="${+(parseFloat(v) / mult).toFixed(4)}"`);
+        }
         function setTgPreviewScale(val) {
             tgPreviewScaleMult = parseFloat(val) || 1;
             renderTrailerGenPreview();
@@ -8597,50 +8607,39 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // the same layout convention as a standard GA drawing (plan
             // above, elevation below with the end view projected off the
             // side view at a shared height scale).
-            // Builds the plan + elevation markup at a given distance
-            // multiplier. fontRefW (only passed for mult > 1) is the
-            // 1x canvas width, so the elevation's width-relative font
-            // sizes stay exactly what they are at 1x.
-            const buildPreviewViews = (mult, fontRefW) => {
-                const topResult = renderTrailerGenTopView(rows, 0, mult, fontRefW);
+            const scaleMult = Math.max(1, tgPreviewScaleMult || 1);
+            tgDotDiv = scaleMult;   // fixed-size markers are drawn at 1/scaleMult in layout units
+            let topHtml, elevationHtml;
+            try {
+                const topResult = renderTrailerGenTopView(rows);
                 // Side view reuses the top view's own X mapping (scale +
                 // offset + canvas width) so every axle line's horizontal
                 // position sits directly below its position in the plan
                 // view above, instead of the elevation panel picking its
                 // own independent horizontal layout.
                 const elevResult = renderTrailerGenElevationCombined(rows, topResult);
+                elevationHtml = elevResult.svg;
                 // Both SVGs render at width:100%, so each one's own declared
                 // viewBox width sets its px-per-mm on screen independently —
                 // if the elevation sheet needed extra room (end-view panels,
                 // cargo-height dimension stack, etc.) and grew past the plan
-                // view's own canvas, the two would silently drift out of
+                // view's fixed 680, the two would silently drift out of
                 // scale even though they share the exact same internal X
                 // mapping (see renderTrailerGenTopView/renderTrailerGenElevationCombined).
                 // Re-running the plan view widened to match — pass 2, same
                 // scale/offsetX/minX, only the outer canvas grows — is what
                 // keeps every trailer/cargo X lined up vertically between
                 // the two stacked drawings.
-                const topHtml = elevResult.svgW > topResult.svgW
-                    ? renderTrailerGenTopView(rows, elevResult.svgW, mult, fontRefW).svg
+                topHtml = elevResult.svgW > topResult.svgW
+                    ? renderTrailerGenTopView(rows, elevResult.svgW).svg
                     : topResult.svg;
-                return { topHtml, elevationHtml: elevResult.svg, svgW: Math.max(topResult.svgW, elevResult.svgW) };
-            };
-            const scaleMult = Math.max(1, tgPreviewScaleMult || 1);
-            let views = buildPreviewViews(1);
-            // CSS width of the two SVGs relative to the panel: 100% at
-            // 1x; at 2x/4x grown by the same ratio as the viewBox, so a
-            // viewBox unit keeps its 1x pixel size (dots, strokes and
-            // text don't grow — only the mm→px distance scale does).
-            let widthPct = 100;
-            if (scaleMult > 1) {
-                const refSvgW = views.svgW;
-                views = buildPreviewViews(scaleMult, refSvgW);
-                widthPct = Math.max(100, (views.svgW / refSvgW) * 100);
+                topHtml = tgCounterScaleStrokes(topHtml, scaleMult);
+                elevationHtml = tgCounterScaleStrokes(elevationHtml, scaleMult);
+            } finally {
+                tgDotDiv = 1;
             }
-            const topHtml = views.topHtml;
-            const elevationHtml = views.elevationHtml;
             wrap.innerHTML = `
-                <div id="tgPreviewScaleInner" style="width:${widthPct.toFixed(3)}%; min-width:100%;">
+                <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * 100}%; min-width:100%;">
                     <div class="tg-view-section">${topHtml}</div>
                     <div class="tg-view-section">${elevationHtml}</div>
                 </div>
@@ -8672,14 +8671,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // ---- Top (plan) view — original live axle-line preview ----
         // Returns an SVG markup string (rather than writing to wrap
         // directly) so all three views can be stacked together.
-        // distMult (1/2/4): scales ONLY the plot area — i.e. the mm→viewBox
-        // `scale` — so real-world distances grow, while paddings, marker
-        // radii, stroke widths, font sizes and dimension tiers stay in the
-        // same viewBox units as 1x (see the preview-scale note above
-        // renderTrailerGenPreview). fontRefW is the 1x canvas width, passed
-        // through to the elevation view so its width-relative font sizes
-        // don't grow with the canvas either.
-        function renderTrailerGenTopView(rows, forcedSvgW, distMult, fontRefW) {
+        function renderTrailerGenTopView(rows, forcedSvgW) {
             // layoutSvgW drives every internal position (padL/plotW/
             // scale/offsetX/minX) and must NEVER change between passes,
             // or the elevation view (which reuses this exact mapping —
@@ -8690,8 +8682,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // caption) grows to match forcedSvgW when the elevation
             // view below needs more room than this plan view does —
             // see renderTrailerGenPreview's two-pass call.
-            const baseSvgW = 680;   // 1x design width
-            const dMult = Math.max(1, distMult || 1);
+            const layoutSvgW = 680;
             // padT/padB grow with the number of stacked dimension tiers so
             // those callouts never get clipped off the canvas. Dimensions
             // are now split into a FRONT stack (drawn above the assembly,
@@ -8704,14 +8695,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const dimTierHalf = Math.ceil(dimTierCount / 2);
             const padT = Math.max(34, 24 + dimTierHalf * 13);
             const padB0 = Math.max(30, 24 + dimTierHalf * 13);
-            const svgH1 = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30);   // 1x canvas height
+            const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30);
             const padL = 55, padR = 50, padB = padB0;
-            // Only the plot area (the part that holds real-world
-            // geometry) grows with dMult; pads stay fixed so labels,
-            // dimension tiers and the border keep their 1x spacing.
-            const plotW = (baseSvgW - padL - padR) * dMult, plotH = (svgH1 - padT - padB) * dMult;
-            const layoutSvgW = padL + plotW + padR;    // == 680 at 1x
-            const svgH = padT + plotH + padB;          // == svgH1 at 1x
+            const plotW = layoutSvgW - padL - padR, plotH = svgH - padT - padB;
 
             // Bounding box always includes the world origin (0,0) — so
             // the origin sign/arrows are always in view — plus every
@@ -8929,9 +8915,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         // (right or left) of a line — draw it as a small
                         // wheel box; the connecting beam to its opposite
                         // side is drawn separately in pairBeamSvg.
-                        axlesSvg += `<rect x="${cx - 5}" y="${y - 6}" width="10" height="12" rx="2.5" fill="${c.color}" opacity="${opacity}"/>`;
+                        axlesSvg += `<rect x="${cx - tgDot(5)}" y="${y - tgDot(6)}" width="${tgDot(10)}" height="${tgDot(12)}" rx="${tgDot(2.5)}" fill="${c.color}" opacity="${opacity}"/>`;
                     } else {
-                        axlesSvg += `<rect x="${cx - 5}" y="${y - 12}" width="10" height="24" rx="3" fill="${c.color}" opacity="${opacity}"/>`;
+                        axlesSvg += `<rect x="${cx - tgDot(5)}" y="${y - tgDot(12)}" width="${tgDot(10)}" height="${tgDot(24)}" rx="${tgDot(3)}" fill="${c.color}" opacity="${opacity}"/>`;
                     }
                 });
                 const centerX = pts.reduce((a, b) => a + b, 0) / pts.length;
@@ -8992,7 +8978,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const dotTokens = d.text.split('/');
                     const isActiveAssigned = dotTokens.some(t => activeSignTokens.has(t));
                     lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${d.text.replace(/'/g, "\\'")}')">` +
-                        `<circle cx="${d.cx.toFixed(1)}" cy="${d.cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="${isActiveAssigned ? 'var(--accent-blue, #38bdf8)' : 'var(--tank-box-bg, #0b1220)'}" stroke-width="${isActiveAssigned ? '2' : '0.8'}"/>` +
+                        `<circle cx="${d.cx.toFixed(1)}" cy="${d.cy.toFixed(1)}" r="${tgDot(3.2)}" fill="${LASHING_SIGN_COLOR}" stroke="${isActiveAssigned ? 'var(--accent-blue, #38bdf8)' : 'var(--tank-box-bg, #0b1220)'}" stroke-width="${isActiveAssigned ? '2' : '0.8'}"/>` +
                         `${labelText ? `<text x="${d.cx.toFixed(1)}" y="${(d.cy + labelDy).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${labelText}</text>` : ''}` +
                         `<title>${d.text} — lashing point sign (${d.side} side) — click to select for the active lashing type (click again to cycle through the others sharing this spot)</title>` +
                         `</g>`;
@@ -9044,7 +9030,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const x2 = sx(seg.endX).toFixed(1), y2 = sy(seg.endY).toFixed(1);
                 lashingChainSvg += `<g>` +
                     `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.4" opacity="0.85"/>` +
-                    `<circle cx="${x2}" cy="${y2}" r="2.4" fill="${color}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.6"/>` +
+                    `<circle cx="${x2}" cy="${y2}" r="${tgDot(2.4)}" fill="${color}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="0.6"/>` +
                     `<title>Lashing type ${seg.typeIndex + 1} — ${escapeHtml(seg.label)} to cargo attachment</title>` +
                     `</g>`;
             });
@@ -9352,7 +9338,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             let originSvg = `<g>` +
                 `<line x1="${ox0}" y1="${oy0}" x2="${ox0 + axisLen}" y2="${oy0}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1.75" marker-end="url(#tgArrowX)"/>` +
                 `<line x1="${ox0}" y1="${oy0}" x2="${ox0}" y2="${oy0 + axisLen}" stroke="var(--accent-green, #10b981)" stroke-width="1.75" marker-end="url(#tgArrowY)"/>` +
-                `<circle cx="${ox0}" cy="${oy0}" r="2.5" fill="var(--text-main, #e2e8f0)"/>` +
+                `<circle cx="${ox0}" cy="${oy0}" r="${tgDot(2.5)}" fill="var(--text-main, #e2e8f0)"/>` +
                 `<text x="${ox0 + axisLen + 4}" y="${oy0 + 3}" font-size="9" fill="var(--accent-blue, #38bdf8)">X</text>` +
                 `<text x="${ox0 - 3}" y="${oy0 + axisLen + 11}" font-size="9" fill="var(--accent-green, #10b981)" text-anchor="middle">Y</text>` +
                 `<text x="${ox0 + 4}" y="${oy0 - 5}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
@@ -9398,10 +9384,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (g.clusters.length > 1) {
                     g.clusters.forEach(c => {
                         connectSvg += `<line x1="${c.centerX}" y1="${c.centerY}" x2="${overallX}" y2="${overallY}" stroke="${g.color}" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.65"/>`;
-                        connectSvg += `<circle cx="${c.centerX}" cy="${c.centerY}" r="2.5" fill="${g.color}"/>`;
+                        connectSvg += `<circle cx="${c.centerX}" cy="${c.centerY}" r="${tgDot(2.5)}" fill="${g.color}"/>`;
                     });
                 }
-                connectSvg += `<circle cx="${overallX}" cy="${overallY}" r="4.5" fill="${g.color}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="1.5"/>`;
+                connectSvg += `<circle cx="${overallX}" cy="${overallY}" r="${tgDot(4.5)}" fill="${g.color}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="1.5"/>`;
                 g.overallX = overallX;
                 g.overallY = overallY;
 
@@ -9475,7 +9461,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const midX = sx((rowA.x + rowB.x) / 2);
                     splitMarkersSvg += `<g>` +
                         `<line x1="${midX}" y1="${y - 15}" x2="${midX}" y2="${y + 15}" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5" stroke-dasharray="1 3"/>` +
-                        `<circle cx="${midX}" cy="${y}" r="4.5" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5"/>` +
+                        `<circle cx="${midX}" cy="${y}" r="${tgDot(4.5)}" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5"/>` +
                         `<title>AutoCAD split — separate SPMT units here (${segments.join(' + ')})</title>` +
                         `</g>`;
                 });
@@ -9517,7 +9503,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // X mapping (offsetX + (x - minX) * scale) and canvas
                 // width, so axle positions line up vertically between
                 // the two stacked drawings.
-                minX, offsetX, padL, padR, plotW, svgW, fontRefW, lashingSigns: allLashingSigns, lashingChainSegments: lashingChainSegmentsTop
+                minX, offsetX, padL, padR, plotW, svgW, lashingSigns: allLashingSigns, lashingChainSegments: lashingChainSegmentsTop
             };
         }
 
@@ -9818,7 +9804,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const tokens = parseLashingSignLabelsList(target.replace(/\//g, ','));
                 const isActiveAssigned = tokens.some(t => activeSignTokensElev.has(t));
                 return `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${target.replace(/'/g, "\\'")}')">` +
-                    `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${LASHING_SIGN_COLOR}" stroke="${isActiveAssigned ? 'var(--accent-blue, #38bdf8)' : 'var(--tank-box-bg, #0b1220)'}" stroke-width="${isActiveAssigned ? '2' : '0.8'}"/>` +
+                    `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${tgDot(3.2)}" fill="${LASHING_SIGN_COLOR}" stroke="${isActiveAssigned ? 'var(--accent-blue, #38bdf8)' : 'var(--tank-box-bg, #0b1220)'}" stroke-width="${isActiveAssigned ? '2' : '0.8'}"/>` +
                     `<text x="${cx.toFixed(1)}" y="${(cy - 7).toFixed(1)}" font-size="6.5" font-weight="700" text-anchor="middle" fill="${LASHING_SIGN_COLOR}">${escapeHtml(txt)}</text>` +
                     `<title>${escapeHtml(target)} — click to select for the active lashing type (click again to cycle through the others sharing this spot)</title></g>`;
             };
@@ -9890,12 +9876,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const sX1 = sx(seg.startX), sZ1 = sz(seg.startZ);
                 const sX2 = sx(seg.endX), sZ2 = sz(seg.endZ);
                 lashingElevSvg += `<line x1="${sX1.toFixed(1)}" y1="${sZ1.toFixed(1)}" x2="${sX2.toFixed(1)}" y2="${sZ2.toFixed(1)}" stroke="${color}" stroke-width="1.2" opacity="0.85"/>` +
-                    `<circle cx="${sX2.toFixed(1)}" cy="${sZ2.toFixed(1)}" r="2.2" fill="${color}"/>`;
+                    `<circle cx="${sX2.toFixed(1)}" cy="${sZ2.toFixed(1)}" r="${tgDot(2.2)}" fill="${color}"/>`;
                 const eZ1 = szEnd(seg.startZ), eZ2 = szEnd(seg.endZ);
                 [sy1, sy2].forEach(syFn => {
                     const eY1 = syFn(seg.startY), eY2 = syFn(seg.endY);
                     lashingElevSvg += `<line x1="${eY1.toFixed(1)}" y1="${eZ1.toFixed(1)}" x2="${eY2.toFixed(1)}" y2="${eZ2.toFixed(1)}" stroke="${color}" stroke-width="1.2" opacity="0.85"/>` +
-                        `<circle cx="${eY2.toFixed(1)}" cy="${eZ2.toFixed(1)}" r="2.2" fill="${color}"/>`;
+                        `<circle cx="${eY2.toFixed(1)}" cy="${eZ2.toFixed(1)}" r="${tgDot(2.2)}" fill="${color}"/>`;
                 });
             });
 
@@ -9905,12 +9891,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // make text here read at the SAME on-screen size as the plan
             // view (regardless of how wide/narrow this true-scale drawing
             // ends up being), font sizes are scaled by this view's actual
-            // width relative to that 680 reference. When the plan view
-            // was rendered at a distance multiplier > 1 it hands down the
-            // 1x canvas width (topView.fontRefW) — the canvas grew only to
-            // fit the enlarged distances, not to enlarge text — so the
-            // font sizes stay at their 1x on-screen size.
-            const fontScale = ((topView && topView.fontRefW) || svgW) / 680;
+            // width relative to that 680 reference.
+            const fontScale = svgW / 680;
             const fLabel = (9 * fontScale).toFixed(2);   // matches plan view's deck-label / axis-label size
             const fDim = (8 * fontScale).toFixed(2);     // matches plan view's dimension-text size
 
@@ -9925,7 +9907,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const cogInlineLabel = (cx, cy, r, text, color, opts = {}) => {
                 const fontSize = opts.fontSize || 9;
                 const gap = opts.gap != null ? opts.gap : 4;
-                return `<text x="${(cx + r + gap).toFixed(1)}" y="${(cy + fontSize * 0.32).toFixed(1)}" font-size="${fontSize}" font-weight="700" fill="${color}">${text}</text>`;
+                return `<text x="${(cx + tgDot(r) + gap).toFixed(1)}" y="${(cy + fontSize * 0.32).toFixed(1)}" font-size="${fontSize}" font-weight="700" fill="${color}">${text}</text>`;
             };
             const deckThickPx = TG_ELEV_DECK_THICK * scale;
 
@@ -9964,7 +9946,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `<path d="M ${hx} ${baseY} L ${hx - dir * 5} ${baseY - 3} L ${hx - dir * 5} ${baseY + 3} Z" fill="var(--accent-green, #10b981)"/>` +
                     `<line x1="${baseX}" y1="${baseY}" x2="${baseX}" y2="${vy}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1.5"/>` +
                     `<path d="M ${baseX} ${vy} L ${baseX - 3} ${vy + 5} L ${baseX + 3} ${vy + 5} Z" fill="var(--accent-blue, #38bdf8)"/>` +
-                    `<circle cx="${baseX}" cy="${baseY}" r="2" fill="var(--text-main, #e2e8f0)"/>` +
+                    `<circle cx="${baseX}" cy="${baseY}" r="${tgDot(2)}" fill="var(--text-main, #e2e8f0)"/>` +
                     `<text x="${hx + dir * 4}" y="${baseY + 3}" font-size="9" fill="var(--accent-green, #10b981)" text-anchor="${dir > 0 ? 'start' : 'end'}">Y</text>` +
                     `<text x="${baseX + 4}" y="${vy - 4}" font-size="9" fill="var(--accent-blue, #38bdf8)">Z</text>` +
                     `</g>`;
