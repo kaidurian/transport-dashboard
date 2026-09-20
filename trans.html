@@ -391,6 +391,14 @@
            .tg-drawing-table use) is wrong here; column A is just "No."
            and should be as narrow as its content, like every other
            column. */
+        /* Top strip of the Lashing calculation card: A12:A14 | J12:J14
+           mirror on the left, lashing-axis sketch on the right. */
+        .tg-lct-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+        .tg-lct-info { flex: 1 1 auto; min-width: 0; }
+        .tg-lct-info table.tg-lct-info-table { width: auto; }
+        .tg-lct-info table.tg-lct-info-table td:first-child { width: auto; }
+        .tg-lct-axis { flex: 0 0 auto; width: 150px; }
+        .tg-lct-axis svg { display: block; width: 100%; height: auto; }
         table.tg-lashing-calc-table td:first-child {
             width: auto; text-align: center; white-space: nowrap; color: var(--text-main);
         }
@@ -811,7 +819,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.127)</h1>
+            <h1>🚂 Transport Dashboard (Rev.128)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1058,7 +1066,9 @@
                             column <strong>P</strong>, so it survives a pull the same as SWL/QTY/dx/dy/dz do.
                             Can also be set by clicking an L# sign directly in the 2D top/side/end views below —
                             that toggles the clicked sign into whichever type's card is currently "active" (click
-                            a card, or focus any of its fields, to make it the active one), <strong>SWL</strong>
+                            a card, or focus any of its fields, to make it the active one). A dot that stands for
+                            several points (SPMT, e.g. L1A/L1D) steps on each click through: none → all of them together
+                            (L1A, L1D) → L1A → L1D → none, <strong>SWL</strong>
                             (Safe Working Load of one lashing/chain of this
                             type, mTe), <strong>QTY</strong> (number of identical lashings of this type), and
                             <strong>dx / dy / dz</strong> (mm — offset from the cargo attachment point to the
@@ -1114,7 +1124,7 @@
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
-                                    ⧉ Show axle preview in separate window (compatible with two monitors)
+                                    ⧉ Show preview in separate window
                                 </label>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgGroupLabelToggle" checked onchange="toggleTgGroupLabels(this.checked)">
@@ -1135,6 +1145,16 @@
                                         <option value="1">1x</option>
                                         <option value="2">2x</option>
                                         <option value="4">4x</option>
+                                        <option value="6">6x</option>
+                                    </select>
+                                </label>
+                                <label class="tg-preview-toggle">
+                                    Font scale:
+                                    <select id="tgPreviewFontScaleSelect" onchange="setTgPreviewFontScale(this.value)" title="Size of the text in the Top/Side/End drawings. Follows the Scale select automatically whenever you change it, but you can then pick a different font scale here (e.g. 4x drawing with 2x text). Dimension values never change.">
+                                        <option value="1">1x</option>
+                                        <option value="2">2x</option>
+                                        <option value="4">4x</option>
+                                        <option value="6">6x</option>
                                     </select>
                                 </label>
                                 <label class="tg-preview-toggle">
@@ -1340,7 +1360,32 @@
                             Excel-computed Length/alfa/beta and the Eff./Long./Trans./Vertical capacity
                             columns, and Lashing point), the Total row, and the Unity Check row. Pull-only, never pushed — the
                             ⚓ Lashing card above is what writes No./SWL/QTY/dx/dy/dz back to A18:F41 and Lashing point back to P18:P41.
+                            The small block at the top-left mirrors <strong>A12:A14</strong> (left column) and
+                            <strong>J12:J14</strong> (right column) of the same sheet, pulled together with the table; the sketch at the
+                            top-right shows the lashing axis (+X right, +Y, +Z up, origin at the lashing point) that dx / dy / dz follow.
                         </p>
+                        <div class="tg-lct-top">
+                            <div id="tgLashingCalcInfo" class="tg-lct-info" title="Mirror of 'Lashing calculation'!A12:A14 (left) and J12:J14 (right)"></div>
+                            <div class="tg-lct-axis" title="Lashing axis — the dx / dy / dz offsets in the ⚓ Lashing card follow this axis, with the origin at the lashing point">
+                                <svg viewBox="70 25 600 445" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Lashing axis: +X right, +Y into the drawing, +Z up, origin at the lashing point">
+                                <g stroke="#4472C4" fill="#4472C4">
+                                    <line x1="347" y1="362" x2="352" y2="150" stroke-width="12"/>
+                                    <polygon points="352,92 328,160 376,158" stroke="none"/>
+                                    <line x1="347" y1="362" x2="440" y2="222" stroke-width="12"/>
+                                    <polygon points="470,172 460.6,234.3 419.4,209.7" stroke="none"/>
+                                    <line x1="347" y1="372" x2="520" y2="372" stroke-width="12"/>
+                                    <polygon points="582,372 515,346 515,398" stroke="none"/>
+                                    <circle cx="347" cy="362" r="28" fill="none" stroke-width="3"/>
+                                </g>
+                                <g fill="#4472C4" font-family="Calibri, 'Segoe UI', Arial, sans-serif" font-weight="700">
+                                    <text x="328" y="88" font-size="58">+Z</text>
+                                    <text x="432" y="156" font-size="58">+Y</text>
+                                    <text x="590" y="388" font-size="58">+X</text>
+                                    <text x="82" y="448" font-size="62" textLength="453" lengthAdjust="spacingAndGlyphs">LASHING POINT</text>
+                                </g>
+                            </svg>
+                            </div>
+                        </div>
                         <div id="tgLashingCalcTable" class="tg-drawing-table-wrap"></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the full table from Excel 'Lashing calculation'!A17:P43"
@@ -1941,7 +1986,7 @@
         // individually.
         function toggleAllTgMinimize(btn) {
             const cardEls = document.querySelectorAll(
-                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
             );
             const previewEls = document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap');
             const anyExpanded =
@@ -1996,7 +2041,7 @@
             // .tg-cargo-card variants) PLUS the 2 output table cards (by
             // id) all use the same .tg-card-minimized mechanism as
             // toggleTgCardMinimize().
-            document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv').forEach(card => {
+            document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing').forEach(card => {   // .tg-card-lashing = ⚓ Lashing + ⚓ Lashing calculation table
                 card.classList.add('tg-card-minimized');
                 const btn = card.querySelector('.tg-minimize-btn');
                 if (btn) { btn.textContent = '▢'; btn.title = 'Expand this card'; }
@@ -2051,6 +2096,11 @@
         // which the uniformly enlarged SVG then shows at their 1x size.
         // Always 1 outside renderTrailerGenPreview.
         let tgDotDiv = 1;
+        // Text-size factor for the current preview render = font scale /
+        // drawing scale (1 whenever the two selects match, which is the
+        // default — the font follows the scale). Used to size the boxes
+        // behind labels/dimension text to the text they hold.
+        let tgFontK = 1;
         function tgDot(v) { return tgDotDiv === 1 ? v : +(v / tgDotDiv).toFixed(3); }
         function cogSymbolSvg(cx, cy, r, color) {
             r = tgDot(r || 7);
@@ -2611,6 +2661,11 @@
         // row where A somehow isn't, see pullLashingFromExcelImpl).
         const LASHING_PULL_RANGE = `A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`;
         let tgLashingCalcRows = []; // raw 2D array pulled from LASHING_FULL_TABLE_RANGE, row-major
+        // Extra cells mirrored above the table: 'Lashing calculation'!A12:A14
+        // and J12:J14 (pulled together with the table; read-only).
+        const LASHING_INFO_A_RANGE = 'A12:A14';
+        const LASHING_INFO_J_RANGE = 'J12:J14';
+        let tgLashingCalcInfo = null; // { a: [[..],[..],[..]], j: [[..],[..],[..]] } once pulled
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
         // AZ34 = "LOAD DETAILS" header, BA34:BD34 = column headers
@@ -5719,56 +5774,62 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // A dot's label can carry MORE THAN ONE physically distinct
         // point (an SPMT top view A/D or B/C pair sharing one pixel
         // since the top view has no Z axis; the 4-way A/B/C/D station
-        // label) — clicking such a dot cycles ONE STEP through
-        // [none, tokens[0], tokens[1], ..., tokens[N-1], none, ...]
-        // rather than assigning every overlapping point to the active
-        // type at once, since a click is only ever really pointing at
-        // one of them. A plain single-token label (the normal case)
-        // is just the N=1 case of the same cycle — click to select,
-        // click again to deselect. Whichever token was previously the
-        // active type's member of this group is what "wasOnActive"
-        // toggling off; the newly-selected token is pulled off
-        // whichever type (active or not) currently holds it, same
-        // "moves rather than duplicates" rule as before — each
-        // physical L# sign is meant to belong to exactly one lashing
-        // type (renderLashingList's totals line flags it when that
+        // label) — each click on such a dot advances ONE STEP through
+        //     none -> ALL of the dot's points together -> point 1 ->
+        //     point 2 -> ... -> point N -> none -> ...
+        // e.g. a merged L1A/L1D dot: none -> "L1A, L1D" -> L1A -> L1D ->
+        // none. The "ALL" step is what lets two (or four) coincident
+        // points be put into the SAME lashing type with a single click;
+        // the following steps still let one of them be picked on its
+        // own. A plain single-point label (the normal case) is just the
+        // N=1 cycle: none -> the point -> none (no separate "all" step).
+        // Whichever of the dot's points the active type already holds
+        // decides where in the cycle the click starts from (all of them
+        // = the "ALL" step; exactly one = that point's step; anything
+        // else, e.g. typed in by hand, counts as "ALL"). Points that get
+        // selected are pulled off whichever other type currently holds
+        // them (each physical L# sign belongs to exactly one lashing
+        // type — renderLashingList's totals line flags it when that
         // invariant is broken).
         function toggleLashingSignForActiveType(labelText) {
             const activePoint = activeLashingPoint();
             if (!activePoint) return;
-            const tokens = parseLashingSignLabelsList((labelText || '').replace(/\//g, ','));
+            const tokens = Array.from(new Set(parseLashingSignLabelsList((labelText || '').replace(/\//g, ','))));
             if (!tokens.length) return;
+            const n = tokens.length;
             const activeList = () => parseLashingSignLabelsList(activePoint.signLabels);
-            // Cycle position 0 = none of this group selected; position
-            // i+1 = tokens[i] selected. curIdx looks at whichever group
-            // token (if any) is currently on the active type to find
-            // where in the cycle we are right now.
-            const curActiveIdx = activeList().findIndex(t => tokens.includes(t));
-            const curPos = curActiveIdx === -1 ? 0 : tokens.indexOf(activeList()[curActiveIdx]) + 1;
-            const nextPos = (curPos + 1) % (tokens.length + 1);
-            // Step 1 — deselect whichever group token is currently on
-            // the active type (there's normally at most one).
-            if (curActiveIdx !== -1) {
-                const list = activeList();
-                list.splice(curActiveIdx, 1);
+            const selected = tokens.filter(t => activeList().includes(t));
+            const totalSteps = n === 1 ? 2 : n + 2;   // none, [ALL,] one step per point
+            let curPos;
+            if (selected.length === 0) curPos = 0;
+            else if (n === 1) curPos = 1;
+            else if (selected.length === 1) curPos = 2 + tokens.indexOf(selected[0]);
+            else curPos = 1;                           // all of them (or a hand-typed mix)
+            const nextPos = (curPos + 1) % totalSteps;
+            // Step 1 — take this dot's points off the active type.
+            if (selected.length) {
+                const list = activeList().filter(t => !tokens.includes(t));
                 activePoint.signLabels = list.join(', ');
                 if (list.length > 0) activePoint.qty = list.length;
             }
-            // Step 2 — if the cycle landed on a real token (not "none"),
-            // select it.
+            // Step 2 — select whatever the new cycle position calls for.
+            let toAdd = [];
             if (nextPos > 0) {
-                const tok = tokens[nextPos - 1];
-                lashingPoints.forEach(p => {
-                    const list = parseLashingSignLabelsList(p.signLabels);
-                    const idx = list.indexOf(tok);
-                    if (idx >= 0) {
-                        list.splice(idx, 1);
-                        p.signLabels = list.join(', ');
-                        if (list.length > 0) p.qty = list.length;
+                if (n === 1) toAdd = [tokens[0]];
+                else toAdd = nextPos === 1 ? tokens.slice() : [tokens[nextPos - 2]];
+            }
+            if (toAdd.length) {
+                lashingPoints.forEach(pt => {
+                    if (pt === activePoint) return;
+                    const list = parseLashingSignLabelsList(pt.signLabels);
+                    const kept = list.filter(t => !toAdd.includes(t));
+                    if (kept.length !== list.length) {
+                        pt.signLabels = kept.join(', ');
+                        if (kept.length > 0) pt.qty = kept.length;
                     }
                 });
                 const list = activeList();
-                list.push(tok);
+                toAdd.forEach(t => list.push(t));
                 activePoint.signLabels = list.join(', ');
                 activePoint.qty = list.length;
             }
@@ -5868,19 +5929,47 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return out;
         }
 
+        function lashingQtyTitle(point) {
+            return point.signLabels ? 'Auto-set from the Lashing point list above (count of entries) — clear that field to edit QTY by hand again' : 'Number of identical lashings of this type (used for SWL/capacity — independent of the L# signs auto-placed in the 2D drawing from deck geometry)';
+        }
         function renderLashingList() {
             const el = document.getElementById('tgLashingList');
             if (!el) return;
-            // Every edit rebuilds this whole list's innerHTML (simplest
-            // way to keep row numbering/summary text in sync), which
-            // normally kicks focus out of whichever input the user was
-            // just typing in (it's now a brand-new DOM node) — reported
-            // as the "Lashing point" field feeling laggy/freezing.
-            // Captured here (by lashing-type id + field name, via the
-            // data-lid/data-field attributes on each input below) and
-            // restored after the rebuild so typing — including pressing
-            // Enter, which commits the value via onchange mid-edit —
-            // never knocks the user out of the field.
+            const activeId = activeLashingPoint() ? activeLashingPoint().id : null;
+            const idKey = lashingPoints.map(p => p.id).join(',');
+            const rowEls = Array.from(el.children).filter(c => c.classList && c.classList.contains('tg-group-row'));
+            if (el.dataset.lashIds === idKey && rowEls.length === lashingPoints.length) {
+                // Same set of lashing types as last render -> patch the
+                // existing inputs IN PLACE instead of rebuilding the
+                // whole list. Rebuilding replaced the very <input> the
+                // user was typing in (every edit, every focus change,
+                // every 2D-preview refresh and every silent Excel poll
+                // ends up here), which is what made the caret jump to
+                // the front of the value / drop typed text. The input
+                // that currently has focus is never touched, so typing,
+                // clicking into the middle of a value and Enter all keep
+                // the caret exactly where it is.
+                const focused = el.ownerDocument.activeElement;
+                rowEls.forEach((row, idx) => {
+                    const point = lashingPoints[idx];
+                    const isActive = point.id === activeId;
+                    row.classList.toggle('tg-group-row-active', isActive);
+                    const tag = row.querySelector('.tg-lashing-active-tag');
+                    if (tag) tag.style.display = isActive ? '' : 'none';
+                    row.querySelectorAll('input[data-field]').forEach(inp => {
+                        const field = inp.getAttribute('data-field');
+                        if (field === 'qty') {
+                            inp.readOnly = !!point.signLabels;
+                            inp.title = lashingQtyTitle(point);
+                        }
+                        if (inp === focused) return;
+                        const want = field === 'signLabels' ? (point.signLabels || '') : String(point[field]);
+                        if (inp.value !== want) inp.value = want;
+                    });
+                });
+            } else {
+            // Structure changed (add/remove/first render) — full rebuild,
+            // restoring focus/caret for whichever input had it.
             const active = document.activeElement;
             let focusInfo = null;
             if (active && el.contains(active) && active.tagName === 'INPUT') {
@@ -5890,24 +5979,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     selStart: active.selectionStart, selEnd: active.selectionEnd
                 };
             }
-            const activeId = activeLashingPoint() ? activeLashingPoint().id : null;
             el.innerHTML = lashingPoints.map((point, idx) => `
                 <div class="tg-group-row${point.id === activeId ? ' tg-group-row-active' : ''}">
                     <div class="tg-group-row-header" onclick="setActiveLashingPoint(${point.id})" title="Click to make this the active lashing type for 2D-drawing clicks">
                         <strong>⚓ Lashing No. ${idx + 1}</strong>
-                        ${point.id === activeId ? '<span style="font-size:10px; color:var(--accent-blue, #38bdf8); font-weight:600;">● active for drawing clicks</span>' : ''}
+                        <span class="tg-lashing-active-tag" style="font-size:10px; color:var(--accent-blue, #38bdf8); font-weight:600;${point.id === activeId ? '' : ' display:none;'}">● active for drawing clicks</span>
                         <button type="button" class="tg-remove-group" title="Remove lashing type"
                                 onclick="removeLashingPoint(${point.id})"
                                 ${lashingPoints.length <= 1 ? 'disabled' : ''}>✕</button>
                     </div>
                     <div class="tg-group-field-grid">
                         <div class="tg-group-field" style="grid-column: 1 / -1;">
-                            <label>Lashing point <span style="font-weight:400; color:var(--text-muted); font-size:10px;">(or click L# signs in the 2D drawing — targets whichever type is "active" above)</span></label>
+                            <label>Lashing point <span style="font-weight:400; color:var(--text-muted); font-size:10px;">(or click L# signs in the 2D drawing — targets whichever type is "active" above)</span>
                             <input type="text" value="${escapeHtml(point.signLabels || '')}"
                                    data-lid="${point.id}" data-field="signLabels"
                                    placeholder="e.g. L1-L3, L5, L23 — or L3A, L4C, L23D for SPMT (lower-case OK, e.g. l1, l3b)"
                                    title="Which drawn L# sign(s) this lashing type is physically installed at — comma/space separated, matching the labels drawn in the 2D views (not case-sensitive; l1 = L1). A range like L1-L3 expands to L1, L2, L3. QTY below auto-fills to the count of entries here once you type any. Clicking an L# sign in the 2D drawing toggles it here too, for whichever type is currently active."
                                    onfocus="setActiveLashingPoint(${point.id})"
+                                   oninput="markLashingDirty()"
                                    onchange="updateLashingField(${point.id}, 'signLabels', this.value)">
                         </div>
                         <div class="tg-group-field">
@@ -5916,15 +6005,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                    data-lid="${point.id}" data-field="swl"
                                    title="Safe Working Load of one lashing/chain of this type"
                                    onfocus="setActiveLashingPoint(${point.id})"
+                                   oninput="markLashingDirty()"
                                    onchange="updateLashingField(${point.id}, 'swl', this.value)">
                         </div>
                         <div class="tg-group-field">
                             <label>QTY</label>
                             <input type="number" step="1" min="1" value="${point.qty}"
                                    data-lid="${point.id}" data-field="qty"
-                                   title="${point.signLabels ? 'Auto-set from the Lashing point list above (count of entries) — clear that field to edit QTY by hand again' : 'Number of identical lashings of this type (used for SWL/capacity — independent of the L# signs auto-placed in the 2D drawing from deck geometry)'}"
+                                   title="${lashingQtyTitle(point)}"
                                    ${point.signLabels ? 'readonly' : ''}
                                    onfocus="setActiveLashingPoint(${point.id})"
+                                   oninput="markLashingDirty()"
                                    onchange="updateLashingField(${point.id}, 'qty', this.value)">
                         </div>
                         <div class="tg-group-field">
@@ -5933,6 +6024,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                    data-lid="${point.id}" data-field="dx"
                                    title="X offset, cargo attachment point to deck/lashing-eye anchor"
                                    onfocus="setActiveLashingPoint(${point.id})"
+                                   oninput="markLashingDirty()"
                                    onchange="updateLashingField(${point.id}, 'dx', this.value)">
                         </div>
                         <div class="tg-group-field">
@@ -5941,6 +6033,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                    data-lid="${point.id}" data-field="dy"
                                    title="Y offset, cargo attachment point to deck/lashing-eye anchor"
                                    onfocus="setActiveLashingPoint(${point.id})"
+                                   oninput="markLashingDirty()"
                                    onchange="updateLashingField(${point.id}, 'dy', this.value)">
                         </div>
                         <div class="tg-group-field">
@@ -5949,14 +6042,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                    data-lid="${point.id}" data-field="dz"
                                    title="Z offset, cargo attachment point to deck/lashing-eye anchor"
                                    onfocus="setActiveLashingPoint(${point.id})"
+                                   oninput="markLashingDirty()"
                                    onchange="updateLashingField(${point.id}, 'dz', this.value)">
                         </div>
                     </div>
-                    <div class="tg-group-summary">
-                        ${point.qty} × SWL ${point.swl} mTe${point.signLabels ? ` · ${escapeHtml(point.signLabels)}` : ''}
-                    </div>
                 </div>
                 `).join('');
+            el.dataset.lashIds = idKey;
 
             if (focusInfo && focusInfo.lid) {
                 const next = el.querySelector(`[data-lid="${focusInfo.lid}"][data-field="${focusInfo.field}"]`);
@@ -5966,6 +6058,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         try { next.setSelectionRange(focusInfo.selStart, focusInfo.selEnd); } catch (e) { /* ignore — some input types don't support selection ranges */ }
                     }
                 }
+            }
             }
 
             const totalPoints = lashingPoints.reduce((s, p) => s + (parseFloat(p.qty) || 0), 0);
@@ -6032,7 +6125,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     lashingPoints = values.slice(0, rowCount).map((r, i) => {
                         const pv = pointColValues && pointColValues[i] ? pointColValues[i][0] : '';
                         return {
-                            id: lashingIdCounter++,
+                            // Reuse the existing row's id (same position) so the
+                            // list is patched in place, not rebuilt — keeps focus/caret
+                            // and the active-row selection across pulls.
+                            id: (lashingPoints[i] && lashingPoints[i].id) || lashingIdCounter++,
                             signLabels: (pv === null || pv === undefined) ? '' : String(pv),
                             swl: parseFloat(r[1]) || 0,
                             qty: parseFloat(r[2]) || 0,
@@ -6140,7 +6236,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             html += '</table>';
             return html;
         }
+        // Small 3-row block for 'Lashing calculation'!A12:A14 | J12:J14,
+        // shown top-left of the table card (the lashing axis sits top-right).
+        function renderTgLashingCalcInfo() {
+            const el = document.getElementById('tgLashingCalcInfo');
+            if (!el) return;
+            const info = tgLashingCalcInfo;
+            const fmt = v => {
+                if (v === null || v === undefined || v === '') return '';
+                if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+                return escapeHtml(String(v));
+            };
+            if (!info) { el.innerHTML = ''; return; }
+            let html = '<table class="tg-drawing-table tg-lct-info-table">';
+            for (let i = 0; i < 3; i++) {
+                const row = 12 + i;
+                const a = info.a[i] ? info.a[i][0] : '', j = info.j[i] ? info.j[i][0] : '';
+                html += `<tr><td title="'${LASHING_SHEET_NAME}'!A${row}">${fmt(a)}</td><td title="'${LASHING_SHEET_NAME}'!J${row}">${fmt(j)}</td></tr>`;
+            }
+            el.innerHTML = html + '</table>';
+        }
         function renderTgLashingCalcTable() {
+            renderTgLashingCalcInfo();
             const el = document.getElementById('tgLashingCalcTable');
             if (!el) return;
             if (!tgLashingCalcRows.length) {
@@ -6156,17 +6273,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return;
             }
             try {
-                let values = null;
+                let values = null, infoA = null, infoJ = null;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(LASHING_SHEET_NAME);
                     const range = sheet.getRange(LASHING_FULL_TABLE_RANGE);
+                    const rangeA = sheet.getRange(LASHING_INFO_A_RANGE);
+                    const rangeJ = sheet.getRange(LASHING_INFO_J_RANGE);
                     range.load('values');
+                    rangeA.load('values');
+                    rangeJ.load('values');
                     await context.sync();
                     values = range.values;
+                    infoA = rangeA.values;
+                    infoJ = rangeJ.values;
                 });
                 tgLashingCalcRows = values || [];
+                tgLashingCalcInfo = { a: infoA || [], j: infoJ || [] };
                 renderTgLashingCalcTable();
-                if (!silent) logMsg(`↺ Pulled Lashing calculation table from '${LASHING_SHEET_NAME}'!${LASHING_FULL_TABLE_RANGE}.`);
+                if (!silent) logMsg(`↺ Pulled Lashing calculation table from '${LASHING_SHEET_NAME}'!${LASHING_FULL_TABLE_RANGE} (+ ${LASHING_INFO_A_RANGE}, ${LASHING_INFO_J_RANGE}).`);
             } catch (e) {
                 console.warn(`Could not read '${LASHING_SHEET_NAME}' sheet (${LASHING_FULL_TABLE_RANGE})`, e);
                 if (!silent) alert(`Could not read sheet "${LASHING_SHEET_NAME}". Make sure it exists.`);
@@ -8573,9 +8697,71 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!(mult > 1)) return markup;
             return markup.replace(/stroke-width="([0-9.]+)"/g, (m, v) => `stroke-width="${+(parseFloat(v) / mult).toFixed(4)}"`);
         }
+        // Font scale (2D preview) — the text size on screen, as a
+        // multiple of the 1x size. Follows the Scale select: picking a
+        // scale sets the font scale to the same value (so text grows with
+        // the drawing, as before); the Font scale select can then be
+        // changed by hand to decouple the two (e.g. 4x drawing, 2x text).
+        // Applied in renderTrailerGenPreview by rescaling every SVG
+        // font-size by fontScale / drawingScale (tgApplyFontScale).
+        let tgPreviewFontMult = 1;
         function setTgPreviewScale(val) {
             tgPreviewScaleMult = parseFloat(val) || 1;
+            tgPreviewFontMult = tgPreviewScaleMult;
+            const fontSel = document.getElementById('tgPreviewFontScaleSelect');
+            if (fontSel) fontSel.value = String(tgPreviewFontMult);
             renderTrailerGenPreview();
+        }
+        function setTgPreviewFontScale(val) {
+            tgPreviewFontMult = parseFloat(val) || 1;
+            renderTrailerGenPreview();
+        }
+        // ---- Middle-mouse-button pan (like AutoCAD): press and hold the
+        // wheel/middle button on the 2D drawing and drag to scroll it in
+        // both directions. Works on the inline #tgPreview panel and on the
+        // "separate window" preview (whose own document scrolls). Bound
+        // once per wrap element; the mousemove/mouseup listeners exist
+        // only while a pan is in progress, so nothing accumulates.
+        function tgAttachMiddlePan(wrap) {
+            if (!wrap || wrap.dataset.tgPanBound === '1') return;
+            wrap.dataset.tgPanBound = '1';
+            const doc = wrap.ownerDocument;
+            const findScroller = () => {
+                const win = doc.defaultView || window;
+                let n = wrap;
+                while (n && n !== doc.body && n !== doc.documentElement) {
+                    const cs = win.getComputedStyle(n);
+                    if (/(auto|scroll)/.test(cs.overflowX + ' ' + cs.overflowY) &&
+                        (n.scrollWidth > n.clientWidth || n.scrollHeight > n.clientHeight)) return n;
+                    n = n.parentElement;
+                }
+                return doc.scrollingElement || doc.documentElement;
+            };
+            wrap.addEventListener('mousedown', (e) => {
+                if (e.button !== 1) return;
+                e.preventDefault();   // stops the browser's own middle-click auto-scroll circle
+                const sc = findScroller();
+                const start = { x: e.clientX, y: e.clientY, left: sc.scrollLeft, top: sc.scrollTop };
+                const prevCursor = wrap.style.cursor;
+                wrap.style.cursor = 'grabbing';
+                const onMove = (ev) => {
+                    if (!(ev.buttons & 4)) { onUp(); return; }   // button released outside the window
+                    sc.scrollLeft = start.left - (ev.clientX - start.x);
+                    sc.scrollTop = start.top - (ev.clientY - start.y);
+                };
+                const onUp = () => {
+                    doc.removeEventListener('mousemove', onMove, true);
+                    doc.removeEventListener('mouseup', onUp, true);
+                    wrap.style.cursor = prevCursor;
+                };
+                doc.addEventListener('mousemove', onMove, true);
+                doc.addEventListener('mouseup', onUp, true);
+            });
+            wrap.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+        }
+        function tgApplyFontScale(markup, k) {
+            if (Math.abs(k - 1) < 1e-6) return markup;
+            return markup.replace(/font-size="([0-9.]+)"/g, (m, v) => `font-size="${+(parseFloat(v) * k).toFixed(3)}"`);
         }
 
         function renderTrailerGenPreview() {
@@ -8609,6 +8795,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // side view at a shared height scale).
             const scaleMult = Math.max(1, tgPreviewScaleMult || 1);
             tgDotDiv = scaleMult;   // fixed-size markers are drawn at 1/scaleMult in layout units
+            // Text: the drawing is enlarged scaleMult x uniformly, so to show
+            // text at fontMult x its 1x size every font-size is multiplied by
+            // fontMult / scaleMult (1 when the two selects match).
+            const fontMult = Math.max(0.1, tgPreviewFontMult || 1);
+            tgFontK = fontMult / scaleMult;
             let topHtml, elevationHtml;
             try {
                 const topResult = renderTrailerGenTopView(rows);
@@ -8633,10 +8824,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 topHtml = elevResult.svgW > topResult.svgW
                     ? renderTrailerGenTopView(rows, elevResult.svgW).svg
                     : topResult.svg;
-                topHtml = tgCounterScaleStrokes(topHtml, scaleMult);
-                elevationHtml = tgCounterScaleStrokes(elevationHtml, scaleMult);
+                topHtml = tgApplyFontScale(tgCounterScaleStrokes(topHtml, scaleMult), tgFontK);
+                elevationHtml = tgApplyFontScale(tgCounterScaleStrokes(elevationHtml, scaleMult), tgFontK);
             } finally {
                 tgDotDiv = 1;
+                tgFontK = 1;
             }
             wrap.innerHTML = `
                 <div id="tgPreviewScaleInner" style="width:${tgPreviewScaleMult * 100}%; min-width:100%;">
@@ -8655,6 +8847,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // element itself (#tgPreview, or the current
             // #tgPreviewExternalRoot) stays the same node, so re-observing
             // it every render would just pile up duplicate observers.
+            tgAttachMiddlePan(wrap);
             tgApplyOrientScale(wrap);
             if (tgOrientResizeObserver && !wrap.dataset.tgOrientObserved) {
                 wrap.dataset.tgOrientObserved = '1';
@@ -8795,11 +8988,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // Box sized to fit the text itself (short "G1"/"G2" tags
                 // now that the full detail string moved to the legend
                 // below) instead of a fixed 70px-wide minimum plate.
-                const boxW = text.length * 6.2 + 14;
-                const boxH = 16;
+                const boxW = text.length * 6.2 * tgFontK + 14;
+                const boxH = 16 * tgFontK;
                 return `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${labelX.toFixed(1)}" y2="${labelY.toFixed(1)}" stroke="${color}" stroke-width="1" opacity="0.55"/>` +
                     `<rect x="${(labelX - boxW / 2).toFixed(1)}" y="${(labelY - boxH / 2).toFixed(1)}" width="${boxW}" height="${boxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="${color}" stroke-width="1"/>` +
-                    `<text x="${labelX.toFixed(1)}" y="${(labelY + 3.5).toFixed(1)}" font-size="${fontSize}" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
+                    `<text x="${labelX.toFixed(1)}" y="${(labelY + 3.5 * tgFontK).toFixed(1)}" font-size="${fontSize}" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
             };
 
             // Collision-avoiding "attached" label placement — no leader
@@ -8825,8 +9018,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const placeAttachedLabel = (rect, text, color, opts = {}) => {
                 const fontSize = opts.fontSize || 9;
                 const gap = opts.gap != null ? opts.gap : 4;
-                const textW = Math.max(20, text.length * fontSize * 0.56);
-                const textH = fontSize + 4;
+                const textW = Math.max(20, text.length * fontSize * tgFontK * 0.56);
+                const textH = fontSize * tgFontK + 4;
                 const midX = (rect.x1 + rect.x2) / 2, midY = (rect.y1 + rect.y2) / 2;
                 const candidates = [
                     { x1: midX - textW / 2, y1: rect.y1 - gap - textH, x2: midX + textW / 2, y2: rect.y1 - gap, anchorX: midX, anchorY: rect.y1 - gap - 3, align: 'middle' },
@@ -9173,12 +9366,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const x1 = sx(xa), x2 = sx(xb);
                     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
                     const y = zone === 'front' ? frontTopY - tier * 13 : backBottomY + tier * 13;
-                    const boxW = Math.max(20, label.length * 5.4);
+                    const boxW = Math.max(20, label.length * 5.4 * tgFontK);
                     return `<g opacity="0.9">` +
                         `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
                         `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
-                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 3 - 10 * tgFontK}" width="${boxW}" height="${10 * tgFontK}" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
                         `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="8" text-anchor="middle" fill="${color}">${escapeHtml(label)}</text>` +
                         `</g>`;
                 };
@@ -9472,7 +9665,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // already-computed position; it just adds blank margin
             // past the (fixed-size) bordered plot box.
             const svgW = Math.max(layoutSvgW, forcedSvgW || 0);
-            const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH + 20}" style="display:block;">
+            const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH + 12 + 8 * Math.max(1, tgFontK)}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-blue, #38bdf8)"/>
@@ -9483,7 +9676,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 ${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}
-                <text x="${svgW / 2}" y="${svgH + 14}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
+                <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
             // Detail legend lives in the main document (not the pop-out
@@ -9956,6 +10149,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             // ---- Side view: one wheel + deck strip per train ----
             let sideWheelsSvg = '', sideDecksSvg = '';
+            const sideTrainLabelXs = [];   // x of each train-name label under the side view (for the "Side View" caption)
             const byTrain = {};
             rows.forEach(r => { (byTrain[r.trainName] = byTrain[r.trainName] || []).push(r); });
             Object.keys(byTrain).forEach(trainName => {
@@ -9987,6 +10181,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // (rather than hugging the deck top) so it reads as a
                 // caption under the drawing, matching the panel-label
                 // convention used for the end-view captions further down.
+                sideTrainLabelXs.push((dx1 + dx2) / 2);
                 sideDecksSvg += `<text x="${(dx1 + dx2) / 2}" y="${sideGroundY + 16}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(trainName)}</text>`;
             });
 
@@ -10450,12 +10645,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const x1 = sx(xa), x2 = sx(xb);
                     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
                     const ty = textY != null ? textY : y;
-                    const boxW = Math.max(20, String(label).length * 5.2);
+                    const boxW = Math.max(20, String(label).length * 5.2 * tgFontK);
                     return `<g opacity="0.9">` +
                         `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
                         `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
-                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${ty - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${ty - 3 - 10 * tgFontK}" width="${boxW}" height="${10 * tgFontK}" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
                         `<text x="${(lo + hi) / 2}" y="${ty - 5}" font-size="${fDim}" text-anchor="middle" fill="${color}">${escapeHtml(String(label))}</text>` +
                         `</g>`;
                 };
@@ -10617,12 +10812,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const chainColorEnd = 'var(--text-muted, #94a3b8)';
                 const dimHEnd = (sxa, sxb, y, color, label) => {
                     const lo = Math.min(sxa, sxb), hi = Math.max(sxa, sxb);
-                    const boxW = Math.max(20, String(label).length * 5.2);
+                    const boxW = Math.max(20, String(label).length * 5.2 * tgFontK);
                     return `<g opacity="0.9">` +
                         `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
                         `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
-                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 3 - 10 * tgFontK}" width="${boxW}" height="${10 * tgFontK}" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
                         `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="${fDim}" text-anchor="middle" fill="${color}">${escapeHtml(String(label))}</text>` +
                         `</g>`;
                 };
@@ -10749,12 +10944,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const xa = syFn(y0World), xb = syFn(yWorld);
                     const lo = Math.min(xa, xb), hi = Math.max(xa, xb);
                     const y = endPadT - 10 - tier * 13;
-                    const boxW = Math.max(20, label.length * 5.2);
+                    const boxW = Math.max(20, label.length * 5.2 * tgFontK);
                     return `<g opacity="0.9">` +
                         `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
                         `<line x1="${hi}" y1="${y - 3}" x2="${hi}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
-                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 13}" width="${boxW}" height="10" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
+                        `<rect x="${(lo + hi) / 2 - boxW / 2}" y="${y - 3 - 10 * tgFontK}" width="${boxW}" height="${10 * tgFontK}" fill="var(--tank-box-bg, #0b1220)" opacity="0.85"/>` +
                         `<text x="${(lo + hi) / 2}" y="${y - 5}" font-size="8" text-anchor="middle" fill="${color}">${escapeHtml(label)}</text>` +
                         `</g>`;
                 };
@@ -10776,8 +10971,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // row (endChainRowY) instead of at fixed offsets, so they
             // always read below it (see buildEndViewPanel's `labels` and
             // the removed groundSvg caption lines above).
-            const trainLabelY = endChainMaxY + 16;
-            const captionY = trainLabelY + 16;
+            const kk = Math.max(1, tgFontK);   // extra row spacing only when the text is enlarged
+            const trainLabelY = endChainMaxY + 16 * kk;
+            const captionY = trainLabelY + 16 * kk;
             let endLabelsSvg = '';
             [...endPanel1.labels, ...endPanel2.labels].forEach(l => {
                 endLabelsSvg += `<text x="${(l.dx1 + l.dx2) / 2}" y="${trainLabelY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(l.name)}</text>`;
@@ -10789,11 +10985,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // camera preset names (Top/Side/Front/Rear — see
             // TG3D_CAM_PRESETS) so every 2D + 3D view uses one shared
             // naming convention.
-            endLabelsSvg += `<text x="${sideOffsetX + sideW / 2}" y="${captionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Side View</text>`;
+            // Positioned directly UNDER the side view's own train-name
+            // label(s) (drawn at sideGroundY + 16 under each train's deck
+            // — see sideDecksSvg), one text-line below it, centered under
+            // the side view, rather than down on the Front/Rear View
+            // caption row.
+            const sideCaptionY = sideGroundY + 16 + Math.round(Number(fLabel) * tgFontK * 1.3);
+            const sideCaptionX = sideTrainLabelXs.length === 1 ? sideTrainLabelXs[0] : sideOffsetX + sideW / 2;   // straight under the train label when there is just one
+            endLabelsSvg += `<text x="${sideCaptionX}" y="${sideCaptionY}" font-size="${fLabel}" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Side View</text>`;
             // svgH now accounts for however low endChainRowY/captionY
             // actually landed (can sit well past the old fixed padB when
             // a stability triangle's arm label is the deepest element).
-            const svgH = Math.max(endGroundY + padB, captionY + 16);
+            const svgH = Math.max(endGroundY + padB, captionY + 16 * kk, sideCaptionY + 8 * kk);
 
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
