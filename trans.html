@@ -391,13 +391,13 @@
            .tg-drawing-table use) is wrong here; column A is just "No."
            and should be as narrow as its content, like every other
            column. */
-        /* Top strip of the Lashing calculation card: A12:A14 | J12:J14
+        /* Top strip of the Lashing calculation card: A12:A14 | F12:J14
            mirror on the left, lashing-axis sketch on the right. */
         .tg-lct-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
         .tg-lct-info { flex: 1 1 auto; min-width: 0; }
         .tg-lct-info table.tg-lct-info-table { width: auto; }
         .tg-lct-info table.tg-lct-info-table td:first-child { width: auto; }
-        .tg-lct-axis { flex: 0 0 auto; width: 150px; }
+        .tg-lct-axis { flex: 0 0 auto; width: 120px; }   /* 80% of the original 150px */
         .tg-lct-axis svg { display: block; width: 100%; height: auto; }
         table.tg-lashing-calc-table td:first-child {
             width: auto; text-align: center; white-space: nowrap; color: var(--text-main);
@@ -819,7 +819,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.128)</h1>
+            <h1>🚂 Transport Dashboard (Rev.128.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1361,11 +1361,11 @@
                             columns, and Lashing point), the Total row, and the Unity Check row. Pull-only, never pushed — the
                             ⚓ Lashing card above is what writes No./SWL/QTY/dx/dy/dz back to A18:F41 and Lashing point back to P18:P41.
                             The small block at the top-left mirrors <strong>A12:A14</strong> (left column) and
-                            <strong>J12:J14</strong> (right column) of the same sheet, pulled together with the table; the sketch at the
+                            <strong>F12:J14</strong> (the five columns to its right) of the same sheet, pulled together with the table; the sketch at the
                             top-right shows the lashing axis (+X right, +Y, +Z up, origin at the lashing point) that dx / dy / dz follow.
                         </p>
                         <div class="tg-lct-top">
-                            <div id="tgLashingCalcInfo" class="tg-lct-info" title="Mirror of 'Lashing calculation'!A12:A14 (left) and J12:J14 (right)"></div>
+                            <div id="tgLashingCalcInfo" class="tg-lct-info" title="Mirror of 'Lashing calculation'!A12:A14 (left) and F12:J14 (right)"></div>
                             <div class="tg-lct-axis" title="Lashing axis — the dx / dy / dz offsets in the ⚓ Lashing card follow this axis, with the origin at the lashing point">
                                 <svg viewBox="70 25 600 445" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Lashing axis: +X right, +Y into the drawing, +Z up, origin at the lashing point">
                                 <g stroke="#4472C4" fill="#4472C4">
@@ -2662,9 +2662,9 @@
         const LASHING_PULL_RANGE = `A${LASHING_DATA_START_ROW}:F${LASHING_DATA_END_ROW}`;
         let tgLashingCalcRows = []; // raw 2D array pulled from LASHING_FULL_TABLE_RANGE, row-major
         // Extra cells mirrored above the table: 'Lashing calculation'!A12:A14
-        // and J12:J14 (pulled together with the table; read-only).
+        // and F12:J14 (pulled together with the table; read-only).
         const LASHING_INFO_A_RANGE = 'A12:A14';
-        const LASHING_INFO_J_RANGE = 'J12:J14';
+        const LASHING_INFO_J_RANGE = 'F12:J14';   // 3 rows x 5 columns (F..J)
         let tgLashingCalcInfo = null; // { a: [[..],[..],[..]], j: [[..],[..],[..]] } once pulled
 
         // ---- Cargo (Generate Cargo) — Excel "Input"!AZ34:BD40 ----
@@ -6236,7 +6236,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             html += '</table>';
             return html;
         }
-        // Small 3-row block for 'Lashing calculation'!A12:A14 | J12:J14,
+        // Small 3-row block for 'Lashing calculation'!A12:A14 | F12:J14,
         // shown top-left of the table card (the lashing axis sits top-right).
         function renderTgLashingCalcInfo() {
             const el = document.getElementById('tgLashingCalcInfo');
@@ -6251,8 +6251,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             let html = '<table class="tg-drawing-table tg-lct-info-table">';
             for (let i = 0; i < 3; i++) {
                 const row = 12 + i;
-                const a = info.a[i] ? info.a[i][0] : '', j = info.j[i] ? info.j[i][0] : '';
-                html += `<tr><td title="'${LASHING_SHEET_NAME}'!A${row}">${fmt(a)}</td><td title="'${LASHING_SHEET_NAME}'!J${row}">${fmt(j)}</td></tr>`;
+                const a = info.a[i] ? info.a[i][0] : '';
+                const fj = info.j[i] || [];   // F..J of this row
+                html += `<tr><td title="'${LASHING_SHEET_NAME}'!A${row}">${fmt(a)}</td>` +
+                    ['F', 'G', 'H', 'I', 'J'].map((col, k) => `<td title="'${LASHING_SHEET_NAME}'!${col}${row}">${fmt(fj[k])}</td>`).join('') + `</tr>`;
             }
             el.innerHTML = html + '</table>';
         }
