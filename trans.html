@@ -819,7 +819,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.130)</h1>
+            <h1>🚂 Transport Dashboard (Rev.130.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1401,16 +1401,22 @@
                         </div>
                         <p class="tg-modal-sub" id="tgCheckSummaryHelpPanel">
                             Read-only mirror of the checks from KKKai's list that don't live anywhere else yet
-                            — <strong>Unity Check Moment</strong> (Front/Rear/Right/Left), <strong>Axle Line
-                            Capacity</strong> (Group 01&ndash;04), <strong>Chassis Capacity Check</strong>
-                            (bending moment / shear force), and <strong>Driving/Braking Check</strong>
-                            (utilisation). <strong>MAX GBP (ALL CASES)</strong> and the 7 <strong>STABILITY
-                            ANGLE</strong> rows already live in 📈 CoG Envelope Summary above — this card is only
-                            the remaining groups. Every row here uses the same <strong>&lt;1</strong> pass/fail
-                            limit. Pull-only, never pushed. <strong>Source cells aren't wired up yet</strong> —
-                            fill in the sheet name + cell for each row in <code>CHECK_SUMMARY_ROWS</code> near
-                            <code>pullCheckSummaryFromExcel()</code> in the code, then this refresh button will
-                            pull real values the same way 📈 CoG Envelope Summary does.
+                            — <strong>Unity Check Moment</strong> (Front/Rear/Right/Left) from sheet
+                            <strong>"Stability on strength (3P)"</strong>!<strong>C11:C14</strong>,
+                            <strong>Allowable Moments</strong> (based on allowable axle loadings) from the same
+                            sheet's <strong>C46/C53/C60/C67</strong>, <strong>Axle Line Capacity</strong>
+                            (3 groups) from <strong>"Drawing_table"</strong>!<strong>C48/D48/E48</strong>,
+                            <strong>Stability Angle</strong> (7 rows) from <strong>"Drawing_table"</strong>!
+                            <strong>C56:C62</strong> — each row's limit is pulled live from the matching cell
+                            in <strong>D56:D62</strong>, not a fixed number — <strong>Chassis Capacity
+                            Check</strong> from <strong>"Chasis Capacity Check"</strong>!<strong>H43</strong>
+                            (bending) / <strong>H44</strong> (shear), and <strong>Driving/Braking Check</strong>
+                            from <strong>"Traction Check"</strong>!<strong>C66</strong> (driving) /
+                            <strong>C84</strong> (braking). <strong>MAX GBP (ALL CASES)</strong> already lives in
+                            📈 CoG Envelope Summary above, so it isn't duplicated here. Every row is flagged
+                            red using its own limit/direction (most are <strong>&lt;1</strong>, the Stability
+                            Angle rows are <strong>&gt;N&deg;</strong> against their pulled limit). Pull-only,
+                            never pushed.
                         </p>
                         <div id="tgCheckSummaryTable" class="tg-drawing-table-wrap"><!-- Additional Check Summary rendered by JS --></div>
                         <div class="tg-train-list-actions">
@@ -2666,6 +2672,12 @@
         // deleted type's whole row (No. + values + Lashing point)
         // disappears from Excel, not just its values.
         const LASHING_SHEET_NAME = "Lashing calculation";
+        // Sheets behind the ✅ Additional Check Summary card's
+        // CHECK_SUMMARY_ROWS below — separate reference workbooks from
+        // the Drawing_table/_LC/_LC_Slope family above.
+        const STABILITY_ON_STRENGTH_SHEET_NAME = "Stability on strength (3P)";
+        const CHASSIS_CAPACITY_SHEET_NAME = "Chasis Capacity Check"; // sic — matches KKKai's actual sheet name/spelling
+        const TRACTION_CHECK_SHEET_NAME = "Traction Check";
         const LASHING_HEADER_ROW = 17;
         const LASHING_DATA_START_ROW = 18;
         const LASHING_DATA_END_ROW = 41; // 24 rows max (18-41)
@@ -6809,32 +6821,47 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
         // ---- ✅ Additional Check Summary — the remaining checks from
         // KKKai's list that aren't covered by 📈 CoG Envelope Summary
-        // above (that card already owns MAX GBP (ALL CASES) and the 7
-        // STABILITY ANGLE rows). Same read-only/pull-only pattern —
-        // nothing here is ever pushed.
+        // above (that card already owns MAX GBP (ALL CASES) via its own
+        // per-LC pull). Same read-only/pull-only pattern — nothing here
+        // is ever pushed.
         //
-        // TODO(KKKai): CHECK_SUMMARY_ROWS below has sheet/cell set to
-        // null for every row as a placeholder — fill in the real sheet
-        // name + cell reference per row (single cells, same idea as
-        // "Input"!BD28 in pullCogEnvSummaryFromExcel()) and refresh will
-        // start pulling real values. Until then the card renders
-        // "not configured" for every row instead of failing silently.
-        const CHECK_SUMMARY_THRESHOLD = 1; // shared "<1" limit for every row here
+        // Each row: { section, label, sheet, cell, limitCell, limit,
+        // direction, unit }. limit/direction/unit default to <1
+        // (direction 'over' = bad when ABOVE limit) unless overridden.
+        // Most rows have a fixed `limit`; the STABILITY ANGLE rows
+        // instead pull their limit live from `limitCell` (Drawing_table!
+        // D56:D62, one per row) — `limit` there is just the fallback
+        // shown before the first pull.
         const CHECK_SUMMARY_ROWS = [
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Front', sheet: null, cell: null },
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Rear',  sheet: null, cell: null },
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Right', sheet: null, cell: null },
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Left',  sheet: null, cell: null },
-            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 01', sheet: null, cell: null },
-            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 02', sheet: null, cell: null },
-            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 03', sheet: null, cell: null },
-            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 04', sheet: null, cell: null },
-            { section: 'CHASSIS CAPACITY CHECK', label: 'UC bending moment', sheet: null, cell: null },
-            { section: 'CHASSIS CAPACITY CHECK', label: 'UC shear force', sheet: null, cell: null },
-            { section: 'DRIVING / BRAKING CHECK', label: 'Driving Capacity Utilisation Check', sheet: null, cell: null },
-            { section: 'DRIVING / BRAKING CHECK', label: 'Braking Calculation Utilisation Check', sheet: null, cell: null },
-        ];
-        let tgCheckSummary = null; // null until first pull; array of numbers/nulls after — see pullCheckSummaryFromExcel()
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Front', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C11' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Rear',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C12' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Right', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C13' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Left',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C14' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Front', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C46' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Rear',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C53' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Right', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C60' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Left',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C67' },
+            // Only 3 axle groups — confirmed by KKKai (no Group 04 row).
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 01', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C48' },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 02', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'D48' },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 03', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'E48' },
+            // Limit for each row here is pulled live from limitCell
+            // (Drawing_table!D56:D62), NOT a fixed number — confirmed by
+            // KKKai. The `limit` value below is only the display
+            // fallback used before the first successful pull.
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG LOAD"',              sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C56', limitCell: 'D56', limit: 8, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG COMBINED"',          sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C57', limitCell: 'D57', limit: 8, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "ON STRENGTH"',           sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C58', limitCell: 'D58', limit: 2, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG LOAD" CASE A',       sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C59', limitCell: 'D59', limit: 7, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG COMBINED" CASE A',   sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C60', limitCell: 'D60', limit: 7, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG LOAD" CASE B',       sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C61', limitCell: 'D61', limit: 7, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG COMBINED" CASE B',   sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C62', limitCell: 'D62', limit: 7, direction: 'under', unit: '°' },
+            { section: 'CHASSIS CAPACITY CHECK', label: 'UC bending moment', sheet: CHASSIS_CAPACITY_SHEET_NAME, cell: 'H43' },
+            { section: 'CHASSIS CAPACITY CHECK', label: 'UC shear force',    sheet: CHASSIS_CAPACITY_SHEET_NAME, cell: 'H44' },
+            { section: 'DRIVING / BRAKING CHECK', label: 'Driving Capacity Utilisation Check',   sheet: TRACTION_CHECK_SHEET_NAME, cell: 'C66' },
+            { section: 'DRIVING / BRAKING CHECK', label: 'Braking Calculation Utilisation Check', sheet: TRACTION_CHECK_SHEET_NAME, cell: 'C84' },
+        ].map(r => ({ limit: 1, direction: 'over', unit: '', limitCell: null, ...r })); // fill defaults (<1, "over" = bad, fixed limit) for every row that didn't override them
+        let tgCheckSummary = null; // null until first pull; array of {v, limit} (both number|null) after — see pullCheckSummaryFromExcel()
 
         async function pullCheckSummaryFromExcel(opts = {}) {
             const silent = opts.silent === true;
@@ -6844,29 +6871,44 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             const configuredRows = CHECK_SUMMARY_ROWS.filter(r => r.sheet && r.cell);
             if (configuredRows.length === 0) {
-                tgCheckSummary = CHECK_SUMMARY_ROWS.map(() => null);
+                tgCheckSummary = CHECK_SUMMARY_ROWS.map(() => ({ v: null, limit: null }));
                 renderTgCheckSummary();
                 if (!silent) alert('Additional Check Summary cell references aren\'t configured yet — set sheet/cell for each row in CHECK_SUMMARY_ROWS in the code first.');
                 return;
             }
             try {
                 const raw = {};
+                const rawLimit = {};
                 await Excel.run(async (context) => {
                     const sheetCache = {};
+                    const getSheet = name => {
+                        if (!sheetCache[name]) sheetCache[name] = context.workbook.worksheets.getItem(name);
+                        return sheetCache[name];
+                    };
                     CHECK_SUMMARY_ROWS.forEach((r, i) => {
                         if (!r.sheet || !r.cell) return;
-                        if (!sheetCache[r.sheet]) sheetCache[r.sheet] = context.workbook.worksheets.getItem(r.sheet);
-                        const rng = sheetCache[r.sheet].getRange(r.cell);
+                        const rng = getSheet(r.sheet).getRange(r.cell);
                         rng.load('values');
                         raw[i] = rng;
+                        if (r.limitCell) {
+                            const lrng = getSheet(r.sheet).getRange(r.limitCell);
+                            lrng.load('values');
+                            rawLimit[i] = lrng;
+                        }
                     });
                     await context.sync();
                 });
-                tgCheckSummary = CHECK_SUMMARY_ROWS.map((r, i) => {
-                    if (!raw[i]) return null;
-                    const n = parseFloat(raw[i].values && raw[i].values[0] && raw[i].values[0][0]);
+                const cellNum = rng => {
+                    const n = parseFloat(rng && rng.values && rng.values[0] && rng.values[0][0]);
                     return Number.isFinite(n) ? n : null;
-                });
+                };
+                tgCheckSummary = CHECK_SUMMARY_ROWS.map((r, i) => ({
+                    v: raw[i] ? cellNum(raw[i]) : null,
+                    // Pulled limit wins when its cell is configured and
+                    // numeric; otherwise fall back to the row's fixed
+                    // `limit` (e.g. the <1 rows, which have no limitCell).
+                    limit: r.limitCell ? (cellNum(rawLimit[i]) ?? r.limit) : r.limit,
+                }));
                 renderTgCheckSummary();
                 if (!silent) logMsg(`↺ Pulled Additional Check Summary (${configuredRows.length}/${CHECK_SUMMARY_ROWS.length} row(s) configured).`);
             } catch (e) {
@@ -6878,14 +6920,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Renders tgCheckSummary as an HTML table, same visual language
         // as 📈 CoG Envelope Summary (.tg-drawing-table/.tg-dt-bold/
         // .tg-dt-title/.tg-dt-notok) — a flat list grouped by section
-        // header, every row flagged red the same way UNITY CHECK is
-        // there: over the shared <1 threshold.
+        // header. Each row is flagged using ITS OWN limit/direction/unit
+        // (most are <1 "over is bad"; the STABILITY ANGLE rows are
+        // >N° "under is bad" — see the CHECK_SUMMARY_ROWS defaults above).
         function renderTgCheckSummary() {
             const el = document.getElementById('tgCheckSummaryTable');
             if (!el) return;
             const vals = tgCheckSummary;
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
-            const flagCellOver = v => `<td${(typeof v === 'number' && v > CHECK_SUMMARY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            const valueCell = (v, limit, r) => {
+                const bad = typeof v === 'number' && typeof limit === 'number' && (r.direction === 'under' ? v < limit : v > limit);
+                return `<td${bad ? ' class="tg-dt-notok"' : ''}>${fmt(v)}${typeof v === 'number' ? r.unit : ''}</td>`;
+            };
             let html = '<table class="tg-drawing-table">';
             html += `<tr class="tg-dt-title"><td colspan="3">ADDITIONAL CHECK SUMMARY</td></tr>`;
             html += `<tr class="tg-dt-bold"><td>Check</td><td>Value</td><td>Limit</td></tr>`;
@@ -6895,8 +6941,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     html += `<tr class="tg-dt-bold"><td colspan="3">${r.section}</td></tr>`;
                     lastSection = r.section;
                 }
-                const v = vals ? vals[i] : null;
-                html += `<tr><td>${r.label}</td>${flagCellOver(v)}<td>&lt;1</td></tr>`;
+                const entry = vals ? vals[i] : null;
+                const v = entry ? entry.v : null;
+                // Pulled limit (when this row has a limitCell) wins over
+                // the fixed fallback — see CHECK_SUMMARY_ROWS' comment.
+                const limit = entry && typeof entry.limit === 'number' ? entry.limit : r.limit;
+                const limitText = `${r.direction === 'under' ? '&gt;' : '&lt;'}${fmt(limit)}${r.unit}`;
+                html += `<tr><td>${r.label}</td>${valueCell(v, limit, r)}<td>${limitText}</td></tr>`;
             });
             html += '</table>';
             el.innerHTML = html;
