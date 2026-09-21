@@ -819,7 +819,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.129.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.130)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1390,6 +1390,32 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the full table from Excel 'Lashing calculation'!A17:P43"
                                     onclick="pullLashingCalcTableFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-minimized tg-card-cogenv-bg" id="tgCheckSummaryCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">✅ Additional Check Summary</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCheckSummaryHelpToggleBtn" onclick="toggleTgCheckSummaryHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Expand this card">▢</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgCheckSummaryHelpPanel">
+                            Read-only mirror of the checks from KKKai's list that don't live anywhere else yet
+                            — <strong>Unity Check Moment</strong> (Front/Rear/Right/Left), <strong>Axle Line
+                            Capacity</strong> (Group 01&ndash;04), <strong>Chassis Capacity Check</strong>
+                            (bending moment / shear force), and <strong>Driving/Braking Check</strong>
+                            (utilisation). <strong>MAX GBP (ALL CASES)</strong> and the 7 <strong>STABILITY
+                            ANGLE</strong> rows already live in 📈 CoG Envelope Summary above — this card is only
+                            the remaining groups. Every row here uses the same <strong>&lt;1</strong> pass/fail
+                            limit. Pull-only, never pushed. <strong>Source cells aren't wired up yet</strong> —
+                            fill in the sheet name + cell for each row in <code>CHECK_SUMMARY_ROWS</code> near
+                            <code>pullCheckSummaryFromExcel()</code> in the code, then this refresh button will
+                            pull real values the same way 📈 CoG Envelope Summary does.
+                        </p>
+                        <div id="tgCheckSummaryTable" class="tg-drawing-table-wrap"><!-- Additional Check Summary rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the Additional Check Summary from Excel (once CHECK_SUMMARY_ROWS is configured with real sheet/cell references)"
+                                    onclick="pullCheckSummaryFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
 
@@ -1986,7 +2012,7 @@
         // individually.
         function toggleAllTgMinimize(btn) {
             const cardEls = document.querySelectorAll(
-                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard, #tgCheckSummaryCard'
             );
             const previewEls = document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap');
             const anyExpanded =
@@ -6552,6 +6578,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const isOpen = panel.classList.toggle('tg-help-open');
             btn.textContent = isOpen ? '✕' : '❓';
         }
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the ✅ Additional Check
+        // Summary card.
+        function toggleTgCheckSummaryHelp() {
+            const panel = document.getElementById('tgCheckSummaryHelpPanel');
+            const btn = document.getElementById('tgCheckSummaryHelpToggleBtn');
+            if (!panel || !btn) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            btn.textContent = isOpen ? '✕' : '❓';
+        }
 
         // ---- CoG Envelope Summary — a NEW, separate read-only table
         // mirroring "CoG_Envelope_Summary.xlsx": UNITY CHECK / MAX GBP
@@ -6766,6 +6802,101 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 html += `<tr><td>${label}</td>${staticStabCell(s.b5_11[i])}<td>[deg]</td>` +
                     [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
                     blank() + blank() + blank() + blank() + `</tr>`;
+            });
+            html += '</table>';
+            el.innerHTML = html;
+        }
+
+        // ---- ✅ Additional Check Summary — the remaining checks from
+        // KKKai's list that aren't covered by 📈 CoG Envelope Summary
+        // above (that card already owns MAX GBP (ALL CASES) and the 7
+        // STABILITY ANGLE rows). Same read-only/pull-only pattern —
+        // nothing here is ever pushed.
+        //
+        // TODO(KKKai): CHECK_SUMMARY_ROWS below has sheet/cell set to
+        // null for every row as a placeholder — fill in the real sheet
+        // name + cell reference per row (single cells, same idea as
+        // "Input"!BD28 in pullCogEnvSummaryFromExcel()) and refresh will
+        // start pulling real values. Until then the card renders
+        // "not configured" for every row instead of failing silently.
+        const CHECK_SUMMARY_THRESHOLD = 1; // shared "<1" limit for every row here
+        const CHECK_SUMMARY_ROWS = [
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Front', sheet: null, cell: null },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Rear',  sheet: null, cell: null },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Right', sheet: null, cell: null },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Left',  sheet: null, cell: null },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 01', sheet: null, cell: null },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 02', sheet: null, cell: null },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 03', sheet: null, cell: null },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 04', sheet: null, cell: null },
+            { section: 'CHASSIS CAPACITY CHECK', label: 'UC bending moment', sheet: null, cell: null },
+            { section: 'CHASSIS CAPACITY CHECK', label: 'UC shear force', sheet: null, cell: null },
+            { section: 'DRIVING / BRAKING CHECK', label: 'Driving Capacity Utilisation Check', sheet: null, cell: null },
+            { section: 'DRIVING / BRAKING CHECK', label: 'Braking Calculation Utilisation Check', sheet: null, cell: null },
+        ];
+        let tgCheckSummary = null; // null until first pull; array of numbers/nulls after — see pullCheckSummaryFromExcel()
+
+        async function pullCheckSummaryFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Additional Check Summary.');
+                return;
+            }
+            const configuredRows = CHECK_SUMMARY_ROWS.filter(r => r.sheet && r.cell);
+            if (configuredRows.length === 0) {
+                tgCheckSummary = CHECK_SUMMARY_ROWS.map(() => null);
+                renderTgCheckSummary();
+                if (!silent) alert('Additional Check Summary cell references aren\'t configured yet — set sheet/cell for each row in CHECK_SUMMARY_ROWS in the code first.');
+                return;
+            }
+            try {
+                const raw = {};
+                await Excel.run(async (context) => {
+                    const sheetCache = {};
+                    CHECK_SUMMARY_ROWS.forEach((r, i) => {
+                        if (!r.sheet || !r.cell) return;
+                        if (!sheetCache[r.sheet]) sheetCache[r.sheet] = context.workbook.worksheets.getItem(r.sheet);
+                        const rng = sheetCache[r.sheet].getRange(r.cell);
+                        rng.load('values');
+                        raw[i] = rng;
+                    });
+                    await context.sync();
+                });
+                tgCheckSummary = CHECK_SUMMARY_ROWS.map((r, i) => {
+                    if (!raw[i]) return null;
+                    const n = parseFloat(raw[i].values && raw[i].values[0] && raw[i].values[0][0]);
+                    return Number.isFinite(n) ? n : null;
+                });
+                renderTgCheckSummary();
+                if (!silent) logMsg(`↺ Pulled Additional Check Summary (${configuredRows.length}/${CHECK_SUMMARY_ROWS.length} row(s) configured).`);
+            } catch (e) {
+                console.warn('Could not read Additional Check Summary source cells', e);
+                if (!silent) alert('Could not read the Additional Check Summary source cells — check the sheet names/cells set in CHECK_SUMMARY_ROWS.');
+            }
+        }
+
+        // Renders tgCheckSummary as an HTML table, same visual language
+        // as 📈 CoG Envelope Summary (.tg-drawing-table/.tg-dt-bold/
+        // .tg-dt-title/.tg-dt-notok) — a flat list grouped by section
+        // header, every row flagged red the same way UNITY CHECK is
+        // there: over the shared <1 threshold.
+        function renderTgCheckSummary() {
+            const el = document.getElementById('tgCheckSummaryTable');
+            if (!el) return;
+            const vals = tgCheckSummary;
+            const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
+            const flagCellOver = v => `<td${(typeof v === 'number' && v > CHECK_SUMMARY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            let html = '<table class="tg-drawing-table">';
+            html += `<tr class="tg-dt-title"><td colspan="3">ADDITIONAL CHECK SUMMARY</td></tr>`;
+            html += `<tr class="tg-dt-bold"><td>Check</td><td>Value</td><td>Limit</td></tr>`;
+            let lastSection = null;
+            CHECK_SUMMARY_ROWS.forEach((r, i) => {
+                if (r.section !== lastSection) {
+                    html += `<tr class="tg-dt-bold"><td colspan="3">${r.section}</td></tr>`;
+                    lastSection = r.section;
+                }
+                const v = vals ? vals[i] : null;
+                html += `<tr><td>${r.label}</td>${flagCellOver(v)}<td>&lt;1</td></tr>`;
             });
             html += '</table>';
             el.innerHTML = html;
@@ -14275,6 +14406,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // STATIC STABILITY / LC0-LC4 table) — pulled from Excel,
                 // saved here so it still renders standalone.
                 tgCogEnvSummary: tgCogEnvSummary,
+                // ✅ Additional Check Summary card (Unity Check Moment /
+                // Axle Line Capacity / Chassis / Driving-Braking) —
+                // pulled from Excel, saved here so it still renders
+                // standalone, same idea as tgCogEnvSummary above.
+                tgCheckSummary: tgCheckSummary,
                 // Trailer CoG / Combined CoG signs (Display!B15:D15 /
                 // B16:D16) — pull-only readouts used by the preview's
                 // CoG dimension lines and the stability-arm view.
@@ -14372,6 +14508,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         tgActiveDrawingLC = Number.isFinite(lc) ? lc : null;
                     }
                     if (Array.isArray(state.tgDrawingTableRows)) tgDrawingTableRows = state.tgDrawingTableRows;
+                    if (state.tgCheckSummary && Array.isArray(state.tgCheckSummary)) {
+                        tgCheckSummary = state.tgCheckSummary;
+                    }
                     if (state.tgCogEnvSummary && typeof state.tgCogEnvSummary === 'object') {
                         tgCogEnvSummary = state.tgCogEnvSummary;
                     }
@@ -14427,6 +14566,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // call it directly so a restored tgCogEnvSummary
                     // actually shows up standalone.
                     renderTgCogEnvSummary();
+                    // renderTgCheckSummary() has the same standalone-call
+                    // requirement as renderTgCogEnvSummary() just above —
+                    // it isn't part of renderTrailerDashboard() either.
+                    renderTgCheckSummary();
                     logMsg(`📂 Imported dashboard (${trailerGenTrains.length} train(s), ${cargoItems.length} cargo item(s)) from "${file.name}".`);
                 } catch (e) {
                     console.warn('Dashboard import error', e);
