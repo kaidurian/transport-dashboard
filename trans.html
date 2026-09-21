@@ -659,6 +659,19 @@
         .tg-totals strong { color: var(--text-main); }
         .tg-totals.tg-totals-error { color: #ef4444; border-color: #ef4444; }
 
+        /* ✅ Additional Check Summary — KPI strip (Total / Passing /
+           Failing / Overall margin), same box language as .tg-totals
+           above, styled below. */
+        .tg-checksum-kpis { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .tg-checksum-kpi {
+            flex: 1 1 90px; background: var(--tank-box-bg); border: 1px solid var(--panel-border);
+            border-radius: 6px; padding: 8px 10px; text-align: center;
+        }
+        .tg-checksum-kpi .n { font-size: 16px; font-weight: 700; color: var(--text-main); line-height: 1.1; }
+        .tg-checksum-kpi .l { font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 3px; }
+        .tg-checksum-kpi.tg-checksum-kpi-ok .n { color: var(--accent-green, #10b981); }
+        .tg-checksum-kpi.tg-checksum-kpi-bad .n { color: #ef4444; }
+
         .tg-groups-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin: 12px 0 6px; }
         .tg-group-row { border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; background: var(--panel-bg); }
         .tg-group-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -819,7 +832,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.130.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.131)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1402,22 +1415,26 @@
                         <p class="tg-modal-sub" id="tgCheckSummaryHelpPanel">
                             Read-only mirror of the checks from KKKai's list that don't live anywhere else yet
                             — <strong>Unity Check Moment</strong> (Front/Rear/Right/Left) from sheet
-                            <strong>"Stability on strength (3P)"</strong>!<strong>C11:C14</strong>,
-                            <strong>Allowable Moments</strong> (based on allowable axle loadings) from the same
-                            sheet's <strong>C46/C53/C60/C67</strong>, <strong>Axle Line Capacity</strong>
-                            (3 groups) from <strong>"Drawing_table"</strong>!<strong>C48/D48/E48</strong>,
-                            <strong>Stability Angle</strong> (7 rows) from <strong>"Drawing_table"</strong>!
-                            <strong>C56:C62</strong> — each row's limit is pulled live from the matching cell
-                            in <strong>D56:D62</strong>, not a fixed number — <strong>Chassis Capacity
-                            Check</strong> from <strong>"Chasis Capacity Check"</strong>!<strong>H43</strong>
-                            (bending) / <strong>H44</strong> (shear), and <strong>Driving/Braking Check</strong>
-                            from <strong>"Traction Check"</strong>!<strong>C66</strong> (driving) /
-                            <strong>C84</strong> (braking). <strong>MAX GBP (ALL CASES)</strong> already lives in
-                            📈 CoG Envelope Summary above, so it isn't duplicated here. Every row is flagged
-                            red using its own limit/direction (most are <strong>&lt;1</strong>, the Stability
-                            Angle rows are <strong>&gt;N&deg;</strong> against their pulled limit). Pull-only,
-                            never pushed.
+                            <strong>"Stability on strength (3P)"</strong>!<strong>C11:C14</strong>, each checked
+                            against the single shared limit in <strong>"Drawing_table"</strong>!<strong>D58</strong>,
+                            <strong>Allowable Moments</strong> (based on allowable axle loadings) from
+                            <strong>"Stability on strength (3P)"</strong>!<strong>C46/C53/C60/C67</strong>,
+                            <strong>MAX GBP (ALL CASES)</strong> — the worst of <strong>"Drawing_table"</strong>!
+                            <strong>C51:E51</strong> checked against the worst of its own <strong>ALLOWABLE
+                            GBP</strong> (<strong>C52:E52</strong>), <strong>Axle Line Capacity</strong>
+                            (3 groups) from <strong>C48/D48/E48</strong>, <strong>Stability Angle</strong>
+                            (7 rows) from <strong>C56:C62</strong> — each row's limit pulled live from the
+                            matching cell in <strong>D56:D62</strong> — <strong>Chassis Capacity Check</strong>
+                            from <strong>"Chasis Capacity Check"</strong>!<strong>H43</strong> (bending) /
+                            <strong>H44</strong> (shear), and <strong>Driving/Braking Check</strong> from
+                            <strong>"Traction Check"</strong>!<strong>C66</strong> (driving) /
+                            <strong>C84</strong> (braking). The KPI strip above the table (checks pulled /
+                            passing / failing / overall margin) counts only rows with both a value and a limit
+                            actually pulled — anything not yet configured or not yet refreshed is excluded from
+                            those counts, not counted as a pass. Every row flags red using its own
+                            limit/direction. Pull-only, never pushed.
                         </p>
+                        <div id="tgCheckSummaryKpis" class="tg-checksum-kpis"><!-- KPI strip rendered by JS --></div>
                         <div id="tgCheckSummaryTable" class="tg-drawing-table-wrap"><!-- Additional Check Summary rendered by JS --></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the Additional Check Summary from Excel (once CHECK_SUMMARY_ROWS is configured with real sheet/cell references)"
@@ -6833,14 +6850,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // D56:D62, one per row) — `limit` there is just the fallback
         // shown before the first pull.
         const CHECK_SUMMARY_ROWS = [
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Front', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C11' },
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Rear',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C12' },
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Right', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C13' },
-            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Left',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C14' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Front', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C11', limitCell: 'D58' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Rear',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C12', limitCell: 'D58' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Right', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C13', limitCell: 'D58' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Left',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C14', limitCell: 'D58' },
             { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Front', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C46' },
             { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Rear',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C53' },
             { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Right', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C60' },
             { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Left',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C67' },
+            // MAX GBP (ALL CASES) — value and its own ALLOWABLE GBP limit
+            // are each the worst of a 3-cell block (C51:E51 / C52:E52),
+            // same MAX()-of-3 idea as pullCogEnvSummaryFromExcel() uses
+            // for its own MAX GBP row — see agg/limitAgg: 'max' below and
+            // maxOfPulledValues() in the pull function.
+            { section: 'MAX GBP (ALL CASES)', label: 'MAX GBP (ALL CASES)', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C51:E51', agg: 'max', limitCell: 'C52:E52', limitAgg: 'max', limit: null, unit: ' mTe/m²' },
             // Only 3 axle groups — confirmed by KKKai (no Group 04 row).
             { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 01', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C48' },
             { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 02', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'D48' },
@@ -6860,7 +6883,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             { section: 'CHASSIS CAPACITY CHECK', label: 'UC shear force',    sheet: CHASSIS_CAPACITY_SHEET_NAME, cell: 'H44' },
             { section: 'DRIVING / BRAKING CHECK', label: 'Driving Capacity Utilisation Check',   sheet: TRACTION_CHECK_SHEET_NAME, cell: 'C66' },
             { section: 'DRIVING / BRAKING CHECK', label: 'Braking Calculation Utilisation Check', sheet: TRACTION_CHECK_SHEET_NAME, cell: 'C84' },
-        ].map(r => ({ limit: 1, direction: 'over', unit: '', limitCell: null, ...r })); // fill defaults (<1, "over" = bad, fixed limit) for every row that didn't override them
+        ].map(r => ({ limit: 1, direction: 'over', unit: '', limitCell: null, agg: null, limitAgg: null, ...r })); // fill defaults (<1, "over" = bad, fixed limit, single-cell) for every row that didn't override them
         let tgCheckSummary = null; // null until first pull; array of {v, limit} (both number|null) after — see pullCheckSummaryFromExcel()
 
         async function pullCheckSummaryFromExcel(opts = {}) {
@@ -6898,16 +6921,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     });
                     await context.sync();
                 });
-                const cellNum = rng => {
-                    const n = parseFloat(rng && rng.values && rng.values[0] && rng.values[0][0]);
+                const cellNum = (rng, agg) => {
+                    if (!rng || !rng.values) return null;
+                    if (agg === 'max') return maxOfPulledValues(rng.values); // reuse the same MAX()-of-3 helper pullCogEnvSummaryFromExcel() uses
+                    const n = parseFloat(rng.values[0] && rng.values[0][0]);
                     return Number.isFinite(n) ? n : null;
                 };
                 tgCheckSummary = CHECK_SUMMARY_ROWS.map((r, i) => ({
-                    v: raw[i] ? cellNum(raw[i]) : null,
+                    v: raw[i] ? cellNum(raw[i], r.agg) : null,
                     // Pulled limit wins when its cell is configured and
                     // numeric; otherwise fall back to the row's fixed
                     // `limit` (e.g. the <1 rows, which have no limitCell).
-                    limit: r.limitCell ? (cellNum(rawLimit[i]) ?? r.limit) : r.limit,
+                    limit: r.limitCell ? (cellNum(rawLimit[i], r.limitAgg) ?? r.limit) : r.limit,
                 }));
                 renderTgCheckSummary();
                 if (!silent) logMsg(`↺ Pulled Additional Check Summary (${configuredRows.length}/${CHECK_SUMMARY_ROWS.length} row(s) configured).`);
@@ -6925,17 +6950,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // >N° "under is bad" — see the CHECK_SUMMARY_ROWS defaults above).
         function renderTgCheckSummary() {
             const el = document.getElementById('tgCheckSummaryTable');
+            const kpiEl = document.getElementById('tgCheckSummaryKpis');
             if (!el) return;
             const vals = tgCheckSummary;
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
+            // Shared pass/fail test — used by both the table cell styling
+            // below and the KPI strip counts, so the two never disagree.
+            // A row with no numeric value/limit yet (nothing pulled) is
+            // neither pass nor fail — excluded from both counts.
+            const isBad = (v, limit, r) => typeof v === 'number' && typeof limit === 'number' && (r.direction === 'under' ? v < limit : v > limit);
             const valueCell = (v, limit, r) => {
-                const bad = typeof v === 'number' && typeof limit === 'number' && (r.direction === 'under' ? v < limit : v > limit);
+                const bad = isBad(v, limit, r);
                 return `<td${bad ? ' class="tg-dt-notok"' : ''}>${fmt(v)}${typeof v === 'number' ? r.unit : ''}</td>`;
             };
             let html = '<table class="tg-drawing-table">';
             html += `<tr class="tg-dt-title"><td colspan="3">ADDITIONAL CHECK SUMMARY</td></tr>`;
             html += `<tr class="tg-dt-bold"><td>Check</td><td>Value</td><td>Limit</td></tr>`;
             let lastSection = null;
+            let evaluated = 0, failed = 0; // for the KPI strip
             CHECK_SUMMARY_ROWS.forEach((r, i) => {
                 if (r.section !== lastSection) {
                     html += `<tr class="tg-dt-bold"><td colspan="3">${r.section}</td></tr>`;
@@ -6948,9 +6980,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const limit = entry && typeof entry.limit === 'number' ? entry.limit : r.limit;
                 const limitText = `${r.direction === 'under' ? '&gt;' : '&lt;'}${fmt(limit)}${r.unit}`;
                 html += `<tr><td>${r.label}</td>${valueCell(v, limit, r)}<td>${limitText}</td></tr>`;
+                if (typeof v === 'number' && typeof limit === 'number') {
+                    evaluated++;
+                    if (isBad(v, limit, r)) failed++;
+                }
             });
             html += '</table>';
             el.innerHTML = html;
+
+            if (kpiEl) {
+                const passed = evaluated - failed;
+                const marginPct = evaluated ? Math.round((passed / evaluated) * 100) : null;
+                const kpi = (n, label, cls) => `<div class="tg-checksum-kpi${cls ? ' ' + cls : ''}"><div class="n">${n}</div><div class="l">${label}</div></div>`;
+                kpiEl.innerHTML =
+                    kpi(evaluated, 'Checks pulled') +
+                    kpi(passed, 'Passing', 'tg-checksum-kpi-ok') +
+                    kpi(failed, 'Failing', failed > 0 ? 'tg-checksum-kpi-bad' : '') +
+                    kpi(marginPct === null ? '—' : `${marginPct}%`, 'Overall margin', marginPct !== null && marginPct < 100 ? 'tg-checksum-kpi-bad' : 'tg-checksum-kpi-ok');
+            }
         }
 
         // ============================================================
