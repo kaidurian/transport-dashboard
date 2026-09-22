@@ -832,7 +832,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.132)</h1>
+            <h1>🚂 Transport Dashboard (Rev.133)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1379,40 +1379,34 @@
                             <button type="button" class="tg-minimize-btn" title="Expand this card">▢</button>
                         </div>
                         <p class="tg-modal-sub" id="tgTransportDataSummaryHelpPanel">
-                            Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
-                            <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
-                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>
-                            for the <strong>MAX GBP</strong> row, and from sheet
-                            <strong>"Drawing_table_LC"!D56:D62</strong> for the 7 <strong>STABILITY</strong>
-                            rows; <strong>LC0&ndash;LC4</strong> come from sheet
-                            <strong>"Drawing_table_LC"</strong> (each load case's own column block);
-                            <strong>LC1-Slope&ndash;LC4-Slope</strong>
-                            (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>. The
-                            <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
-                            MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
-                            Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
-                            this pulls independently, the same way 📋 Transport Data does. Any <strong>UNITY
-                            CHECK</strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
-                            same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Transport Data
-                            above — but for the <strong>STABILITY</strong> rows it's the opposite: those are
-                            flagged red when they fall <strong>under</strong> 1, since a smaller stability
-                            angle means less margin. The <strong>Static</strong> column itself is shown
-                            plainly and is never flagged. Below that, <strong>ADDITIONAL DATA</strong> pulls
-                            the raw <strong>17-row &times; 5-col</strong> block <strong>"Drawing_table_LC"</strong>!
-                            <strong>A63:E79</strong> — LC1&ndash;LC4 read the same rows from the columns
-                            26 over each time (<strong>AA63:AE79</strong>, <strong>BA63:BE79</strong>,
-                            <strong>CA63:CE79</strong>, <strong>DA63:DE79</strong>). Shown as five plain grids,
-                            one per load case — no pass/fail meaning is known for these cells yet, so they're
-                            never flagged red and aren't counted in the KPI strip below. The <strong>KPI
-                            strip</strong> (Checks pulled / Passing / Failing / Overall margin) only counts the
-                            UNITY CHECK / MAX GBP / STABILITY cells above, since those are the only ones with a
-                            known limit.
+                            Read-only mirror of a single 17-row table pulled from
+                            <strong>"Drawing_table_LC"</strong>!<strong>A63:E79</strong> — pulled, never
+                            pushed. Per row: <strong>Label</strong> comes from column <strong>A</strong>,
+                            <strong>Unit</strong> from column <strong>B</strong>, <strong>Static</strong>
+                            (the allowable/limit value) from column <strong>D</strong> — all three read once,
+                            from LC0's own block, not repeated per load case. Each <strong>LC0&ndash;LC4</strong>
+                            column instead reads column <strong>C</strong> from THAT load case's own 26-column
+                            block (<strong>C63:C79</strong> for LC0, <strong>AC63:AC79</strong> for LC1,
+                            <strong>BC63:BC79</strong> for LC2, <strong>CC63:CC79</strong> for LC3,
+                            <strong>DC63:DC79</strong> for LC4). <strong>LC1-Slope&ndash;LC4-Slope</strong> are
+                            unchanged from before — still only the <strong>MAX GBP (ALL CASES)</strong> row,
+                            matched by its label text, still pulled from
+                            <strong>"Drawing_table_LC_Slope"</strong>!<strong>C51:E51</strong> (max) per slope
+                            block, since no with-slope data exists in A63:E79 itself. Deliberately does
+                            <strong>not</strong> sync with the 📊 CoG Envelope Table above — this pulls
+                            independently, the same way 📋 Transport Data does. Every cell is checked against
+                            its OWN row's Static value: <strong>most rows flag red when OVER</strong> Static
+                            (a utilization/GBP-style limit); rows whose <strong>label contains
+                            "stability"</strong> flag red when <strong>UNDER</strong> instead (a smaller angle
+                            means less margin) — this direction is guessed from the label text, since the
+                            sheet doesn't say which way a row goes, so flag it if any row ends up wrong. The
+                            <strong>KPI strip</strong> (Checks pulled / Passing / Failing / Overall margin)
+                            counts every cell checked this way.
                         </p>
                         <div id="tgTransportDataSummaryKpis" class="tg-checksum-kpis"><!-- KPI strip rendered by JS --></div>
                         <div id="tgTransportDataSummaryTable" class="tg-drawing-table-wrap"><!-- Transport Data Summary rendered by JS --></div>
-                        <div id="tgTransportDataSummaryExtra" class="tg-drawing-table-wrap"><!-- Drawing_table_LC!A63:E79-per-LC grids rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the Transport Data Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
+                            <button type="button" class="tg-add-train-btn" title="Pull the Transport Data Summary from Excel 'Drawing_table_LC'!A63:E79 and 'Drawing_table_LC_Slope'"
                                     onclick="pullTransportDataSummaryFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
@@ -6577,61 +6571,36 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             btn.textContent = isOpen ? '✕' : '❓';
         }
 
-        // ---- Transport Data Summary — a NEW, separate read-only table
-        // mirroring "CoG_Envelope_Summary.xlsx": UNITY CHECK / MAX GBP
-        // (ALL CASES) / STABILITY CHECK rows, one column per source
-        // (Static + LC0-LC4 + LC1-Slope..LC4-Slope). Pull-only, exactly
-        // like 📋 Drawing Table above — there's nothing here to push,
-        // every value is Excel-computed. Deliberately does NOT read
-        // from or depend on the 📊 CoG Envelope Table/tgCogEnvComputed
-        // in any way (that table only ever recomputes locally on 🧮
-        // Calculate and is never the source of these numbers) — this
-        // pulls straight from the reference sheets on every refresh,
-        // same as 📋 Drawing Table's own independent pull.
+        // ---- Transport Data Summary — a single read-only table pulled
+        // straight from "Drawing_table_LC"!A63:E79 (17 rows), one column
+        // per source (Static + LC0-LC4 + LC1-Slope..LC4-Slope). Pull-only
+        // — there's nothing here to push, every value is Excel-computed.
+        // Deliberately does NOT read from or depend on the 📊 CoG
+        // Envelope Table/tgCogEnvComputed in any way — this pulls
+        // independently, same as 📋 Transport Data's own pull.
         //
-        // Sources (1-indexed rows, matching the reference workbook):
-        //   Static  — MAX GBP row: sheet "Drawing_table"!C52:E52 (max).
-        //             7 STABILITY rows: sheet "Input"! single cells —
-        //             BD28 (rows 5-6), BD29 (row 7), BD30 (rows 8-9),
-        //             BD31 (rows 10-11) — each rendered as ">N [deg]"
-        //             (see renderTgTransportDataSummary()'s staticStabCell()).
-        //   LC{n}   — sheet "Drawing_table_LC", load case {n}'s own
-        //             26-col-wide block (see drawingTableLcColStart):
-        //             C48:E48 (max) -> UNITY CHECK; C51:E51 (max) -> MAX GBP;
-        //             C56:C62 -> the 7 STABILITY rows.
-        //   LC{n}-Slope — sheet "Drawing_table_LC_Slope", slope block
-        //             {n-1} (see drawingTableLcSlopeColStart): C51:E51
-        //             (max) -> MAX GBP row only (no UNITY CHECK or
-        //             STABILITY rows exist for the with-slope columns).
-        //   ADDITIONAL DATA — same "Drawing_table_LC" sheet, same per-LC
-        //             26-col offset as LC{n} above, but rows 63-79
-        //             (17 rows x 5 cols, A:E relative to each LC's own
-        //             block start) — pulled and shown as a plain grid,
-        //             no known labels or pass/fail limits yet.
-        // "C48:E48"/"C51:E51" are 3-cell-wide per-axle-group blocks —
-        // MAX() picks the worst of the three, same idea as the
-        // reference workbook's own MAX() formulas.
-        const COGENV_SUMMARY_ROW_LABELS = [
-            'STABILITY "COG LOAD"',
-            'STABILITY "COG COMBINED"',
-            'STABILITY "ON STRENGTH"',
-            'STABILITY "COG LOAD" CASE A',
-            'STABILITY "COG COMBINED" CASE A',
-            'STABILITY "COG LOAD" CASE B',
-            'STABILITY "COG COMBINED" CASE B',
-        ];
-        // The "<1" shown in the UNITY CHECK row's Static column is the
-        // pass/fail threshold every other cell (UNITY CHECK, MAX GBP,
-        // and every STABILITY row) is checked against — any value over
-        // this is flagged red, same styling as "DETAIL CHECK REQUIRED"
-        // in 📋 Drawing Table (see cellStatusClass/tg-dt-notok).
-        const COGENV_SUMMARY_UNITY_THRESHOLD = 1;
+        // Per KKKai's spec, label/unit/static come from LC0's OWN block
+        // only (not repeated per LC) — only the value column differs
+        // per load case, using each LC's own 26-col-wide block (see
+        // drawingTableLcColStart):
+        //   Label  — col A (block start +0): A63:A79
+        //   Unit   — col B (block start +1): B63:B79
+        //   Value  — col C (block start +2), PER LC's own block:
+        //            C63:C79 for LC0, AC63:AC79 for LC1, BC63:BC79 for
+        //            LC2, CC63:CC79 for LC3, DC63:DC79 for LC4.
+        //   Static — col D (block start +3): D63:D79.
+        // LC1-Slope..LC4-Slope are UNCHANGED from before this merge —
+        // still only the MAX GBP row (matched by label text below), still
+        // pulled from "Drawing_table_LC_Slope"!C51:E51 (max) per slope
+        // block — no with-slope data exists in the A63:E79 range itself.
+        const TDS_STABILITY_LABEL_HINT = 'stability'; // case-insensitive substring match, see rowDirection() below
         let tgTransportDataSummary = null; // null until first successful pull — see pullTransportDataSummaryFromExcel()
 
         // Max of a pulled values block (any shape — 1xN row, Nx1
         // column, or a single cell), ignoring blanks/non-numeric cells.
         // Returns null if nothing numeric was found, so callers can
-        // tell "genuinely blank" apart from "computed as 0".
+        // tell "genuinely blank" apart from "computed as 0". Still used
+        // for the LC-Slope MAX GBP pull below.
         function maxOfPulledValues(values) {
             let best = null;
             (values || []).forEach(row => (row || []).forEach(v => {
@@ -6642,14 +6611,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
         // Pulls a single 1-indexed column's worth of values (e.g.
-        // D56:D62) and returns a plain array of numbers/nulls in row
-        // order — used for the 7 STABILITY rows, which (unlike UNITY
-        // CHECK/MAX GBP) are single values per row, not a 3-cell block
-        // to MAX() over.
-        function columnOfPulledValues(values) {
+        // A63:A79) and returns a plain array in row order — numeric
+        // cells become numbers, everything else (text labels, blanks)
+        // is kept as a trimmed string (or '' if blank).
+        function columnOfPulledLabelsOrValues(values, numeric) {
             return (values || []).map(row => {
-                const n = parseFloat(row && row[0]);
-                return Number.isFinite(n) ? n : null;
+                const raw = row && row[0];
+                if (numeric) {
+                    const n = parseFloat(raw);
+                    return Number.isFinite(n) ? n : null;
+                }
+                return (raw === null || raw === undefined) ? '' : String(raw).trim();
             });
         }
 
@@ -6662,37 +6634,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             try {
                 const raw = {};
                 await Excel.run(async (context) => {
-                    const dtSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_SHEET_NAME);
                     const lcSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SHEET_NAME);
                     const slopeSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SLOPE_SHEET_NAME);
-                    const inputSheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const ranges = {};
-                    ranges.baseGbp = dtSheet.getRange('C52:E52');
-                    // Static STABILITY column no longer comes from
-                    // "Drawing_table_LC"!D56:D62 — per KKKai's spec it now
-                    // pulls 4 single cells straight off "Input": BD28
-                    // (shared by rows 5-6), BD29 (row 7 only), BD30
-                    // (shared by rows 8-9), BD31 (shared by rows 10-11).
-                    // See the b5_11 mapping below and the ">N [deg]"
-                    // formatting in renderTgTransportDataSummary().
-                    ranges.staticStab28 = inputSheet.getRange('BD28');
-                    ranges.staticStab29 = inputSheet.getRange('BD29');
-                    ranges.staticStab30 = inputSheet.getRange('BD30');
-                    ranges.staticStab31 = inputSheet.getRange('BD31');
+                    // Label/Unit/Static — LC0's own block only (A/B/D),
+                    // not repeated per LC, per KKKai's spec.
+                    ranges.label = lcSheet.getRange('A63:A79');
+                    ranges.unit = lcSheet.getRange('B63:B79');
+                    ranges.static = lcSheet.getRange('D63:D79');
                     for (let lcIndex = 0; lcIndex <= 4; lcIndex++) {
                         const cs = drawingTableLcColStart(lcIndex);
-                        const c = colLetter(cs + 2), e = colLetter(cs + 4);
-                        ranges[`lc${lcIndex}Unity`] = lcSheet.getRange(`${c}48:${e}48`);
-                        ranges[`lc${lcIndex}Gbp`] = lcSheet.getRange(`${c}51:${e}51`);
-                        ranges[`lc${lcIndex}Stab`] = lcSheet.getRange(`${c}56:${c}62`);
-                        // ADDITIONAL DATA block — raw 17-row x 5-col grid,
-                        // same per-LC 26-column offset as everything else
-                        // on this sheet (colLetter(cs)..colLetter(cs+4) is
-                        // A:E for LC0, AA:AE for LC1, BA:BE for LC2, etc.)
-                        // but rows 63-79 instead of the 48/51/56 blocks
-                        // above — no known row/column labels yet, so this
-                        // is pulled and shown as a plain grid, not flagged.
-                        ranges[`lc${lcIndex}Extra`] = lcSheet.getRange(`${colLetter(cs)}63:${e}79`);
+                        const valueCol = colLetter(cs + 2);
+                        ranges[`lc${lcIndex}Value`] = lcSheet.getRange(`${valueCol}63:${valueCol}79`);
                     }
                     for (let slopeIdx = 0; slopeIdx <= 3; slopeIdx++) {
                         const cs = drawingTableLcSlopeColStart(slopeIdx);
@@ -6703,132 +6656,80 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     await context.sync();
                     Object.entries(ranges).forEach(([key, r]) => { raw[key] = r.values; });
                 });
-                // Single-cell pulls (BD28-BD31) come back as [[v]] —
-                // pull the one value out, same null-if-non-numeric
-                // handling as columnOfPulledValues() below.
-                const singleCellValue = raw2d => {
-                    const n = parseFloat(raw2d && raw2d[0] && raw2d[0][0]);
-                    return Number.isFinite(n) ? n : null;
-                };
-                const stab28 = singleCellValue(raw.staticStab28);
-                const stab29 = singleCellValue(raw.staticStab29);
-                const stab30 = singleCellValue(raw.staticStab30);
-                const stab31 = singleCellValue(raw.staticStab31);
+                const labels = columnOfPulledLabelsOrValues(raw.label, false);
+                const units = columnOfPulledLabelsOrValues(raw.unit, false);
+                const statics = columnOfPulledLabelsOrValues(raw.static, true);
+                const lcValues = [0, 1, 2, 3, 4].map(lcIndex => columnOfPulledLabelsOrValues(raw[`lc${lcIndex}Value`], true));
+                const slope3 = [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`]));
                 tgTransportDataSummary = {
-                    b3: maxOfPulledValues(raw.baseGbp),
-                    // Rows (0-indexed): 0-1 -> BD28, 2 -> BD29, 3-4 -> BD30, 5-6 -> BD31
-                    b5_11: [stab28, stab28, stab29, stab30, stab30, stab31, stab31],
-                    lc: [0, 1, 2, 3, 4].map(lcIndex => ({
-                        row2: maxOfPulledValues(raw[`lc${lcIndex}Unity`]),
-                        row3: maxOfPulledValues(raw[`lc${lcIndex}Gbp`]),
-                        rows5_11: columnOfPulledValues(raw[`lc${lcIndex}Stab`]),
-                        // Raw 17x5 grid, values as-is (not maxed or
-                        // column-flattened like the rows above) — see
-                        // renderTgTransportDataSummary()'s extra-grid
-                        // rendering for how this is displayed.
-                        extraGrid: raw[`lc${lcIndex}Extra`] || [],
+                    rows: labels.map((label, i) => ({
+                        label,
+                        unit: units[i] || '',
+                        static: statics[i],
+                        lc: [0, 1, 2, 3, 4].map(lcIndex => lcValues[lcIndex][i]),
+                        // Slope columns are blank for every row except
+                        // MAX GBP (ALL CASES) — matched by label text,
+                        // same as before this merge.
+                        slope: /^max gbp \(all cases\)$/i.test(label) ? slope3 : null,
                     })),
-                    slope3: [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`])),
                 };
                 renderTgTransportDataSummary();
-                if (!silent) logMsg(`↺ Pulled Transport Data Summary from '${DRAWING_TABLE_SHEET_NAME}' (MAX GBP Static), '${INPUT_SHEET_NAME}' (Static STABILITY BD28:BD31), '${DRAWING_TABLE_LC_SHEET_NAME}' (LC0-LC4 + ADDITIONAL DATA A63:E79 blocks), and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
+                if (!silent) logMsg(`↺ Pulled Transport Data Summary (${labels.length} row(s)) from '${DRAWING_TABLE_LC_SHEET_NAME}'!A63:E79 (LC0-LC4) and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}' (MAX GBP slope).`);
             } catch (e) {
                 console.warn('Could not read Transport Data Summary source cells', e);
-                if (!silent) alert(`Could not read the Transport Data Summary source cells. Make sure sheets "${DRAWING_TABLE_SHEET_NAME}", "${DRAWING_TABLE_LC_SHEET_NAME}", and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
+                if (!silent) alert(`Could not read the Transport Data Summary source cells. Make sure sheets "${DRAWING_TABLE_LC_SHEET_NAME}" and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
             }
         }
 
+        // A row's flag DIRECTION isn't given by the sheet — only the
+        // label, unit, and static/allowable value are. Per KKKai's
+        // running spec across this whole feature, "under is bad" only
+        // applies to the STABILITY-angle-style rows (bigger angle =
+        // more margin); every other row so far (UNITY CHECK, MAX GBP,
+        // Axle Line Capacity, Chassis, Driving/Braking) is "over is
+        // bad" (value must stay under its limit). Detected here by a
+        // case-insensitive "stability" substring in the row's own
+        // label — flag if this guess is ever wrong for a row in the
+        // pulled range.
+        function tdsRowDirection(label) {
+            return (label || '').toLowerCase().includes(TDS_STABILITY_LABEL_HINT) ? 'under' : 'over';
+        }
+
         // Renders tgTransportDataSummary as an HTML table, same visual
-        // language as 📋 Drawing Table (.tg-drawing-table/.tg-dt-bold/
-        // .tg-dt-title/.tg-dt-notok). Column C is a fixed unit label
-        // (not a pulled value) — "[mTe/m²]" for MAX GBP, "[deg]" for
-        // the STABILITY rows, blank for UNITY CHECK. Per KKKai's spec,
-        // red flagging (tg-dt-notok, against COGENV_SUMMARY_UNITY_THRESHOLD)
-        // is applied ONLY to the computed LC0-LC4/LC-Slope columns —
-        // never to the Static column, which is shown plainly — and the
-        // DIRECTION differs by row type: UNITY CHECK (D2:H2) flags when
-        // OVER the fixed threshold (utilization ratio — too high is
-        // bad); the 7 STABILITY rows (D5:D11...H5:H11) flag when UNDER
-        // the fixed threshold (a stability angle — too low is bad) —
-        // see flagCellOver()/flagCellUnder() below. MAX GBP (D3:L3) is
-        // the one exception: each LC/LC-Slope cell there flags red when
-        // it's OVER that row's OWN Static (B3) value instead of the
-        // fixed threshold — see flagCellOverStatic() below.
+        // language as 📋 Transport Data (.tg-drawing-table/.tg-dt-bold/
+        // .tg-dt-title/.tg-dt-notok). Every row (label/unit/static all
+        // pulled from Excel, not hardcoded) is checked against its OWN
+        // Static column value — see tdsRowDirection() above for which
+        // direction each row uses.
         function renderTgTransportDataSummary() {
             const el = document.getElementById('tgTransportDataSummaryTable');
             const kpiEl = document.getElementById('tgTransportDataSummaryKpis');
-            const extraEl = document.getElementById('tgTransportDataSummaryExtra');
             if (!el) return;
             const s = tgTransportDataSummary;
             if (!s) {
                 el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load this summary.</div>`;
                 if (kpiEl) kpiEl.innerHTML = '';
-                if (extraEl) extraEl.innerHTML = '';
                 return;
             }
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
-            const plainCell = v => `<td>${fmt(v)}</td>`;
-            // Shared pass/fail tests, also used to feed the KPI strip
-            // below so the table's red flags and the KPI counts can
-            // never disagree.
             let evaluated = 0, failed = 0;
-            const track = bad => { evaluated++; if (bad) failed++; };
-            const flagCellOver = v => {
-                const bad = typeof v === 'number' && v > COGENV_SUMMARY_UNITY_THRESHOLD;
-                if (typeof v === 'number') track(bad);
-                return `<td${bad ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
-            };
-            const flagCellUnder = v => {
-                const bad = typeof v === 'number' && v < COGENV_SUMMARY_UNITY_THRESHOLD;
-                if (typeof v === 'number') track(bad);
-                return `<td${bad ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
-            };
-            // MAX GBP (ALL CASES) row only — per KKKai's spec, each LC0-LC4/
-            // LC-Slope cell (D3:L3) flags red (same tg-dt-notok red text +
-            // red background as "DETAIL CHECK REQUIRED" in 📋 Drawing
-            // Table) when it exceeds the row's OWN Static column value
-            // (B3, s.b3) — not the fixed COGENV_SUMMARY_UNITY_THRESHOLD
-            // used by every other row.
-            const flagCellOverStatic = v => {
-                const bad = typeof v === 'number' && typeof s.b3 === 'number' && v > s.b3;
-                if (typeof v === 'number' && typeof s.b3 === 'number') track(bad);
+            const flagCell = (v, staticVal, direction) => {
+                const bad = typeof v === 'number' && typeof staticVal === 'number' &&
+                    (direction === 'under' ? v < staticVal : v > staticVal);
+                if (typeof v === 'number' && typeof staticVal === 'number') { evaluated++; if (bad) failed++; }
                 return `<td${bad ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
             };
             const blank = () => `<td></td>`;
-            // Static column for the 7 STABILITY rows (BD28:BD31 on
-            // "Input") is rendered as a ">N [deg]" threshold label, e.g.
-            // ">8 [deg]" — not a plain number — per KKKai's spec. Never
-            // flagged red, same as every other Static cell.
-            const staticStabCell = v => `<td>${typeof v === 'number' ? `&gt;${fmt(v)} [deg]` : '—'}</td>`;
             let html = '<table class="tg-drawing-table">';
             html += `<tr class="tg-dt-title"><td colspan="12">TRANSPORT DATA SUMMARY</td></tr>`;
             html += `<tr class="tg-dt-bold"><td></td><td>Static</td><td>Unit</td><td>LC0</td><td>LC1</td><td>LC2</td><td>LC3</td><td>LC4</td><td>LC1-Slope</td><td>LC2-Slope</td><td>LC3-Slope</td><td>LC4-Slope</td></tr>`;
-            // Row 2 — UNITY CHECK. Static column shows the "<1"
-            // threshold label itself (not a pulled value); no unit and
-            // no with-slope columns exist for this row.
-            html += `<tr><td>UNITY CHECK</td><td>&lt;1</td><td></td>` +
-                [0, 1, 2, 3, 4].map(i => flagCellOver(s.lc[i].row2)).join('') +
-                blank() + blank() + blank() + blank() + `</tr>`;
-            // Row 3 — MAX GBP (ALL CASES). Every column populated,
-            // including the 4 with-slope ones.
-            html += `<tr><td>MAX GBP (ALL CASES)</td>${plainCell(s.b3)}<td>[mTe/m&sup2;]</td>` +
-                [0, 1, 2, 3, 4].map(i => flagCellOverStatic(s.lc[i].row3)).join('') +
-                [0, 1, 2, 3].map(i => flagCellOverStatic(s.slope3[i])).join('') +
-                `</tr>`;
-            // Row 4 — STABILITY CHECK section header (label only).
-            html += `<tr class="tg-dt-bold"><td colspan="12">STABILITY CHECK</td></tr>`;
-            // Rows 5-11 — the 7 STABILITY sub-rows; no with-slope
-            // columns exist for these either.
-            COGENV_SUMMARY_ROW_LABELS.forEach((label, i) => {
-                // Static column for the 7 STABILITY rows is now pulled
-                // from "Input"!BD28:BD31 (s.b5_11[i] — see the
-                // pullTransportDataSummaryFromExcel() mapping) and rendered as
-                // a ">N [deg]" text threshold via staticStabCell(), e.g.
-                // ">8 [deg]". Per KKKai's spec, this column is still
-                // never flagged red.
-                html += `<tr><td>${label}</td>${staticStabCell(s.b5_11[i])}<td>[deg]</td>` +
-                    [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
-                    blank() + blank() + blank() + blank() + `</tr>`;
+            s.rows.forEach(row => {
+                if (!row.label) return; // skip genuinely blank rows in the 63-79 block
+                const direction = tdsRowDirection(row.label);
+                html += `<tr><td>${row.label}</td><td>${fmt(row.static)}</td><td>${row.unit}</td>` +
+                    row.lc.map(v => flagCell(v, row.static, direction)).join('') +
+                    (row.slope ? row.slope.map(v => flagCell(v, row.static, direction)).join('') : blank() + blank() + blank() + blank()) +
+                    `</tr>`;
             });
             html += '</table>';
             el.innerHTML = html;
@@ -6842,29 +6743,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     kpi(passed, 'Passing', 'tg-checksum-kpi-ok') +
                     kpi(failed, 'Failing', failed > 0 ? 'tg-checksum-kpi-bad' : '') +
                     kpi(marginPct === null ? '—' : `${marginPct}%`, 'Overall margin', marginPct !== null && marginPct < 100 ? 'tg-checksum-kpi-bad' : 'tg-checksum-kpi-ok');
-            }
-
-            // ADDITIONAL DATA — Drawing_table_LC!A63:E79 (and its per-LC
-            // 26-col offset siblings), one plain grid per load case. No
-            // known row/column labels or pass/fail limits yet, so these
-            // are shown as-is (row 63-79 down the side, A-E across the
-            // top) and never flagged red — see the card's help text.
-            if (extraEl) {
-                let extraHtml = '';
-                [0, 1, 2, 3, 4].forEach(lcIndex => {
-                    const grid = (s.lc[lcIndex] && s.lc[lcIndex].extraGrid) || [];
-                    extraHtml += `<table class="tg-drawing-table" style="margin-top:10px;">`;
-                    extraHtml += `<tr class="tg-dt-title"><td colspan="6">ADDITIONAL DATA — LC${lcIndex}</td></tr>`;
-                    extraHtml += `<tr class="tg-dt-bold"><td>Row</td><td>A</td><td>B</td><td>C</td><td>D</td><td>E</td></tr>`;
-                    for (let r = 0; r < 17; r++) {
-                        const row = grid[r] || [];
-                        extraHtml += `<tr><td>${63 + r}</td>` +
-                            [0, 1, 2, 3, 4].map(c => `<td>${fmt(parseFloat(row[c]))}</td>`).join('') +
-                            `</tr>`;
-                    }
-                    extraHtml += '</table>';
-                });
-                extraEl.innerHTML = extraHtml;
             }
         }
 
