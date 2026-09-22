@@ -257,7 +257,7 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #a78bfa 10%);
         }
-        /* 📊 CoG Envelope Table and 📈 Transport Data Summary share the
+        /* 📊 CoG Envelope Table and 📈 CoG Envelope Summary share the
            same background tint as 📐 CoG Envelope (.tg-card-cogenv)
            above, without taking its purple border-left accent (that
            stays reserved for the 4 top-level input cards). */
@@ -659,7 +659,7 @@
         .tg-totals strong { color: var(--text-main); }
         .tg-totals.tg-totals-error { color: #ef4444; border-color: #ef4444; }
 
-        /* 📈 Transport Data Summary — KPI strip (Checks pulled / Passing /
+        /* ✅ Additional Check Summary — KPI strip (Total / Passing /
            Failing / Overall margin), same box language as .tg-totals
            above, styled below. */
         .tg-checksum-kpis { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -832,7 +832,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.133)</h1>
+            <h1>🚂 Transport Dashboard (Rev.133.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1296,6 +1296,40 @@
                         <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
+                    <div class="tg-cargo-card tg-card-minimized tg-card-cogenv-bg" id="tgCogEnvSummaryCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">📈 CoG Envelope Summary</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Expand this card">▢</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgCogEnvSummaryHelpPanel">
+                            Read-only mirror of <strong>UNITY CHECK</strong> / <strong>MAX GBP</strong> /
+                            <strong>STABILITY CHECK</strong> rows across every load case — pulled, never
+                            pushed. <strong>Static</strong> comes from sheet <strong>"Drawing_table"</strong>
+                            for the <strong>MAX GBP</strong> row, and from sheet
+                            <strong>"Drawing_table_LC"!D56:D62</strong> for the 7 <strong>STABILITY</strong>
+                            rows; <strong>LC0&ndash;LC4</strong> come from sheet
+                            <strong>"Drawing_table_LC"</strong> (each load case's own column block);
+                            <strong>LC1-Slope&ndash;LC4-Slope</strong>
+                            (MAX GBP row only) come from sheet <strong>"Drawing_table_LC_Slope"</strong>. The
+                            <strong>Unit</strong> column is a fixed label (<strong>[mTe/m&sup2;]</strong> for
+                            MAX GBP, <strong>[deg]</strong> for the STABILITY rows) — not a pulled value.
+                            Deliberately does <strong>not</strong> sync with the 📊 CoG Envelope Table above —
+                            this pulls independently, the same way 📋 Transport Data does. Any <strong>UNITY
+                            CHECK</strong> or <strong>MAX GBP</strong> value over 1 is highlighted red, the
+                            same way <strong>DETAIL CHECK REQUIRED</strong> rows are in 📋 Transport Data
+                            above — but for the <strong>STABILITY</strong> rows it's the opposite: those are
+                            flagged red when they fall <strong>under</strong> 1, since a smaller stability
+                            angle means less margin. The <strong>Static</strong> column itself is shown
+                            plainly and is never flagged.
+                        </p>
+                        <div id="tgCogEnvSummaryTable" class="tg-drawing-table-wrap"><!-- CoG Envelope Summary rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the CoG Envelope Summary from Excel 'Drawing_table', 'Drawing_table_LC', and 'Drawing_table_LC_Slope'"
+                                    onclick="pullCogEnvSummaryFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-cargo-card tg-card-cogenv-bg" id="tgTransportLcCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🚚 Transport Data w/ CoG Env</h2>
@@ -1311,7 +1345,7 @@
                             so once every load case has been pushed at least once, all 4 tables here show
                             their own permanent snapshot side by side. Pull-only, never pushed. Auto-refreshes
                             right after <strong>🧮 Calculate CoG Envelope</strong> finishes its full
-                            push/refresh sequence (📊 CoG Envelope Table push, then 📈 Transport Data Summary
+                            push/refresh sequence (📊 CoG Envelope Table push, then 📈 CoG Envelope Summary
                             refresh, then every load case's own mirror into <strong>"Drawing_table_LC"</strong>)
                             — no need to press its own refresh button separately after that. This is
                             also exactly what the 📐 AutoCAD export below uses for its own LC1-4
@@ -1372,42 +1406,39 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-minimized tg-card-cogenv-bg" id="tgTransportDataSummaryCard">
+                    <div class="tg-cargo-card tg-card-minimized tg-card-cogenv-bg" id="tgCheckSummaryCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📈 Transport Data Summary</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgTransportDataSummaryHelpToggleBtn" onclick="toggleTgTransportDataSummaryHelp()">❓</button>
+                            <h2 class="tg-cargo-title">✅ Additional Check Summary</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCheckSummaryHelpToggleBtn" onclick="toggleTgCheckSummaryHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Expand this card">▢</button>
                         </div>
-                        <p class="tg-modal-sub" id="tgTransportDataSummaryHelpPanel">
-                            Read-only mirror of a single 17-row table pulled from
-                            <strong>"Drawing_table_LC"</strong>!<strong>A63:E79</strong> — pulled, never
-                            pushed. Per row: <strong>Label</strong> comes from column <strong>A</strong>,
-                            <strong>Unit</strong> from column <strong>B</strong>, <strong>Static</strong>
-                            (the allowable/limit value) from column <strong>D</strong> — all three read once,
-                            from LC0's own block, not repeated per load case. Each <strong>LC0&ndash;LC4</strong>
-                            column instead reads column <strong>C</strong> from THAT load case's own 26-column
-                            block (<strong>C63:C79</strong> for LC0, <strong>AC63:AC79</strong> for LC1,
-                            <strong>BC63:BC79</strong> for LC2, <strong>CC63:CC79</strong> for LC3,
-                            <strong>DC63:DC79</strong> for LC4). <strong>LC1-Slope&ndash;LC4-Slope</strong> are
-                            unchanged from before — still only the <strong>MAX GBP (ALL CASES)</strong> row,
-                            matched by its label text, still pulled from
-                            <strong>"Drawing_table_LC_Slope"</strong>!<strong>C51:E51</strong> (max) per slope
-                            block, since no with-slope data exists in A63:E79 itself. Deliberately does
-                            <strong>not</strong> sync with the 📊 CoG Envelope Table above — this pulls
-                            independently, the same way 📋 Transport Data does. Every cell is checked against
-                            its OWN row's Static value: <strong>most rows flag red when OVER</strong> Static
-                            (a utilization/GBP-style limit); rows whose <strong>label contains
-                            "stability"</strong> flag red when <strong>UNDER</strong> instead (a smaller angle
-                            means less margin) — this direction is guessed from the label text, since the
-                            sheet doesn't say which way a row goes, so flag it if any row ends up wrong. The
-                            <strong>KPI strip</strong> (Checks pulled / Passing / Failing / Overall margin)
-                            counts every cell checked this way.
+                        <p class="tg-modal-sub" id="tgCheckSummaryHelpPanel">
+                            Read-only mirror of the checks from KKKai's list that don't live anywhere else yet
+                            — <strong>Unity Check Moment</strong> (Front/Rear/Right/Left) from sheet
+                            <strong>"Stability on strength (3P)"</strong>!<strong>C11:C14</strong>, each checked
+                            against the single shared limit in <strong>"Drawing_table"</strong>!<strong>D58</strong>,
+                            <strong>Allowable Moments</strong> (based on allowable axle loadings) from
+                            <strong>"Stability on strength (3P)"</strong>!<strong>C46/C53/C60/C67</strong>,
+                            <strong>MAX GBP (ALL CASES)</strong> — the worst of <strong>"Drawing_table"</strong>!
+                            <strong>C51:E51</strong> checked against the worst of its own <strong>ALLOWABLE
+                            GBP</strong> (<strong>C52:E52</strong>), <strong>Axle Line Capacity</strong>
+                            (3 groups) from <strong>C48/D48/E48</strong>, <strong>Stability Angle</strong>
+                            (7 rows) from <strong>C56:C62</strong> — each row's limit pulled live from the
+                            matching cell in <strong>D56:D62</strong> — <strong>Chassis Capacity Check</strong>
+                            from <strong>"Chasis Capacity Check"</strong>!<strong>H43</strong> (bending) /
+                            <strong>H44</strong> (shear), and <strong>Driving/Braking Check</strong> from
+                            <strong>"Traction Check"</strong>!<strong>C66</strong> (driving) /
+                            <strong>C84</strong> (braking). The KPI strip above the table (checks pulled /
+                            passing / failing / overall margin) counts only rows with both a value and a limit
+                            actually pulled — anything not yet configured or not yet refreshed is excluded from
+                            those counts, not counted as a pass. Every row flags red using its own
+                            limit/direction. Pull-only, never pushed.
                         </p>
-                        <div id="tgTransportDataSummaryKpis" class="tg-checksum-kpis"><!-- KPI strip rendered by JS --></div>
-                        <div id="tgTransportDataSummaryTable" class="tg-drawing-table-wrap"><!-- Transport Data Summary rendered by JS --></div>
+                        <div id="tgCheckSummaryKpis" class="tg-checksum-kpis"><!-- KPI strip rendered by JS --></div>
+                        <div id="tgCheckSummaryTable" class="tg-drawing-table-wrap"><!-- Additional Check Summary rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the Transport Data Summary from Excel 'Drawing_table_LC'!A63:E79 and 'Drawing_table_LC_Slope'"
-                                    onclick="pullTransportDataSummaryFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" title="Pull the Additional Check Summary from Excel (once CHECK_SUMMARY_ROWS is configured with real sheet/cell references)"
+                                    onclick="pullCheckSummaryFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
 
@@ -1518,10 +1549,10 @@
         }
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
-        // ❓ Help button above, just scoped to the 📈 Transport Data Summary card.
-        function toggleTgTransportDataSummaryHelp() {
-            const panel = document.getElementById('tgTransportDataSummaryHelpPanel');
-            const btn = document.getElementById('tgTransportDataSummaryHelpToggleBtn');
+        // ❓ Help button above, just scoped to the 📈 CoG Envelope Summary card.
+        function toggleTgCogEnvSummaryHelp() {
+            const panel = document.getElementById('tgCogEnvSummaryHelpPanel');
+            const btn = document.getElementById('tgCogEnvSummaryHelpToggleBtn');
             if (!panel) return;
             const isOpen = panel.classList.toggle('tg-help-open');
             if (btn) btn.textContent = isOpen ? '✕' : '❓';
@@ -1855,7 +1886,7 @@
                     await pullHeaderDbarLengthsFromExcel();
                     await pullLoadPerAxleFromExcel();
                     await pullDrawingTableFromExcel({ silent: true });
-                    await pullTransportDataSummaryFromExcel({ silent: true }); // independent pull — see that function's own comment for why this deliberately never touches tgCogEnvComputed/the 📊 CoG Envelope Table
+                    await pullCogEnvSummaryFromExcel({ silent: true }); // independent pull — see that function's own comment for why this deliberately never touches tgCogEnvComputed/the 📊 CoG Envelope Table
                     // Skipped while lashingDirty — Lashing no longer
                     // auto-pushes on edit (button-push-only, see
                     // markLashingDirty), so a background pull here could
@@ -2004,7 +2035,7 @@
         // individually.
         function toggleAllTgMinimize(btn) {
             const cardEls = document.querySelectorAll(
-                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgTransportDataSummaryCard'
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard, #tgCheckSummaryCard'
             );
             const previewEls = document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap');
             const anyExpanded =
@@ -2658,6 +2689,12 @@
         // deleted type's whole row (No. + values + Lashing point)
         // disappears from Excel, not just its values.
         const LASHING_SHEET_NAME = "Lashing calculation";
+        // Sheets behind the ✅ Additional Check Summary card's
+        // CHECK_SUMMARY_ROWS below — separate reference workbooks from
+        // the Drawing_table/_LC/_LC_Slope family above.
+        const STABILITY_ON_STRENGTH_SHEET_NAME = "Stability on strength (3P)";
+        const CHASSIS_CAPACITY_SHEET_NAME = "Chasis Capacity Check"; // sic — matches KKKai's actual sheet name/spelling
+        const TRACTION_CHECK_SHEET_NAME = "Traction Check";
         const LASHING_HEADER_ROW = 17;
         const LASHING_DATA_START_ROW = 18;
         const LASHING_DATA_END_ROW = 41; // 24 rows max (18-41)
@@ -6570,37 +6607,88 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const isOpen = panel.classList.toggle('tg-help-open');
             btn.textContent = isOpen ? '✕' : '❓';
         }
+        // Same collapsed-by-default / toggle-on-demand pattern as the main
+        // ❓ Help button above, just scoped to the ✅ Additional Check
+        // Summary card.
+        function toggleTgCheckSummaryHelp() {
+            const panel = document.getElementById('tgCheckSummaryHelpPanel');
+            const btn = document.getElementById('tgCheckSummaryHelpToggleBtn');
+            if (!panel || !btn) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            btn.textContent = isOpen ? '✕' : '❓';
+        }
 
-        // ---- Transport Data Summary — a single read-only table pulled
-        // straight from "Drawing_table_LC"!A63:E79 (17 rows), one column
-        // per source (Static + LC0-LC4 + LC1-Slope..LC4-Slope). Pull-only
-        // — there's nothing here to push, every value is Excel-computed.
-        // Deliberately does NOT read from or depend on the 📊 CoG
-        // Envelope Table/tgCogEnvComputed in any way — this pulls
-        // independently, same as 📋 Transport Data's own pull.
+        // ---- CoG Envelope Summary — a NEW, separate read-only table
+        // mirroring "CoG_Envelope_Summary.xlsx": UNITY CHECK / MAX GBP
+        // (ALL CASES) / STABILITY CHECK rows, one column per source
+        // (Static + LC0-LC4 + LC1-Slope..LC4-Slope). Pull-only, exactly
+        // like 📋 Drawing Table above — there's nothing here to push,
+        // every value is Excel-computed. Deliberately does NOT read
+        // from or depend on the 📊 CoG Envelope Table/tgCogEnvComputed
+        // in any way (that table only ever recomputes locally on 🧮
+        // Calculate and is never the source of these numbers) — this
+        // pulls straight from the reference sheets on every refresh,
+        // same as 📋 Drawing Table's own independent pull.
         //
-        // Per KKKai's spec, label/unit/static come from LC0's OWN block
-        // only (not repeated per LC) — only the value column differs
-        // per load case, using each LC's own 26-col-wide block (see
-        // drawingTableLcColStart):
-        //   Label  — col A (block start +0): A63:A79
-        //   Unit   — col B (block start +1): B63:B79
-        //   Value  — col C (block start +2), PER LC's own block:
-        //            C63:C79 for LC0, AC63:AC79 for LC1, BC63:BC79 for
-        //            LC2, CC63:CC79 for LC3, DC63:DC79 for LC4.
-        //   Static — col D (block start +3): D63:D79.
-        // LC1-Slope..LC4-Slope are UNCHANGED from before this merge —
-        // still only the MAX GBP row (matched by label text below), still
-        // pulled from "Drawing_table_LC_Slope"!C51:E51 (max) per slope
-        // block — no with-slope data exists in the A63:E79 range itself.
-        const TDS_STABILITY_LABEL_HINT = 'stability'; // case-insensitive substring match, see rowDirection() below
-        let tgTransportDataSummary = null; // null until first successful pull — see pullTransportDataSummaryFromExcel()
+        // Sources (1-indexed rows, matching the reference workbook):
+        //   Static  — MAX GBP row: sheet "Drawing_table"!C52:E52 (max).
+        //             7 STABILITY rows: sheet "Input"! single cells —
+        //             BD28 (rows 5-6), BD29 (row 7), BD30 (rows 8-9),
+        //             BD31 (rows 10-11) — each rendered as ">N [deg]"
+        //             (see renderTgCogEnvSummary()'s staticStabCell()).
+        //   LC{n}   — sheet "Drawing_table_LC", load case {n}'s own
+        //             26-col-wide block (see drawingTableLcColStart):
+        //             C48:E48 (max) -> UNITY CHECK; C51:E51 (max) -> MAX GBP;
+        //             C56:C62 -> the 7 STABILITY rows.
+        //   LC{n}-Slope — sheet "Drawing_table_LC_Slope", slope block
+        //             {n-1} (see drawingTableLcSlopeColStart): C51:E51
+        //             (max) -> MAX GBP row only (no UNITY CHECK or
+        //             STABILITY rows exist for the with-slope columns).
+        // "C48:E48"/"C51:E51" are 3-cell-wide per-axle-group blocks —
+        // MAX() picks the worst of the three, same idea as the
+        // reference workbook's own MAX() formulas.
+        const COGENV_SUMMARY_ROW_LABELS = [
+            'STABILITY "COG LOAD"',
+            'STABILITY "COG COMBINED"',
+            'STABILITY "ON STRENGTH"',
+            'STABILITY "COG LOAD" CASE A',
+            'STABILITY "COG COMBINED" CASE A',
+            'STABILITY "COG LOAD" CASE B',
+            'STABILITY "COG COMBINED" CASE B',
+        ];
+        // The "<1" shown in the UNITY CHECK row's Static column is the
+        // pass/fail threshold every other cell (UNITY CHECK, MAX GBP,
+        // and every STABILITY row) is checked against — any value over
+        // this is flagged red, same styling as "DETAIL CHECK REQUIRED"
+        // in 📋 Drawing Table (see cellStatusClass/tg-dt-notok).
+        const COGENV_SUMMARY_UNITY_THRESHOLD = 1;
+
+        // Four more sections appended below STABILITY CHECK, sourced
+        // straight from "Drawing_table"!A63:E79 (Static) and the
+        // matching A63:E79-shaped block within each "Drawing_table_LC"
+        // load-case block (per KKKai's request to extend CoG Envelope
+        // Summary with this range). Column A63/A68/A71/A74 are section
+        // headers only (no data); the data rows are C64:C67, C69:C70,
+        // C72:C73, and C75:C79 respectively — same single-value-per-row
+        // shape as the existing STABILITY rows (C56:C62), so they reuse
+        // columnOfPulledValues(). Like STABILITY, no with-slope columns
+        // exist for these on "Drawing_table_LC_Slope", so those cells
+        // are left blank. Column D on the source sheet is always the
+        // fixed "<1" unity-check threshold and column E is Excel's own
+        // OK/NOT OK/NOT REQ. text — both are re-derived locally via
+        // flagCellOver() (>1 = bad) rather than pulled, same as every
+        // other unity-check row in this table (e.g. UNITY CHECK, row 2).
+        const COGENV_MOMENTS_ROW_LABELS = ['Longitudinal moment to Front', 'Unity Check Moment to Rear', 'Unity Check Moment to Right', 'Unity Check Moment to Left'];
+        const COGENV_CHASSIS_ROW_LABELS = ['UC bending moment', 'UC shear force'];
+        const COGENV_TRACTION_ROW_LABELS = ['Driving Calculation Check', 'Braking Calculation Check'];
+        const COGENV_LASHING_ROW_LABELS = ['Rear', 'Front', 'Right', 'Left', 'Vertical'];
+
+        let tgCogEnvSummary = null; // null until first successful pull — see pullCogEnvSummaryFromExcel()
 
         // Max of a pulled values block (any shape — 1xN row, Nx1
         // column, or a single cell), ignoring blanks/non-numeric cells.
         // Returns null if nothing numeric was found, so callers can
-        // tell "genuinely blank" apart from "computed as 0". Still used
-        // for the LC-Slope MAX GBP pull below.
+        // tell "genuinely blank" apart from "computed as 0".
         function maxOfPulledValues(values) {
             let best = null;
             (values || []).forEach(row => (row || []).forEach(v => {
@@ -6611,41 +6699,62 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
         // Pulls a single 1-indexed column's worth of values (e.g.
-        // A63:A79) and returns a plain array in row order — numeric
-        // cells become numbers, everything else (text labels, blanks)
-        // is kept as a trimmed string (or '' if blank).
-        function columnOfPulledLabelsOrValues(values, numeric) {
+        // D56:D62) and returns a plain array of numbers/nulls in row
+        // order — used for the 7 STABILITY rows, which (unlike UNITY
+        // CHECK/MAX GBP) are single values per row, not a 3-cell block
+        // to MAX() over.
+        function columnOfPulledValues(values) {
             return (values || []).map(row => {
-                const raw = row && row[0];
-                if (numeric) {
-                    const n = parseFloat(raw);
-                    return Number.isFinite(n) ? n : null;
-                }
-                return (raw === null || raw === undefined) ? '' : String(raw).trim();
+                const n = parseFloat(row && row[0]);
+                return Number.isFinite(n) ? n : null;
             });
         }
 
-        async function pullTransportDataSummaryFromExcel(opts = {}) {
+        async function pullCogEnvSummaryFromExcel(opts = {}) {
             const silent = opts.silent === true;
             if (!isOfficeInitialized) {
-                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Transport Data Summary.');
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the CoG Envelope Summary.');
                 return;
             }
             try {
                 const raw = {};
                 await Excel.run(async (context) => {
+                    const dtSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_SHEET_NAME);
                     const lcSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SHEET_NAME);
                     const slopeSheet = context.workbook.worksheets.getItem(DRAWING_TABLE_LC_SLOPE_SHEET_NAME);
+                    const inputSheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const ranges = {};
-                    // Label/Unit/Static — LC0's own block only (A/B/D),
-                    // not repeated per LC, per KKKai's spec.
-                    ranges.label = lcSheet.getRange('A63:A79');
-                    ranges.unit = lcSheet.getRange('B63:B79');
-                    ranges.static = lcSheet.getRange('D63:D79');
+                    ranges.baseGbp = dtSheet.getRange('C52:E52');
+                    // Static STABILITY column no longer comes from
+                    // "Drawing_table_LC"!D56:D62 — per KKKai's spec it now
+                    // pulls 4 single cells straight off "Input": BD28
+                    // (shared by rows 5-6), BD29 (row 7 only), BD30
+                    // (shared by rows 8-9), BD31 (shared by rows 10-11).
+                    // See the b5_11 mapping below and the ">N [deg]"
+                    // formatting in renderTgCogEnvSummary().
+                    ranges.staticStab28 = inputSheet.getRange('BD28');
+                    ranges.staticStab29 = inputSheet.getRange('BD29');
+                    ranges.staticStab30 = inputSheet.getRange('BD30');
+                    ranges.staticStab31 = inputSheet.getRange('BD31');
+                    // Drawing_table!A63:E79 (Static) — the 4 new
+                    // sections below STABILITY CHECK. See the block
+                    // comment above COGENV_MOMENTS_ROW_LABELS.
+                    ranges.staticMoments = dtSheet.getRange('C64:C67');
+                    ranges.staticChassis = dtSheet.getRange('C69:C70');
+                    ranges.staticTraction = dtSheet.getRange('C72:C73');
+                    ranges.staticLashing = dtSheet.getRange('C75:C79');
                     for (let lcIndex = 0; lcIndex <= 4; lcIndex++) {
                         const cs = drawingTableLcColStart(lcIndex);
-                        const valueCol = colLetter(cs + 2);
-                        ranges[`lc${lcIndex}Value`] = lcSheet.getRange(`${valueCol}63:${valueCol}79`);
+                        const c = colLetter(cs + 2), e = colLetter(cs + 4);
+                        ranges[`lc${lcIndex}Unity`] = lcSheet.getRange(`${c}48:${e}48`);
+                        ranges[`lc${lcIndex}Gbp`] = lcSheet.getRange(`${c}51:${e}51`);
+                        ranges[`lc${lcIndex}Stab`] = lcSheet.getRange(`${c}56:${c}62`);
+                        // Same A63:E79-shaped block, offset into this
+                        // load case's own columns.
+                        ranges[`lc${lcIndex}Moments`] = lcSheet.getRange(`${c}64:${c}67`);
+                        ranges[`lc${lcIndex}Chassis`] = lcSheet.getRange(`${c}69:${c}70`);
+                        ranges[`lc${lcIndex}Traction`] = lcSheet.getRange(`${c}72:${c}73`);
+                        ranges[`lc${lcIndex}Lashing`] = lcSheet.getRange(`${c}75:${c}79`);
                     }
                     for (let slopeIdx = 0; slopeIdx <= 3; slopeIdx++) {
                         const cs = drawingTableLcSlopeColStart(slopeIdx);
@@ -6656,80 +6765,288 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     await context.sync();
                     Object.entries(ranges).forEach(([key, r]) => { raw[key] = r.values; });
                 });
-                const labels = columnOfPulledLabelsOrValues(raw.label, false);
-                const units = columnOfPulledLabelsOrValues(raw.unit, false);
-                const statics = columnOfPulledLabelsOrValues(raw.static, true);
-                const lcValues = [0, 1, 2, 3, 4].map(lcIndex => columnOfPulledLabelsOrValues(raw[`lc${lcIndex}Value`], true));
-                const slope3 = [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`]));
-                tgTransportDataSummary = {
-                    rows: labels.map((label, i) => ({
-                        label,
-                        unit: units[i] || '',
-                        static: statics[i],
-                        lc: [0, 1, 2, 3, 4].map(lcIndex => lcValues[lcIndex][i]),
-                        // Slope columns are blank for every row except
-                        // MAX GBP (ALL CASES) — matched by label text,
-                        // same as before this merge.
-                        slope: /^max gbp \(all cases\)$/i.test(label) ? slope3 : null,
-                    })),
+                // Single-cell pulls (BD28-BD31) come back as [[v]] —
+                // pull the one value out, same null-if-non-numeric
+                // handling as columnOfPulledValues() below.
+                const singleCellValue = raw2d => {
+                    const n = parseFloat(raw2d && raw2d[0] && raw2d[0][0]);
+                    return Number.isFinite(n) ? n : null;
                 };
-                renderTgTransportDataSummary();
-                if (!silent) logMsg(`↺ Pulled Transport Data Summary (${labels.length} row(s)) from '${DRAWING_TABLE_LC_SHEET_NAME}'!A63:E79 (LC0-LC4) and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}' (MAX GBP slope).`);
+                const stab28 = singleCellValue(raw.staticStab28);
+                const stab29 = singleCellValue(raw.staticStab29);
+                const stab30 = singleCellValue(raw.staticStab30);
+                const stab31 = singleCellValue(raw.staticStab31);
+                tgCogEnvSummary = {
+                    b3: maxOfPulledValues(raw.baseGbp),
+                    // Rows (0-indexed): 0-1 -> BD28, 2 -> BD29, 3-4 -> BD30, 5-6 -> BD31
+                    b5_11: [stab28, stab28, stab29, stab30, stab30, stab31, stab31],
+                    // Drawing_table!A63:E79 (Static) — see COGENV_MOMENTS_ROW_LABELS etc.
+                    staticMoments: columnOfPulledValues(raw.staticMoments),
+                    staticChassis: columnOfPulledValues(raw.staticChassis),
+                    staticTraction: columnOfPulledValues(raw.staticTraction),
+                    staticLashing: columnOfPulledValues(raw.staticLashing),
+                    lc: [0, 1, 2, 3, 4].map(lcIndex => ({
+                        row2: maxOfPulledValues(raw[`lc${lcIndex}Unity`]),
+                        row3: maxOfPulledValues(raw[`lc${lcIndex}Gbp`]),
+                        rows5_11: columnOfPulledValues(raw[`lc${lcIndex}Stab`]),
+                        moments: columnOfPulledValues(raw[`lc${lcIndex}Moments`]),
+                        chassis: columnOfPulledValues(raw[`lc${lcIndex}Chassis`]),
+                        traction: columnOfPulledValues(raw[`lc${lcIndex}Traction`]),
+                        lashing: columnOfPulledValues(raw[`lc${lcIndex}Lashing`]),
+                    })),
+                    slope3: [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`])),
+                };
+                renderTgCogEnvSummary();
+                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}' (MAX GBP Static + A63:E79), '${INPUT_SHEET_NAME}' (Static STABILITY BD28:BD31), '${DRAWING_TABLE_LC_SHEET_NAME}' (LC0-LC4, incl. A63:E79 per block), and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
             } catch (e) {
-                console.warn('Could not read Transport Data Summary source cells', e);
-                if (!silent) alert(`Could not read the Transport Data Summary source cells. Make sure sheets "${DRAWING_TABLE_LC_SHEET_NAME}" and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
+                console.warn('Could not read CoG Envelope Summary source cells', e);
+                if (!silent) alert(`Could not read the CoG Envelope Summary source cells. Make sure sheets "${DRAWING_TABLE_SHEET_NAME}", "${DRAWING_TABLE_LC_SHEET_NAME}", and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
             }
         }
 
-        // A row's flag DIRECTION isn't given by the sheet — only the
-        // label, unit, and static/allowable value are. Per KKKai's
-        // running spec across this whole feature, "under is bad" only
-        // applies to the STABILITY-angle-style rows (bigger angle =
-        // more margin); every other row so far (UNITY CHECK, MAX GBP,
-        // Axle Line Capacity, Chassis, Driving/Braking) is "over is
-        // bad" (value must stay under its limit). Detected here by a
-        // case-insensitive "stability" substring in the row's own
-        // label — flag if this guess is ever wrong for a row in the
-        // pulled range.
-        function tdsRowDirection(label) {
-            return (label || '').toLowerCase().includes(TDS_STABILITY_LABEL_HINT) ? 'under' : 'over';
-        }
-
-        // Renders tgTransportDataSummary as an HTML table, same visual
-        // language as 📋 Transport Data (.tg-drawing-table/.tg-dt-bold/
-        // .tg-dt-title/.tg-dt-notok). Every row (label/unit/static all
-        // pulled from Excel, not hardcoded) is checked against its OWN
-        // Static column value — see tdsRowDirection() above for which
-        // direction each row uses.
-        function renderTgTransportDataSummary() {
-            const el = document.getElementById('tgTransportDataSummaryTable');
-            const kpiEl = document.getElementById('tgTransportDataSummaryKpis');
+        // Renders tgCogEnvSummary as an HTML table, same visual
+        // language as 📋 Drawing Table (.tg-drawing-table/.tg-dt-bold/
+        // .tg-dt-title/.tg-dt-notok). Column C is a fixed unit label
+        // (not a pulled value) — "[mTe/m²]" for MAX GBP, "[deg]" for
+        // the STABILITY rows, blank for UNITY CHECK. Per KKKai's spec,
+        // red flagging (tg-dt-notok, against COGENV_SUMMARY_UNITY_THRESHOLD)
+        // is applied ONLY to the computed LC0-LC4/LC-Slope columns —
+        // never to the Static column, which is shown plainly — and the
+        // DIRECTION differs by row type: UNITY CHECK (D2:H2) flags when
+        // OVER the fixed threshold (utilization ratio — too high is
+        // bad); the 7 STABILITY rows (D5:D11...H5:H11) flag when UNDER
+        // the fixed threshold (a stability angle — too low is bad) —
+        // see flagCellOver()/flagCellUnder() below. MAX GBP (D3:L3) is
+        // the one exception: each LC/LC-Slope cell there flags red when
+        // it's OVER that row's OWN Static (B3) value instead of the
+        // fixed threshold — see flagCellOverStatic() below.
+        function renderTgCogEnvSummary() {
+            const el = document.getElementById('tgCogEnvSummaryTable');
             if (!el) return;
-            const s = tgTransportDataSummary;
+            const s = tgCogEnvSummary;
             if (!s) {
                 el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load this summary.</div>`;
-                if (kpiEl) kpiEl.innerHTML = '';
                 return;
             }
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
-            let evaluated = 0, failed = 0;
-            const flagCell = (v, staticVal, direction) => {
-                const bad = typeof v === 'number' && typeof staticVal === 'number' &&
-                    (direction === 'under' ? v < staticVal : v > staticVal);
-                if (typeof v === 'number' && typeof staticVal === 'number') { evaluated++; if (bad) failed++; }
-                return `<td${bad ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
-            };
+            const plainCell = v => `<td>${fmt(v)}</td>`;
+            const flagCellOver = v => `<td${(typeof v === 'number' && v > COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            const flagCellUnder = v => `<td${(typeof v === 'number' && v < COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            // MAX GBP (ALL CASES) row only — per KKKai's spec, each LC0-LC4/
+            // LC-Slope cell (D3:L3) flags red (same tg-dt-notok red text +
+            // red background as "DETAIL CHECK REQUIRED" in 📋 Drawing
+            // Table) when it exceeds the row's OWN Static column value
+            // (B3, s.b3) — not the fixed COGENV_SUMMARY_UNITY_THRESHOLD
+            // used by every other row.
+            const flagCellOverStatic = v => `<td${(typeof v === 'number' && typeof s.b3 === 'number' && v > s.b3) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
             const blank = () => `<td></td>`;
+            // Static column for the 7 STABILITY rows (BD28:BD31 on
+            // "Input") is rendered as a ">N [deg]" threshold label, e.g.
+            // ">8 [deg]" — not a plain number — per KKKai's spec. Never
+            // flagged red, same as every other Static cell.
+            const staticStabCell = v => `<td>${typeof v === 'number' ? `&gt;${fmt(v)} [deg]` : '—'}</td>`;
             let html = '<table class="tg-drawing-table">';
-            html += `<tr class="tg-dt-title"><td colspan="12">TRANSPORT DATA SUMMARY</td></tr>`;
+            html += `<tr class="tg-dt-title"><td colspan="12">CoG ENVELOPE SUMMARY</td></tr>`;
             html += `<tr class="tg-dt-bold"><td></td><td>Static</td><td>Unit</td><td>LC0</td><td>LC1</td><td>LC2</td><td>LC3</td><td>LC4</td><td>LC1-Slope</td><td>LC2-Slope</td><td>LC3-Slope</td><td>LC4-Slope</td></tr>`;
-            s.rows.forEach(row => {
-                if (!row.label) return; // skip genuinely blank rows in the 63-79 block
-                const direction = tdsRowDirection(row.label);
-                html += `<tr><td>${row.label}</td><td>${fmt(row.static)}</td><td>${row.unit}</td>` +
-                    row.lc.map(v => flagCell(v, row.static, direction)).join('') +
-                    (row.slope ? row.slope.map(v => flagCell(v, row.static, direction)).join('') : blank() + blank() + blank() + blank()) +
-                    `</tr>`;
+            // Row 2 — UNITY CHECK. Static column shows the "<1"
+            // threshold label itself (not a pulled value); no unit and
+            // no with-slope columns exist for this row.
+            html += `<tr><td>UNITY CHECK</td><td>&lt;1</td><td></td>` +
+                [0, 1, 2, 3, 4].map(i => flagCellOver(s.lc[i].row2)).join('') +
+                blank() + blank() + blank() + blank() + `</tr>`;
+            // Row 3 — MAX GBP (ALL CASES). Every column populated,
+            // including the 4 with-slope ones.
+            html += `<tr><td>MAX GBP (ALL CASES)</td>${plainCell(s.b3)}<td>[mTe/m&sup2;]</td>` +
+                [0, 1, 2, 3, 4].map(i => flagCellOverStatic(s.lc[i].row3)).join('') +
+                [0, 1, 2, 3].map(i => flagCellOverStatic(s.slope3[i])).join('') +
+                `</tr>`;
+            // Row 4 — STABILITY CHECK section header (label only).
+            html += `<tr class="tg-dt-bold"><td colspan="12">STABILITY CHECK</td></tr>`;
+            // Rows 5-11 — the 7 STABILITY sub-rows; no with-slope
+            // columns exist for these either.
+            COGENV_SUMMARY_ROW_LABELS.forEach((label, i) => {
+                // Static column for the 7 STABILITY rows is now pulled
+                // from "Input"!BD28:BD31 (s.b5_11[i] — see the
+                // pullCogEnvSummaryFromExcel() mapping) and rendered as
+                // a ">N [deg]" text threshold via staticStabCell(), e.g.
+                // ">8 [deg]". Per KKKai's spec, this column is still
+                // never flagged red.
+                html += `<tr><td>${label}</td>${staticStabCell(s.b5_11[i])}<td>[deg]</td>` +
+                    [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
+                    blank() + blank() + blank() + blank() + `</tr>`;
+            });
+            // Rows from Drawing_table!A63:E79 — 4 more sections below
+            // STABILITY CHECK (Allowable Moments, Chassis Capacity,
+            // Traction Capacity, Lashing Calculation). Unlike UNITY
+            // CHECK (row 2), Static here IS a real pulled value (the
+            // source sheet has literal numbers, not a formula) — so it
+            // gets the same flagCellOver() treatment as LC0-LC4, and no
+            // with-slope columns (none exist for this range). A small
+            // helper avoids repeating that per section.
+            const renderCogEnvExtraSection = (sectionTitle, rowLabels, staticKey, lcKey) => {
+                html += `<tr class="tg-dt-bold"><td colspan="12">${sectionTitle}</td></tr>`;
+                rowLabels.forEach((label, i) => {
+                    html += `<tr><td>${label}</td>${flagCellOver((s[staticKey] || [])[i])}<td></td>` +
+                        [0, 1, 2, 3, 4].map(lcIndex => flagCellOver(s.lc[lcIndex][lcKey][i])).join('') +
+                        blank() + blank() + blank() + blank() + `</tr>`;
+                });
+            };
+            renderCogEnvExtraSection('ALLOWABLE MOMENTS (based on allowable axle loadings)', COGENV_MOMENTS_ROW_LABELS, 'staticMoments', 'moments');
+            renderCogEnvExtraSection('CHASSIS CAPACITY CHECK', COGENV_CHASSIS_ROW_LABELS, 'staticChassis', 'chassis');
+            renderCogEnvExtraSection('TRACTION CAPACITY CHECK', COGENV_TRACTION_ROW_LABELS, 'staticTraction', 'traction');
+            renderCogEnvExtraSection('LASHING CALCULATION', COGENV_LASHING_ROW_LABELS, 'staticLashing', 'lashing');
+            html += '</table>';
+            el.innerHTML = html;
+        }
+
+        // ---- ✅ Additional Check Summary — the remaining checks from
+        // KKKai's list that aren't covered by 📈 CoG Envelope Summary
+        // above (that card already owns MAX GBP (ALL CASES) via its own
+        // per-LC pull). Same read-only/pull-only pattern — nothing here
+        // is ever pushed.
+        //
+        // Each row: { section, label, sheet, cell, limitCell, limit,
+        // direction, unit }. limit/direction/unit default to <1
+        // (direction 'over' = bad when ABOVE limit) unless overridden.
+        // Most rows have a fixed `limit`; the STABILITY ANGLE rows
+        // instead pull their limit live from `limitCell` (Drawing_table!
+        // D56:D62, one per row) — `limit` there is just the fallback
+        // shown before the first pull.
+        const CHECK_SUMMARY_ROWS = [
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Front', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C11', limitCell: 'D58' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Rear',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C12', limitCell: 'D58' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Right', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C13', limitCell: 'D58' },
+            { section: 'STABILITY ON STRENGTH — UNITY CHECK MOMENT', label: 'Left',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C14', limitCell: 'D58' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Front', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C46' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Rear',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C53' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Right', sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C60' },
+            { section: 'ALLOWABLE MOMENTS (based on allowable axle loadings) — UNITY CHECK MOMENT', label: 'Left',  sheet: STABILITY_ON_STRENGTH_SHEET_NAME, cell: 'C67' },
+            // MAX GBP (ALL CASES) — value and its own ALLOWABLE GBP limit
+            // are each the worst of a 3-cell block (C51:E51 / C52:E52),
+            // same MAX()-of-3 idea as pullCogEnvSummaryFromExcel() uses
+            // for its own MAX GBP row — see agg/limitAgg: 'max' below and
+            // maxOfPulledValues() in the pull function.
+            { section: 'MAX GBP (ALL CASES)', label: 'MAX GBP (ALL CASES)', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C51:E51', agg: 'max', limitCell: 'C52:E52', limitAgg: 'max', limit: null, unit: ' mTe/m²' },
+            // Only 3 axle groups — confirmed by KKKai (no Group 04 row).
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 01', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C48' },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 02', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'D48' },
+            { section: 'AXLE LINE CAPACITY — UNITY CHECK', label: 'Group 03', sheet: DRAWING_TABLE_SHEET_NAME, cell: 'E48' },
+            // Limit for each row here is pulled live from limitCell
+            // (Drawing_table!D56:D62), NOT a fixed number — confirmed by
+            // KKKai. The `limit` value below is only the display
+            // fallback used before the first successful pull.
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG LOAD"',              sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C56', limitCell: 'D56', limit: 8, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG COMBINED"',          sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C57', limitCell: 'D57', limit: 8, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "ON STRENGTH"',           sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C58', limitCell: 'D58', limit: 2, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG LOAD" CASE A',       sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C59', limitCell: 'D59', limit: 7, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG COMBINED" CASE A',   sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C60', limitCell: 'D60', limit: 7, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG LOAD" CASE B',       sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C61', limitCell: 'D61', limit: 7, direction: 'under', unit: '°' },
+            { section: 'STABILITY ANGLE', label: 'STABILITY "COG COMBINED" CASE B',   sheet: DRAWING_TABLE_SHEET_NAME, cell: 'C62', limitCell: 'D62', limit: 7, direction: 'under', unit: '°' },
+            { section: 'CHASSIS CAPACITY CHECK', label: 'UC bending moment', sheet: CHASSIS_CAPACITY_SHEET_NAME, cell: 'H43' },
+            { section: 'CHASSIS CAPACITY CHECK', label: 'UC shear force',    sheet: CHASSIS_CAPACITY_SHEET_NAME, cell: 'H44' },
+            { section: 'DRIVING / BRAKING CHECK', label: 'Driving Capacity Utilisation Check',   sheet: TRACTION_CHECK_SHEET_NAME, cell: 'C66' },
+            { section: 'DRIVING / BRAKING CHECK', label: 'Braking Calculation Utilisation Check', sheet: TRACTION_CHECK_SHEET_NAME, cell: 'C84' },
+        ].map(r => ({ limit: 1, direction: 'over', unit: '', limitCell: null, agg: null, limitAgg: null, ...r })); // fill defaults (<1, "over" = bad, fixed limit, single-cell) for every row that didn't override them
+        let tgCheckSummary = null; // null until first pull; array of {v, limit} (both number|null) after — see pullCheckSummaryFromExcel()
+
+        async function pullCheckSummaryFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Additional Check Summary.');
+                return;
+            }
+            const configuredRows = CHECK_SUMMARY_ROWS.filter(r => r.sheet && r.cell);
+            if (configuredRows.length === 0) {
+                tgCheckSummary = CHECK_SUMMARY_ROWS.map(() => ({ v: null, limit: null }));
+                renderTgCheckSummary();
+                if (!silent) alert('Additional Check Summary cell references aren\'t configured yet — set sheet/cell for each row in CHECK_SUMMARY_ROWS in the code first.');
+                return;
+            }
+            try {
+                const raw = {};
+                const rawLimit = {};
+                await Excel.run(async (context) => {
+                    const sheetCache = {};
+                    const getSheet = name => {
+                        if (!sheetCache[name]) sheetCache[name] = context.workbook.worksheets.getItem(name);
+                        return sheetCache[name];
+                    };
+                    CHECK_SUMMARY_ROWS.forEach((r, i) => {
+                        if (!r.sheet || !r.cell) return;
+                        const rng = getSheet(r.sheet).getRange(r.cell);
+                        rng.load('values');
+                        raw[i] = rng;
+                        if (r.limitCell) {
+                            const lrng = getSheet(r.sheet).getRange(r.limitCell);
+                            lrng.load('values');
+                            rawLimit[i] = lrng;
+                        }
+                    });
+                    await context.sync();
+                });
+                const cellNum = (rng, agg) => {
+                    if (!rng || !rng.values) return null;
+                    if (agg === 'max') return maxOfPulledValues(rng.values); // reuse the same MAX()-of-3 helper pullCogEnvSummaryFromExcel() uses
+                    const n = parseFloat(rng.values[0] && rng.values[0][0]);
+                    return Number.isFinite(n) ? n : null;
+                };
+                tgCheckSummary = CHECK_SUMMARY_ROWS.map((r, i) => ({
+                    v: raw[i] ? cellNum(raw[i], r.agg) : null,
+                    // Pulled limit wins when its cell is configured and
+                    // numeric; otherwise fall back to the row's fixed
+                    // `limit` (e.g. the <1 rows, which have no limitCell).
+                    limit: r.limitCell ? (cellNum(rawLimit[i], r.limitAgg) ?? r.limit) : r.limit,
+                }));
+                renderTgCheckSummary();
+                if (!silent) logMsg(`↺ Pulled Additional Check Summary (${configuredRows.length}/${CHECK_SUMMARY_ROWS.length} row(s) configured).`);
+            } catch (e) {
+                console.warn('Could not read Additional Check Summary source cells', e);
+                if (!silent) alert('Could not read the Additional Check Summary source cells — check the sheet names/cells set in CHECK_SUMMARY_ROWS.');
+            }
+        }
+
+        // Renders tgCheckSummary as an HTML table, same visual language
+        // as 📈 CoG Envelope Summary (.tg-drawing-table/.tg-dt-bold/
+        // .tg-dt-title/.tg-dt-notok) — a flat list grouped by section
+        // header. Each row is flagged using ITS OWN limit/direction/unit
+        // (most are <1 "over is bad"; the STABILITY ANGLE rows are
+        // >N° "under is bad" — see the CHECK_SUMMARY_ROWS defaults above).
+        function renderTgCheckSummary() {
+            const el = document.getElementById('tgCheckSummaryTable');
+            const kpiEl = document.getElementById('tgCheckSummaryKpis');
+            if (!el) return;
+            const vals = tgCheckSummary;
+            const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
+            // Shared pass/fail test — used by both the table cell styling
+            // below and the KPI strip counts, so the two never disagree.
+            // A row with no numeric value/limit yet (nothing pulled) is
+            // neither pass nor fail — excluded from both counts.
+            const isBad = (v, limit, r) => typeof v === 'number' && typeof limit === 'number' && (r.direction === 'under' ? v < limit : v > limit);
+            const valueCell = (v, limit, r) => {
+                const bad = isBad(v, limit, r);
+                return `<td${bad ? ' class="tg-dt-notok"' : ''}>${fmt(v)}${typeof v === 'number' ? r.unit : ''}</td>`;
+            };
+            let html = '<table class="tg-drawing-table">';
+            html += `<tr class="tg-dt-title"><td colspan="3">ADDITIONAL CHECK SUMMARY</td></tr>`;
+            html += `<tr class="tg-dt-bold"><td>Check</td><td>Value</td><td>Limit</td></tr>`;
+            let lastSection = null;
+            let evaluated = 0, failed = 0; // for the KPI strip
+            CHECK_SUMMARY_ROWS.forEach((r, i) => {
+                if (r.section !== lastSection) {
+                    html += `<tr class="tg-dt-bold"><td colspan="3">${r.section}</td></tr>`;
+                    lastSection = r.section;
+                }
+                const entry = vals ? vals[i] : null;
+                const v = entry ? entry.v : null;
+                // Pulled limit (when this row has a limitCell) wins over
+                // the fixed fallback — see CHECK_SUMMARY_ROWS' comment.
+                const limit = entry && typeof entry.limit === 'number' ? entry.limit : r.limit;
+                const limitText = `${r.direction === 'under' ? '&gt;' : '&lt;'}${fmt(limit)}${r.unit}`;
+                html += `<tr><td>${r.label}</td>${valueCell(v, limit, r)}<td>${limitText}</td></tr>`;
+                if (typeof v === 'number' && typeof limit === 'number') {
+                    evaluated++;
+                    if (isBad(v, limit, r)) failed++;
+                }
             });
             html += '</table>';
             el.innerHTML = html;
@@ -6745,7 +7062,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     kpi(marginPct === null ? '—' : `${marginPct}%`, 'Overall margin', marginPct !== null && marginPct < 100 ? 'tg-checksum-kpi-bad' : 'tg-checksum-kpi-ok');
             }
         }
-
 
         // ============================================================
         // CoG ENVELOPE — local calc mirroring "CoG_Envelope.xlsx"!"2",
@@ -6890,13 +7206,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             tgCogEnvComputed = calcCogEnvelope(); // freeze the snapshot renderTgCogEnvTable()/renderTgCogEnvPreview() will keep showing until this button is pressed again — see tgCogEnvComputed's own comment above
             renderTgCogEnvTable(); // was blank — now shows the frozen snapshot immediately
             // Auto-expand (per KKKai's spec): 📊 CoG Envelope Table and
-            // 📈 Transport Data Summary both pop open on every "🧮
+            // 📈 CoG Envelope Summary both pop open on every "🧮
             // Calculate CoG Envelope" click, even if either was left
             // minimized — done unconditionally here (before the Excel
             // push below, which can fail/be offline) so the freshly
             // calculated table is visible either way.
             expandTgCardById('tgCogEnvTableCard');
-            expandTgCardById('tgTransportDataSummaryCard');
+            expandTgCardById('tgCogEnvSummaryCard');
             if (!isOfficeInitialized) {
                 alert(`Not connected to Excel — the table above is calculated and shown locally, but could not push to '${COGENV_TABLE_SHEET}'!${COGENV_TABLE_RANGE_MAIN}/${COGENV_TABLE_RANGE_SLOPE}. Open this add-in inside an Excel workbook to push.`);
                 throw new Error('Not connected to Excel');
@@ -6963,7 +7279,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // so a hiccup on any one row logs quietly instead of
                 // an alert() interrupting the chain, and doesn't undo
                 // the Table push that already succeeded above.
-                await pullTransportDataSummaryFromExcel({ silent: true });
+                await pullCogEnvSummaryFromExcel({ silent: true });
                 const lcPushSequence = [
                     { name: 'CoG-LC0', x: c.cogX, y: c.cogY, z: c.zDeckCog },
                     ...COGENV_LC_MAIN_NAMES.map((name, i) => ({ name, x: c.lcBase[i].x, y: c.lcBase[i].y, z: c.zDeckLc })),
@@ -7036,7 +7352,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // element directly (not an id) since there are 8 of these
         // rendered fresh on every table re-render.
         // btnEl may be null — used that way by the automatic post-⚡
-        // Transport Data Summary CoG-LC0 push (see calculateCogEnvelopeImpl()),
+        // CoG Envelope Summary CoG-LC0 push (see calculateCogEnvelopeImpl()),
         // which has no button of its own to flash and passes
         // { silent: true } so a failure there logs quietly instead of
         // popping an alert() in the middle of an unattended chain.
@@ -7814,7 +8130,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 await pullCogEnvFromExcel({ silent: true }); // CoG Envelope dim/CoG inputs — own try/catch inside
                 await pullDrawingTableFromExcel({ silent: true }); // Transport Data — own try/catch inside
                 await pullAllTransportLcTables({ silent: true }); // Transport Data w/ CoG Env (LC1-4) — own try/catch inside
-                await pullTransportDataSummaryFromExcel({ silent: true }); // Transport Data Summary — own try/catch inside
+                await pullCogEnvSummaryFromExcel({ silent: true }); // CoG Envelope Summary — own try/catch inside
                 renderTrailerDashboard();
                 logMsg(`↺ Loaded initial values from ${INPUT_SHEET_NAME}!${INPUT_NUM_TRAINS_CELL} (trains), ${INPUT_NUM_GROUPS_CELL} (groups), ${ZHEIGHT_CELL} (Z Trailer Height = ${tgZTrailerHeightMm}mm), and X/Y offset for ${linkedCount} of ${n} linked train(s).`);
             } catch (e) {
@@ -14200,7 +14516,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // including fields that are normally PULL-ONLY from Excel
         // (tgCogEnv's dimX/dimY/dimZ/cogX/cogY/cogZ, tgCogEnvGroups,
         // the CoG-sign/stability-arm readouts, tgDrawingTableRows,
-        // tgTransportDataSummary) — since on a plain standalone webpage
+        // tgCogEnvSummary) — since on a plain standalone webpage
         // there's no Excel to pull them FROM, so exporting/restoring
         // them here is the only way they persist across a reload.
         // EXCEPT Excel connection state itself (isOfficeInitialized),
@@ -14247,10 +14563,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // (local display flag) and the pulled A1:F63 grid itself.
                 tgActiveDrawingLC: tgActiveDrawingLC,
                 tgDrawingTableRows: tgDrawingTableRows,
-                // Transport Data Summary card (UNITY CHECK / MAX GBP /
+                // CoG Envelope Summary card (UNITY CHECK / MAX GBP /
                 // STATIC STABILITY / LC0-LC4 table) — pulled from Excel,
                 // saved here so it still renders standalone.
-                tgTransportDataSummary: tgTransportDataSummary,
+                tgCogEnvSummary: tgCogEnvSummary,
+                // ✅ Additional Check Summary card (Unity Check Moment /
+                // Axle Line Capacity / Chassis / Driving-Braking) —
+                // pulled from Excel, saved here so it still renders
+                // standalone, same idea as tgCogEnvSummary above.
+                tgCheckSummary: tgCheckSummary,
                 // Trailer CoG / Combined CoG signs (Display!B15:D15 /
                 // B16:D16) — pull-only readouts used by the preview's
                 // CoG dimension lines and the stability-arm view.
@@ -14348,8 +14669,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         tgActiveDrawingLC = Number.isFinite(lc) ? lc : null;
                     }
                     if (Array.isArray(state.tgDrawingTableRows)) tgDrawingTableRows = state.tgDrawingTableRows;
-                    if (state.tgTransportDataSummary && typeof state.tgTransportDataSummary === 'object') {
-                        tgTransportDataSummary = state.tgTransportDataSummary;
+                    if (state.tgCheckSummary && Array.isArray(state.tgCheckSummary)) {
+                        tgCheckSummary = state.tgCheckSummary;
+                    }
+                    if (state.tgCogEnvSummary && typeof state.tgCogEnvSummary === 'object') {
+                        tgCogEnvSummary = state.tgCogEnvSummary;
                     }
                     if (state.cogTrailerSign && typeof state.cogTrailerSign === 'object') {
                         ['x', 'y', 'z'].forEach(k => {
@@ -14397,12 +14721,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     if (dirSelect) dirSelect.value = trailerGenLoadDirection;
 
                     renderTrailerDashboard(); // also re-renders cargo list, totals, and the preview
-                    // renderTgTransportDataSummary() isn't part of
+                    // renderTgCogEnvSummary() isn't part of
                     // renderTrailerDashboard() (it's only called after a
-                    // live Excel pull — see pullTransportDataSummaryFromExcel) —
-                    // call it directly so a restored tgTransportDataSummary
+                    // live Excel pull — see pullCogEnvSummaryFromExcel) —
+                    // call it directly so a restored tgCogEnvSummary
                     // actually shows up standalone.
-                    renderTgTransportDataSummary();
+                    renderTgCogEnvSummary();
+                    // renderTgCheckSummary() has the same standalone-call
+                    // requirement as renderTgCogEnvSummary() just above —
+                    // it isn't part of renderTrailerDashboard() either.
+                    renderTgCheckSummary();
                     logMsg(`📂 Imported dashboard (${trailerGenTrains.length} train(s), ${cargoItems.length} cargo item(s)) from "${file.name}".`);
                 } catch (e) {
                     console.warn('Dashboard import error', e);
