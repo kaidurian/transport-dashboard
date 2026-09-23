@@ -823,7 +823,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.134)</h1>
+            <h1>🚂 Transport Dashboard (Rev.135)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -6606,20 +6606,25 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const COGENV_SUMMARY_UNITY_THRESHOLD = 1;
 
         // Four more sections appended below STABILITY CHECK, sourced
-        // straight from "Drawing_table"!A63:E79 (Static) and the
-        // matching A63:E79-shaped block within each "Drawing_table_LC"
-        // load-case block (per KKKai's request to extend CoG Envelope
-        // Summary with this range). Column A63/A68/A71/A74 are section
-        // headers only (no data); the data rows are C64:C67, C69:C70,
-        // C72:C73, and C75:C79 respectively — same single-value-per-row
-        // shape as the existing STABILITY rows (C56:C62), so they reuse
-        // columnOfPulledValues(). Like STABILITY, no with-slope columns
-        // exist for these on "Drawing_table_LC_Slope", so those cells
-        // are left blank. Column D on the source sheet is always the
-        // fixed "<1" unity-check threshold and column E is Excel's own
-        // OK/NOT OK/NOT REQ. text — both are re-derived locally via
-        // flagCellOver() (>1 = bad) rather than pulled, same as every
-        // other unity-check row in this table (e.g. UNITY CHECK, row 2).
+        // straight from "Drawing_table"!A63:E79 and the matching
+        // A63:E79-shaped block within each "Drawing_table_LC" load-case
+        // block (per KKKai's request to extend CoG Envelope Summary
+        // with this range). Column A63/A68/A71/A74 are section headers
+        // only (no data); the data rows are *64:*67, *69:*70, *72:*73,
+        // and *75:*79 respectively.
+        // Static column (confirmed): pulled from column D, not C — D
+        // holds the actual UNITY CHECK limitation text (e.g. "<1"),
+        // while C is the (currently #REF!, unreliable) computed value.
+        // Pulled as text via columnOfPulledText() and shown as-is, same
+        // treatment as the hardcoded "<1" Static cell on the UNITY
+        // CHECK row above (row 2) — never flagged red, since it's a
+        // limit label, not a result.
+        // LC0-LC4 columns: still the real computed unity-check ratio,
+        // pulled from each load case's own C-equivalent column (see
+        // ranges.lc*Moments/Chassis/Traction/Lashing below) and flagged
+        // via flagCellOver() same as every other unity-check row here.
+        // Like STABILITY, no with-slope columns exist for these on
+        // "Drawing_table_LC_Slope", so those cells are left blank.
         const COGENV_MOMENTS_ROW_LABELS = ['Longitudinal moment to Front', 'Unity Check Moment to Rear', 'Unity Check Moment to Right', 'Unity Check Moment to Left'];
         const COGENV_CHASSIS_ROW_LABELS = ['UC bending moment', 'UC shear force'];
         const COGENV_TRACTION_ROW_LABELS = ['Driving Calculation Check', 'Braking Calculation Check'];
@@ -6652,6 +6657,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
         }
 
+        // Same shape as columnOfPulledValues() but for label/threshold
+        // cells (e.g. "<1") that are text, not numbers — used for the
+        // Static column of the 4 new sections below STABILITY CHECK,
+        // pulled from "Drawing_table"!D64:D79. Blank cells come back as
+        // null so callers can tell "genuinely blank" apart from an
+        // empty string.
+        function columnOfPulledText(values) {
+            return (values || []).map(row => {
+                const v = row && row[0];
+                return (v === undefined || v === null || v === '') ? null : String(v);
+            });
+        }
+
         async function pullCogEnvSummaryFromExcel(opts = {}) {
             const silent = opts.silent === true;
             if (!isOfficeInitialized) {
@@ -6678,13 +6696,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     ranges.staticStab29 = inputSheet.getRange('BD29');
                     ranges.staticStab30 = inputSheet.getRange('BD30');
                     ranges.staticStab31 = inputSheet.getRange('BD31');
-                    // Drawing_table!A63:E79 (Static) — the 4 new
-                    // sections below STABILITY CHECK. See the block
-                    // comment above COGENV_MOMENTS_ROW_LABELS.
-                    ranges.staticMoments = dtSheet.getRange('C64:C67');
-                    ranges.staticChassis = dtSheet.getRange('C69:C70');
-                    ranges.staticTraction = dtSheet.getRange('C72:C73');
-                    ranges.staticLashing = dtSheet.getRange('C75:C79');
+                    // Drawing_table!D64:D79 (Static — the UNITY CHECK
+                    // limitation text, e.g. "<1") — the 4 new sections
+                    // below STABILITY CHECK. See the block comment
+                    // above COGENV_MOMENTS_ROW_LABELS.
+                    ranges.staticMoments = dtSheet.getRange('D64:D67');
+                    ranges.staticChassis = dtSheet.getRange('D69:D70');
+                    ranges.staticTraction = dtSheet.getRange('D72:D73');
+                    ranges.staticLashing = dtSheet.getRange('D75:D79');
                     for (let lcIndex = 0; lcIndex <= 4; lcIndex++) {
                         const cs = drawingTableLcColStart(lcIndex);
                         const c = colLetter(cs + 2), e = colLetter(cs + 4);
@@ -6722,11 +6741,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     b3: maxOfPulledValues(raw.baseGbp),
                     // Rows (0-indexed): 0-1 -> BD28, 2 -> BD29, 3-4 -> BD30, 5-6 -> BD31
                     b5_11: [stab28, stab28, stab29, stab30, stab30, stab31, stab31],
-                    // Drawing_table!A63:E79 (Static) — see COGENV_MOMENTS_ROW_LABELS etc.
-                    staticMoments: columnOfPulledValues(raw.staticMoments),
-                    staticChassis: columnOfPulledValues(raw.staticChassis),
-                    staticTraction: columnOfPulledValues(raw.staticTraction),
-                    staticLashing: columnOfPulledValues(raw.staticLashing),
+                    // Drawing_table!D64:D79 (Static limitation text) — see COGENV_MOMENTS_ROW_LABELS etc.
+                    staticMoments: columnOfPulledText(raw.staticMoments),
+                    staticChassis: columnOfPulledText(raw.staticChassis),
+                    staticTraction: columnOfPulledText(raw.staticTraction),
+                    staticLashing: columnOfPulledText(raw.staticLashing),
                     lc: [0, 1, 2, 3, 4].map(lcIndex => ({
                         row2: maxOfPulledValues(raw[`lc${lcIndex}Unity`]),
                         row3: maxOfPulledValues(raw[`lc${lcIndex}Gbp`]),
@@ -6739,7 +6758,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     slope3: [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`])),
                 };
                 renderTgCogEnvSummary();
-                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}' (MAX GBP Static + A63:E79), '${INPUT_SHEET_NAME}' (Static STABILITY BD28:BD31), '${DRAWING_TABLE_LC_SHEET_NAME}' (LC0-LC4, incl. A63:E79 per block), and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
+                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}' (MAX GBP Static + D64:D79 limitation text), '${INPUT_SHEET_NAME}' (Static STABILITY BD28:BD31), '${DRAWING_TABLE_LC_SHEET_NAME}' (LC0-LC4, incl. A63:E79 per block), and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
             } catch (e) {
                 console.warn('Could not read CoG Envelope Summary source cells', e);
                 if (!silent) alert(`Could not read the CoG Envelope Summary source cells. Make sure sheets "${DRAWING_TABLE_SHEET_NAME}", "${DRAWING_TABLE_LC_SHEET_NAME}", and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
@@ -6819,16 +6838,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             // Rows from Drawing_table!A63:E79 — 4 more sections below
             // STABILITY CHECK (Allowable Moments, Chassis Capacity,
-            // Traction Capacity, Lashing Calculation). Unlike UNITY
-            // CHECK (row 2), Static here IS a real pulled value (the
-            // source sheet has literal numbers, not a formula) — so it
-            // gets the same flagCellOver() treatment as LC0-LC4, and no
-            // with-slope columns (none exist for this range). A small
-            // helper avoids repeating that per section.
+            // Traction Capacity, Lashing Calculation). Static here is
+            // the pulled D-column limitation text (e.g. "<1"), shown
+            // plainly and never flagged — same treatment as the
+            // hardcoded "<1" Static cell on UNITY CHECK (row 2) and the
+            // ">N [deg]" Static cells on the STABILITY rows above. The
+            // LC0-LC4 columns are the real computed unity-check ratios,
+            // so those keep flagCellOver(). No with-slope columns exist
+            // for this range. A small helper avoids repeating this per
+            // section.
+            const staticLimitCell = v => `<td>${v != null ? escapeHtml(v) : '—'}</td>`;
             const renderCogEnvExtraSection = (sectionTitle, rowLabels, staticKey, lcKey) => {
                 html += `<tr class="tg-dt-bold"><td colspan="12">${sectionTitle}</td></tr>`;
                 rowLabels.forEach((label, i) => {
-                    html += `<tr><td>${label}</td>${flagCellOver((s[staticKey] || [])[i])}<td></td>` +
+                    html += `<tr><td>${label}</td>${staticLimitCell((s[staticKey] || [])[i])}<td></td>` +
                         [0, 1, 2, 3, 4].map(lcIndex => flagCellOver(s.lc[lcIndex][lcKey][i])).join('') +
                         blank() + blank() + blank() + blank() + `</tr>`;
                 });
