@@ -366,7 +366,7 @@
         }
 
         /* ---- Drawing Table — read-only mirror of Excel "Drawing_table"
-           (A1:F80), rendered between the 2D and 3D preview. Column
+           (A1:F82), rendered between the 2D and 3D preview. Column
            widths loosely mirror that sheet's own (A widest — labels,
            B/C/D numeric, E/F numeric/notes). Row 3's title banner and
            the known bold section-header rows are styled to match the
@@ -823,7 +823,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.136)</h1>
+            <h1>🚂 Transport Dashboard (Rev.138)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1241,7 +1241,7 @@
                         </p>
                         <div id="tgDrawingTable" class="tg-drawing-table-wrap"><!-- Drawing Table rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the Transport Data from Excel 'Drawing_table'!A1:F80"
+                            <button type="button" class="tg-add-train-btn" title="Pull the Transport Data from Excel 'Drawing_table'!A1:F82"
                                     onclick="pullDrawingTableFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
@@ -1411,7 +1411,7 @@
                         <option value="out">Load out (Left to Right)</option>
                     </select>
                 </label>
-                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts top/side/end view blocks per train (offset in Y so the 3 views don't overlap), the Transport Data table (rows 2 and 80 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 80 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
+                <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts top/side/end view blocks per train (offset in Y so the 3 views don't overlap), the Transport Data table (rows 2 and 82 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 82 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
             </div>
 
@@ -2349,22 +2349,25 @@
         // the LC1-4 quadrant tables ONLY when exported to AutoCAD —
         // rows 1-2 (blank banner rows above the title), the "TRAILER
         // ARRANGEMENT" section (row 4's merged banner + rows 5-8,
-        // identical across every load case), and row 80 (trailing blank
+        // identical across every load case), and row 82 (trailing blank
         // row) are all cut, so row 9 slides up to close the gap right
         // below the title (TRANSPORT TABLE LC{n}, row 3) and every
         // exported quadrant table is shorter. Purely a CAD-export trim:
         // never applied to the on-screen 🚚 Transport Data w/ CoG Env
         // card, the main 📋 Transport Data table, or Excel itself — see
         // stripExportRows()/computeLcQuadrantTables(). Trailing blank row
-        // was 63 until the row 63-79 extension pushed the spacer row down to 80.
-        const LC_EXPORT_HIDDEN_ROWS = [{ from: 1, to: 2 }, { from: 4, to: 8 }, { from: 80, to: 80 }];
+        // was 63, then 80 after the row 63-79 extension, and is now 82
+        // after TRACTION CAPACITY CHECK grew to 4 rows and LASHING
+        // CALCULATION gained its "Vertical" row.
+        const LC_EXPORT_HIDDEN_ROWS = [{ from: 1, to: 2 }, { from: 4, to: 8 }, { from: 82, to: 82 }];
         // Excel row numbers (1-indexed, inclusive ranges) to omit from
         // the main 📋 Transport Data (Drawing Table) ONLY when exported
         // to AutoCAD — row 2 (blank banner row above the title) and row
-        // 80 (trailing blank row, was 63 before the row 63-79 extension).
+        // 82 (trailing blank row, was 63 before the row 63-79 extension,
+        // then 80, now 82 after the TRACTION/LASHING row growth above).
         // Same CAD-export-only trim as LC_EXPORT_HIDDEN_ROWS above: never
         // applied to the on-screen table or to Excel itself — see stripExportRows().
-        const DRAWING_TABLE_EXPORT_HIDDEN_ROWS = [{ from: 2, to: 2 }, { from: 80, to: 80 }];
+        const DRAWING_TABLE_EXPORT_HIDDEN_ROWS = [{ from: 2, to: 2 }, { from: 82, to: 82 }];
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
         // kept in sync with. B5 = X offset, B6 = Y offset. B1 = Number
@@ -2556,7 +2559,7 @@
 
 
         // ---- Drawing Table — a READ-ONLY mirror of Excel sheet
-        // "Drawing_table" (A1:F80), shown between the 2D and 3D preview.
+        // "Drawing_table" (A1:F82), shown between the 2D and 3D preview.
         // Unlike every other synced field above, this is pull-only —
         // there's no push button, since the sheet's own values are
         // Excel-computed (title/arrangement summary, load-details rows,
@@ -2569,17 +2572,17 @@
         // which row numbers get the bold "section header" styling and
         // which single row is the big merged title banner.
         const DRAWING_TABLE_SHEET_NAME = "Drawing_table";
-        const DRAWING_TABLE_RANGE = "A1:F80";
-        const DRAWING_TABLE_NUM_ROWS = 80; // row count of DRAWING_TABLE_RANGE — used to build LC-block A1 ranges. Was 63 (A1:F63) until KKai extended "Drawing_table" with 4 new sections (Allowable Moments/Chassis Capacity/Traction Capacity/Lashing Calculation, rows 63-79) plus the trailing blank spacer row (80) that now sits below them.
+        const DRAWING_TABLE_RANGE = "A1:F82";
+        const DRAWING_TABLE_NUM_ROWS = 82; // row count of DRAWING_TABLE_RANGE — used to build LC-block A1 ranges. Was 63 (A1:F63) until KKai extended "Drawing_table" with 4 new sections (Allowable Moments/Chassis Capacity/Traction Capacity/Lashing Calculation, rows 63-79) plus the trailing blank spacer row (80); TRACTION CAPACITY CHECK was then split from 2 generic rows into 4 Dry/Wet-specific rows (72-75) and LASHING CALCULATION gained a "Vertical" row, pushing the section down to rows 76-81 and the trailing blank spacer to row 82.
         const DRAWING_TABLE_TITLE_ROW = 3;   // 1-indexed — "TRANSPORT TABLE" banner, merged across all columns
         const DRAWING_TABLE_MERGE_BC_ROW = 4; // 1-indexed — B holds the value, spans B:C ("TRAILER ARRANGEMENT" value)
-        const DRAWING_TABLE_BOLD_ROWS = new Set([1, 4, 9, 17, 23, 30, 38, 46, 55, 63, 68, 71, 74]); // 1-indexed section-header rows — 63/68/71/74 ("Allowable Moments...", "CHASSIS CAPACITY CHECK", "TRACTION CAPACITY CHECK", "LASHING CALCULATION") added with the row 63-79 extension
+        const DRAWING_TABLE_BOLD_ROWS = new Set([1, 4, 9, 17, 23, 30, 38, 46, 55, 63, 68, 71, 76]); // 1-indexed section-header rows — 63/68/71/76 ("Allowable Moments...", "CHASSIS CAPACITY CHECK", "TRACTION CAPACITY CHECK", "LASHING CALCULATION") — LASHING CALCULATION's header moved from 74 to 76 once TRACTION CAPACITY CHECK grew to 4 rows
         let tgDrawingTableRows = []; // raw 2D array of pulled cell values, row-major, same shape as DRAWING_TABLE_RANGE
         // 🚚 Transport Data w/ CoG Env — 4 read-only tables (TRANSPORT
         // TABLE LC1-LC4), each pulled straight from its own block in
         // "Drawing_table_LC" (see drawingTableLcColStart()). Keyed 1-4
         // (not 0-4 — there's no LC0 block shown here, only LC1-LC4).
-        // Same A1:F80 row shape as tgDrawingTableRows. This is also the
+        // Same A1:F82 row shape as tgDrawingTableRows. This is also the
         // data source the AutoCAD export's LC1-4 quadrant tables now
         // read from — see computeLcQuadrantTables().
         let tgTransportLcRows = { 1: [], 2: [], 3: [], 4: [] };
@@ -2593,7 +2596,7 @@
         // which load case the table currently reflects.
         let tgActiveDrawingLC = null;
         // "Drawing_table_LC" — a reference workbook sheet laid out as 5
-        // side-by-side copies of the single "Drawing_table" A1:F80
+        // side-by-side copies of the single "Drawing_table" A1:F82
         // block, one per load case, 26 columns apart (LC0 at A, LC1 at
         // AA, LC2 at BA, LC3 at CA, LC4 at DA — see
         // 197-Goldhofer-Excel-Modify-LC0.xlsx for the reference). Every
@@ -2604,7 +2607,7 @@
         const DRAWING_TABLE_LC_SHEET_NAME = "Drawing_table_LC";
         const DRAWING_TABLE_LC_BLOCK_WIDTH = 26; // A..Z per block — only A:F (6 cols) are actually written
         // 1-indexed column number where load case {lcIndex}'s (0-4)
-        // A1:F80-shaped block starts in "Drawing_table_LC" (0 -> col 1 =
+        // A1:F82-shaped block starts in "Drawing_table_LC" (0 -> col 1 =
         // "A", 1 -> col 27 = "AA", 2 -> col 53 = "BA", etc.).
         function drawingTableLcColStart(lcIndex) { return 1 + lcIndex * DRAWING_TABLE_LC_BLOCK_WIDTH; }
         // "Drawing_table_LC_Slope" — same idea as "Drawing_table_LC"
@@ -2619,7 +2622,7 @@
         // pushLoadCaseToExcel().
         const DRAWING_TABLE_LC_SLOPE_SHEET_NAME = "Drawing_table_LC_Slope";
         // 1-indexed column number where LC{n}-Slope's (n = 1-4)
-        // A1:F80-shaped block starts in "Drawing_table_LC_Slope" (LC1-Slope
+        // A1:F82-shaped block starts in "Drawing_table_LC_Slope" (LC1-Slope
         // -> col 1 = "A", LC2-Slope -> col 27 = "AA", etc.) — note the
         // index here is 0-based over the 4 slope load cases (LC1-Slope = 0),
         // NOT the 0-4 lcIndex used by drawingTableLcColStart() above.
@@ -6433,7 +6436,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // cell whose value is a recognized pass/fail "sign" (OK/NOT OK/
         // PASS/FAIL/etc. — see cellStatusClass()) is colored green or
         // red so a failing check is immediately visible.
-        // Shared renderer for any A1:F80-shaped Drawing Table grid — used
+        // Shared renderer for any A1:F82-shaped Drawing Table grid — used
         // by both 📋 Transport Data (tgDrawingTableRows) and each of the
         // 4 🚚 Transport Data w/ CoG Env tables (tgTransportLcRows[1-4]).
         // forcedLcLabel, if given (e.g. "LC1"), is appended to the pulled
@@ -6607,12 +6610,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const COGENV_SUMMARY_UNITY_THRESHOLD = 1;
 
         // Four more sections appended below STABILITY CHECK, sourced
-        // straight from "Drawing_table"!A63:E79 and the matching
-        // A63:E79-shaped block within each "Drawing_table_LC" load-case
+        // straight from "Drawing_table"!A63:E81 and the matching
+        // A63:E81-shaped block within each "Drawing_table_LC" load-case
         // block (per KKKai's request to extend CoG Envelope Summary
-        // with this range). Column A63/A68/A71/A74 are section headers
-        // only (no data); the data rows are *64:*67, *69:*70, *72:*73,
-        // and *75:*79 respectively.
+        // with this range). Column A63/A68/A71/A76 are section headers
+        // only (no data); the data rows are *64:*67, *69:*70, *72:*75,
+        // and *77:*81 respectively — TRACTION CAPACITY CHECK now has 4
+        // Dry/Wet rows (was 2) and LASHING CALCULATION's header moved
+        // from row 74 to row 76 to make room, with its own data now at
+        // 77-81 (5 rows, including the new "Vertical" row).
         // Static column (confirmed): pulled from column D, not C — D
         // holds the actual UNITY CHECK limitation text (e.g. "<1"),
         // while C is the (currently #REF!, unreliable) computed value.
@@ -6628,7 +6634,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // "Drawing_table_LC_Slope", so those cells are left blank.
         const COGENV_MOMENTS_ROW_LABELS = ['Longitudinal moment to Front', 'Unity Check Moment to Rear', 'Unity Check Moment to Right', 'Unity Check Moment to Left'];
         const COGENV_CHASSIS_ROW_LABELS = ['UC bending moment', 'UC shear force'];
-        const COGENV_TRACTION_ROW_LABELS = ['Driving Calculation Check', 'Braking Calculation Check'];
+        // Was 2 generic rows ('Driving Calculation Check', 'Braking
+        // Calculation Check') until KKKai split TRACTION CAPACITY CHECK
+        // into separate Dry/Wet rows for Tractive Effort and Braking
+        // (Drawing_table/Drawing_table_LC/Drawing_table_LC_Slope rows 72-75).
+        const COGENV_TRACTION_ROW_LABELS = ['Utilization Tractive Effort (Dry)', 'Utilization Tractive Effort (Wet)', 'Utilization Braking (Dry)', 'Utilization Braking (Wet)'];
         const COGENV_LASHING_ROW_LABELS = ['Rear', 'Front', 'Right', 'Left', 'Vertical'];
 
         let tgCogEnvSummary = null; // null until first successful pull — see pullCogEnvSummaryFromExcel()
@@ -6661,7 +6671,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Same shape as columnOfPulledValues() but for label/threshold
         // cells (e.g. "<1") that are text, not numbers — used for the
         // Static column of the 4 new sections below STABILITY CHECK,
-        // pulled from "Drawing_table"!D64:D79. Blank cells come back as
+        // pulled from "Drawing_table"!D64:D81. Blank cells come back as
         // null so callers can tell "genuinely blank" apart from an
         // empty string.
         function columnOfPulledText(values) {
@@ -6697,26 +6707,26 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     ranges.staticStab29 = inputSheet.getRange('BD29');
                     ranges.staticStab30 = inputSheet.getRange('BD30');
                     ranges.staticStab31 = inputSheet.getRange('BD31');
-                    // Drawing_table!D64:D79 (Static — the UNITY CHECK
+                    // Drawing_table!D64:D81 (Static — the UNITY CHECK
                     // limitation text, e.g. "<1") — the 4 new sections
                     // below STABILITY CHECK. See the block comment
                     // above COGENV_MOMENTS_ROW_LABELS.
                     ranges.staticMoments = dtSheet.getRange('D64:D67');
                     ranges.staticChassis = dtSheet.getRange('D69:D70');
-                    ranges.staticTraction = dtSheet.getRange('D72:D73');
-                    ranges.staticLashing = dtSheet.getRange('D75:D79');
+                    ranges.staticTraction = dtSheet.getRange('D72:D75');
+                    ranges.staticLashing = dtSheet.getRange('D77:D81');
                     for (let lcIndex = 0; lcIndex <= 4; lcIndex++) {
                         const cs = drawingTableLcColStart(lcIndex);
                         const c = colLetter(cs + 2), e = colLetter(cs + 4);
                         ranges[`lc${lcIndex}Unity`] = lcSheet.getRange(`${c}48:${e}48`);
                         ranges[`lc${lcIndex}Gbp`] = lcSheet.getRange(`${c}51:${e}51`);
                         ranges[`lc${lcIndex}Stab`] = lcSheet.getRange(`${c}56:${c}62`);
-                        // Same A63:E79-shaped block, offset into this
+                        // Same A63:E81-shaped block, offset into this
                         // load case's own columns.
                         ranges[`lc${lcIndex}Moments`] = lcSheet.getRange(`${c}64:${c}67`);
                         ranges[`lc${lcIndex}Chassis`] = lcSheet.getRange(`${c}69:${c}70`);
-                        ranges[`lc${lcIndex}Traction`] = lcSheet.getRange(`${c}72:${c}73`);
-                        ranges[`lc${lcIndex}Lashing`] = lcSheet.getRange(`${c}75:${c}79`);
+                        ranges[`lc${lcIndex}Traction`] = lcSheet.getRange(`${c}72:${c}75`);
+                        ranges[`lc${lcIndex}Lashing`] = lcSheet.getRange(`${c}77:${c}81`);
                     }
                     for (let slopeIdx = 0; slopeIdx <= 3; slopeIdx++) {
                         const cs = drawingTableLcSlopeColStart(slopeIdx);
@@ -6742,7 +6752,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     b3: maxOfPulledValues(raw.baseGbp),
                     // Rows (0-indexed): 0-1 -> BD28, 2 -> BD29, 3-4 -> BD30, 5-6 -> BD31
                     b5_11: [stab28, stab28, stab29, stab30, stab30, stab31, stab31],
-                    // Drawing_table!D64:D79 (Static limitation text) — see COGENV_MOMENTS_ROW_LABELS etc.
+                    // Drawing_table!D64:D81 (Static limitation text) — see COGENV_MOMENTS_ROW_LABELS etc.
                     staticMoments: columnOfPulledText(raw.staticMoments),
                     staticChassis: columnOfPulledText(raw.staticChassis),
                     staticTraction: columnOfPulledText(raw.staticTraction),
@@ -6759,7 +6769,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     slope3: [0, 1, 2, 3].map(slopeIdx => maxOfPulledValues(raw[`slope${slopeIdx}Gbp`])),
                 };
                 renderTgCogEnvSummary();
-                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}' (MAX GBP Static + D64:D79 limitation text), '${INPUT_SHEET_NAME}' (Static STABILITY BD28:BD31), '${DRAWING_TABLE_LC_SHEET_NAME}' (LC0-LC4, incl. A63:E79 per block), and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
+                if (!silent) logMsg(`↺ Pulled CoG Envelope Summary from '${DRAWING_TABLE_SHEET_NAME}' (MAX GBP Static + D64:D81 limitation text), '${INPUT_SHEET_NAME}' (Static STABILITY BD28:BD31), '${DRAWING_TABLE_LC_SHEET_NAME}' (LC0-LC4, incl. A63:E81 per block), and '${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}'.`);
             } catch (e) {
                 console.warn('Could not read CoG Envelope Summary source cells', e);
                 if (!silent) alert(`Could not read the CoG Envelope Summary source cells. Make sure sheets "${DRAWING_TABLE_SHEET_NAME}", "${DRAWING_TABLE_LC_SHEET_NAME}", and "${DRAWING_TABLE_LC_SLOPE_SHEET_NAME}" exist.`);
@@ -6837,7 +6847,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
                     blank() + blank() + blank() + blank() + `</tr>`;
             });
-            // Rows from Drawing_table!A63:E79 — 4 more sections below
+            // Rows from Drawing_table!A63:E81 — 4 more sections below
             // STABILITY CHECK (Allowable Moments, Chassis Capacity,
             // Traction Capacity, Lashing Calculation). Static here is
             // the pulled D-column limitation text (e.g. "<1"), shown
@@ -7227,7 +7237,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
         // Mirrors the just-pulled 📋 Drawing Table grid (rows, same
-        // A1:F80 shape as DRAWING_TABLE_RANGE) into load case {lcIndex}'s
+        // A1:F82 shape as DRAWING_TABLE_RANGE) into load case {lcIndex}'s
         // (0-4) own column block in Excel sheet "Drawing_table_LC" — see
         // the DRAWING_TABLE_LC_SHEET_NAME comment above for the block
         // layout. Called from pushLoadCaseToExcel right after that load
@@ -12750,7 +12760,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // its row's top edge no matter what this ratio is set to.
         const DRAWING_TABLE_TEXT_HEIGHT_RATIO = 0.6;
         // Computes just the overall footprint (total width/height, in
-        // export mm) of an A1:F80-shaped grid at the given scale — the
+        // export mm) of an A1:F82-shaped grid at the given scale — the
         // same size math buildDrawingTableGridScript() does internally,
         // exposed on its own so a caller can work out where a table's
         // TOP-RIGHT anchor needs to be to make some OTHER corner of it
@@ -12843,7 +12853,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
         // ---- LC1-LC4 quadrant tables (.scr export) — 4 full copies of
         // the 🚚 Transport Data w/ CoG Env tables (tgTransportLcRows[1-4],
-        // same A1:F80 shape/style as DRAWING_TABLE_RANGE — same 6
+        // same A1:F82 shape/style as DRAWING_TABLE_RANGE — same 6
         // columns, same DRAWING_TABLE_COL_WIDTHS_MM/DRAWING_TABLE_PAPER_SCALE
         // as the Transport Data table's own .scr export below), one per
         // COGENV_LC_MAIN_NAMES load case, laid out in their own new
@@ -12872,7 +12882,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Cuts the given 1-indexed inclusive row ranges (an array of
         // {from,to} objects, e.g. LC_EXPORT_HIDDEN_ROWS /
         // DRAWING_TABLE_EXPORT_HIDDEN_ROWS) out of a pulled
-        // A1:F80-shaped grid — see those constants' own comments for
+        // A1:F82-shaped grid — see those constants' own comments for
         // why. Purely positional (array filter), so whatever row used
         // to be, say, row 8 slides up to become the new row 4 in the
         // returned array once the rows above it are cut;
@@ -14267,7 +14277,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // currently 10:1) so its real-world-mm dimensions print at
             // the right size.
             let drawingTableLispLines = [];
-            // CAD-export-only trim: row 2 and row 80 hidden, per
+            // CAD-export-only trim: row 2 and row 82 hidden, per
             // DRAWING_TABLE_EXPORT_HIDDEN_ROWS — never applied to the
             // on-screen 📋 Transport Data table or to Excel itself.
             const drawingTableExportRows = tgDrawingTableRows.length
@@ -14369,7 +14379,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 tgCogEnvCalculated: tgCogEnvCalculated,
                 tgCogEnvComputed: tgCogEnvComputed,
                 // 📋 Drawing Table — which load case's table is active
-                // (local display flag) and the pulled A1:F80 grid itself.
+                // (local display flag) and the pulled A1:F82 grid itself.
                 tgActiveDrawingLC: tgActiveDrawingLC,
                 tgDrawingTableRows: tgDrawingTableRows,
                 // CoG Envelope Summary card (UNITY CHECK / MAX GBP /
