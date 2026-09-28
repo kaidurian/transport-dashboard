@@ -269,6 +269,29 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #a78bfa 10%);
         }
+        /* 🚛 Traction Capacity (input) + 🚛 Traction Capacity Data (output) share one teal tint;
+           ⚓ Lashing (input) + ⚓ Lashing calculation table (output) share one pink tint. Neither hue
+           is used by any other card (amber = Generate Trailer, green = Cargo, blue = Horizontal
+           Loads, purple = CoG Envelope + its tables). Input cards carry the 4px left accent (as the
+           other top-level input cards do); the output cards take the tint only. */
+        .tg-card-traction {
+            border-left: 4px solid #14b8a6;
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #14b8a6 10%);
+        }
+        .tg-card-traction-bg {
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #14b8a6 10%);
+        }
+        .tg-card-lashing {
+            border-left: 4px solid #ec4899;
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #ec4899 10%);
+        }
+        .tg-card-lashing-bg {
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #ec4899 10%);
+        }
         /* Pushes the ❓ Help / — Minimize button group to the flush
            right edge of every .tg-train-card-header (title takes only
            its natural width, buttons get the rest) — see the "move
@@ -605,8 +628,9 @@
         /* Traction Capacity: Excel-computed E22/F22 result line under the Ballast field. */
         .tg-traction-result { grid-column: 1 / -1; font-size: 11px; color: var(--text-muted); padding: 2px 2px 0; }
         .tg-traction-result.tg-traction-over { color: #ef4444; font-weight: 700; }
-        /* Traction Capacity Data table (B24:F80): free-text note rows span the width and wrap. */
+        /* Traction Capacity Data table (B3:F80): free-text note rows span the width and wrap. */
         table.tg-traction-data-table td.tg-tcd-note { white-space: normal; text-align: left; width: auto; color: var(--text-muted); font-style: italic; }
+        table.tg-traction-data-table td.tg-tcd-span { white-space: normal; text-align: left; }
         table.tg-traction-data-table tr.tg-dt-bold td.tg-tcd-note { color: var(--text-main); font-style: normal; }
         /* Pull-only (Excel-computed, never editable here) look — same
            greyed-out styling as .tg-cargo-field-readonly (the "Move All
@@ -834,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.139)</h1>
+            <h1>🚂 Transport Dashboard (Rev.140)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1029,40 +1053,28 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-cogenv">
+                    <div class="tg-cargo-card tg-card-traction" id="tgTractionCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📐 CoG Envelope</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvHelpToggleBtn" onclick="toggleTgCogEnvHelp()">❓</button>
+                            <h2 class="tg-cargo-title">🚛 Traction Capacity</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgTractionHelpToggleBtn" onclick="toggleTgTractionHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
-                        <p class="tg-modal-sub" id="tgCogEnvHelpPanel">
-                            Reproduces the <strong>"CoG_Envelope"</strong> reference workbook's Cargo CoG
-                            envelope calculation (sheet <strong>"2"</strong>) directly in this dashboard.
-                            <strong>Cargo Dim.</strong> (X/Y/Z, m — workbook C10:E10) is 🔒 <strong>pull-only</strong>,
-                            auto-synced from Excel <strong>"Input"!BE{row}/BF{row}/BG{row}</strong>.
-                            <strong>Cargo CoG</strong> (X/Y/Z, m — workbook C11:E11) is also 🔒
-                            <strong>pull-only</strong>, auto-synced from Excel
-                            <strong>"Input"!BB{row}/BC{row}/BJ{row}</strong>. In both cases {row} is whichever cargo
-                            item is picked from the <strong>🔽 Cargo Selection</strong> dropdown above (synced
-                            with <strong>"Input"!AZ35:AZ39</strong>, defaulting to <strong>AZ35</strong>).
-                            Neither is ever written back to Excel or
-                            editable here. <strong>Slope shift</strong> (uphill LC1&amp;4 / downhill LC2&amp;3,
-                            workbook C18/C19) and <strong>CoG Envelope</strong> (workbook C12, the
-                            envelope percentage — defaults to the workbook's fixed 5%) both stay
-                            local-only inputs — no Excel source given, so type them in directly; Y/Z
-                            have no slope-shift input, matching the workbook's
-                            "N/A" there. The table further down (📊 CoG Envelope Table, below 📋 Transport Data)
-                            is every downstream formula from that sheet (<strong>CoG envelope</strong>,
-                            load cases <strong>LC1&ndash;LC4</strong>, and the same again with the
-                            uphill/downhill slope shift folded in), computed here in the dashboard's own code
-                            rather than pulled from Excel.
+                        <p class="tg-modal-sub" id="tgTractionHelpPanel">
+                            Inputs for the Excel sheet <strong>"Traction Check Full Trailer"</strong>.
+                            <strong>Prime Mover Band</strong> syncs with <strong>B4:C4</strong> — <strong>C4</strong> is a
+                            drop-down list in Excel, so the options here are read from that cell's own validation list.
+                            <strong>Prime mover quantity</strong> and <strong>Ballast weight addition (per trailer)</strong> sync with
+                            <strong>B21:F22</strong> (values in <strong>C21/C22</strong>; the "Total Axle Rear force … (Max. …)" text from
+                            <strong>E22/F22</strong> is Excel-computed and shown read-only). Pulled on open/refresh and by the
+                            background poll; edits push automatically (or with 📤 Push to Excel). The calculation output is in the
+                            <strong>Traction Capacity Data</strong> card under the 3D Drawing.
                         </p>
-                        <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
+                        <div id="tgTractionFields"><!-- Traction Capacity fields rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input'!BE{row}/BF{row}/BG{row}, Cargo CoG. X/Y/Z from 'Input'!BB{row}/BC{row}/BJ{row} (row set by the 🔽 Cargo Selection dropdown above, AZ35:AZ39), and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
-                                    onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgCalcCogEnvBtn" title="Compute the 📊 CoG Envelope Table below (CoG envelope % from the field above, LC1-4, and the with-slope versions) from the fields above, then push the numeric data to Excel 'Check CASE A & CASE B'!B67:E73 and B75:E81"
-                                    onclick="calculateCogEnvelope()">🧮 Calculate CoG Envelope</button>
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshTractionBtn" title="Pull Prime Mover Band + quantity/ballast from Excel 'Traction Check Full Trailer'!B4:C4 + B21:F22"
+                                    onclick="pullTractionFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" id="tgPushTractionBtn" title="Write Prime Mover Band (C4), Prime mover quantity (C21) and Ballast weight addition (C22) to Excel 'Traction Check Full Trailer'"
+                                    onclick="pushTractionToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
 
@@ -1130,30 +1142,43 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-lashing" id="tgTractionCard">
+                    <div class="tg-cargo-card tg-card-cogenv">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚛 Traction Capacity</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgTractionHelpToggleBtn" onclick="toggleTgTractionHelp()">❓</button>
+                            <h2 class="tg-cargo-title">📐 CoG Envelope</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvHelpToggleBtn" onclick="toggleTgCogEnvHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
-                        <p class="tg-modal-sub" id="tgTractionHelpPanel">
-                            Inputs for the Excel sheet <strong>"Traction Check Full Trailer"</strong>.
-                            <strong>Prime Mover Band</strong> syncs with <strong>B4:C4</strong> — <strong>C4</strong> is a
-                            drop-down list in Excel, so the options here are read from that cell's own validation list.
-                            <strong>Prime mover quantity</strong> and <strong>Ballast weight addition (per trailer)</strong> sync with
-                            <strong>B21:F22</strong> (values in <strong>C21/C22</strong>; the "Total Axle Rear force … (Max. …)" text from
-                            <strong>E22/F22</strong> is Excel-computed and shown read-only). Pulled on open/refresh and by the
-                            background poll; edits push automatically (or with 📤 Push to Excel). The calculation output is in the
-                            <strong>Traction Capacity Data</strong> card below the Lashing calculation table.
+                        <p class="tg-modal-sub" id="tgCogEnvHelpPanel">
+                            Reproduces the <strong>"CoG_Envelope"</strong> reference workbook's Cargo CoG
+                            envelope calculation (sheet <strong>"2"</strong>) directly in this dashboard.
+                            <strong>Cargo Dim.</strong> (X/Y/Z, m — workbook C10:E10) is 🔒 <strong>pull-only</strong>,
+                            auto-synced from Excel <strong>"Input"!BE{row}/BF{row}/BG{row}</strong>.
+                            <strong>Cargo CoG</strong> (X/Y/Z, m — workbook C11:E11) is also 🔒
+                            <strong>pull-only</strong>, auto-synced from Excel
+                            <strong>"Input"!BB{row}/BC{row}/BJ{row}</strong>. In both cases {row} is whichever cargo
+                            item is picked from the <strong>🔽 Cargo Selection</strong> dropdown above (synced
+                            with <strong>"Input"!AZ35:AZ39</strong>, defaulting to <strong>AZ35</strong>).
+                            Neither is ever written back to Excel or
+                            editable here. <strong>Slope shift</strong> (uphill LC1&amp;4 / downhill LC2&amp;3,
+                            workbook C18/C19) and <strong>CoG Envelope</strong> (workbook C12, the
+                            envelope percentage — defaults to the workbook's fixed 5%) both stay
+                            local-only inputs — no Excel source given, so type them in directly; Y/Z
+                            have no slope-shift input, matching the workbook's
+                            "N/A" there. The table further down (📊 CoG Envelope Table, below 📋 Transport Data)
+                            is every downstream formula from that sheet (<strong>CoG envelope</strong>,
+                            load cases <strong>LC1&ndash;LC4</strong>, and the same again with the
+                            uphill/downhill slope shift folded in), computed here in the dashboard's own code
+                            rather than pulled from Excel.
                         </p>
-                        <div id="tgTractionFields"><!-- Traction Capacity fields rendered by JS --></div>
+                        <div id="tgCogEnvFields"><!-- CoG Envelope input field grid rendered by JS --></div>
                         <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" id="tgRefreshTractionBtn" title="Pull Prime Mover Band + quantity/ballast from Excel 'Traction Check Full Trailer'!B4:C4 + B21:F22"
-                                    onclick="pullTractionFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgPushTractionBtn" title="Write Prime Mover Band (C4), Prime mover quantity (C21) and Ballast weight addition (C22) to Excel 'Traction Check Full Trailer'"
-                                    onclick="pushTractionToExcel()">📤 Push to Excel</button>
+                            <button type="button" class="tg-add-train-btn" title="Pull Cargo Dim. X/Y/Z from Excel 'Input'!BE{row}/BF{row}/BG{row}, Cargo CoG. X/Y/Z from 'Input'!BB{row}/BC{row}/BJ{row} (row set by the 🔽 Cargo Selection dropdown above, AZ35:AZ39), and hydraulic group G1/G2/G3 X/Y from 'Display'!B3:C5"
+                                    onclick="pullCogEnvFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" id="tgCalcCogEnvBtn" title="Compute the 📊 CoG Envelope Table below (CoG envelope % from the field above, LC1-4, and the with-slope versions) from the fields above, then push the numeric data to Excel 'Check CASE A & CASE B'!B67:E73 and B75:E81"
+                                    onclick="calculateCogEnvelope()">🧮 Calculate CoG Envelope</button>
                         </div>
                     </div>
+
                 </div>
 
                 <div class="tg-modal-col-right">
@@ -1258,6 +1283,70 @@
                         <div class="tg-3d-hint">Drag = orbit · middle-drag / two-finger drag = pan · scroll / pinch = zoom</div>
                     </div>
 
+                    <div class="tg-cargo-card tg-card-traction-bg" id="tgTractionDataCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚛 Traction Capacity Data</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgTractionDataHelpToggleBtn" onclick="toggleTgTractionDataHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgTractionDataHelpPanel">
+                            Read-only mirror of Excel <strong>"Traction Check Full Trailer"</strong>!<strong>B3:F80</strong> — the Driving
+                            (traction) and Braking calculation checks with their OK / NOT OK utilization results (NOT OK! is shown red-on-red,
+                            like the Transport Data Summary). Pull-only, never pushed;
+                            change the inputs in the 🚛 Traction Capacity card under ⚓ Lashing.
+                        </p>
+                        <div id="tgTractionDataTable" class="tg-drawing-table-wrap"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Traction Check Full Trailer'!B3:F80"
+                                    onclick="pullTractionDataFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-lashing-bg" id="tgLashingCalcCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">⚓ Lashing calculation table</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgLashingCalcHelpToggleBtn" onclick="toggleTgLashingCalcHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgLashingCalcHelpPanel">
+                            Read-only mirror of Excel <strong>"Lashing calculation"</strong>!<strong>A17:P43</strong>
+                            — the header row, all 24 lashing-type rows (No./SWL/QTY/dx/dy/dz, the
+                            Excel-computed Length/alfa/beta and the Eff./Long./Trans./Vertical capacity
+                            columns, and Lashing point), the Total row, and the Unity Check row. Pull-only, never pushed — the
+                            ⚓ Lashing card above is what writes No./SWL/QTY/dx/dy/dz back to A18:F41 and Lashing point back to P18:P41.
+                            The small block at the top-left mirrors <strong>A12:A14</strong> (left column) and
+                            <strong>F12:J14</strong> (the five columns to its right) of the same sheet, pulled together with the table; the sketch at the
+                            top-right shows the lashing axis (+X right, +Y, +Z up, origin at the lashing point) that dx / dy / dz follow.
+                        </p>
+                        <div class="tg-lct-top">
+                            <div id="tgLashingCalcInfo" class="tg-lct-info" title="Mirror of 'Lashing calculation'!A12:A14 (left) and F12:J14 (right)"></div>
+                            <div class="tg-lct-axis" title="Lashing axis — the dx / dy / dz offsets in the ⚓ Lashing card follow this axis, with the origin at the lashing point">
+                                <svg viewBox="70 25 600 445" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Lashing axis: +X right, +Y into the drawing, +Z up, origin at the lashing point">
+                                <g stroke="#4472C4" fill="#4472C4">
+                                    <line x1="347" y1="362" x2="352" y2="150" stroke-width="12"/>
+                                    <polygon points="352,92 328,160 376,158" stroke="none"/>
+                                    <line x1="347" y1="362" x2="440" y2="222" stroke-width="12"/>
+                                    <polygon points="470,172 460.6,234.3 419.4,209.7" stroke="none"/>
+                                    <line x1="347" y1="372" x2="520" y2="372" stroke-width="12"/>
+                                    <polygon points="582,372 515,346 515,398" stroke="none"/>
+                                    <circle cx="347" cy="362" r="28" fill="none" stroke-width="3"/>
+                                </g>
+                                <g fill="#4472C4" font-family="Calibri, 'Segoe UI', Arial, sans-serif" font-weight="700">
+                                    <text x="328" y="88" font-size="58">+Z</text>
+                                    <text x="432" y="156" font-size="58">+Y</text>
+                                    <text x="590" y="388" font-size="58">+X</text>
+                                    <text x="82" y="448" font-size="62" textLength="453" lengthAdjust="spacingAndGlyphs">LASHING POINT</text>
+                                </g>
+                            </svg>
+                            </div>
+                        </div>
+                        <div id="tgLashingCalcTable" class="tg-drawing-table-wrap"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the full table from Excel 'Lashing calculation'!A17:P43"
+                                    onclick="pullLashingCalcTableFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-cargo-card" id="tgDrawingTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📋 Transport Data</h2>
@@ -1353,69 +1442,6 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull all 4 TRANSPORT TABLE LC1-4 tables from Excel 'Drawing_table_LC'"
                                     onclick="pullAllTransportLcTables()">⇩ Refresh All from Excel</button>
-                        </div>
-                    </div>
-
-                    <div class="tg-cargo-card tg-card-lashing" id="tgLashingCalcCard">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">⚓ Lashing calculation table</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgLashingCalcHelpToggleBtn" onclick="toggleTgLashingCalcHelp()">❓</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgLashingCalcHelpPanel">
-                            Read-only mirror of Excel <strong>"Lashing calculation"</strong>!<strong>A17:P43</strong>
-                            — the header row, all 24 lashing-type rows (No./SWL/QTY/dx/dy/dz, the
-                            Excel-computed Length/alfa/beta and the Eff./Long./Trans./Vertical capacity
-                            columns, and Lashing point), the Total row, and the Unity Check row. Pull-only, never pushed — the
-                            ⚓ Lashing card above is what writes No./SWL/QTY/dx/dy/dz back to A18:F41 and Lashing point back to P18:P41.
-                            The small block at the top-left mirrors <strong>A12:A14</strong> (left column) and
-                            <strong>F12:J14</strong> (the five columns to its right) of the same sheet, pulled together with the table; the sketch at the
-                            top-right shows the lashing axis (+X right, +Y, +Z up, origin at the lashing point) that dx / dy / dz follow.
-                        </p>
-                        <div class="tg-lct-top">
-                            <div id="tgLashingCalcInfo" class="tg-lct-info" title="Mirror of 'Lashing calculation'!A12:A14 (left) and F12:J14 (right)"></div>
-                            <div class="tg-lct-axis" title="Lashing axis — the dx / dy / dz offsets in the ⚓ Lashing card follow this axis, with the origin at the lashing point">
-                                <svg viewBox="70 25 600 445" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Lashing axis: +X right, +Y into the drawing, +Z up, origin at the lashing point">
-                                <g stroke="#4472C4" fill="#4472C4">
-                                    <line x1="347" y1="362" x2="352" y2="150" stroke-width="12"/>
-                                    <polygon points="352,92 328,160 376,158" stroke="none"/>
-                                    <line x1="347" y1="362" x2="440" y2="222" stroke-width="12"/>
-                                    <polygon points="470,172 460.6,234.3 419.4,209.7" stroke="none"/>
-                                    <line x1="347" y1="372" x2="520" y2="372" stroke-width="12"/>
-                                    <polygon points="582,372 515,346 515,398" stroke="none"/>
-                                    <circle cx="347" cy="362" r="28" fill="none" stroke-width="3"/>
-                                </g>
-                                <g fill="#4472C4" font-family="Calibri, 'Segoe UI', Arial, sans-serif" font-weight="700">
-                                    <text x="328" y="88" font-size="58">+Z</text>
-                                    <text x="432" y="156" font-size="58">+Y</text>
-                                    <text x="590" y="388" font-size="58">+X</text>
-                                    <text x="82" y="448" font-size="62" textLength="453" lengthAdjust="spacingAndGlyphs">LASHING POINT</text>
-                                </g>
-                            </svg>
-                            </div>
-                        </div>
-                        <div id="tgLashingCalcTable" class="tg-drawing-table-wrap"></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the full table from Excel 'Lashing calculation'!A17:P43"
-                                    onclick="pullLashingCalcTableFromExcel()">⇩ Refresh from Excel</button>
-                        </div>
-                    </div>
-
-                    <div class="tg-cargo-card tg-card-lashing" id="tgTractionDataCard">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚛 Traction Capacity Data</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgTractionDataHelpToggleBtn" onclick="toggleTgTractionDataHelp()">❓</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgTractionDataHelpPanel">
-                            Read-only mirror of Excel <strong>"Traction Check Full Trailer"</strong>!<strong>B24:F80</strong> — the Driving
-                            (traction) and Braking calculation checks with their OK / NOT OK utilization results. Pull-only, never pushed;
-                            change the inputs in the 🚛 Traction Capacity card under ⚓ Lashing.
-                        </p>
-                        <div id="tgTractionDataTable" class="tg-drawing-table-wrap"></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Traction Check Full Trailer'!B24:F80"
-                                    onclick="pullTractionDataFromExcel()">⇩ Refresh from Excel</button>
                         </div>
                     </div>
 
@@ -2062,7 +2088,7 @@
         // individually.
         function toggleAllTgMinimize(btn) {
             const cardEls = document.querySelectorAll(
-                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, .tg-card-lashing-bg, .tg-card-traction, .tg-card-traction-bg, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
             );
             const previewEls = document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap');
             const anyExpanded =
@@ -2117,7 +2143,7 @@
             // .tg-cargo-card variants) PLUS the 2 output table cards (by
             // id) all use the same .tg-card-minimized mechanism as
             // toggleTgCardMinimize().
-            document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing').forEach(card => {   // .tg-card-lashing = ⚓ Lashing + ⚓ Lashing calculation table
+            document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, .tg-card-lashing-bg, .tg-card-traction, .tg-card-traction-bg').forEach(card => {   // lashing = ⚓ Lashing + ⚓ Lashing calculation table; traction = 🚛 Traction Capacity + 🚛 Traction Capacity Data
                 card.classList.add('tg-card-minimized');
                 const btn = card.querySelector('.tg-minimize-btn');
                 if (btn) { btn.textContent = '▢'; btn.title = 'Expand this card'; }
@@ -6388,7 +6414,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // addition; E22/F22 are Excel-computed text, shown read-only).
         // Output (🚛 Traction Capacity Data card, between ⚓ Lashing
         // calculation table and 📈 Transport Data Summary): pull-only
-        // mirror of B24:F80. Each Excel write is its own Excel.run so one
+        // mirror of B3:F80. Each Excel write is its own Excel.run so one
         // failing range never rolls back the others.
         const TRACTION_SHEET_NAME = "Traction Check Full Trailer";
         const TRACTION_PM_RANGE = 'B4:C4';
@@ -6397,9 +6423,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const TRACTION_INPUT_RANGE = 'B21:F22';
         const TRACTION_QTY_CELL = 'C21';
         const TRACTION_BALLAST_CELL = 'C22';
-        const TRACTION_DATA_RANGE = 'B24:F80';
-        const TRACTION_DATA_START_ROW = 24;
-        const TRACTION_DATA_BOLD_ROWS = new Set([24, 25, 35, 39, 40, 44, 48, 49, 51, 60, 61, 65, 66, 70, 74]); // bold in the reference sheet
+        const TRACTION_DATA_RANGE = 'B3:F80';
+        const TRACTION_DATA_START_ROW = 3;
+        const TRACTION_DATA_BOLD_ROWS = new Set([3, 24, 25, 35, 39, 40, 44, 48, 49, 51, 60, 61, 65, 66, 70, 74]); // bold in the reference sheet
         let tgTraction = {
             pmLabel: 'Prime Mover Band', pm: '', pmOptions: [],
             qtyLabel: 'Prime mover quantity', qty: '', qtyUnit: 'Unit',
@@ -6562,20 +6588,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
                 return escapeHtml(String(v));
             };
-            const NOTE_LEN = 45; // longer free text spans the remaining columns and wraps
+            const NCOL = 5;      // B..F
+            const LONG_LEN = 45; // a long last cell spans to the right edge and wraps
             let html = '<table class="tg-drawing-table tg-traction-data-table">';
             rows.forEach((row, i) => {
                 const excelRow = TRACTION_DATA_START_ROW + i;
-                const cells = row.slice(0, 5);
+                const cells = row.slice(0, NCOL);
                 const filled = cells.map(v => v !== null && v !== undefined && String(v).trim() !== '');
-                if (!filled.some(Boolean)) { html += '<tr class="tg-dt-spacer"><td colspan="5">&nbsp;</td></tr>'; return; }
+                if (!filled.some(Boolean)) { html += '<tr class="tg-dt-spacer"><td colspan="' + NCOL + '">&nbsp;</td></tr>'; return; }
                 const cls = TRACTION_DATA_BOLD_ROWS.has(excelRow) ? ' class="tg-dt-bold"' : '';
-                const first = filled.findIndex(Boolean);
-                const restEmpty = !filled.slice(first + 1).some(Boolean);
+                const li = filled.lastIndexOf(true);
                 let tds = '';
-                if (restEmpty && String(cells[first]).length > NOTE_LEN) {
-                    // long note in a single cell — span from its column to the end
-                    tds = '<td></td>'.repeat(first) + `<td class="tg-tcd-note" colspan="${5 - first}">${fmt(cells[first])}</td>`;
+                if (String(cells[li]).length > LONG_LEN) {
+                    for (let k = 0; k < li; k++) tds += `<td class="${cellStatusClass(cells[k])}">${fmt(cells[k])}</td>`;
+                    tds += `<td class="${li === 0 ? 'tg-tcd-note' : 'tg-tcd-span'}" colspan="${NCOL - li}">${fmt(cells[li])}</td>`;
                 } else {
                     tds = cells.map(v => `<td class="${cellStatusClass(v)}">${fmt(v)}</td>`).join('');
                 }
@@ -6721,7 +6747,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const DT_NOTOK_TOKENS = new Set(['notok', 'not ok', 'ng', 'fail', 'failed', 'unsafe', 'false', 'no', 'exceed', 'exceeded', 'over', 'detail check required', 'detail check', 'check required']);
         function cellStatusClass(v) {
             if (typeof v !== 'string') return '';
-            const norm = v.trim().toLowerCase();
+            const norm = v.trim().toLowerCase().replace(/[!.\s]+$/, ''); // "NOT OK!" -> "not ok"
             if (!norm) return '';
             if (DT_OK_TOKENS.has(norm)) return 'tg-dt-ok';
             if (DT_NOTOK_TOKENS.has(norm.replace(/\s+/g, ' '))) return 'tg-dt-notok';
