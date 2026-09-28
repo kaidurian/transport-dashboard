@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.140)</h1>
+            <h1>🚂 Transport Dashboard (Rev.141)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1292,7 +1292,7 @@
                         <p class="tg-modal-sub" id="tgTractionDataHelpPanel">
                             Read-only mirror of Excel <strong>"Traction Check Full Trailer"</strong>!<strong>B3:F80</strong> — the Driving
                             (traction) and Braking calculation checks with their OK / NOT OK utilization results (NOT OK! is shown red-on-red,
-                            like the Transport Data Summary). Pull-only, never pushed;
+                            like the Transport Data w/ CoG Env Summary). Pull-only, never pushed;
                             change the inputs in the 🚛 Traction Capacity card under ⚓ Lashing.
                         </p>
                         <div id="tgTractionDataTable" class="tg-drawing-table-wrap"></div>
@@ -1445,9 +1445,9 @@
                         </div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-minimized" id="tgCogEnvSummaryCard">
+                    <div class="tg-cargo-card tg-card-cogenv-bg tg-card-minimized" id="tgCogEnvSummaryCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📈 Transport Data Summary</h2>
+                            <h2 class="tg-cargo-title">📈 Transport Data w/ CoG Env Summary</h2>
                             <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Expand this card">▢</button>
                         </div>
@@ -6413,7 +6413,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // list) and B21:F22 (C21 Prime mover quantity, C22 Ballast weight
         // addition; E22/F22 are Excel-computed text, shown read-only).
         // Output (🚛 Traction Capacity Data card, between ⚓ Lashing
-        // calculation table and 📈 Transport Data Summary): pull-only
+        // calculation table and 📈 Transport Data w/ CoG Env Summary): pull-only
         // mirror of B3:F80. Each Excel write is its own Excel.run so one
         // failing range never rolls back the others.
         const TRACTION_SHEET_NAME = "Traction Check Full Trailer";
