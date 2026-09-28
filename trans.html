@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.142)</h1>
+            <h1>🚂 Transport Dashboard (Rev.144)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3544,12 +3544,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // computeTrailerCADInserts(). One TOP view insert + one
                 // FRONT (side) view insert per accessory instance,
                 // regardless of how many sub-blocks[] this type draws in
-                // the 2D/3D preview. Per KKai's spec these block names
-                // carry no _AFT/_FWD suffix and are used for both Load
-                // In and Load Out — direction is conveyed purely by
-                // rotation/mirror (see computeTrailerCADInserts).
-                cadBlockName: 'KAMAG_K25_YOKE_2F_top_view',
-                cadSideViewBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_side_view',
+                // the 2D/3D preview. Per GHF_2F_HEADER_Dbar.dwg each
+                // type now has its own dedicated Left and Right block
+                // for BOTH views ("GHF 2F HEADER&Dbar <type> <Left|Right>_
+                // <Top|Side> view"), used for both Load In and Load Out.
+                // The Right blocks already carry their own 180° rotation
+                // (top) / X-mirror (side) inside the block definition, so
+                // the export inserts every one of them at rotation 0 /
+                // X scale 1 (see computeTrailerCADInserts).
+                cadBlocks: {
+                    left:  { top: 'GHF 2F HEADER&Dbar 3m Left_Top view',  side: 'GHF 2F HEADER&Dbar 3m Left_Side view' },
+                    right: { top: 'GHF 2F HEADER&Dbar 3m Right_Top view', side: 'GHF 2F HEADER&Dbar 3m Right_Side view' }
+                },
                 blocks: [
                     { length: 955, width: 860, height: 473 }
                 ]
@@ -3558,8 +3564,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 label: 'GHF 2F Header&Dbar 3m&PPU',
                 totalWeightT: 1.29,
                 secondBlockOffsetY: 1069,
-                cadBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_top_view',
-                cadSideViewBlockName: 'KAMAG_K25_YOKE_GOLDH_MT_PP_2F_side_view',
+                cadBlocks: {
+                    left:  { top: 'GHF 2F HEADER&Dbar 3m&PPU Left_Top view',  side: 'GHF 2F HEADER&Dbar 3m&PPU Left_Side view' },
+                    right: { top: 'GHF 2F HEADER&Dbar 3m&PPU Right_Top view', side: 'GHF 2F HEADER&Dbar 3m&PPU Right_Side view' }
+                },
                 blocks: [
                     { length: 955, width: 860, height: 473 },
                     { length: 909, width: 1034, height: 710 }
@@ -13910,7 +13918,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // Header/Dbar accessories (if any) — ONE AutoCAD block
                 // insert per accessory instance (not per sub-block piece
                 // drawn in the preview), using
-                // HEADER_DBAR_TYPES[typeKey].cadBlockName. Left and Right
+                // HEADER_DBAR_TYPES[typeKey].cadBlocks[side].top/.side. Left and Right
                 // are independent selections (train.headerDbarLeft/
                 // headerDbarRight — see computeHeaderDbarBlocksForSide),
                 // so a train can export ZERO, ONE, or BOTH of these in
@@ -13935,7 +13943,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ['left', 'right'].forEach(side => {
                     const typeKey = side === 'right' ? train.headerDbarRight : train.headerDbarLeft;
                     const hdDef = HEADER_DBAR_TYPES[typeKey];
-                    if (!hdDef || !hdDef.cadBlockName) return;
+                    if (!hdDef || !hdDef.cadBlocks || !hdDef.cadBlocks[side]) return;
+                    const hdCadBlocks = hdDef.cadBlocks[side];
                     const hdLabel = hdSideLabel(typeKey, side);
                     // flushAtEdge: true — per KKai's spec, xCenter =
                     // edgeX (no more ± half-block-length outward
@@ -13973,22 +13982,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const hdFarXm = anchor.xCenter + headerDbarProtrusionMm(typeKey);
                         headerDbarMaxXm = (headerDbarMaxXm === null) ? hdFarXm : Math.max(headerDbarMaxXm, hdFarXm);
                     }
-                    // Direction (rotation/mirror) — driven by side, not
-                    // loadDirection: Left = 0°/un-mirrored, Right =
-                    // 180°/mirrored (X scale -1), same block name both
-                    // ways (no separate _AFT/_FWD block was given).
-                    const hdRotated = side === 'right';
+                    // Direction — driven by which block is used, not by
+                    // rotation/mirror: the dedicated Right_Top /
+                    // Right_Side blocks (GHF_2F_HEADER_Dbar.dwg) already
+                    // contain their own 180° rotation / X mirror, so
+                    // every insert here is rotation 0 / X scale 1.
                     inserts.push({
                         trainName: `${train.name} — ${hdLabel}`,
                         view: 'top',
-                        blockName: hdDef.cadBlockName,
+                        blockName: hdCadBlocks.top,
                         axleCount: null,
                         loadDirection,
                         x: hdX,
                         y: hdY,
-                        rotationDeg: hdRotated ? 180 : 0
+                        rotationDeg: 0
                     });
-                    if (hdDef.cadSideViewBlockName) {
+                    if (hdCadBlocks.side) {
                         // Front (side) view — shares this accessory's
                         // own X (top/side views share X across this
                         // whole export — see the trailer's own
@@ -13998,13 +14007,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         inserts.push({
                             trainName: `${train.name} — ${hdLabel} (front view)`,
                             view: 'side',
-                            blockName: hdDef.cadSideViewBlockName,
+                            blockName: hdCadBlocks.side,
                             axleCount: null,
                             loadDirection,
                             x: hdX,
                             y: sharedSideYm,
-                            rotationDeg: 0,
-                            xScale: hdRotated ? -1 : 1
+                            rotationDeg: 0
                         });
                     }
                 });
@@ -14536,10 +14544,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const cogMarkerInserts = inserts.filter(ins => cogMarkerBlockNames.has(ins.blockName));
             const otherInserts = inserts.filter(ins => !cogMarkerBlockNames.has(ins.blockName));
             const insertLines = (ins) => {
-                // xScale defaults to 1 for every ordinary insert; the
-                // Header/Dbar front-view accessory block passes -1 to
-                // mirror it (Load In only — see computeTrailerCADInserts).
+                // xScale defaults to 1 for every ordinary insert.
                 const xScale = (ins.xScale !== undefined) ? ins.xScale : 1;
+                if (/\s/.test(ins.blockName)) {
+                    // Block names containing spaces (the GHF 2F
+                    // Header&Dbar blocks) can't go on their own script
+                    // line — a space in a .scr line is read as Enter and
+                    // would split the name. AutoLISP's (command ...)
+                    // passes the name as ONE string instead.
+                    lines.push(`(command "._-INSERT" "${ins.blockName}" "${ins.x.toFixed(3)},${ins.y.toFixed(3)},0" "${xScale}" "1" "${ins.rotationDeg}")`);
+                    return;
+                }
                 lines.push('-Insert');
                 lines.push(ins.blockName);
                 lines.push(`${ins.x.toFixed(3)},${ins.y.toFixed(3)},0`);
