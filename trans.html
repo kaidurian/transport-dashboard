@@ -597,6 +597,17 @@
             border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
         }
         .tg-field input:focus { outline: none; border-color: var(--accent-blue); }
+        .tg-field select {
+            width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border-radius: 5px;
+            border: 1px solid var(--panel-border); background: var(--input-bg); color: var(--text-main);
+        }
+        .tg-field select:focus { outline: none; border-color: var(--accent-blue); }
+        /* Traction Capacity: Excel-computed E22/F22 result line under the Ballast field. */
+        .tg-traction-result { grid-column: 1 / -1; font-size: 11px; color: var(--text-muted); padding: 2px 2px 0; }
+        .tg-traction-result.tg-traction-over { color: #ef4444; font-weight: 700; }
+        /* Traction Capacity Data table (B24:F80): free-text note rows span the width and wrap. */
+        table.tg-traction-data-table td.tg-tcd-note { white-space: normal; text-align: left; width: auto; color: var(--text-muted); font-style: italic; }
+        table.tg-traction-data-table tr.tg-dt-bold td.tg-tcd-note { color: var(--text-main); font-style: normal; }
         /* Pull-only (Excel-computed, never editable here) look — same
            greyed-out styling as .tg-cargo-field-readonly (the "Move All
            Cargo Together" fields when Group All is unchecked), reused
@@ -823,7 +834,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.138)</h1>
+            <h1>🚂 Transport Dashboard (Rev.139)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1118,6 +1129,31 @@
                                     onclick="pushLashingToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
+
+                    <div class="tg-cargo-card tg-card-lashing" id="tgTractionCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚛 Traction Capacity</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgTractionHelpToggleBtn" onclick="toggleTgTractionHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgTractionHelpPanel">
+                            Inputs for the Excel sheet <strong>"Traction Check Full Trailer"</strong>.
+                            <strong>Prime Mover Band</strong> syncs with <strong>B4:C4</strong> — <strong>C4</strong> is a
+                            drop-down list in Excel, so the options here are read from that cell's own validation list.
+                            <strong>Prime mover quantity</strong> and <strong>Ballast weight addition (per trailer)</strong> sync with
+                            <strong>B21:F22</strong> (values in <strong>C21/C22</strong>; the "Total Axle Rear force … (Max. …)" text from
+                            <strong>E22/F22</strong> is Excel-computed and shown read-only). Pulled on open/refresh and by the
+                            background poll; edits push automatically (or with 📤 Push to Excel). The calculation output is in the
+                            <strong>Traction Capacity Data</strong> card below the Lashing calculation table.
+                        </p>
+                        <div id="tgTractionFields"><!-- Traction Capacity fields rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshTractionBtn" title="Pull Prime Mover Band + quantity/ballast from Excel 'Traction Check Full Trailer'!B4:C4 + B21:F22"
+                                    onclick="pullTractionFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" id="tgPushTractionBtn" title="Write Prime Mover Band (C4), Prime mover quantity (C21) and Ballast weight addition (C22) to Excel 'Traction Check Full Trailer'"
+                                    onclick="pushTractionToExcel()">📤 Push to Excel</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tg-modal-col-right">
@@ -1365,6 +1401,24 @@
                         </div>
                     </div>
 
+                    <div class="tg-cargo-card tg-card-lashing" id="tgTractionDataCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚛 Traction Capacity Data</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgTractionDataHelpToggleBtn" onclick="toggleTgTractionDataHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgTractionDataHelpPanel">
+                            Read-only mirror of Excel <strong>"Traction Check Full Trailer"</strong>!<strong>B24:F80</strong> — the Driving
+                            (traction) and Braking calculation checks with their OK / NOT OK utilization results. Pull-only, never pushed;
+                            change the inputs in the 🚛 Traction Capacity card under ⚓ Lashing.
+                        </p>
+                        <div id="tgTractionDataTable" class="tg-drawing-table-wrap"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Traction Check Full Trailer'!B24:F80"
+                                    onclick="pullTractionDataFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-cargo-card tg-card-minimized" id="tgCogEnvSummaryCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📈 Transport Data Summary</h2>
@@ -1447,6 +1501,20 @@
 
         // Same collapsed-by-default / toggle-on-demand pattern as the main
         // ❓ Help button above, just scoped to the Horizontal Loads card.
+        function toggleTgTractionHelp() {
+            const panel = document.getElementById('tgTractionHelpPanel');
+            const btn = document.getElementById('tgTractionHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
+        }
+        function toggleTgTractionDataHelp() {
+            const panel = document.getElementById('tgTractionDataHelpPanel');
+            const btn = document.getElementById('tgTractionDataHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
+        }
         function toggleTgHLoadsHelp() {
             const panel = document.getElementById('tgHLoadsHelpPanel');
             const btn = document.getElementById('tgHLoadsHelpToggleBtn');
@@ -1868,6 +1936,8 @@
                     // background sync.
                     if (!lashingDirty) await pullLashingFromExcelImpl({ silent: true });
                     await pullLashingCalcTableFromExcel({ silent: true });
+                    await pullTractionFromExcelImpl({ silent: true });   // unwrapped: no flash on every poll tick (same reason as the Lashing pull above)
+                    await pullTractionDataFromExcel({ silent: true });
                 }
                 renderTrailerGenPreview();
             } catch (e) {
@@ -6310,6 +6380,241 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
         }
 
+
+        // ---- 🚛 Traction Capacity — sheet "Traction Check Full Trailer".
+        // Inputs (card under ⚓ Lashing): B4:C4 (Prime Mover Band; C4 is an
+        // Excel drop-down — options are read from C4's own data-validation
+        // list) and B21:F22 (C21 Prime mover quantity, C22 Ballast weight
+        // addition; E22/F22 are Excel-computed text, shown read-only).
+        // Output (🚛 Traction Capacity Data card, between ⚓ Lashing
+        // calculation table and 📈 Transport Data Summary): pull-only
+        // mirror of B24:F80. Each Excel write is its own Excel.run so one
+        // failing range never rolls back the others.
+        const TRACTION_SHEET_NAME = "Traction Check Full Trailer";
+        const TRACTION_PM_RANGE = 'B4:C4';
+        const TRACTION_PM_CELL = 'C4';
+        const TRACTION_PM_FALLBACK_LIST_RANGE = 'K4:M4'; // C4's validation source in the reference workbook
+        const TRACTION_INPUT_RANGE = 'B21:F22';
+        const TRACTION_QTY_CELL = 'C21';
+        const TRACTION_BALLAST_CELL = 'C22';
+        const TRACTION_DATA_RANGE = 'B24:F80';
+        const TRACTION_DATA_START_ROW = 24;
+        const TRACTION_DATA_BOLD_ROWS = new Set([24, 25, 35, 39, 40, 44, 48, 49, 51, 60, 61, 65, 66, 70, 74]); // bold in the reference sheet
+        let tgTraction = {
+            pmLabel: 'Prime Mover Band', pm: '', pmOptions: [],
+            qtyLabel: 'Prime mover quantity', qty: '', qtyUnit: 'Unit',
+            ballastLabel: 'Ballast weight addition (per trailer)', ballast: '', ballastUnit: 'Te',
+            resultText: ''
+        };
+        let tgTractionDataRows = [];
+
+        function tractionText(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
+        function tractionNum(v) { const n = parseFloat(v); return Number.isFinite(n) ? n : ''; }
+
+        // Resolves C4's validation list into an array of strings. Handles
+        // a cell-range source ("=$K$4:$M$4", optionally sheet-qualified)
+        // and an inline comma list; falls back to K4:M4.
+        async function readTractionPmOptions() {
+            const flat = arr => (arr || []).reduce((a, r) => a.concat(r), []).map(tractionText).filter(x => x !== '');
+            let opts = [];
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(TRACTION_SHEET_NAME);
+                    const dv = sheet.getRange(TRACTION_PM_CELL).dataValidation;
+                    dv.load('type,rule');
+                    await context.sync();
+                    const src = dv.type === 'List' && dv.rule && dv.rule.list ? tractionText(dv.rule.list.source) : '';
+                    if (src) {
+                        const ref = src.replace(/^=/, '');
+                        if (/^(('[^']+'|[A-Za-z0-9_]+)!)?\$?[A-Z]{1,3}\$?\d+(:\$?[A-Z]{1,3}\$?\d+)?$/.test(ref)) {
+                            const parts = ref.split('!');
+                            const addr = parts.pop().replace(/\$/g, '');
+                            const shName = parts.length ? parts[0].replace(/^'|'$/g, '') : TRACTION_SHEET_NAME;
+                            const r = context.workbook.worksheets.getItem(shName).getRange(addr);
+                            r.load('values');
+                            await context.sync();
+                            opts = flat(r.values);
+                        } else {
+                            opts = src.split(',').map(x => x.trim()).filter(Boolean);
+                        }
+                    }
+                });
+            } catch (e) { console.warn('Traction: could not read C4 validation list', e); }
+            if (!opts.length) {
+                try {
+                    await Excel.run(async (context) => {
+                        const r = context.workbook.worksheets.getItem(TRACTION_SHEET_NAME).getRange(TRACTION_PM_FALLBACK_LIST_RANGE);
+                        r.load('values');
+                        await context.sync();
+                        opts = flat(r.values);
+                    });
+                } catch (e) { /* no list available — the select just shows the current value */ }
+            }
+            return opts;
+        }
+
+        async function pullTractionFromExcelImpl(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull Traction Capacity data.');
+                return;
+            }
+            try {
+                let pm = null, inp = null;
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(TRACTION_SHEET_NAME);
+                    const r1 = sheet.getRange(TRACTION_PM_RANGE);
+                    const r2 = sheet.getRange(TRACTION_INPUT_RANGE);
+                    r1.load('values'); r2.load('values');
+                    await context.sync();
+                    pm = r1.values; inp = r2.values;
+                });
+                const pmOptions = await readTractionPmOptions();
+                const t = tgTraction;
+                t.pmLabel = tractionText(pm[0][0]) || t.pmLabel;
+                t.pm = tractionText(pm[0][1]);
+                t.pmOptions = pmOptions;
+                t.qtyLabel = tractionText(inp[0][0]) || t.qtyLabel;
+                t.qty = tractionNum(inp[0][1]);
+                t.qtyUnit = tractionText(inp[0][2]) || t.qtyUnit;
+                t.ballastLabel = tractionText(inp[1][0]) || t.ballastLabel;
+                t.ballast = tractionNum(inp[1][1]);
+                t.ballastUnit = tractionText(inp[1][2]) || t.ballastUnit;
+                t.resultText = [tractionText(inp[1][3]), tractionText(inp[1][4])].filter(Boolean).join(' ');
+                renderTgTractionFields();
+                if (!silent) logMsg(`↺ Pulled Traction Capacity inputs from '${TRACTION_SHEET_NAME}'!${TRACTION_PM_RANGE} + ${TRACTION_INPUT_RANGE}.`);
+            } catch (e) {
+                console.warn(`Could not read '${TRACTION_SHEET_NAME}' sheet (${TRACTION_PM_RANGE}, ${TRACTION_INPUT_RANGE})`, e);
+                if (!silent) alert(`Could not read sheet "${TRACTION_SHEET_NAME}". Make sure it exists.`);
+            }
+        }
+        const pullTractionFromExcel = withBtnSyncIndicator('tgRefreshTractionBtn', pullTractionFromExcelImpl);
+
+        async function pushTractionToExcelImpl(opts) {
+            const silent = !!(opts && opts.silent);
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push Traction Capacity data.');
+                return;
+            }
+            const t = tgTraction;
+            try {
+                if (t.pm !== '') {
+                    await Excel.run(async (context) => {
+                        context.workbook.worksheets.getItem(TRACTION_SHEET_NAME).getRange(TRACTION_PM_CELL).values = [[t.pm]];
+                        await context.sync();
+                    });
+                }
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(TRACTION_SHEET_NAME);
+                    sheet.getRange(TRACTION_QTY_CELL).values = [[t.qty]];       // '' clears the cell (null would leave it unchanged)
+                    sheet.getRange(TRACTION_BALLAST_CELL).values = [[t.ballast]];
+                    await context.sync();
+                });
+                if (!silent) logMsg(`📤 Pushed Traction Capacity inputs to '${TRACTION_SHEET_NAME}' (${TRACTION_PM_CELL}, ${TRACTION_QTY_CELL}, ${TRACTION_BALLAST_CELL}).`);
+            } catch (e) {
+                console.warn(`Could not push Traction Capacity to '${TRACTION_SHEET_NAME}'`, e);
+                if (!silent) alert(`Could not push to sheet "${TRACTION_SHEET_NAME}". Make sure it exists and isn't protected.`);
+            }
+        }
+        const pushTractionToExcel = withBtnSyncIndicator('tgPushTractionBtn', pushTractionToExcelImpl);
+
+        function updateTractionField(key, raw) {
+            if (key === 'pm') tgTraction.pm = String(raw);
+            else if (key === 'qty') tgTraction.qty = tractionNum(raw);
+            else if (key === 'ballast') tgTraction.ballast = tractionNum(raw);
+            else return;
+            scheduleAutoPush('pushTractionToExcel', pushTractionToExcelImpl);
+        }
+
+        function renderTgTractionFields() {
+            const el = document.getElementById('tgTractionFields');
+            if (!el) return;
+            const t = tgTraction;
+            const options = t.pmOptions.slice();
+            if (t.pm && !options.includes(t.pm)) options.unshift(t.pm);
+            const pmHtml = options.length
+                ? `<select onchange="updateTractionField('pm', this.value)" title="Synced with Excel '${TRACTION_SHEET_NAME}'!${TRACTION_PM_CELL} (drop-down list).">` +
+                  (t.pm ? '' : '<option value="" selected></option>') +
+                  options.map(o => `<option value="${escapeHtml(o)}"${o === t.pm ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('') + '</select>'
+                : `<input type="text" value="${escapeHtml(t.pm)}" title="No drop-down list could be read from ${TRACTION_PM_CELL} — type the exact Excel value." onchange="updateTractionField('pm', this.value)">`;
+            const over = /over max/i.test(t.resultText);
+            el.innerHTML = `
+                <div class="tg-field-grid">
+                    <div class="tg-field" style="grid-column: 1 / -1;">
+                        <label>🔗 ${escapeHtml(t.pmLabel)} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_PM_RANGE}" onclick="pullTractionFromExcel()">⇩</button></label>
+                        ${pmHtml}
+                    </div>
+                    <div class="tg-field">
+                        <label>🔗 ${escapeHtml(t.qtyLabel)}${t.qtyUnit ? ` (${escapeHtml(t.qtyUnit)})` : ''} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_QTY_CELL}" onclick="pullTractionFromExcel()">⇩</button></label>
+                        <input type="number" step="any" value="${t.qty}" title="Synced with Excel '${TRACTION_SHEET_NAME}'!${TRACTION_QTY_CELL}." onchange="updateTractionField('qty', this.value)">
+                    </div>
+                    <div class="tg-field">
+                        <label>🔗 ${escapeHtml(t.ballastLabel)}${t.ballastUnit ? ` (${escapeHtml(t.ballastUnit)})` : ''} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_BALLAST_CELL}" onclick="pullTractionFromExcel()">⇩</button></label>
+                        <input type="number" step="any" value="${t.ballast}" title="Synced with Excel '${TRACTION_SHEET_NAME}'!${TRACTION_BALLAST_CELL}." onchange="updateTractionField('ballast', this.value)">
+                    </div>
+                    ${t.resultText ? `<div class="tg-traction-result${over ? ' tg-traction-over' : ''}" title="Excel-computed — '${TRACTION_SHEET_NAME}'!E22:F22">🔒 ${escapeHtml(t.resultText)}</div>` : ''}
+                </div>`;
+        }
+
+        function buildTractionDataTableHtml(rows) {
+            const fmt = v => {
+                if (v === null || v === undefined || v === '') return '';
+                if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+                return escapeHtml(String(v));
+            };
+            const NOTE_LEN = 45; // longer free text spans the remaining columns and wraps
+            let html = '<table class="tg-drawing-table tg-traction-data-table">';
+            rows.forEach((row, i) => {
+                const excelRow = TRACTION_DATA_START_ROW + i;
+                const cells = row.slice(0, 5);
+                const filled = cells.map(v => v !== null && v !== undefined && String(v).trim() !== '');
+                if (!filled.some(Boolean)) { html += '<tr class="tg-dt-spacer"><td colspan="5">&nbsp;</td></tr>'; return; }
+                const cls = TRACTION_DATA_BOLD_ROWS.has(excelRow) ? ' class="tg-dt-bold"' : '';
+                const first = filled.findIndex(Boolean);
+                const restEmpty = !filled.slice(first + 1).some(Boolean);
+                let tds = '';
+                if (restEmpty && String(cells[first]).length > NOTE_LEN) {
+                    // long note in a single cell — span from its column to the end
+                    tds = '<td></td>'.repeat(first) + `<td class="tg-tcd-note" colspan="${5 - first}">${fmt(cells[first])}</td>`;
+                } else {
+                    tds = cells.map(v => `<td class="${cellStatusClass(v)}">${fmt(v)}</td>`).join('');
+                }
+                html += `<tr${cls}>${tds}</tr>`;
+            });
+            return html + '</table>';
+        }
+        function renderTgTractionDataTable() {
+            const el = document.getElementById('tgTractionDataTable');
+            if (!el) return;
+            if (!tgTractionDataRows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${TRACTION_SHEET_NAME}'!${TRACTION_DATA_RANGE}.</div>`;
+                return;
+            }
+            el.innerHTML = buildTractionDataTableHtml(tgTractionDataRows);
+        }
+        async function pullTractionDataFromExcel(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Traction Capacity Data.');
+                return;
+            }
+            try {
+                let values = null;
+                await Excel.run(async (context) => {
+                    const range = context.workbook.worksheets.getItem(TRACTION_SHEET_NAME).getRange(TRACTION_DATA_RANGE);
+                    range.load('values');
+                    await context.sync();
+                    values = range.values;
+                });
+                tgTractionDataRows = values || [];
+                renderTgTractionDataTable();
+                if (!silent) logMsg(`↺ Pulled Traction Capacity Data from '${TRACTION_SHEET_NAME}'!${TRACTION_DATA_RANGE}.`);
+            } catch (e) {
+                console.warn(`Could not read '${TRACTION_SHEET_NAME}' sheet (${TRACTION_DATA_RANGE})`, e);
+                if (!silent) alert(`Could not read sheet "${TRACTION_SHEET_NAME}". Make sure it exists.`);
+            }
+        }
+
         // ---- Horizontal Loads — editing a field updates the local
         // value and re-renders (the plan-view readout below the origin
         // sign depends on it); pullHorizontalLoadsFromExcel() re-reads
@@ -8237,6 +8542,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTgCogEnvFields();
             renderTgCogEnvTable();
             renderLashingList();
+            renderTgTractionFields();
+            renderTgTractionDataTable();
             // Auto-refresh each train's AutoCAD split on every dashboard
             // load/refresh, so a stale split (axle groups changed by
             // hand, a preset swap, an Excel pull, etc.) never needs a
@@ -14585,6 +14892,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 await pullCargoFromExcel({ silent: true });
                 await pullLashingFromExcel({ silent: true });
                 await pullLashingCalcTableFromExcel({ silent: true });
+                await pullTractionFromExcel({ silent: true });
+                await pullTractionDataFromExcel({ silent: true });
                 if (autoSyncEnabled) startAutoPullPolling();
             }
         }
