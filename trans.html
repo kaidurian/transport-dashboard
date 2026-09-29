@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.145)</h1>
+            <h1>🚂 Transport Dashboard (Rev.146)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3830,6 +3830,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return protrusion ? (baseX - protrusion) : baseX;
         }
 
+        // Inverse of trainXOffsetWithHeaderDbarLeft: Excel Input!<xCell>
+        // holds the COMBINED value (train.x minus the Left Header/Dbar
+        // protrusion), so reading it back must add the protrusion again.
+        // That keeps "X offset for Train (mm)" (train.x) the 1st-priority
+        // anchor: deck, axle lines, Header/Dbar, PPU and prime movers are
+        // all positioned relative to it, and a push -> pull round trip
+        // never shifts it by the block length.
+        function trainXFromInputCell(train, cellValue) {
+            const v = parseFloat(cellValue);
+            if (!Number.isFinite(v)) return v;
+            return v + headerDbarLeftProtrusionMm(train);
+        }
+
         // 'row' says which physical axle(s) of each axle LINE in [fromAxle,
         // toAxle] this group covers: 'both' (right + left), 'right' only,
         // or 'left' only. Only meaningful for preset trailers (which have
@@ -4025,6 +4038,55 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function pmIsMirrored(side, status) {
             return side === 'left' ? status === 'push' : status === 'pull';
         }
+        // ---- Prime mover Qty. (Left + Right, all trains) <-> Traction
+        // Capacity "Prime mover quantity" (Excel C21) --------------------
+        // Excel is only applied to the trains when C21 actually CHANGED in
+        // Excel since we last pushed/saw it (tgPmQtyLastExcel), so the
+        // background poll never reverts an edit that hasn't been pushed yet.
+        let tgPmQtyLastExcel = null;
+        function pmActiveEntries() {
+            const out = [];
+            trailerGenTrains.forEach(train => ['left', 'right'].forEach(side => {
+                if (pmTrainQty(train, side) > 0) out.push({ train, side });
+            }));
+            return out;
+        }
+        function pmTotalQty() {
+            return trailerGenTrains.reduce((s, t) => s + pmTrainQty(t, 'left') + pmTrainQty(t, 'right'), 0);
+        }
+        function pmSetQty(train, side, n) { train[side === 'right' ? 'pmQtyRight' : 'pmQtyLeft'] = Math.max(0, n); }
+        // Excel qty -> trains. Returns true when any train changed.
+        //  - active Prime mover qty exists: the difference goes onto the
+        //    last active entry (walking backwards if it would go below 0);
+        //  - none active: Train 1's Prime mover Qty. (Right) = qty, status Pull.
+        function applyTractionQtyToTrains(qty) {
+            const target = Math.round(Number(qty));
+            if (!Number.isFinite(target) || target < 0 || !trailerGenTrains.length) return false;
+            const active = pmActiveEntries();
+            if (!active.length) {
+                if (target === 0) return false;
+                const t0 = trailerGenTrains[0];
+                pmSetQty(t0, 'right', target);
+                t0.pmStatusRight = 'pull';
+                return true;
+            }
+            let diff = target - pmTotalQty();
+            if (diff === 0) return false;
+            for (let i = active.length - 1; i >= 0 && diff !== 0; i--) {
+                const e = active[i], cur = pmTrainQty(e.train, e.side);
+                const next = Math.max(0, cur + diff);
+                diff -= (next - cur);
+                pmSetQty(e.train, e.side, next);
+            }
+            return true;
+        }
+        // Trains -> Traction Capacity card (+ debounced silent push to C21).
+        function syncTractionQtyFromTrains() {
+            tgTraction.qty = pmTotalQty();
+            if (typeof renderTgTractionFields === 'function') renderTgTractionFields();
+            scheduleAutoPush('pushTractionToExcel', pushTractionToExcelImpl);
+        }
+
         function updateTrainPrimeMoverField(id, field, value) {
             const train = trailerGenTrains.find(t => t.id === id);
             if (!train) return;
@@ -4035,6 +4097,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 train[field] = value === 'push' ? 'push' : 'pull';
             } else return;
             renderTrailerDashboard();
+            syncTractionQtyFromTrains();
         }
 
         // Sets a train's Header/Dbar Left or Right accessory type
@@ -4253,6 +4316,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // 300mm below the previous train's footprint.
             trailerGenTrains.push(buildTrainCopiedFromTrain1());
             renderTrailerDashboard();
+            syncTractionQtyFromTrains();
             pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
             scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
@@ -4279,6 +4343,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             renderTrailerDashboard();
             if (!opts.skipPush) {
+                syncTractionQtyFromTrains();
                 pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
                 scheduleAutoPush('pushDataToExcel', pushDataToExcel);
             }
@@ -4819,9 +4884,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const t = rebuiltTrains[i];
                     const axle1WorldX = (parseFloat(t.x) || 0) + (parseFloat(t.axle1OffsetX) || 0);
                     const axle1WorldY = (parseFloat(t.y) || 0) + (parseFloat(t.axle1OffsetY) || 0);
-                    t.x = off.x;
+                    const anchorX = trainXFromInputCell(t, off.x);   // Excel holds train.x minus the Left Header/Dbar block
+                    t.x = anchorX;
                     t.y = off.y;
-                    t.axle1OffsetX = axle1WorldX - off.x;
+                    t.axle1OffsetX = axle1WorldX - anchorX;
                     t.axle1OffsetY = axle1WorldY - off.y;
                     relinkedCount++;
                 }
@@ -4970,6 +5036,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             trailerGenTrains = trailerGenTrains.filter(t => t.id !== id);
             if (trailerGenTrains.length === 0) trailerGenTrains.push(defaultTrailerGenTrain(1));
             renderTrailerDashboard();
+            syncTractionQtyFromTrains();
             pushValueToInputCell(INPUT_NUM_TRAINS_CELL, trailerGenTrains.length, 'Number of trains');
             scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
@@ -6792,6 +6859,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 t.pmOptions = pmOptions;
                 t.qtyLabel = tractionText(inp[0][0]) || t.qtyLabel;
                 t.qty = tractionNum(inp[0][1]);
+                // Excel C21 -> active Prime mover Qty. (only when it changed in Excel)
+                if (t.qty !== '' && t.qty !== tgPmQtyLastExcel) {
+                    tgPmQtyLastExcel = t.qty;
+                    if (applyTractionQtyToTrains(t.qty)) renderTrailerDashboard();
+                }
+                if (trailerGenTrains.length) t.qty = pmTotalQty();   // card always shows the trains' total
                 t.qtyUnit = tractionText(inp[0][2]) || t.qtyUnit;
                 t.ballastLabel = tractionText(inp[1][0]) || t.ballastLabel;
                 t.ballast = tractionNum(inp[1][1]);
@@ -6813,6 +6886,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return;
             }
             const t = tgTraction;
+            if (trailerGenTrains.length) t.qty = pmTotalQty();   // C21 = total Prime mover Qty. (Left + Right, all trains)
             try {
                 if (t.pm !== '') {
                     await Excel.run(async (context) => {
@@ -6826,6 +6900,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     sheet.getRange(TRACTION_BALLAST_CELL).values = [[t.ballast]];
                     await context.sync();
                 });
+                tgPmQtyLastExcel = t.qty;
                 if (!silent) logMsg(`📤 Pushed Traction Capacity inputs to '${TRACTION_SHEET_NAME}' (${TRACTION_PM_CELL}, ${TRACTION_QTY_CELL}, ${TRACTION_BALLAST_CELL}).`);
             } catch (e) {
                 console.warn(`Could not push Traction Capacity to '${TRACTION_SHEET_NAME}'`, e);
@@ -6836,7 +6911,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
         function updateTractionField(key, raw) {
             if (key === 'pm') tgTraction.pm = String(raw);
-            else if (key === 'qty') tgTraction.qty = tractionNum(raw);
+            else if (key === 'qty') {
+                tgTraction.qty = tractionNum(raw);
+                if (tgTraction.qty !== '' && applyTractionQtyToTrains(tgTraction.qty)) renderTrailerDashboard();
+                if (trailerGenTrains.length) tgTraction.qty = pmTotalQty();
+                renderTgTractionFields();
+            }
             else if (key === 'ballast') tgTraction.ballast = tractionNum(raw);
             else return;
             scheduleAutoPush('pushTractionToExcel', pushTractionToExcelImpl);
@@ -8509,7 +8589,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     await context.sync();
                     raw = range.values[0][0];
                 });
-                const num = parseFloat(raw);
+                let num = parseFloat(raw);
+                if (field === 'x' && !isNaN(num)) num = trainXFromInputCell(train, num);
                 train[field] = isNaN(num) ? 0 : num;
                 renderTrailerDashboard();
                 logMsg(`↺ Pulled ${field === 'x' ? 'X' : 'Y'} offset (${train[field]}) from ${INPUT_SHEET_NAME}!${cell} into "${train.name}".`);
@@ -8564,13 +8645,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const zHeight = parseFloat(zHeightRaw);
                 tgZTrailerHeightMm = (Number.isFinite(zHeight) && zHeight > 0) ? zHeight : TG_Z_TRAILER_HEIGHT_DEFAULT;
 
+                await pullHeaderDbarLengthsFromExcel();   // protrusion must be known before converting the Excel X back to train.x
                 let linkedCount = 0;
                 const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
                 for (let i = 0; i < n; i++) {
                     const train = trailerGenTrains[i];
                     const xNum = parseFloat(offsetRanges[i].xR.values[0][0]);
                     const yNum = parseFloat(offsetRanges[i].yR.values[0][0]);
-                    if (!isNaN(xNum)) { train.x = xNum; linkedCount++; }
+                    if (!isNaN(xNum)) { train.x = trainXFromInputCell(train, xNum); linkedCount++; }
                     if (!isNaN(yNum)) { train.y = yNum; }
                 }
                 await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
