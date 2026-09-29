@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.146)</h1>
+            <h1>🚂 Transport Dashboard (Rev.146.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2207,8 +2207,16 @@
         // behind labels/dimension text to the text they hold.
         let tgFontK = 1;
         function tgDot(v) { return tgDotDiv === 1 ? v : +(v / tgDotDiv).toFixed(3); }
+        // All 2D CoG signs (top/side/end; cargo, Trailer CoG, Combined CoG)
+        // are drawn at 50% of their original radius. cogSignR() is the ONE
+        // place that size is computed, and it goes through tgDot() so the
+        // sign keeps a constant on-screen size at every Scale (1x/2x/4x/6x).
+        // Label-collision rectangles and label offsets next to a sign use
+        // the same helper, so they follow the sign at every Scale.
+        const TG_COG_SIGN_K = 0.5;
+        function cogSignR(r) { return tgDot((r || 7) * TG_COG_SIGN_K); }
         function cogSymbolSvg(cx, cy, r, color) {
-            r = tgDot(r || 7);
+            r = cogSignR(r);
             return `<g>` +
                 `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${color}" opacity="0.85"/>` +
                 `<path d="M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${color}" opacity="0.85"/>` +
@@ -4038,47 +4046,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function pmIsMirrored(side, status) {
             return side === 'left' ? status === 'push' : status === 'pull';
         }
-        // ---- Prime mover Qty. (Left + Right, all trains) <-> Traction
-        // Capacity "Prime mover quantity" (Excel C21) --------------------
-        // Excel is only applied to the trains when C21 actually CHANGED in
-        // Excel since we last pushed/saw it (tgPmQtyLastExcel), so the
-        // background poll never reverts an edit that hasn't been pushed yet.
-        let tgPmQtyLastExcel = null;
-        function pmActiveEntries() {
-            const out = [];
-            trailerGenTrains.forEach(train => ['left', 'right'].forEach(side => {
-                if (pmTrainQty(train, side) > 0) out.push({ train, side });
-            }));
-            return out;
-        }
+        // ---- Prime mover Qty. (Left + Right, all trains) -> Traction
+        // Capacity "Prime mover quantity" (Excel C21). ONE-WAY: the Traction
+        // field is read-only and always shows / pushes this total. ---------
         function pmTotalQty() {
             return trailerGenTrains.reduce((s, t) => s + pmTrainQty(t, 'left') + pmTrainQty(t, 'right'), 0);
-        }
-        function pmSetQty(train, side, n) { train[side === 'right' ? 'pmQtyRight' : 'pmQtyLeft'] = Math.max(0, n); }
-        // Excel qty -> trains. Returns true when any train changed.
-        //  - active Prime mover qty exists: the difference goes onto the
-        //    last active entry (walking backwards if it would go below 0);
-        //  - none active: Train 1's Prime mover Qty. (Right) = qty, status Pull.
-        function applyTractionQtyToTrains(qty) {
-            const target = Math.round(Number(qty));
-            if (!Number.isFinite(target) || target < 0 || !trailerGenTrains.length) return false;
-            const active = pmActiveEntries();
-            if (!active.length) {
-                if (target === 0) return false;
-                const t0 = trailerGenTrains[0];
-                pmSetQty(t0, 'right', target);
-                t0.pmStatusRight = 'pull';
-                return true;
-            }
-            let diff = target - pmTotalQty();
-            if (diff === 0) return false;
-            for (let i = active.length - 1; i >= 0 && diff !== 0; i--) {
-                const e = active[i], cur = pmTrainQty(e.train, e.side);
-                const next = Math.max(0, cur + diff);
-                diff -= (next - cur);
-                pmSetQty(e.train, e.side, next);
-            }
-            return true;
         }
         // Trains -> Traction Capacity card (+ debounced silent push to C21).
         function syncTractionQtyFromTrains() {
@@ -6859,12 +6831,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 t.pmOptions = pmOptions;
                 t.qtyLabel = tractionText(inp[0][0]) || t.qtyLabel;
                 t.qty = tractionNum(inp[0][1]);
-                // Excel C21 -> active Prime mover Qty. (only when it changed in Excel)
-                if (t.qty !== '' && t.qty !== tgPmQtyLastExcel) {
-                    tgPmQtyLastExcel = t.qty;
-                    if (applyTractionQtyToTrains(t.qty)) renderTrailerDashboard();
-                }
-                if (trailerGenTrains.length) t.qty = pmTotalQty();   // card always shows the trains' total
+                if (trailerGenTrains.length) t.qty = pmTotalQty();   // one-way: Generate Trailer -> C21; the card always shows the trains' total
                 t.qtyUnit = tractionText(inp[0][2]) || t.qtyUnit;
                 t.ballastLabel = tractionText(inp[1][0]) || t.ballastLabel;
                 t.ballast = tractionNum(inp[1][1]);
@@ -6900,7 +6867,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     sheet.getRange(TRACTION_BALLAST_CELL).values = [[t.ballast]];
                     await context.sync();
                 });
-                tgPmQtyLastExcel = t.qty;
                 if (!silent) logMsg(`📤 Pushed Traction Capacity inputs to '${TRACTION_SHEET_NAME}' (${TRACTION_PM_CELL}, ${TRACTION_QTY_CELL}, ${TRACTION_BALLAST_CELL}).`);
             } catch (e) {
                 console.warn(`Could not push Traction Capacity to '${TRACTION_SHEET_NAME}'`, e);
@@ -6911,12 +6877,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
         function updateTractionField(key, raw) {
             if (key === 'pm') tgTraction.pm = String(raw);
-            else if (key === 'qty') {
-                tgTraction.qty = tractionNum(raw);
-                if (tgTraction.qty !== '' && applyTractionQtyToTrains(tgTraction.qty)) renderTrailerDashboard();
-                if (trailerGenTrains.length) tgTraction.qty = pmTotalQty();
-                renderTgTractionFields();
-            }
+            else if (key === 'qty') return;   // read-only: driven by Generate Trailer's Prime mover Qty.
             else if (key === 'ballast') tgTraction.ballast = tractionNum(raw);
             else return;
             scheduleAutoPush('pushTractionToExcel', pushTractionToExcelImpl);
@@ -6940,9 +6901,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         <label>🔗 ${escapeHtml(t.pmLabel)} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_PM_RANGE}" onclick="pullTractionFromExcel()">⇩</button></label>
                         ${pmHtml}
                     </div>
-                    <div class="tg-field">
-                        <label>🔗 ${escapeHtml(t.qtyLabel)}${t.qtyUnit ? ` (${escapeHtml(t.qtyUnit)})` : ''} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_QTY_CELL}" onclick="pullTractionFromExcel()">⇩</button></label>
-                        <input type="number" step="any" value="${t.qty}" title="Synced with Excel '${TRACTION_SHEET_NAME}'!${TRACTION_QTY_CELL}." onchange="updateTractionField('qty', this.value)">
+                    <div class="tg-field tg-field-readonly" title="Read-only — this is the total of Prime mover Qty. (Left + Right) over all trains in Generate Trailer, pushed to Excel '${TRACTION_SHEET_NAME}'!${TRACTION_QTY_CELL} automatically. Change the quantity on the train instead.">
+                        <label>🔒 ${escapeHtml(t.qtyLabel)}${t.qtyUnit ? ` (${escapeHtml(t.qtyUnit)})` : ''}</label>
+                        <input type="number" value="${t.qty}" readonly tabindex="-1">
                     </div>
                     <div class="tg-field">
                         <label>🔗 ${escapeHtml(t.ballastLabel)}${t.ballastUnit ? ` (${escapeHtml(t.ballastUnit)})` : ''} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_BALLAST_CELL}" onclick="pullTractionFromExcel()">⇩</button></label>
@@ -9907,7 +9868,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // better with a solid backing plate + border in its own
             // group color).
             const planLeaderBoxLabel = (anchorX, anchorY, text, color, opts = {}) => {
-                const fontSize = opts.fontSize || 10.5;
+                const fontSize = opts.fontSize || 9;   // = cargo name label height (placeAttachedLabel default)
                 const dist = opts.dist || 34;
                 const ccx = offsetX + usedW / 2, ccy = offsetY + usedH / 2;
                 let dx = anchorX - ccx, dy = anchorY - ccy;
@@ -9917,11 +9878,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // Box sized to fit the text itself (short "G1"/"G2" tags
                 // now that the full detail string moved to the legend
                 // below) instead of a fixed 70px-wide minimum plate.
-                const boxW = text.length * 6.2 * tgFontK + 14;
-                const boxH = 16 * tgFontK;
+                // Everything below is in the same units as the text
+                // (font-size gets x tgFontK at the end of the render), so the
+                // plate hugs the text at every Scale / Font scale combination.
+                const boxW = (text.length * fontSize * 0.62 + 9) * tgFontK;
+                const boxH = (fontSize + 5) * tgFontK;
                 return `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${labelX.toFixed(1)}" y2="${labelY.toFixed(1)}" stroke="${color}" stroke-width="1" opacity="0.55"/>` +
                     `<rect x="${(labelX - boxW / 2).toFixed(1)}" y="${(labelY - boxH / 2).toFixed(1)}" width="${boxW}" height="${boxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="${color}" stroke-width="1"/>` +
-                    `<text x="${labelX.toFixed(1)}" y="${(labelY + 3.5 * tgFontK).toFixed(1)}" font-size="${fontSize}" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
+                    `<text x="${labelX.toFixed(1)}" y="${(labelY + fontSize * 0.36 * tgFontK).toFixed(1)}" font-size="${fontSize}" font-weight="700" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
             };
 
             // Collision-avoiding "attached" label placement — no leader
@@ -10241,7 +10205,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // cardinal sides).
             if (cogTrailerSignLoaded) {
                 const tCx = sx(parseFloat(cogTrailerSign.x) || 0), tCy = sy(parseFloat(cogTrailerSign.y) || 0);
-                const tRect = { x1: tCx - 6, y1: tCy - 6, x2: tCx + 6, y2: tCy + 6 };
+                const tHalf = cogSignR(6);
+                const tRect = { x1: tCx - tHalf, y1: tCy - tHalf, x2: tCx + tHalf, y2: tCy + tHalf };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(tCx, tCy, 6, TG_COG_TRAILER_COLOR) +
                     `</g>`;
@@ -10249,10 +10214,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             if (cogCombinedSignLoaded) {
                 const cCx = sx(parseFloat(cogCombinedSign.x) || 0), cCy = sy(parseFloat(cogCombinedSign.y) || 0);
-                const cRect = { x1: cCx - 9, y1: cCy - 9, x2: cCx + 9, y2: cCy + 9 };
+                const cHalf = cogSignR(9);
+                const cRect = { x1: cCx - cHalf, y1: cCy - cHalf, x2: cCx + cHalf, y2: cCy + cHalf };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
-                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: 5, diagonals: true, cornersOnly: true }) +
+                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 9, gap: tgDot(5), diagonals: true, cornersOnly: true }) +
                     `</g>`;
                 blockedRects.push(cRect);
             }
@@ -11037,8 +11003,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // below, so no adjacent name text is drawn there at all).
             const cogInlineLabel = (cx, cy, r, text, color, opts = {}) => {
                 const fontSize = opts.fontSize || 9;
-                const gap = opts.gap != null ? opts.gap : 4;
-                return `<text x="${(cx + tgDot(r) + gap).toFixed(1)}" y="${(cy + fontSize * 0.32).toFixed(1)}" font-size="${fontSize}" font-weight="700" fill="${color}">${text}</text>`;
+                const gap = tgDot(opts.gap != null ? opts.gap : 4);
+                return `<text x="${(cx + cogSignR(r) + gap).toFixed(1)}" y="${(cy + fontSize * 0.32).toFixed(1)}" font-size="${fontSize}" font-weight="700" fill="${color}">${text}</text>`;
             };
             const deckThickPx = TG_ELEV_DECK_THICK * scale;
 
