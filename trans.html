@@ -662,7 +662,7 @@
 
         .tg-train-summary { margin-top: 8px; font-size: 10.5px; color: var(--text-muted); }
 
-        .tg-cad-split-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
+        .tg-cad-split-row { margin-top: 10px; margin-bottom: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
         .tg-cad-split-row label {
             display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
             color: var(--text-muted); margin-bottom: 3px;
@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.144)</h1>
+            <h1>🚂 Transport Dashboard (Rev.145)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3919,7 +3919,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // a train can carry a Left accessory, a Right accessory,
                 // both, or neither.
                 headerDbarLeft: 'none',
-                headerDbarRight: 'none'
+                headerDbarRight: 'none',
+                // Prime mover(s) per side — see computePrimeMoverPlacements.
+                // Left default = 1 x Pull (the original "one prime mover
+                // ahead of every train"); Right default = none.
+                ...pmTrainDefaults()
             };
         }
 
@@ -3989,6 +3993,48 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (trailerGenTrains[0]) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, trailerGenTrains[0].groups.length, 'Number of Hydraulic Groups');
             renderTrailerDashboard();
             scheduleAutoPush('pushDataToExcel', pushDataToExcel);
+        }
+
+        // ---- Prime mover per-train settings (Left / Right) ----------
+        // Qty: how many prime movers pull/push on that side (0 = none;
+        // 2D + 3D labels the drawn unit "x2", "x3"...). Status: 'pull' or
+        // 'push'. Drawing direction: the prime mover artwork's default
+        // ("current") has its bumper facing -X, i.e. AWAY from the train
+        // when it sits in front (Left). So:
+        //   Left  + Pull -> same as current    Left  + Push -> mirrored
+        //   Right + Pull -> mirrored           Right + Push -> same as current
+        function pmTrainQty(train, side) {
+            const raw = train ? (side === 'right' ? train.pmQtyRight : train.pmQtyLeft) : undefined;
+            const n = parseInt(raw, 10);
+            if (Number.isFinite(n) && n >= 0) return n;
+            return side === 'right' ? 0 : 1;
+        }
+        function pmTrainStatus(train, side) {
+            const raw = train ? (side === 'right' ? train.pmStatusRight : train.pmStatusLeft) : undefined;
+            if (raw === 'pull' || raw === 'push') return raw;
+            return side === 'right' ? 'push' : 'pull';
+        }
+        function pmTrainDefaults(src) {
+            return {
+                pmQtyLeft: pmTrainQty(src, 'left'),
+                pmStatusLeft: pmTrainStatus(src, 'left'),
+                pmQtyRight: pmTrainQty(src, 'right'),
+                pmStatusRight: pmTrainStatus(src, 'right')
+            };
+        }
+        function pmIsMirrored(side, status) {
+            return side === 'left' ? status === 'push' : status === 'pull';
+        }
+        function updateTrainPrimeMoverField(id, field, value) {
+            const train = trailerGenTrains.find(t => t.id === id);
+            if (!train) return;
+            if (field === 'pmQtyLeft' || field === 'pmQtyRight') {
+                const n = parseInt(value, 10);
+                train[field] = Number.isFinite(n) && n >= 0 ? n : 0;
+            } else if (field === 'pmStatusLeft' || field === 'pmStatusRight') {
+                train[field] = value === 'push' ? 'push' : 'pull';
+            } else return;
+            renderTrailerDashboard();
         }
 
         // Sets a train's Header/Dbar Left or Right accessory type
@@ -4187,6 +4233,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 newTrain.axlePairOffsetY = train1.axlePairOffsetY;
                 newTrain.headerDbarLeft = train1.headerDbarLeft || 'none';
                 newTrain.headerDbarRight = train1.headerDbarRight || 'none';
+                newTrain.pmQtyLeft = pmTrainQty(train1, 'left');
+                newTrain.pmStatusLeft = pmTrainStatus(train1, 'left');
+                newTrain.pmQtyRight = pmTrainQty(train1, 'right');
+                newTrain.pmStatusRight = pmTrainStatus(train1, 'right');
             }
             const lastTrain = trailerGenTrains[trailerGenTrains.length - 1];
             if (lastTrain) {
@@ -4736,7 +4786,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         axle1OffsetX: detectedPreset ? detectedPreset.axle1X : null,
                         axle1OffsetY: detectedPreset ? detectedPreset.axle1Y : null,
                         axlePairOffsetY: axlePairOffsetY,
-                        ...parseHeaderDbarFromSetGroupBlock(setGroupValues, b)
+                        ...parseHeaderDbarFromSetGroupBlock(setGroupValues, b),
+                        // Prime mover qty/status aren't stored in Excel —
+                        // keep whatever this train had before the pull.
+                        ...pmTrainDefaults(oldTrain)
                     });
                 }
 
@@ -4899,7 +4952,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         axle1OffsetY: null,
                         axlePairOffsetY: null,
                         headerDbarLeft: 'none',
-                        headerDbarRight: 'none'
+                        headerDbarRight: 'none',
+                        ...pmTrainDefaults()
                     };
                 });
 
@@ -6527,33 +6581,69 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const rowXs = trainRows.map(r => r.x), rowYs = trainRows.map(r => r.y);
                 if (!train.deckLength && !rowXs.length) return;
                 const deckX1 = train.deckLength ? (parseFloat(train.x) || 0) : Math.min(...rowXs) - 300;
+                const deckX2 = train.deckLength ? deckX1 + (parseFloat(train.deckLength) || 0) : Math.max(...rowXs) + 300;
                 const deckY1 = train.deckWidth ? (parseFloat(train.y) || 0) : (rowYs.length ? Math.min(...rowYs) - 300 : (parseFloat(train.y) || 0));
                 const deckY2 = train.deckWidth ? deckY1 + train.deckWidth : (rowYs.length ? Math.max(...rowYs) + 300 : deckY1 + 1000);
-                let front = deckX1;
-                computeHeaderDbarBlocks(train).forEach(b => { if (b.side === 'left') front = Math.min(front, b.xCenter - b.lengthMm / 2); });
-                const x2 = front - gap;
-                out.push({ trainName: train.name, x1: x2 - TG_PM_LEN, x2, yCenter: (deckY1 + deckY2) / 2 });
+                let front = deckX1, back = deckX2;
+                computeHeaderDbarBlocks(train).forEach(b => {
+                    if (b.side === 'left') front = Math.min(front, b.xCenter - b.lengthMm / 2);
+                    else back = Math.max(back, b.xCenter + b.lengthMm / 2);
+                });
+                ['left', 'right'].forEach(side => {
+                    const qty = pmTrainQty(train, side);
+                    if (qty < 1) return;
+                    const status = pmTrainStatus(train, side);
+                    // Left: rear end flush to the train's front-most point.
+                    // Right: front end flush to the train's back-most point.
+                    const x1 = side === 'left' ? front - gap - TG_PM_LEN : back + gap;
+                    out.push({
+                        trainName: train.name, side, qty, status,
+                        mirror: pmIsMirrored(side, status),
+                        x1, x2: x1 + TG_PM_LEN, yCenter: (deckY1 + deckY2) / 2
+                    });
+                });
             });
             return out;
         }
         function primeMoverTopHeightMm() { return tgPrimeMover.show ? TG_PM_HEIGHT : 0; }
 
+        // "x2" / "x3"... label for qty >= 2, centred on the ballast box.
+        function primeMoverLabelText(pl) { return pl.qty >= 2 ? `x${pl.qty}` : ''; }
+        function primeMoverLabelX(pl) {
+            const c = (TG_PM_BALLAST.x1 + TG_PM_BALLAST.x2) / 2;
+            return pl.mirror ? pl.x2 - c : pl.x1 + c;
+        }
+        function primeMoverSvgLabel(pl, px, py) {
+            const txt = primeMoverLabelText(pl);
+            if (!txt) return '';
+            return `<text x="${px}" y="${py}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="700" fill="${TG_PM_COLOR_DARK}" stroke="#ffffff" stroke-width="3" paint-order="stroke" style="pointer-events:none">${txt}</text>`;
+        }
+        // Mirrored = flipped about the vertical (Z) axis through the
+        // placement, so the bumper faces +X instead of -X.
         function primeMoverTopSvgFor(pl, sx, sy, scale) {
             const b = TG_PM_BALLAST, hw = TG_PM_WIDTH / 2;
             const w = px => (px / scale).toFixed(2);   // constant on-screen stroke width (local units are mm)
-            return `<g transform="translate(${sx(pl.x1)} ${sy(pl.yCenter)}) scale(${scale} ${-scale})" fill="none" stroke="${TG_PM_COLOR_DARK}">` +
+            const tf = pl.mirror
+                ? `translate(${sx(pl.x2)} ${sy(pl.yCenter)}) scale(${-scale} ${-scale})`
+                : `translate(${sx(pl.x1)} ${sy(pl.yCenter)}) scale(${scale} ${-scale})`;
+            return `<g transform="${tf}" fill="none" stroke="${TG_PM_COLOR_DARK}">` +
                 `<path d="${TG_PM_TOP_HID_PATH}" stroke-width="${w(0.6)}" stroke-dasharray="${w(4)} ${w(3)}" opacity="0.7"/>` +
                 `<path d="${TG_PM_TOP_PATH}" stroke-width="${w(0.8)}"/>` +
                 `<rect x="${b.x1}" y="${-hw}" width="${b.x2 - b.x1}" height="${TG_PM_WIDTH}" stroke-width="${w(1)}" stroke="${TG_PM_COLOR}" fill="${TG_PM_COLOR}" fill-opacity="0.2"/>` +
-                `</g>`;
+                `</g>` +
+                primeMoverSvgLabel(pl, sx(primeMoverLabelX(pl)), sy(pl.yCenter));
         }
         function primeMoverSideSvgFor(pl, sx, sz, scale) {
             const b = TG_PM_BALLAST;
             const w = px => (px / scale).toFixed(2);
-            return `<g transform="translate(${sx(pl.x1)} ${sz(0)}) scale(${scale} ${-scale})" fill="none" stroke="${TG_PM_COLOR_DARK}">` +
+            const tf = pl.mirror
+                ? `translate(${sx(pl.x2)} ${sz(0)}) scale(${-scale} ${-scale})`
+                : `translate(${sx(pl.x1)} ${sz(0)}) scale(${scale} ${-scale})`;
+            return `<g transform="${tf}" fill="none" stroke="${TG_PM_COLOR_DARK}">` +
                 `<path d="${TG_PM_SIDE_PATH}" stroke-width="${w(0.8)}"/>` +
                 `<rect x="${b.x1}" y="${b.z1}" width="${b.x2 - b.x1}" height="${b.z2 - b.z1}" stroke-width="${w(1)}" stroke="${TG_PM_COLOR}" fill="${TG_PM_COLOR}" fill-opacity="0.2"/>` +
-                `</g>`;
+                `</g>` +
+                primeMoverSvgLabel(pl, sx(primeMoverLabelX(pl)), sz((b.z1 + b.z2) / 2));
         }
 
         // 3D: three.js axes are (worldX, worldZ-up, worldY). Same material
@@ -6562,13 +6652,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const solid = tg3dSolidModeTG;
             const mat = () => new THREE.MeshStandardMaterial({ color: 0x14b8a6, metalness: 0.15, roughness: 0.6, transparent: !solid, opacity: solid ? 1 : 0.35, depthWrite: solid });
             const edgeMat = new THREE.LineBasicMaterial({ color: 0x0f766e });
+            // All parts live in a sub-group anchored at the bumper end
+            // (or, when mirrored, at the far end and turned 180 deg about
+            // the vertical axis so the bumper faces +X).
+            const pmGroup = new THREE.Group();
+            pmGroup.position.set((pl.mirror ? pl.x2 : pl.x1) * S, 0, pl.yCenter * S);
+            if (pl.mirror) pmGroup.rotation.y = Math.PI;
+            group.add(pmGroup);
             const addMesh = (geo, lx, lz, ly) => {
                 const m = new THREE.Mesh(geo, mat());
-                m.position.set((pl.x1 + lx) * S, lz * S, (pl.yCenter + ly) * S);
-                group.add(m);
+                m.position.set(lx * S, lz * S, ly * S);
+                pmGroup.add(m);
                 const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), edgeMat);
                 e.position.copy(m.position);
-                group.add(e);
+                pmGroup.add(e);
             };
             const box = (x1, x2, z1, z2, w) => addMesh(new THREE.BoxGeometry((x2 - x1) * S, (z2 - z1) * S, w * S), (x1 + x2) / 2, (z1 + z2) / 2, 0);
             // cab profile, extruded across the truck width (centred on Y)
@@ -6588,6 +6685,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }));
             extend(pl.x1, pl.yCenter - TG_PM_WIDTH / 2, TG_PM_HEIGHT);
             extend(pl.x2, pl.yCenter + TG_PM_WIDTH / 2, TG_PM_HEIGHT);
+            const lblTxt = primeMoverLabelText(pl);
+            if (lblTxt) {
+                labelAnchors3dTG.push({ pos: new THREE.Vector3(((pl.x1 + pl.x2) / 2) * S, (TG_PM_HEIGHT + 150) * S, pl.yCenter * S), text: lblTxt, color: TG_PM_COLOR });
+            }
         }
         function updatePrimeMoverField(key, raw) {
             if (key === 'show') tgPrimeMover.show = !!raw;
@@ -6770,12 +6871,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     <div class="tg-field" style="grid-column: 1 / -1;">
                         <label style="display:flex; align-items:center; gap:6px;">
                             <input type="checkbox" style="width:auto;" ${tgPrimeMover.show ? 'checked' : ''} onchange="updatePrimeMoverField('show', this.checked)">
-                            🚛 Show prime mover ahead of each train (2D plan/side + 3D)
+                            🚛 Show prime movers (2D plan/side + 3D) — Qty. / Pull-Push set per train, Left &amp; Right
                         </label>
                     </div>
                     <div class="tg-field">
-                        <label>Gap: prime mover rear → train front (mm)</label>
-                        <input type="number" step="any" value="${tgPrimeMover.gapMm}" title="0 = rear end of the prime mover touches the train's front-most point (deck front edge, or the left Header/Dbar block when fitted)." onchange="updatePrimeMoverField('gap', this.value)">
+                        <label>Gap: prime mover → train / Header-Dbar block (mm)</label>
+                        <input type="number" step="any" value="${tgPrimeMover.gapMm}" title="0 = the prime mover touches the train's front-most point (deck front edge, or the left Header/Dbar block when fitted) on the Left, or its back-most point (deck rear edge, or the right Header/Dbar block) on the Right." onchange="updatePrimeMoverField('gap', this.value)">
                     </div>
                     ${t.resultText ? `<div class="tg-traction-result${over ? ' tg-traction-over' : ''}" title="Excel-computed — '${TRACTION_SHEET_NAME}'!E22:F22">🔒 ${escapeHtml(t.resultText)}</div>` : ''}
                 </div>`;
@@ -8870,18 +8971,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         </div>
                     </div>
 
-                    <div class="tg-field-grid">
-                        <div class="tg-field">
-                            <label>Header/Dbar block (Left)</label>
-                            <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to the LEFT side of this trailer's deck edge — mounted at the train's FRONT (just ahead of the deck's front edge) and listed BEFORE all this train's axle-group segments in the AutoCAD split / Set Train Group export (e.g. 'Header&amp;Dbar 3m Left, GHF 4, GHF 4, GHF 6'). Centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward smaller Y (above it in plan view). Shown in the 2D/3D preview. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
-                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbarLeft', this.value)">
-                                <option value="none" ${(!train.headerDbarLeft || train.headerDbarLeft === 'none') ? 'selected' : ''}>None</option>
-                                <option value="3m" ${train.headerDbarLeft === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m Left</option>
-                                <option value="3m_ppu" ${train.headerDbarLeft === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU Left</option>
-                            </select>
-                        </div>
-                    </div>
-
                     <div class="tg-cad-split-row">
                         <label title="Axle lines per physical trailer, front→back — e.g. &quot;4,6&quot; for a 10-line train built from a 4-line unit then a 6-line unit. Each segment becomes its own separate AutoCAD block on export.">Trailer split</label>
                         <div class="tg-cad-split-input-row">
@@ -8906,12 +8995,58 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                     <div class="tg-field-grid">
                         <div class="tg-field">
+                            <label>Header/Dbar block (Left)</label>
+                            <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to the LEFT side of this trailer's deck edge — mounted at the train's FRONT (just ahead of the deck's front edge) and listed BEFORE all this train's axle-group segments in the AutoCAD split / Set Train Group export (e.g. 'Header&amp;Dbar 3m Left, GHF 4, GHF 4, GHF 6'). Centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward smaller Y (above it in plan view). Shown in the 2D/3D preview. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
+                                    onchange="updateHeaderDbarField(${train.id}, 'headerDbarLeft', this.value)">
+                                <option value="none" ${(!train.headerDbarLeft || train.headerDbarLeft === 'none') ? 'selected' : ''}>None</option>
+                                <option value="3m" ${train.headerDbarLeft === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m Left</option>
+                                <option value="3m_ppu" ${train.headerDbarLeft === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU Left</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="tg-field-grid">
+                        <div class="tg-field">
+                            <label>Prime mover Qty. (Left)</label>
+                            <input type="number" min="0" step="1" value="${pmTrainQty(train, 'left')}"
+                                   title="Number of prime movers on the LEFT side of this train (front — ahead of the deck / Header-Dbar block). 0 = none. The 2D plan/side and 3D views draw one prime mover and label it x2, x3... when the quantity is 2 or more."
+                                   onchange="updateTrainPrimeMoverField(${train.id}, 'pmQtyLeft', this.value)">
+                        </div>
+                        <div class="tg-field">
+                            <label>Prime mover status (Left)</label>
+                            <select title="Pull = prime mover block drawn in the current direction; Push = mirrored."
+                                    onchange="updateTrainPrimeMoverField(${train.id}, 'pmStatusLeft', this.value)">
+                                <option value="pull" ${pmTrainStatus(train, 'left') === 'pull' ? 'selected' : ''}>Pull</option>
+                                <option value="push" ${pmTrainStatus(train, 'left') === 'push' ? 'selected' : ''}>Push</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="tg-field-grid">
+                        <div class="tg-field">
                             <label>Header/Dbar block (Right)</label>
                             <select title="Attach a GHF 2F Header&amp;Dbar hydraulic block to the RIGHT side of this trailer's deck edge — mounted at the train's BACK (just behind the deck's rear edge) and listed AFTER all this train's axle-group segments in the AutoCAD split / Set Train Group export (e.g. 'GHF 4, GHF 4, GHF 6, Header&amp;Dbar 3m Right'). Centered on the trailer's own width (Y) with its top flush with the trailer top deck; for the &amp;PPU variant the second block sits 1069mm center-to-center from the first (same X), toward larger Y (below it in plan view). Shown in the 2D/3D preview. Only drawn once this train has a known deck footprint (a Goldhofer/SPMT trailer-type preset above)."
                                     onchange="updateHeaderDbarField(${train.id}, 'headerDbarRight', this.value)">
                                 <option value="none" ${(!train.headerDbarRight || train.headerDbarRight === 'none') ? 'selected' : ''}>None</option>
                                 <option value="3m" ${train.headerDbarRight === '3m' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m Right</option>
                                 <option value="3m_ppu" ${train.headerDbarRight === '3m_ppu' ? 'selected' : ''}>GHF 2F Header&amp;Dbar 3m&amp;PPU Right</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="tg-field-grid">
+                        <div class="tg-field">
+                            <label>Prime mover Qty. (Right)</label>
+                            <input type="number" min="0" step="1" value="${pmTrainQty(train, 'right')}"
+                                   title="Number of prime movers on the RIGHT side of this train (back — behind the deck / Header-Dbar block). 0 = none. The 2D plan/side and 3D views draw one prime mover and label it x2, x3... when the quantity is 2 or more."
+                                   onchange="updateTrainPrimeMoverField(${train.id}, 'pmQtyRight', this.value)">
+                        </div>
+                        <div class="tg-field">
+                            <label>Prime mover status (Right)</label>
+                            <select title="Pull = prime mover block drawn mirrored; Push = current direction."
+                                    onchange="updateTrainPrimeMoverField(${train.id}, 'pmStatusRight', this.value)">
+                                <option value="pull" ${pmTrainStatus(train, 'right') === 'pull' ? 'selected' : ''}>Pull</option>
+                                <option value="push" ${pmTrainStatus(train, 'right') === 'push' ? 'selected' : ''}>Push</option>
                             </select>
                         </div>
                     </div>
