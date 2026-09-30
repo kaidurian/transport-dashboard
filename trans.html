@@ -861,7 +861,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.148.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.148.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1070,8 +1070,8 @@
                             <strong>Prime Mover Band</strong> syncs with <strong>B4:C4</strong> — <strong>C4</strong> is a
                             drop-down list in Excel, so the options here are read from that cell's own validation list.
                             <strong>Prime mover quantity</strong> and <strong>Ballast weight addition (per trailer)</strong> sync with
-                            <strong>B21:H22</strong> (<strong>C21</strong> is read from Excel; <strong>C22</strong> is written; the total Prime mover Qty. of all trains
-                            (Left + Right) is written to <strong>E21:H21</strong> as Pull total / Push total; the "Total Axle Rear force … (Max. …)" text from
+                            <strong>B21:H22</strong> (<strong>C21</strong> is read from Excel; <strong>C22</strong> is written; Prime mover Qty. / status (Left + Right) in Generate Trailer sync two-way with
+                            <strong>E21:H21</strong> (E21 Qty. Left, F21 status Left, G21 Qty. Right, H21 status Right); the "Total Axle Rear force … (Max. …)" text from
                             <strong>E22/F22</strong> is Excel-computed and shown read-only). Pulled on open/refresh and by the
                             background poll; edits push automatically (or with 📤 Push to Excel). The calculation output is in the
                             <strong>Traction Capacity Data</strong> card under the 3D Drawing.
@@ -1083,7 +1083,7 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" id="tgRefreshTractionBtn" title="Pull Prime Mover Band + quantity/ballast from Excel 'Traction Check Full Trailer'!B4:C4 + B21:H22"
                                     onclick="pullTractionFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgPushTractionBtn" title="Write Prime Mover Band (C4), all-train prime mover Pull/Push totals (E21:H21) and Ballast weight addition (C22) to Excel 'Traction Check Full Trailer'"
+                            <button type="button" class="tg-add-train-btn" id="tgPushTractionBtn" title="Write Prime Mover Band (C4), Prime mover Qty./status Left + Right (E21:H21) and Ballast weight addition (C22) to Excel 'Traction Check Full Trailer'"
                                     onclick="pushTractionToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
@@ -4073,15 +4073,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return side === 'left' ? status === 'push' : status === 'pull';
         }
         // ---- Prime mover Qty. (Left + Right, all trains) -> Traction
-        // Capacity "Prime mover quantity" (Excel C21). ONE-WAY: the Traction
-        // field is read-only and always shows / pushes this total. ---------
+        // Capacity "Prime mover quantity" (Excel C21, Excel-computed from E21/G21).
+        // The Traction field is read-only; Left/Right qty + status sync two-way with E21:H21. ---------
         function pmTotalQty() {
             return trailerGenTrains.reduce((s, t) => s + pmTrainQty(t, 'left') + pmTrainQty(t, 'right'), 0);
         }
         // Trains -> Traction Capacity card (+ debounced silent push to C21).
         function syncTractionQtyFromTrains() {
-            // Traction Capacity's quantity (C21) is pulled from Excel; here we only push the all-train
-            // Pull / Push totals to E21:H21 (Excel recalculates C21 from them).
+            // Traction Capacity's quantity (C21) is pulled from Excel; here we push Prime mover
+            // Qty./status Left + Right to E21:H21 (Excel recalculates C21 from them).
             scheduleAutoPush('pushTractionToExcel', pushTractionToExcelImpl);
         }
 
@@ -6785,7 +6785,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const TRACTION_PM_CELL = 'C4';
         const TRACTION_PM_FALLBACK_LIST_RANGE = 'K4:M4'; // C4's validation source in the reference workbook
         const TRACTION_INPUT_RANGE = 'B21:H22';   // C21 qty (Excel-driven), E22:F22 result text
-        const TRACTION_PM_TRAIN_RANGE = 'E21:H21';   // E21 total Pull qty, F21 'Pull', G21 total Push qty, H21 'Push' (all trains, Left + Right) <- Generate Trailer
+        const TRACTION_PM_TRAIN_RANGE = 'E21:H21';   // two-way: E21 Qty (Left), F21 status (Left), G21 Qty (Right), H21 status (Right) <-> Generate Trailer
         const TRACTION_QTY_CELL = 'C21';
         const TRACTION_BALLAST_CELL = 'C22';
         const TRACTION_DATA_RANGE = 'B3:F80';
@@ -6844,22 +6844,36 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return opts;
         }
 
-        // ---- Prime mover totals (ALL trains, Left + Right) -> E21:H21, split by Pull / Push ----
-        // E21 = total Pull qty, F21 = "Pull", G21 = total Push qty, H21 = "Push".
-        // ONE-WAY (dashboard -> Excel): totals can't be split back onto individual trains.
-        function pmTotalsByStatus() {
-            let pull = 0, push = 0;
-            ['left', 'right'].forEach(side => {
-                const q = parseInt(side === 'right' ? tgAccessory.pmQtyRight : tgAccessory.pmQtyLeft, 10);
-                const n = (Number.isFinite(q) && q >= 0) ? q : 0;
-                if (pmTrainStatus(null, side) === 'push') push += n; else pull += n;
-            });
-            return { pull, push };
-        }
+        // ---- Prime mover Qty. / status (Left + Right, shared by all trains) <-> E21:H21 (TWO-WAY) ----
+        // E21 = Prime mover Qty. (Left), F21 = Prime mover status (Left),
+        // G21 = Prime mover Qty. (Right), H21 = Prime mover status (Right).
+        // Status cells hold the text "Pull" / "Push".
         function tractionPmRowFromTrain() {
             if (!trailerGenTrains.length) return null;
-            const tot = pmTotalsByStatus();
-            return [tot.pull, 'Pull', tot.push, 'Push'];
+            const q = side => { const n = parseInt(side === 'right' ? tgAccessory.pmQtyRight : tgAccessory.pmQtyLeft, 10); return (Number.isFinite(n) && n >= 0) ? n : 0; };
+            const st = side => (pmTrainStatus(null, side) === 'push' ? 'Push' : 'Pull');
+            return [q('left'), st('left'), q('right'), st('right')];
+        }
+        // Excel E21:H21 -> tgAccessory. Blank / invalid cells leave the local value alone.
+        // Returns true when something changed. Deliberately does NOT go through
+        // updateAccessoryField (that would schedule a push straight back to Excel).
+        function applyTractionPmRowFromExcel(row) {
+            if (!row || row.length < 4) return false;
+            const qty = v => {
+                if (v === '' || v === null || v === undefined) return null;
+                const n = parseInt(v, 10);
+                return (Number.isFinite(n) && n >= 0) ? n : null;
+            };
+            const stat = v => {
+                const x = tractionText(v).toLowerCase();
+                return (x === 'pull' || x === 'push') ? x : null;
+            };
+            const next = { pmQtyLeft: qty(row[0]), pmStatusLeft: stat(row[1]), pmQtyRight: qty(row[2]), pmStatusRight: stat(row[3]) };
+            let changed = false;
+            Object.keys(next).forEach(k => {
+                if (next[k] !== null && tgAccessory[k] !== next[k]) { tgAccessory[k] = next[k]; changed = true; }
+            });
+            return changed;
         }
 
         async function pullTractionFromExcelImpl(opts = {}) {
@@ -6890,8 +6904,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 t.ballast = tractionNum(inp[1][1]);
                 t.ballastUnit = tractionText(inp[1][2]) || t.ballastUnit;
                 t.resultText = [tractionText(inp[1][3]), tractionText(inp[1][4])].filter(Boolean).join(' ');
+                // E21:H21 -> Prime mover Qty./status (Left/Right). Skipped while a local edit is still
+                // waiting to be pushed, so the poll can't overwrite it with Excel's old value.
+                const pmPending = !!autoPushTimers['pushTractionToExcel'] || isAutoPushing;
+                const pmChanged = pmPending ? false : applyTractionPmRowFromExcel(inp[0].slice(3, 7));
                 renderTgTractionFields();
-                if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview();   // refresh ballast label in 2D + 3D
+                if (pmChanged && typeof renderTrailerDashboard === 'function') renderTrailerDashboard();   // accessory card + 2D/3D prime movers
+                else if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview();   // refresh ballast label in 2D + 3D
                 if (!silent) logMsg(`↺ Pulled Traction Capacity inputs from '${TRACTION_SHEET_NAME}'!${TRACTION_PM_RANGE} + ${TRACTION_INPUT_RANGE}.`);
             } catch (e) {
                 console.warn(`Could not read '${TRACTION_SHEET_NAME}' sheet (${TRACTION_PM_RANGE}, ${TRACTION_INPUT_RANGE})`, e);
@@ -6962,7 +6981,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         <label>🔗 ${escapeHtml(t.pmLabel)} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_PM_RANGE}" onclick="pullTractionFromExcel()">⇩</button></label>
                         ${pmHtml}
                     </div>
-                    <div class="tg-field tg-field-readonly" title="Read-only — mirrors Excel '${TRACTION_SHEET_NAME}'!${TRACTION_QTY_CELL}. Change Prime mover Qty. / status on the trains in Generate Trailer (all-train Pull / Push totals are pushed to E21:H21) instead.">
+                    <div class="tg-field tg-field-readonly" title="Read-only — mirrors Excel '${TRACTION_SHEET_NAME}'!${TRACTION_QTY_CELL}. Change Prime mover Qty. / status (Left / Right) in Generate Trailer instead — they sync two-way with E21:H21.">
                         <label>🔒 ${escapeHtml(t.qtyLabel)}${t.qtyUnit ? ` (${escapeHtml(t.qtyUnit)})` : ''}</label>
                         <input type="number" value="${t.qty}" readonly tabindex="-1">
                     </div>
