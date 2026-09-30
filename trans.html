@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.146.4)</h1>
+            <h1>🚂 Transport Dashboard (Rev.146.5)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -6660,10 +6660,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const c = (TG_PM_BALLAST.x1 + TG_PM_BALLAST.x2) / 2;
             return pl.mirror ? pl.x2 - c : pl.x1 + c;
         }
+        // One row: "Pull x1(1x20Te)" — ballast in brackets, dropped when there is none.
+        function primeMoverCombinedText(pl) {
+            const a = primeMoverLabelText(pl), b = primeMoverBallastText(pl);
+            return a ? (b ? `${a}(${b})` : a) : '';
+        }
         function primeMoverSvgLabel(pl, px, py) {
-            const lines = [primeMoverLabelText(pl), primeMoverBallastText(pl)].filter(Boolean);
+            const lines = [primeMoverCombinedText(pl)].filter(Boolean);
             if (!lines.length) return '';
-            const lh = 14, y0 = py - (lines.length - 1) * lh / 2;
+            const lh = 14, y0 = py;
             return lines.map((txt, i) => `<text x="${px}" y="${y0 + i * lh}" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="700" fill="${TG_PM_COLOR_DARK}" stroke="#ffffff" stroke-width="2.5" paint-order="stroke" style="pointer-events:none">${txt}</text>`).join('');
         }
         // Mirrored = flipped about the vertical (Z) axis through the
@@ -6679,7 +6684,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 `<path d="${TG_PM_TOP_PATH}" stroke-width="${w(0.8)}"/>` +
                 `<rect x="${b.x1}" y="${-hw}" width="${b.x2 - b.x1}" height="${TG_PM_WIDTH}" stroke-width="${w(1)}" stroke="${TG_PM_COLOR}" fill="${TG_PM_COLOR}" fill-opacity="0.2"/>` +
                 `</g>` +
-                primeMoverSvgLabel(pl, sx(primeMoverLabelX(pl)), sy(pl.yCenter));
+                primeMoverSvgLabel(pl, sx(primeMoverLabelX(pl)), sy(pl.yCenter) - (TG_PM_WIDTH / 2) * scale - 7);   // just above the prime mover
         }
         function primeMoverSideSvgFor(pl, sx, sz, scale) {
             const b = TG_PM_BALLAST;
@@ -6691,7 +6696,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 `<path d="${TG_PM_SIDE_PATH}" stroke-width="${w(0.8)}"/>` +
                 `<rect x="${b.x1}" y="${b.z1}" width="${b.x2 - b.x1}" height="${b.z2 - b.z1}" stroke-width="${w(1)}" stroke="${TG_PM_COLOR}" fill="${TG_PM_COLOR}" fill-opacity="0.2"/>` +
                 `</g>` +
-                primeMoverSvgLabel(pl, sx(primeMoverLabelX(pl)), sz((b.z1 + b.z2) / 2));
+                primeMoverSvgLabel(pl, sx(primeMoverLabelX(pl)), sz(TG_PM_HEIGHT) - 8);   // just above the prime mover
         }
 
         // 3D: three.js axes are (worldX, worldZ-up, worldY). Same material
@@ -6733,7 +6738,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }));
             extend(pl.x1, pl.yCenter - TG_PM_WIDTH / 2, TG_PM_HEIGHT);
             extend(pl.x2, pl.yCenter + TG_PM_WIDTH / 2, TG_PM_HEIGHT);
-            const lblTxt = [primeMoverLabelText(pl), primeMoverBallastText(pl)].filter(Boolean).join(' · ');
+            const lblTxt = primeMoverCombinedText(pl);
             if (lblTxt) {
                 labelAnchors3dTG.push({ pos: new THREE.Vector3(((pl.x1 + pl.x2) / 2) * S, (TG_PM_HEIGHT + 150) * S, pl.yCenter * S), text: lblTxt, color: TG_PM_COLOR });
             }
@@ -9797,35 +9802,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // each ordered top-to-bottom the way they sit in the top view
             // (smallest Y = highest on screen first). The first row lines up
             // with the first (closest) dimension row above the drawing.
-            const HDR_LBL_FONT = 9, HDR_COL_GAP = 10;
-            const hdrRowH = 12 * tgFontK;
+            const HDR_LBL_FONT = 8, HDR_COL_GAP = 14;   // 8 = same font size as the dimension text
+            const hdrRowH = 11 * tgFontK;
+            // Column 1: trains, LOWEST on the top view first (largest dashboard Y = lowest on screen = smallest AutoCAD Y), going up.
             const hdrTrainItems = trailerGenTrains
                 .filter(t => t.deckLength && t.deckWidth)
                 .map(t => ({ y: parseFloat(t.y) || 0, text: `${t.name} ${t.trailerType === 'goldhofer' ? 'GHF' : 'SPMT'} ${t.axleLineCount} line`, color: 'var(--text-muted, #94a3b8)' }))
-                .sort((a, b) => a.y - b.y);
+                .sort((a, b) => b.y - a.y);
+            // Column 2: cargo, closest to the trailer in the side view first (lowest base Z), going up; equal Z -> shorter one first.
+            const hdrCargoSpans = computeCargoZSpans();
             const hdrCargoItems = cargoItems
                 .map((c, i) => ({
-                    y: (parseFloat(c.tlY) || 0) * 1000,
-                    z: (parseFloat(c.z) || 0),
-                    text: `${c.name} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`,
+                    z: hdrCargoSpans[i] ? hdrCargoSpans[i].baseWorldZ : 0,
+                    h: parseFloat(c.height) || 0,
+                    text: `${c.name} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`,   // full name, never truncated
                     color: cargoColorFor(i)
                 }))
-                .sort((a, b) => (a.y - b.y) || (b.z - a.z));
+                .sort((a, b) => (a.z - b.z) || (a.h - b.h));
             const hdrCharW = HDR_LBL_FONT * tgFontK * 0.56;
-            const hdrColMax = layoutSvgW * 0.16;
-            const hdrFit = (items) => items.forEach(it => {
-                const maxCh = Math.max(6, Math.floor(hdrColMax / hdrCharW));
-                if (it.text.length > maxCh) it.text = it.text.slice(0, maxCh - 1) + '…';
-            });
-            hdrFit(hdrTrainItems); hdrFit(hdrCargoItems);
             const hdrCol1W = hdrTrainItems.length ? Math.max(...hdrTrainItems.map(it => it.text.length)) * hdrCharW : 0;
             const hdrCol2W = hdrCargoItems.length ? Math.max(...hdrCargoItems.map(it => it.text.length)) * hdrCharW : 0;
-            const hdrGutterW = (hdrCol1W || hdrCol2W) ? Math.ceil(hdrCol1W + hdrCol2W + (hdrCol1W && hdrCol2W ? HDR_COL_GAP : 0) + 8) : 0;
+            const hdrBlockW = hdrCol1W + hdrCol2W + (hdrCol1W && hdrCol2W ? HDR_COL_GAP : 0);
             const hdrRowCount = Math.max(hdrTrainItems.length, hdrCargoItems.length);
             const padT = Math.max(34, 24 + dimTierHalf * 13);
             const padB0 = Math.max(30, 24 + dimTierHalf * 13);
-            const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30) + Math.max(0, hdrRowCount * hdrRowH - 110);
-            const padL = 55 + hdrGutterW, padR = 50, padB = padB0;   // padL also feeds the shared side/end-view X mapping
+            const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30) + Math.max(0, hdrRowCount * hdrRowH - 40);   // room for the label block that steps down from the first back-side dimension row
+            const padL = 55, padR = 50, padB = padB0;
             const plotW = layoutSvgW - padL - padR, plotH = svgH - padT - padB;
 
             // Bounding box always includes the world origin (0,0) — so
@@ -10286,7 +10288,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // spacing between axle line 1 and axle line 2, and the +Y
             // offset between an axle line's right and left physical axle.
             let dimensionsSvg = '';
-            const frontTopYHdr = sy(rawMinY) - 20;   // = first (closest) front dimension row height
+            const backBottomYHdr = sy(rawMaxY) + 20;   // = first (closest) back/right-side dimension row height
             if (tgShowDimensions) {
                 const dimColorCorner = 'var(--accent-blue, #38bdf8)';
                 const dimColorPair = 'var(--accent-green, #10b981)';
@@ -10475,17 +10477,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
             }
 
-            // Train + cargo labels — 2 columns in the left gutter of the frame; row 0 sits at the
-            // first (closest) dimension row's height, later rows step downward.
+            // Train + cargo labels — one 2-column block in the MIDDLE of the frame. Row 0 sits at the
+            // first (closest) dimension row on the right/back side; later rows step down from there.
             let hdrLabelsSvg = '';
             {
-                const gx1 = 55, gx2 = 55 + (hdrCol1W ? hdrCol1W + HDR_COL_GAP : 0);
-                const y0 = frontTopYHdr;
+                const gx1 = padL + (plotW - hdrBlockW) / 2;
+                const gx2 = gx1 + (hdrCol1W ? hdrCol1W + HDR_COL_GAP : 0);
+                const y0 = backBottomYHdr;
+                const halo = 'stroke="var(--tank-box-bg, #0b1220)" stroke-width="2.5" paint-order="stroke"';
                 hdrTrainItems.forEach((it, r) => {
-                    hdrLabelsSvg += `<text x="${gx1}" y="${(y0 + r * hdrRowH).toFixed(1)}" font-size="${HDR_LBL_FONT}" font-weight="700" fill="${it.color}">${escapeHtml(it.text)}</text>`;
+                    hdrLabelsSvg += `<text x="${gx1.toFixed(1)}" y="${(y0 + r * hdrRowH).toFixed(1)}" font-size="${HDR_LBL_FONT}" font-weight="700" fill="${it.color}" ${halo}>${escapeHtml(it.text)}</text>`;
                 });
                 hdrCargoItems.forEach((it, r) => {
-                    hdrLabelsSvg += `<text x="${gx2}" y="${(y0 + r * hdrRowH).toFixed(1)}" font-size="${HDR_LBL_FONT}" font-weight="700" fill="${it.color}">${escapeHtml(it.text)}</text>`;
+                    hdrLabelsSvg += `<text x="${gx2.toFixed(1)}" y="${(y0 + r * hdrRowH).toFixed(1)}" font-size="${HDR_LBL_FONT}" font-weight="700" fill="${it.color}" ${halo}>${escapeHtml(it.text)}</text>`;
                 });
             }
 
@@ -10639,7 +10643,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-green, #10b981)"/>
                     </marker>
                 </defs>
-                <rect x="${padL - 10 - hdrGutterW}" y="${padT - 10}" width="${plotW + 20 + hdrGutterW}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${hdrLabelsSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}
                 <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
