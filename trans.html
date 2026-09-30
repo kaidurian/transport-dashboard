@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.146.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.146.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -6647,22 +6647,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function primeMoverTopHeightMm() { return tgPrimeMover.show ? TG_PM_HEIGHT : 0; }
 
         // "x2" / "x3"... label for qty >= 2, centred on the ballast box.
-        function primeMoverLabelText(pl) { return pl.qty >= 2 ? `x${pl.qty}` : ''; }
+        // "P.M. (Pull) x2" — shown from 1 prime mover upward.
+        function primeMoverLabelText(pl) { return pl.qty >= 1 ? `P.M. (${pl.status === 'push' ? 'Push' : 'Pull'}) x${pl.qty}` : ''; }
         // "+20 Te" — Ballast weight addition (per trailer) from the Traction card.
-        function primeMoverBallastText() {
+        // "Ballast 2x20Te" = prime mover Qty. x ballast per trailer.
+        function primeMoverBallastText(pl) {
             const v = parseFloat(tgTraction.ballast);
-            if (!Number.isFinite(v) || v === 0) return '';
-            return `+${Number.isInteger(v) ? v : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')} Te`;
+            if (!Number.isFinite(v) || v === 0 || !pl || pl.qty < 1) return '';
+            return `Ballast ${pl.qty}x${Number.isInteger(v) ? v : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}Te`;
         }
         function primeMoverLabelX(pl) {
             const c = (TG_PM_BALLAST.x1 + TG_PM_BALLAST.x2) / 2;
             return pl.mirror ? pl.x2 - c : pl.x1 + c;
         }
         function primeMoverSvgLabel(pl, px, py) {
-            const lines = [primeMoverLabelText(pl), primeMoverBallastText()].filter(Boolean);
+            const lines = [primeMoverLabelText(pl), primeMoverBallastText(pl)].filter(Boolean);
             if (!lines.length) return '';
-            const lh = 15, y0 = py - (lines.length - 1) * lh / 2;
-            return lines.map((txt, i) => `<text x="${px}" y="${y0 + i * lh}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="700" fill="${TG_PM_COLOR_DARK}" stroke="#ffffff" stroke-width="3" paint-order="stroke" style="pointer-events:none">${txt}</text>`).join('');
+            const lh = 10, y0 = py - (lines.length - 1) * lh / 2;
+            return lines.map((txt, i) => `<text x="${px}" y="${y0 + i * lh}" text-anchor="middle" dominant-baseline="central" font-size="8" font-weight="700" fill="${TG_PM_COLOR_DARK}" stroke="#ffffff" stroke-width="2" paint-order="stroke" style="pointer-events:none">${txt}</text>`).join('');
         }
         // Mirrored = flipped about the vertical (Z) axis through the
         // placement, so the bumper faces +X instead of -X.
@@ -6731,7 +6733,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }));
             extend(pl.x1, pl.yCenter - TG_PM_WIDTH / 2, TG_PM_HEIGHT);
             extend(pl.x2, pl.yCenter + TG_PM_WIDTH / 2, TG_PM_HEIGHT);
-            const lblTxt = [primeMoverLabelText(pl), primeMoverBallastText()].filter(Boolean).join(' · ');
+            const lblTxt = [primeMoverLabelText(pl), primeMoverBallastText(pl)].filter(Boolean).join(' · ');
             if (lblTxt) {
                 labelAnchors3dTG.push({ pos: new THREE.Vector3(((pl.x1 + pl.x2) / 2) * S, (TG_PM_HEIGHT + 150) * S, pl.yCenter * S), text: lblTxt, color: TG_PM_COLOR });
             }
@@ -9560,14 +9562,27 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return doc.scrollingElement || doc.documentElement;
             };
             wrap.addEventListener('mousedown', (e) => {
-                if (e.button !== 1) return;
-                e.preventDefault();   // stops the browser's own middle-click auto-scroll circle
+                // Middle button pans immediately; the LEFT button pans too
+                // (same drag), but only once the pointer has moved a few px,
+                // so plain clicks on lashing dots etc. still work.
+                if (e.button !== 0 && e.button !== 1) return;
+                const isLeft = e.button === 0;
+                if (isLeft && e.target && e.target.closest && e.target.closest('input,select,textarea,button,a,label')) return;
+                if (!isLeft) e.preventDefault();   // stops the browser's own middle-click auto-scroll circle
                 const sc = findScroller();
                 const start = { x: e.clientX, y: e.clientY, left: sc.scrollLeft, top: sc.scrollTop };
-                const prevCursor = wrap.style.cursor;
-                wrap.style.cursor = 'grabbing';
+                const prevCursor = wrap.style.cursor, prevSel = wrap.style.userSelect;
+                const mask = isLeft ? 1 : 4;
+                let moved = !isLeft;
+                if (!isLeft) wrap.style.cursor = 'grabbing';
                 const onMove = (ev) => {
-                    if (!(ev.buttons & 4)) { onUp(); return; }   // button released outside the window
+                    if (!(ev.buttons & mask)) { onUp(); return; }   // button released outside the window
+                    if (!moved) {
+                        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+                        moved = true;
+                        wrap.style.cursor = 'grabbing';
+                        wrap.style.userSelect = 'none';
+                    }
                     sc.scrollLeft = start.left - (ev.clientX - start.x);
                     sc.scrollTop = start.top - (ev.clientY - start.y);
                 };
@@ -9575,6 +9590,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     doc.removeEventListener('mousemove', onMove, true);
                     doc.removeEventListener('mouseup', onUp, true);
                     wrap.style.cursor = prevCursor;
+                    wrap.style.userSelect = prevSel;
+                    if (isLeft && moved) {   // a drag is not a click: swallow the click that follows
+                        const swallow = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
+                        doc.addEventListener('click', swallow, true);
+                        setTimeout(() => doc.removeEventListener('click', swallow, true), 0);
+                    }
                 };
                 doc.addEventListener('mousemove', onMove, true);
                 doc.addEventListener('mouseup', onUp, true);
@@ -9771,7 +9792,37 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // isn't known until the geometry below is computed).
             const dimTierCount = 2 + trailerGenTrains.length + cargoItems.length;
             const dimTierHalf = Math.ceil(dimTierCount / 2);
-            const padT = Math.max(34, 24 + dimTierHalf * 13);
+            // ---- Train + cargo name labels: ALL on the same (top) side, in
+            // rows above the dimension stack. Trains first (closest row),
+            // then cargo; at least 2 labels per row, wrapping only when a
+            // 3rd would not fit. Extra top padding reserves their rows.
+            const HDR_LBL_FONT = 9, HDR_LBL_GAP = 14, HDR_TIER = 13;
+            const hdrRowH = 12 * tgFontK;
+            const hdrItems = { train: [], cargo: [] };
+            trailerGenTrains.forEach(t => {
+                if (!t.deckLength || !t.deckWidth) return;
+                const shortType = t.trailerType === 'goldhofer' ? 'GHF' : 'SPMT';
+                hdrItems.train.push({ text: `${t.name} ${shortType} ${t.axleLineCount} line`, color: 'var(--text-muted, #94a3b8)' });
+            });
+            cargoItems.forEach((c, i) => {
+                hdrItems.cargo.push({ text: `${c.name} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`, color: cargoColorFor(i) });
+            });
+            const hdrMaxW = layoutSvgW - 55 - 50;
+            const hdrLayoutRows = (items) => {
+                const rows = []; let cur = [], curW = 0;
+                items.forEach(it => {
+                    const w = Math.max(20, it.text.length * HDR_LBL_FONT * tgFontK * 0.56);
+                    if (cur.length >= 2 && curW + HDR_LBL_GAP + w > hdrMaxW) { rows.push(cur); cur = []; curW = 0; }
+                    it.w = w; it.x = curW ? curW + HDR_LBL_GAP : 0;
+                    curW = it.x + w;
+                    cur.push(it);
+                });
+                if (cur.length) rows.push(cur);
+                return rows;
+            };
+            const hdrRows = hdrLayoutRows(hdrItems.train).concat(hdrLayoutRows(hdrItems.cargo));   // row 0 = closest to the drawing
+            const hdrExtra = hdrRows.length ? hdrRows.length * hdrRowH + HDR_TIER : 0;
+            const padT = Math.max(34, 24 + dimTierHalf * 13) + hdrExtra;
             const padB0 = Math.max(30, 24 + dimTierHalf * 13);
             const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30);
             const padL = 55, padR = 50, padB = padB0;
@@ -10030,7 +10081,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const deckMidX = (rx1 + rx2) / 2;
                 deckSvg += `<g>` +
                     `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>` +
-                    `<text x="${deckMidX.toFixed(1)}" y="${(Math.min(ry1, ry2) - 6).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="var(--text-muted, #94a3b8)">${escapeHtml(label)}</text>` +
                     `</g>`;
                 blockedRects.push({ x1: Math.min(rx1, rx2), y1: Math.min(ry1, ry2) - 14, x2: Math.max(rx1, rx2), y2: Math.max(ry1, ry2) });
             });
@@ -10171,7 +10221,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const cogCx = sx(cogXMm), cogCy = sy(cogYMm);
                 cargoSvg += `<g>` +
                     `<rect x="${rect.x1}" y="${rect.y1}" width="${rect.x2 - rect.x1}" height="${rect.y2 - rect.y1}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
-                    placeAttachedLabel(rect, `${escapeHtml(c.name)} · ${(parseFloat(c.weight) || 0).toFixed(1)} t`, cargoColor) +
                     cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
                     `</g>`;
                 blockedRects.push(rect);
@@ -10237,6 +10286,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // spacing between axle line 1 and axle line 2, and the +Y
             // offset between an axle line's right and left physical axle.
             let dimensionsSvg = '';
+            let hdrStackTopY = sy(rawMinY) - 8;   // top edge of whatever sits above the drawing (dimension stack when shown)
             if (tgShowDimensions) {
                 const dimColorCorner = 'var(--accent-blue, #38bdf8)';
                 const dimColorPair = 'var(--accent-green, #10b981)';
@@ -10423,7 +10473,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         if (item.yLabel != null) dimensionsSvg += dimV(0, item.y, zone, tier, item.yLabel, item.color);
                     });
                 });
+                // Top-most dimension row (+ its text height); the label rows start one tier pitch above it.
+                if (frontTier > 0) hdrStackTopY = frontTopY - (frontTier - 1) * HDR_TIER - HDR_TIER;
             }
+
+            // Train + cargo labels (rows above the top view)
+            let hdrLabelsSvg = '';
+            hdrRows.forEach((row, ri) => {
+                const y = hdrStackTopY - HDR_TIER - ri * hdrRowH;
+                row.forEach(it => {
+                    hdrLabelsSvg += `<text x="${(padL + it.x).toFixed(1)}" y="${y.toFixed(1)}" font-size="${HDR_LBL_FONT}" font-weight="700" text-anchor="start" fill="${it.color}">${escapeHtml(it.text)}</text>`;
+                });
+            });
 
             // Origin sign at world (0,0): X-axis arrow pointing right
             // (+X), Y-axis arrow pointing down (+Y).
@@ -10576,7 +10637,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}
+                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${hdrLabelsSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}
                 <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
@@ -11471,7 +11532,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             angleLabelX = midX + px * labelOff;
                             angleLabelY = midY + py * labelOff;
                         }
-                        svg += `<text x="${angleLabelX}" y="${angleLabelY}" font-size="${fDim}" text-anchor="middle" fill="${s.color}">${s.label} ${s.angleDeg.toFixed(1)}°${s.fromGroups ? ' (G3–4 ⟂)' : ''}</text>`;
+                        // Angle only ("16.2°"), tucked beside its own CoG (Single, left)
+                        // / CCoG (Combined, right) sign at the apex.
+                        const signHalf = cogSignR(s.label === 'Single' ? 6 : 9) + 3;
+                        const angSide = s.label === 'Single' ? -1 : 1;
+                        svg += `<text x="${apexX + angSide * signHalf}" y="${apexY + 3}" font-size="${fDim}" text-anchor="${angSide < 0 ? 'end' : 'start'}" fill="${s.color}">${s.angleDeg.toFixed(1)}°</text>`;
                         // Arm distance label — placed below the arm foot
                         // point, outside the triangle's base leg, each
                         // system stacked at its own vertical tier so the
