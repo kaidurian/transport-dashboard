@@ -861,7 +861,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.148.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.148.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3823,33 +3823,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
         }
 
-        // On-demand ⇩ button handler for the "🔒 X offset for Train &
-        // Header/Dbar block Left (mm)" field — pulls the latest lengths
-        // then re-renders so the computed value picks them up.
-        async function pullHeaderDbarLengthAndRerender() {
-            if (!isOfficeInitialized) {
-                alert('Not connected to Excel — open this add-in inside an Excel workbook to pull the Header/Dbar block length.');
-                return;
-            }
-            await pullHeaderDbarLengthsFromExcel();
-            renderTrailerDashboard();
-            logMsg(`↺ Pulled Header/Dbar block length(s) from ${PROPERTIES_SHEET_NAME}!A1:B20.`);
-        }
-
-        // See the X OFFSET reference comment above — the LONGEST reach
-        // ahead of the deck's front edge is simply the Header/Dbar
-        // (Left) block's own Excel-sourced length (tgHeaderDbarLengthMm),
-        // not the smaller visual preview sub-block dims. Returns 0 when
-        // no Header/Dbar (Left) block is selected.
-        function headerDbarLeftProtrusionMm(train) {
-            const typeKey = train && hdTypeForTrain(train, 'left');
-            if (!typeKey || typeKey === 'none' || !HEADER_DBAR_TYPES[typeKey]) return 0;
-            const val = tgHeaderDbarLengthMm[typeKey];
-            return Number.isFinite(val) ? val : HEADER_DBAR_LENGTH_DEFAULT_MM;
-        }
-
-        // Side-agnostic version of headerDbarLeftProtrusionMm above —
-        // same authoritative Excel "L [mm]" length (tgHeaderDbarLengthMm,
+        // Header/Dbar block protrusion by type — the authoritative Excel "L [mm]" length (tgHeaderDbarLengthMm,
         // keyed by HEADER_DBAR_TYPES type only, not by side — it's the
         // same physical accessory whichever edge it's mounted on), used
         // by the Front-view AutoCAD-export Y-height dimension anchor
@@ -3860,31 +3834,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!typeKey || typeKey === 'none' || !HEADER_DBAR_TYPES[typeKey]) return 0;
             const val = tgHeaderDbarLengthMm[typeKey];
             return Number.isFinite(val) ? val : HEADER_DBAR_LENGTH_DEFAULT_MM;
-        }
-
-        // "X offset for Train & Header/Dbar block Left (mm)" — the
-        // combined value actually PUSHED to Excel Input!<xCell> instead
-        // of the raw train.x — see pushTrainOffsetsToExcel(). Equals
-        // train.x minus the Header/Dbar (Left) block's protrusion (it
-        // extends in -X, so it's subtracted); identical to train.x when
-        // no Header/Dbar (Left) block is selected.
-        function trainXOffsetWithHeaderDbarLeft(train) {
-            const baseX = parseFloat(train && train.x) || 0;
-            const protrusion = headerDbarLeftProtrusionMm(train);
-            return protrusion ? (baseX - protrusion) : baseX;
-        }
-
-        // Inverse of trainXOffsetWithHeaderDbarLeft: Excel Input!<xCell>
-        // holds the COMBINED value (train.x minus the Left Header/Dbar
-        // protrusion), so reading it back must add the protrusion again.
-        // That keeps "X offset for Train (mm)" (train.x) the 1st-priority
-        // anchor: deck, axle lines, Header/Dbar, PPU and prime movers are
-        // all positioned relative to it, and a push -> pull round trip
-        // never shifts it by the block length.
-        function trainXFromInputCell(train, cellValue) {
-            const v = parseFloat(cellValue);
-            if (!Number.isFinite(v)) return v;
-            return v + headerDbarLeftProtrusionMm(train);
         }
 
         // 'row' says which physical axle(s) of each axle LINE in [fromAxle,
@@ -4870,7 +4819,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const t = rebuiltTrains[i];
                     const axle1WorldX = (parseFloat(t.x) || 0) + (parseFloat(t.axle1OffsetX) || 0);
                     const axle1WorldY = (parseFloat(t.y) || 0) + (parseFloat(t.axle1OffsetY) || 0);
-                    const anchorX = trainXFromInputCell(t, off.x);   // Excel holds train.x minus the Left Header/Dbar block
+                    const anchorX = off.x;   // Input!B5 (etc.) holds train.x directly
                     t.x = anchorX;
                     t.y = off.y;
                     t.axle1OffsetX = axle1WorldX - anchorX;
@@ -8575,12 +8524,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const yCell = offsetCellForTrainIndex(i + 1, 'y');
                         const train = trailerGenTrains[i];
                         if (train) {
-                            // Push "X offset for Train & Header/Dbar block
-                            // Left (mm)" (train.x adjusted for a Left
-                            // Header/Dbar block's -X protrusion, if any)
-                            // instead of the raw train.x — see
-                            // trainXOffsetWithHeaderDbarLeft().
-                            sheet.getRange(xCell).values = [[trainXOffsetWithHeaderDbarLeft(train)]];
+                            // "X offset for Train (mm)" (train.x) maps 1:1
+                            // to Input!B5 (Train 1) etc. — no Header/Dbar
+                            // block adjustment.
+                            sheet.getRange(xCell).values = [[parseFloat(train.x) || 0]];
                             sheet.getRange(yCell).values = [[parseFloat(train.y) || 0]];
                         } else {
                             // No train at this slot anymore (deleted) —
@@ -8621,7 +8568,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     raw = range.values[0][0];
                 });
                 let num = parseFloat(raw);
-                if (field === 'x' && !isNaN(num)) num = trainXFromInputCell(train, num);
                 train[field] = isNaN(num) ? 0 : num;
                 renderTrailerDashboard();
                 logMsg(`↺ Pulled ${field === 'x' ? 'X' : 'Y'} offset (${train[field]}) from ${INPUT_SHEET_NAME}!${cell} into "${train.name}".`);
@@ -8676,14 +8622,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const zHeight = parseFloat(zHeightRaw);
                 tgZTrailerHeightMm = (Number.isFinite(zHeight) && zHeight > 0) ? zHeight : TG_Z_TRAILER_HEIGHT_DEFAULT;
 
-                await pullHeaderDbarLengthsFromExcel();   // protrusion must be known before converting the Excel X back to train.x
                 let linkedCount = 0;
                 const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
                 for (let i = 0; i < n; i++) {
                     const train = trailerGenTrains[i];
                     const xNum = parseFloat(offsetRanges[i].xR.values[0][0]);
                     const yNum = parseFloat(offsetRanges[i].yR.values[0][0]);
-                    if (!isNaN(xNum)) { train.x = trainXFromInputCell(train, xNum); linkedCount++; }
+                    if (!isNaN(xNum)) { train.x = xNum; linkedCount++; }
                     if (!isNaN(yNum)) { train.y = yNum; }
                 }
                 await pullCogSignsFromExcel(); // Trailer CoG / Combined CoG signs — own try/catch inside
@@ -9026,8 +8971,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const tgOffsetPos = tgIdx + 1;
                 const tgXCell = offsetCellForTrainIndex(tgOffsetPos, 'x');
                 const tgYCell = offsetCellForTrainIndex(tgOffsetPos, 'y');
-                const tgHdLeftProtrusion = headerDbarLeftProtrusionMm(train);
-                const tgAdjustedX = trainXOffsetWithHeaderDbarLeft(train);
                 const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
                 const trainAxleCount = train.groups.reduce((s, g) => s + axleCountForGroup(train, g), 0);
                 const totalLoad = train.groups.reduce((s, g) => {
@@ -9060,7 +9003,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         </div>
                         <div class="tg-field">
                             <label>${tgXCell ? '🔗 ' : ''}X offset for Train (mm) <button type="button" class="tg-xy-sync-btn" title="${tgXCell ? `Pull X offset from Excel Input!${tgXCell}` : `Not linked to Excel — X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}`}" onclick="pullOffsetField(${train.id}, 'x')" ${tgXCell ? '' : 'disabled'}>⇩</button> <button type="button" class="tg-field-help-btn" title="What does X offset for Train mean? (reference diagram)" onclick="toggleTgFieldHelp('tgXOffsetHelp_${train.id}', this)">❓</button></label>
-                            <input type="number" step="any" value="${train.x}" title="Distance from world origin (0,0) to the top-left (FRONT) corner of the trailer deck itself — does NOT include any Header/Dbar block (Left) sticking out further ahead of it. See '🔒 X offset for Train & Header/Dbar block Left (mm)' below for that combined value, which is what actually gets pushed to Excel.${tgXCell ? ` Synced with Excel sheet 'Input'!${tgXCell}.` : ''}"
+                            <input type="number" step="any" value="${train.x}" title="Distance from world origin (0,0) to the top-left (FRONT) corner of the trailer deck itself.${tgXCell ? ` Synced with Excel sheet 'Input'!${tgXCell}.` : ''}"
                                    onchange="updateTrailerGenField(${train.id}, 'x', this.value)">
                         </div>
                         <div class="tg-field">
@@ -9073,14 +9016,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     <div class="tg-field-help-popover" id="tgXOffsetHelp_${train.id}">
                         <img src="data:image/png;base64,${X_OFFSET_DIAGRAM_B64}" alt="X offset reference diagram — measured to the front-most point of the trailer assembly, including any Left Header/Dbar block">
                         <div class="tg-field-help-popover-text">
-                            X OFFSET is always measured from the world origin (0,0) to the <strong>FRONT-most point</strong> of the whole assembly along X. Top diagram: Header/Dbar block on the <strong>LEFT</strong> (front) — X OFFSET includes that block's own length sticking out ahead of the deck. Bottom diagram: Header/Dbar block on the <strong>RIGHT</strong> (back) instead — nothing extra sticks out on the front, so X OFFSET is just the deck's own front edge. See "🔒 X offset for Train &amp; Header/Dbar block Left (mm)" below — that's the combined value actually pushed to Excel.
-                        </div>
-                    </div>
-
-                    <div class="tg-field-grid">
-                        <div class="tg-field tg-field-readonly" title="${tgHdLeftProtrusion ? `= X offset for Train (${train.x}) + (-${tgHdLeftProtrusion}) = ${tgAdjustedX}mm — "-${tgHdLeftProtrusion}" is the ${HEADER_DBAR_TYPES[hdTypeForTrain(train, 'left')].label} Left's length from Excel '${PROPERTIES_SHEET_NAME}'!A:B ("${hdSideLabel(hdTypeForTrain(train, 'left'), 'left')}"). This combined value — not the raw X offset for Train above — is what gets pushed to Excel${tgXCell ? ` Input!${tgXCell}` : ''} on '📤 Push to Excel'.` : `No Header/Dbar block (Left) selected, so this equals X offset for Train (mm) as-is — that's what gets pushed to Excel${tgXCell ? ` Input!${tgXCell}` : ''} on '📤 Push to Excel'.`}">
-                            <label>🔒 X offset for Train &amp; Header/Dbar block Left (mm) <button type="button" class="tg-xy-sync-btn" title="Pull Header/Dbar block length(s) from Excel '${PROPERTIES_SHEET_NAME}'!A:B" onclick="pullHeaderDbarLengthAndRerender()">⇩</button></label>
-                            <input type="number" value="${tgAdjustedX}" disabled>
+                            X OFFSET is always measured from the world origin (0,0) to the <strong>FRONT-most point</strong> of the whole assembly along X. Top diagram: Header/Dbar block on the <strong>LEFT</strong> (front) — X OFFSET includes that block's own length sticking out ahead of the deck. Bottom diagram: Header/Dbar block on the <strong>RIGHT</strong> (back) instead — nothing extra sticks out on the front, so X OFFSET is just the deck's own front edge.
                         </div>
                     </div>
 
