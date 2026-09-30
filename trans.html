@@ -858,7 +858,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.146.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.146.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -6648,14 +6648,21 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
         // "x2" / "x3"... label for qty >= 2, centred on the ballast box.
         function primeMoverLabelText(pl) { return pl.qty >= 2 ? `x${pl.qty}` : ''; }
+        // "+20 Te" — Ballast weight addition (per trailer) from the Traction card.
+        function primeMoverBallastText() {
+            const v = parseFloat(tgTraction.ballast);
+            if (!Number.isFinite(v) || v === 0) return '';
+            return `+${Number.isInteger(v) ? v : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')} Te`;
+        }
         function primeMoverLabelX(pl) {
             const c = (TG_PM_BALLAST.x1 + TG_PM_BALLAST.x2) / 2;
             return pl.mirror ? pl.x2 - c : pl.x1 + c;
         }
         function primeMoverSvgLabel(pl, px, py) {
-            const txt = primeMoverLabelText(pl);
-            if (!txt) return '';
-            return `<text x="${px}" y="${py}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="700" fill="${TG_PM_COLOR_DARK}" stroke="#ffffff" stroke-width="3" paint-order="stroke" style="pointer-events:none">${txt}</text>`;
+            const lines = [primeMoverLabelText(pl), primeMoverBallastText()].filter(Boolean);
+            if (!lines.length) return '';
+            const lh = 15, y0 = py - (lines.length - 1) * lh / 2;
+            return lines.map((txt, i) => `<text x="${px}" y="${y0 + i * lh}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="700" fill="${TG_PM_COLOR_DARK}" stroke="#ffffff" stroke-width="3" paint-order="stroke" style="pointer-events:none">${txt}</text>`).join('');
         }
         // Mirrored = flipped about the vertical (Z) axis through the
         // placement, so the bumper faces +X instead of -X.
@@ -6724,7 +6731,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }));
             extend(pl.x1, pl.yCenter - TG_PM_WIDTH / 2, TG_PM_HEIGHT);
             extend(pl.x2, pl.yCenter + TG_PM_WIDTH / 2, TG_PM_HEIGHT);
-            const lblTxt = primeMoverLabelText(pl);
+            const lblTxt = [primeMoverLabelText(pl), primeMoverBallastText()].filter(Boolean).join(' · ');
             if (lblTxt) {
                 labelAnchors3dTG.push({ pos: new THREE.Vector3(((pl.x1 + pl.x2) / 2) * S, (TG_PM_HEIGHT + 150) * S, pl.yCenter * S), text: lblTxt, color: TG_PM_COLOR });
             }
@@ -6838,6 +6845,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 t.ballastUnit = tractionText(inp[1][2]) || t.ballastUnit;
                 t.resultText = [tractionText(inp[1][3]), tractionText(inp[1][4])].filter(Boolean).join(' ');
                 renderTgTractionFields();
+                if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview();   // refresh ballast label in 2D + 3D
                 if (!silent) logMsg(`↺ Pulled Traction Capacity inputs from '${TRACTION_SHEET_NAME}'!${TRACTION_PM_RANGE} + ${TRACTION_INPUT_RANGE}.`);
             } catch (e) {
                 console.warn(`Could not read '${TRACTION_SHEET_NAME}' sheet (${TRACTION_PM_RANGE}, ${TRACTION_INPUT_RANGE})`, e);
@@ -6880,6 +6888,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             else if (key === 'qty') return;   // read-only: driven by Generate Trailer's Prime mover Qty.
             else if (key === 'ballast') tgTraction.ballast = tractionNum(raw);
             else return;
+            if (key === 'ballast' && typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview();   // 2D + 3D ballast label
             scheduleAutoPush('pushTractionToExcel', pushTractionToExcelImpl);
         }
 
@@ -6908,16 +6917,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     <div class="tg-field">
                         <label>🔗 ${escapeHtml(t.ballastLabel)}${t.ballastUnit ? ` (${escapeHtml(t.ballastUnit)})` : ''} <button type="button" class="tg-xy-sync-btn" title="Pull from Excel '${TRACTION_SHEET_NAME}'!${TRACTION_BALLAST_CELL}" onclick="pullTractionFromExcel()">⇩</button></label>
                         <input type="number" step="any" value="${t.ballast}" title="Synced with Excel '${TRACTION_SHEET_NAME}'!${TRACTION_BALLAST_CELL}." onchange="updateTractionField('ballast', this.value)">
-                    </div>
-                    <div class="tg-field" style="grid-column: 1 / -1;">
-                        <label style="display:flex; align-items:center; gap:6px;">
-                            <input type="checkbox" style="width:auto;" ${tgPrimeMover.show ? 'checked' : ''} onchange="updatePrimeMoverField('show', this.checked)">
-                            🚛 Show prime movers (2D plan/side + 3D) — Qty. / Pull-Push set per train, Left &amp; Right
-                        </label>
-                    </div>
-                    <div class="tg-field">
-                        <label>Gap: prime mover → train / Header-Dbar block (mm)</label>
-                        <input type="number" step="any" value="${tgPrimeMover.gapMm}" title="0 = the prime mover touches the train's front-most point (deck front edge, or the left Header/Dbar block when fitted) on the Left, or its back-most point (deck rear edge, or the right Header/Dbar block) on the Right." onchange="updatePrimeMoverField('gap', this.value)">
                     </div>
                     ${t.resultText ? `<div class="tg-traction-result${over ? ' tg-traction-over' : ''}" title="Excel-computed — '${TRACTION_SHEET_NAME}'!E22:F22">🔒 ${escapeHtml(t.resultText)}</div>` : ''}
                 </div>`;
@@ -9883,8 +9882,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // plate hugs the text at every Scale / Font scale combination.
                 const boxW = (text.length * fontSize * 0.62 + 9) * tgFontK;
                 const boxH = (fontSize + 5) * tgFontK;
-                return `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${labelX.toFixed(1)}" y2="${labelY.toFixed(1)}" stroke="${color}" stroke-width="1" opacity="0.55"/>` +
-                    `<rect x="${(labelX - boxW / 2).toFixed(1)}" y="${(labelY - boxH / 2).toFixed(1)}" width="${boxW}" height="${boxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="${color}" stroke-width="1"/>` +
+                return `<rect x="${(labelX - boxW / 2).toFixed(1)}" y="${(labelY - boxH / 2).toFixed(1)}" width="${boxW}" height="${boxH}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="${color}" stroke-width="1"/>` +
                     `<text x="${labelX.toFixed(1)}" y="${(labelY + fontSize * 0.36 * tgFontK).toFixed(1)}" font-size="${fontSize}" font-weight="700" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
             };
 
@@ -15173,11 +15171,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     if (typeof state.tgShowGroupLabels === 'boolean') tgShowGroupLabels = state.tgShowGroupLabels;
                     if (typeof state.tgShowDimensions === 'boolean') tgShowDimensions = state.tgShowDimensions;
                     if (typeof state.tgShowLashing === 'boolean') tgShowLashing = state.tgShowLashing;
-                    if (state.tgPrimeMover && typeof state.tgPrimeMover === 'object') {
-                        tgPrimeMover.show = state.tgPrimeMover.show !== false;
-                        const g = parseFloat(state.tgPrimeMover.gapMm);
-                        tgPrimeMover.gapMm = Number.isFinite(g) ? g : 0;
-                    }
+                    tgPrimeMover.show = true; tgPrimeMover.gapMm = 0;   // toggle + gap field removed from the UI
                     if (state.tgHLoads && typeof state.tgHLoads === 'object') {
                         Object.keys(tgHLoads).forEach(key => {
                             const v = parseFloat(state.tgHLoads[key]);
