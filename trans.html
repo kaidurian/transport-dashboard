@@ -415,10 +415,6 @@
            table. See cellStatusClass() in renderTgDrawingTable(). */
         table.tg-drawing-table td.tg-dt-ok { color: var(--accent-green); font-weight: 700; }
         table.tg-drawing-table td.tg-dt-notok { color: #ef4444; font-weight: 700; background: rgba(239, 68, 68, 0.14); }
-        /* 2D preview copy of Transport Data (cols A:D): OK also gets a green background. */
-        .tg-2d-transport-wrap { overflow-x: auto; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel-bg); margin-top: 6px; }
-        table.tg-2d-transport td.tg-dt-ok { color: var(--accent-green); font-weight: 700; background: rgba(34, 197, 94, 0.16); }
-        table.tg-2d-transport td:first-child { width: 40%; }
         /* Lashing calculation table (buildLashingCalcTableHtml) — row-
            per-lashing-type, not row-per-metric, so the base first-
            column-at-34% rule (sized for the OTHER, label-first
@@ -7080,7 +7076,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
                 tgDrawingTableRows = values || [];
                 renderTgDrawingTable();
-                if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview();   // keep the 2D Transport Data block in sync
                 if (!silent) logMsg(`↺ Pulled Drawing Table from '${DRAWING_TABLE_SHEET_NAME}'!${DRAWING_TABLE_RANGE}.`);
             } catch (e) {
                 console.warn(`Could not read '${DRAWING_TABLE_SHEET_NAME}' sheet`, e);
@@ -7173,72 +7168,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             html += '</table>';
             return html;
-        }
-        // ---- Transport Data -> 2D preview (columns 1-4 = A:D). Same pulled grid as the 📋 Transport Data
-        // card (tgDrawingTableRows), so it stays in sync with every Excel refresh. Two blocks are condensed:
-        //   * SPMT AXLE LINE CAPACITY -> one row, the MAXIMUM unity (+ its OK / NOT OK! sign)
-        //   * MAX GBP (ALL CASES)     -> one row, the MAXIMUM value (+ its OK / NOT OK! sign)
-        // OK = green text on green background, NOT OK! = red text on red background.
-        function tgDtNumbers(row) {
-            const out = [];
-            (row || []).forEach((v, ci) => { if (ci >= 1 && typeof v === 'number' && Number.isFinite(v)) out.push(v); });
-            return out;
-        }
-        function tgDtStatusOf(rows) {
-            for (const row of rows) for (let ci = 1; ci < (row || []).length; ci++) {
-                const cls = cellStatusClass(row[ci]);
-                if (cls) return { cls, text: String(row[ci]).trim() };
-            }
-            return null;
-        }
-        function renderTrailerGen2DTransportData() {
-            const rows = tgDrawingTableRows;
-            if (!rows || !rows.length) return '';
-            const fmtNum = n => Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
-            const fmt = v => (v === null || v === undefined || v === '') ? '' : (typeof v === 'number' ? fmtNum(v) : escapeHtml(String(v)));
-            const isBlank = r => (r || []).every(v => v === null || v === undefined || v === '');
-            const isHeader = i => DRAWING_TABLE_BOLD_ROWS.has(i + 1);
-            const cell = v => { const c = cellStatusClass(v); return `<td${c ? ` class="${c}"` : ''}>${fmt(v)}</td>`; };
-            const maxRow = (label, memberRows, opts) => {
-                const nums = [];
-                memberRows.forEach(r => { if (!opts.unityOnly || /unity/i.test(String(r[0] || ''))) nums.push(...tgDtNumbers(r)); });
-                if (!nums.length) memberRows.forEach(r => nums.push(...tgDtNumbers(r)));
-                if (!nums.length) return null;
-                const mx = Math.max(...nums);
-                let st = tgDtStatusOf(memberRows);
-                if (!st && opts.threshold != null) st = mx <= opts.threshold ? { cls: 'tg-dt-ok', text: 'OK' } : { cls: 'tg-dt-notok', text: 'NOT OK!' };
-                const cls = st ? st.cls : '';
-                return `<tr class="tg-dt-bold"><td>${escapeHtml(label)}</td><td>${escapeHtml(opts.tag)}</td>` +
-                    `<td${cls ? ` class="${cls}"` : ''}>${fmtNum(mx)}</td><td${cls ? ` class="${cls}"` : ''}>${st ? escapeHtml(st.text) : ''}</td></tr>`;
-            };
-            let html = '<table class="tg-drawing-table tg-2d-transport">';
-            for (let i = 0; i < rows.length; i++) {
-                const row = rows[i] || [];
-                const rowNum = i + 1;
-                if (isBlank(row)) { html += '<tr class="tg-dt-spacer"><td colspan="4"></td></tr>'; continue; }
-                if (rowNum === DRAWING_TABLE_TITLE_ROW) { html += `<tr class="tg-dt-title"><td colspan="4">${fmt(row[0])}</td></tr>`; continue; }
-                const label = String(row[0] == null ? '' : row[0]);
-                if (/spmt\s+axle\s+line\s+capacity/i.test(label)) {
-                    let members = [row];
-                    if (!tgDtNumbers(row).length) {   // header row -> gather its section rows
-                        members = [];
-                        for (let j = i + 1; j < rows.length && !isBlank(rows[j]) && !isHeader(j); j++) members.push(rows[j]);
-                        i += members.length;
-                    }
-                    const out = maxRow(label.trim(), members, { tag: 'Max unity', unityOnly: true, threshold: COGENV_SUMMARY_UNITY_THRESHOLD });
-                    if (out) { html += out; continue; }
-                    html += `<tr class="tg-dt-bold"><td>${fmt(row[0])}</td><td></td><td></td><td></td></tr>`;
-                    continue;
-                }
-                if (/max\s+gbp/i.test(label)) {
-                    const out = maxRow(label.trim(), [row], { tag: 'Max' });
-                    if (out) { html += out; continue; }
-                }
-                const bold = isHeader(i) ? ' class="tg-dt-bold"' : '';
-                html += `<tr${bold}>` + row.slice(0, 4).map(cell).join('') + '</tr>';
-            }
-            html += '</table>';
-            return `<div class="tg-2d-transport-wrap">${html}</div>`;
         }
         function renderTgDrawingTable() {
             const el = document.getElementById('tgDrawingTable');
@@ -9830,7 +9759,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     <div class="tg-view-section">${topHtml}</div>
                     <div class="tg-view-section">${elevationHtml}</div>
                 </div>
-                <div class="tg-view-section">${renderTrailerGen2DTransportData()}</div>
                 <div class="tg-view-section">${renderTrailerGenHLoadsPanel()}</div>
                 <div class="tg-unit-label-overlay">Unit: mm.</div>
             `;
@@ -10139,11 +10067,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // rectangles never sit right at the canvas edge, so this
                 // stays clear of axle lines/cargo in the normal case).
                 const shortType = t.trailerType === 'goldhofer' ? 'GHF' : 'SPMT';
-                // Text-only label INSIDE its own trailer at the RIGHT (rear) end of the deck — "1 GHF 14L".
-                // No border; font size 8 = same as the dimension text.
+                // Boxed label INSIDE its own trailer, same plate/border style as the G1–G4 group labels: "1 GHF 14L".
                 const trainNo = String(t.name || '').replace(/^\s*train\s*/i, '') || String(t.name || '');
                 const label = `${trainNo} ${shortType} ${t.axleLineCount}L`;
-                trainBoxSvg += `<text x="${(Math.max(rx1, rx2) - 6).toFixed(1)}" y="${((ry1 + ry2) / 2 + 8 * 0.36 * tgFontK).toFixed(1)}" font-size="8" font-weight="700" text-anchor="end" fill="var(--text-main, #e2e8f0)" stroke="var(--tank-box-bg, #0b1220)" stroke-width="2.5" paint-order="stroke" style="pointer-events:none">${escapeHtml(label)}</text>`;
+                {
+                    const fs = 9, bw = (label.length * fs * 0.62 + 9) * tgFontK, bh = (fs + 5) * tgFontK;
+                    const bx = Math.min(rx1, rx2) + 6, by = (ry1 + ry2) / 2;   // front (left) end of the deck, vertically centred
+                    trainBoxSvg += `<rect x="${bx.toFixed(1)}" y="${(by - bh / 2).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
+                        `<text x="${(bx + bw / 2).toFixed(1)}" y="${(by + fs * 0.36 * tgFontK).toFixed(1)}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${escapeHtml(label)}</text>`;
+                }
                 const deckMidX = (rx1 + rx2) / 2;
                 deckSvg += `<g>` +
                     `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>` +
