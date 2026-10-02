@@ -861,7 +861,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.148.3)</h1>
+            <h1>🚂 Transport Dashboard (Rev.149)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1509,6 +1509,228 @@
         </div>
     </div>
 
+    <script>
+// ===== xlbridge.js =====
+// xlbridge.js - browser client for xl_bridge.py
+//
+//   const xl = new XLBridge(token);
+//   await xl.connect();
+//   const v = await xl.get("Input", "BD26");
+//   await xl.set("Input", "BB35:BD39", [[1, 2, 3], [4, 5, 6]]);
+//   xl.watch("Display", "B15:D16", vals => render(vals));
+//
+// Values are always 2D arrays on read. Optional last arg `book` = workbook name.
+
+class XLBridge {
+  constructor(token, url = "ws://127.0.0.1:8765") {
+    this.url = `${url}/?t=${encodeURIComponent(token)}`;
+    this.pending = new Map();   // id -> {resolve, reject}
+    this.watchers = new Map();  // "book|sheet|addr" -> {sheet, addr, book, cbs:Set}
+    this.nextId = 1;
+    this.retry = 0;
+    this.onstatus = () => {};   // (state) => void : "open" | "closed"
+  }
+
+  connect() {
+    return new Promise((resolve, reject) => {
+      const ws = (this.ws = new WebSocket(this.url));
+      let opened = false;
+      ws.onopen = () => {
+        opened = true; this.retry = 0; this.onstatus("open");
+        // resubscribe after reconnect
+        for (const w of this.watchers.values())
+          this._req({ op: "watch", sheet: w.sheet, addr: w.addr, book: w.book })
+            .then(v => w.cbs.forEach(cb => cb(v))).catch(() => {});
+        resolve();
+      };
+      ws.onmessage = (ev) => {
+        const m = JSON.parse(ev.data);
+        if (m.op === "changed") {
+          const w = this.watchers.get(this._k(m.book, m.sheet, m.addr));
+          if (w) w.cbs.forEach(cb => cb(m.values));
+          return;
+        }
+        const p = this.pending.get(m.id);
+        if (!p) return;
+        this.pending.delete(m.id);
+        if (m.ok) p.resolve(m.result);
+        else { const e = new Error(m.error); e.code = m.code; p.reject(e); }
+      };
+      ws.onclose = () => {
+        this.onstatus("closed");
+        for (const p of this.pending.values()) p.reject(new Error("closed"));
+        this.pending.clear();
+        if (!opened) reject(new Error("bridge unreachable"));
+        setTimeout(() => this.connect().catch(() => {}),
+                   Math.min(1000 * 2 ** this.retry++, 10000));
+      };
+    });
+  }
+
+  _k(book, sheet, addr) { return `${book || ""}|${sheet}|${addr}`; }
+
+  _req(msg) {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== 1) return reject(new Error("not connected"));
+      const id = this.nextId++;
+      this.pending.set(id, { resolve, reject });
+      this.ws.send(JSON.stringify({ id, ...msg }));
+    });
+  }
+
+  get(sheet, addr, book)         { return this._req({ op: "get", sheet, addr, book }); }
+  set(sheet, addr, values, book) { return this._req({ op: "set", sheet, addr, values, book }); }
+  // items: [{sheet, addr, book?}] -> array of 2D arrays, same order
+  getMany(items)                 { return this._req({ op: "getmany", items }); }
+  // items: [{sheet, addr, values, book?}]
+  setMany(items)                 { return this._req({ op: "setmany", items }); }
+
+  // One callback for a group of ranges. cb receives an array of current values
+  // (same order as `items`) once on start, then after any member changes.
+  // Changes landing within 60 ms are coalesced into a single callback.
+  async watchMany(items, cb) {
+    const cur = await this.getMany(items);
+    let timer = null, ready = false;
+    const fire = () => { timer = null; cb(cur.slice()); };
+    const offs = await Promise.all(items.map((it, i) =>
+      this.watch(it.sheet, it.addr, vals => {
+        cur[i] = vals;
+        if (ready && !timer) timer = setTimeout(fire, 60);
+      }, it.book)));
+    ready = true;
+    cb(cur.slice());
+    return () => offs.forEach(off => off());
+  }
+
+  clear(sheet, addr, book)       { return this._req({ op: "clear", sheet, addr, book }); }
+  validation(sheet, addr, book)  { return this._req({ op: "validation", sheet, addr, book }); }
+  books()                        { return this._req({ op: "books" }); }
+  sheets(book)                   { return this._req({ op: "sheets", book }); }
+
+  async watch(sheet, addr, cb, book) {
+    const k = this._k(book, sheet, addr);
+    let w = this.watchers.get(k);
+    if (!w) this.watchers.set(k, (w = { sheet, addr, book, cbs: new Set() }));
+    w.cbs.add(cb);
+    const initial = await this._req({ op: "watch", sheet, addr, book });
+    cb(initial);
+    return () => {               // call to unsubscribe
+      w.cbs.delete(cb);
+      if (!w.cbs.size) {
+        this.watchers.delete(k);
+        this._req({ op: "unwatch", sheet, addr, book }).catch(() => {});
+      }
+    };
+  }
+}
+
+// ===== xl_shim.js =====
+// xl_shim.js - emulates the slice of Office.js `Excel.run` that trans.html uses,
+// on top of XLBridge (xlbridge.js) -> xl_bridge.py -> desktop Excel.
+//
+// Supported (everything trans.html calls):
+//   Excel.run(async ctx => { ... })           auto-sync at end, like Office.js
+//   ctx.workbook.worksheets.getItem(name)     .getRange(addr)
+//   ctx.workbook.worksheets.load('items/name'); .items[].name
+//   range.load('values'|'values,text'); range.values (get/set); range.text
+//   range.clear(Excel.ClearApplyTo.contents)
+//   range.dataValidation.load('type,rule');  .type / .rule.list.source
+//   ctx.sync()                                runs queued ops in order, batched
+// Errors from the bridge keep `.code` (e.g. "ItemNotFound" for a missing sheet).
+// Not supported: formulas, formats, events, adding/deleting sheets.
+//
+// Requires XLBridge (xlbridge.js) loaded first.
+
+(function () {
+  let bridge = null;
+  const norm2d = a => (a || []).map(r => r.map(v => (v == null ? "" : v)));
+
+  class DataValidation {
+    constructor(range) { this._r = range; this.type = undefined; this.rule = undefined; }
+    load() { this._r._ctx._q.push({ k: "dv", d: this }); return this; }
+  }
+
+  class Range {
+    constructor(ctx, sheet, addr) {
+      this._ctx = ctx; this._sheet = sheet; this._addr = addr;
+      this._values = undefined; this._dv = null;
+    }
+    get values() { return this._values; }
+    set values(v) { this._values = v; this._ctx._q.push({ k: "set", r: this, v }); }
+    get text() { return this._values && this._values.map(r => r.map(x => String(x))); }
+    get dataValidation() { return this._dv || (this._dv = new DataValidation(this)); }
+    load() { this._ctx._q.push({ k: "get", r: this }); return this; }
+    clear() { this._ctx._q.push({ k: "clear", r: this }); }
+  }
+
+  class Worksheet {
+    constructor(ctx, name) { this._ctx = ctx; this.name = name; }
+    getRange(addr) { return new Range(this._ctx, this, addr); }
+  }
+
+  class Worksheets {
+    constructor(ctx) { this._ctx = ctx; this.items = []; }
+    getItem(name) { return new Worksheet(this._ctx, name); }
+    load() { this._ctx._q.push({ k: "sheets", w: this }); return this; }
+  }
+
+  class Context {
+    constructor() {
+      this._q = [];
+      this.workbook = { worksheets: new Worksheets(this) };
+    }
+    async sync() {
+      const q = this._q; this._q = [];
+      const ref = r => ({ sheet: r._sheet.name, addr: r._addr });
+      let i = 0;
+      while (i < q.length) {
+        const k = q[i].k;
+        let j = i + 1;
+        if (k === "get" || k === "set") while (j < q.length && q[j].k === k) j++;  // batch runs, keep order
+        const run = q.slice(i, j);
+        if (k === "get") {
+          const res = await bridge.getMany(run.map(o => ref(o.r)));
+          run.forEach((o, n) => { o.r._values = norm2d(res[n]); });
+        } else if (k === "set") {
+          await bridge.setMany(run.map(o => ({ ...ref(o.r), values: o.v })));
+        } else if (k === "clear") {
+          await bridge.clear(q[i].r._sheet.name, q[i].r._addr);
+        } else if (k === "dv") {
+          const d = q[i].d, res = await bridge.validation(d._r._sheet.name, d._r._addr);
+          d.type = res.type; d.rule = res.rule;
+        } else if (k === "sheets") {
+          q[i].w.items = (await bridge.sheets()).map(name => ({ name }));
+        }
+        i = j;
+      }
+    }
+  }
+
+  const E = {
+    ClearApplyTo: { all: "All", formats: "Formats", contents: "Contents" },
+    async run(fn) {
+      const ctx = new Context();
+      const out = await fn(ctx);
+      await ctx.sync();            // Office.js flushes at the end of run()
+      return out;
+    },
+  };
+
+  // opts: { url, onstatus(state) }   state = "open" | "closed"
+  window.__xlShimInstall = async function (token, opts = {}) {
+    // define Excel first so calls fail cleanly ("not connected") if the bridge is down
+    try { window.Excel = E; } catch (e) { /* ignore */ }
+    if (window.Excel !== E)
+      Object.defineProperty(window, "Excel", { value: E, configurable: true, writable: true });
+    bridge = new XLBridge(token, opts.url);
+    bridge.onstatus = opts.onstatus || (() => {});
+    window.xlBridge = bridge;
+    await bridge.connect();
+    return bridge;
+  };
+})();
+
+    </script>
     <script>
         // ============================================================
         // HELP PANEL (collapsed by default — was a permanently-visible Sayarm Tan
@@ -15392,7 +15614,30 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // host (Excel task pane). When this file is opened as a plain
         // standalone webpage, guard for that so the dashboard still
         // renders (in mock/offline mode) instead of throwing.
-        if (typeof Office !== 'undefined' && Office && typeof Office.onReady === 'function') {
+        // Standalone mode: open the page as  trans_standalone.html?bridge=<token>
+        // (token printed by xl_bridge.py). Excel.run is shimmed over the local
+        // websocket bridge, so every pull/push below works unchanged. Without
+        // ?bridge= the original Office.js add-in path runs exactly as before.
+        const _xlBridgeTok = new URLSearchParams(location.search).get('bridge');
+        if (_xlBridgeTok) {
+            const setBridgeStatus = (on) => {
+                isOfficeInitialized = on;
+                const el = document.getElementById('connectionStatus');
+                if (el) el.innerHTML = on
+                    ? 'Status: <span style="color: var(--accent-green);">● Excel connected (bridge)</span>'
+                    : 'Status: <span style="color:#eab308;">● Bridge disconnected</span>';
+            };
+            (async () => {
+                try {
+                    await window.__xlShimInstall(_xlBridgeTok, { onstatus: (s) => setBridgeStatus(s === 'open') });
+                    setBridgeStatus(true);
+                } catch (e) {
+                    console.warn('xl_bridge unreachable', e);
+                    setBridgeStatus(false);
+                }
+                initDashboard();
+            })();
+        } else if (typeof Office !== 'undefined' && Office && typeof Office.onReady === 'function') {
             Office.onReady((info) => {
                 if (info.host === Office.HostType.Excel) {
                     isOfficeInitialized = true;
