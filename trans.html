@@ -861,7 +861,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.151)</h1>
+            <h1>🚂 Transport Dashboard (Rev.151.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -2695,7 +2695,16 @@ class XLBridge {
         // was 63, then 80 after the row 63-79 extension, and is now 82
         // after TRACTION CAPACITY CHECK grew to 4 rows and LASHING
         // CALCULATION gained its "Vertical" row.
-        const LC_EXPORT_HIDDEN_ROWS = [{ from: 1, to: 2 }, { from: 4, to: 8 }, { from: 82, to: 82 }];
+        //
+        // LAST EXPORTED ROW (per KKai): AutoCAD exports of BOTH the
+        // Drawing_table and the Drawing_table_LC (LC1-4) tables stop at
+        // Excel row 62 — everything from row 63 down (the "Allowable
+        // Moments..."/"CHASSIS CAPACITY CHECK"/etc. sections and the
+        // trailing blank row) is cut. Change this one constant to move
+        // the cut-off. The cut uses an open-ended range (to: Infinity),
+        // so it also holds if the sheet grows past row 82.
+        const DRAWING_TABLE_EXPORT_LAST_ROW = 62;
+        const LC_EXPORT_HIDDEN_ROWS = [{ from: 1, to: 2 }, { from: 4, to: 8 }, { from: DRAWING_TABLE_EXPORT_LAST_ROW + 1, to: Infinity }];
         // Excel row numbers (1-indexed, inclusive ranges) to omit from
         // the main 📋 Transport Data (Drawing Table) ONLY when exported
         // to AutoCAD — row 2 (blank banner row above the title) and row
@@ -2703,7 +2712,8 @@ class XLBridge {
         // then 80, now 82 after the TRACTION/LASHING row growth above).
         // Same CAD-export-only trim as LC_EXPORT_HIDDEN_ROWS above: never
         // applied to the on-screen table or to Excel itself — see stripExportRows().
-        const DRAWING_TABLE_EXPORT_HIDDEN_ROWS = [{ from: 2, to: 2 }, { from: 82, to: 82 }];
+        // Last exported row = DRAWING_TABLE_EXPORT_LAST_ROW (62) — see above.
+        const DRAWING_TABLE_EXPORT_HIDDEN_ROWS = [{ from: 2, to: 2 }, { from: DRAWING_TABLE_EXPORT_LAST_ROW + 1, to: Infinity }];
 
         // ---- Excel "Input" sheet cells that X offset / Y offset are
         // kept in sync with. B5 = X offset, B6 = Y offset. B1 = Number
@@ -15318,7 +15328,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // currently 10:1) so its real-world-mm dimensions print at
             // the right size.
             let drawingTableLispLines = [];
-            // CAD-export-only trim: row 2 and row 82 hidden, per
+            // CAD-export-only trim: row 2 and rows 63+ hidden (last exported row = 62), per
             // DRAWING_TABLE_EXPORT_HIDDEN_ROWS — never applied to the
             // on-screen 📋 Transport Data table or to Excel itself.
             const drawingTableExportRows = tgDrawingTableRows.length
