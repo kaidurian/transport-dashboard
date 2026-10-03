@@ -861,7 +861,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.151.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.152)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1054,7 +1054,7 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull every Horizontal Loads field from Excel 'Input horizontal loads'!H14/H16/H18/H20/H21/H22/B23/E23/H23/B24/E24/H24/H25/H26"
                                     onclick="pullHorizontalLoadsFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" title="Write every editable Horizontal Loads field to Excel 'Input horizontal loads' (H23/H24 skipped — Excel-computed)"
+                            <button type="button" class="tg-add-train-btn" id="tgPushHLoadsBtn" title="Write every editable Horizontal Loads field to Excel 'Input horizontal loads' (H23/H24 skipped — Excel-computed)"
                                     onclick="pushHorizontalLoadsToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
@@ -1975,12 +1975,44 @@ class XLBridge {
                 try {
                     const result = await fn.apply(this, args);
                     flashBtnResult(btnId, true);
+                    if (isOfficeInitialized) clearPushPendingForBtnId(btnId);
                     return result;
                 } catch (e) {
                     flashBtnResult(btnId, false);
                     throw e;
                 }
             };
+        }
+
+        // ---- "Unsaved changes" indicator for every 📤 Push to Excel ----
+        // Same amber look as the Lashing card (.tg-btn-pending on the
+        // button + .tg-card-pending ring on its card): turns on the
+        // moment a value feeding that push is edited, turns off once
+        // the push actually ran against Excel (manual press or
+        // auto-sync). Keys are the scheduleAutoPush() keys.
+        const PUSH_PENDING_BTN_BY_KEY = {
+            pushDataToExcel: 'tgPushWheelsBtn',
+            pushCargoToExcel: 'tgPushCargoBtn',
+            pushHorizontalLoadsToExcel: 'tgPushHLoadsBtn',
+            pushTractionToExcel: 'tgPushTractionBtn',
+        };
+        function setPushPendingForBtn(btnId, on) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            btn.classList.toggle('tg-btn-pending', !!on);
+            const card = findSyncCardFor(btn);
+            if (card) card.classList.toggle('tg-card-pending', !!card.querySelector('.tg-btn-pending'));
+        }
+        function markPushPending(key) {
+            const id = PUSH_PENDING_BTN_BY_KEY[key];
+            if (id) setPushPendingForBtn(id, true);
+        }
+        function clearPushPendingForKey(key) {
+            const id = PUSH_PENDING_BTN_BY_KEY[key];
+            if (id) setPushPendingForBtn(id, false);
+        }
+        function clearPushPendingForBtnId(btnId) {
+            if (Object.values(PUSH_PENDING_BTN_BY_KEY).includes(btnId)) setPushPendingForBtn(btnId, false);
         }
 
         // Debounced dispatcher shared by every auto-push call site below:
@@ -1990,6 +2022,11 @@ class XLBridge {
         // last one. `key` just needs to be unique per push function so
         // two different push functions don't cancel each other's timers.
         function scheduleAutoPush(key, fn) {
+            // Every call site is "a dashboard value was just changed", so
+            // flag the matching Push button/card as having unpushed edits
+            // — even with auto-sync off or Excel not connected. Edits made
+            // by an auto-pull (isAutoPulling) match Excel already: skip.
+            if (!isAutoPulling) markPushPending(key);
             if (!autoSyncEnabled || !isOfficeInitialized || isAutoPulling) return;
             if (autoPushTimers[key]) clearTimeout(autoPushTimers[key]);
             autoPushTimers[key] = setTimeout(async () => {
@@ -1998,6 +2035,7 @@ class XLBridge {
                 setSyncStatus('⏳ Syncing…', '#eab308');
                 try {
                     await fn({ silent: true });
+                    clearPushPendingForKey(key);
                     setSyncStatus('✓ Synced', 'var(--accent-green)');
                 } catch (e) {
                     console.warn(`Auto-push (${key}) error`, e);
@@ -7313,7 +7351,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (!silent) alert(`Could not read sheet "${HLOADS_SHEET_NAME}". Make sure it exists with the Horizontal Loads values in place.`);
             }
         }
-        async function pushHorizontalLoadsToExcel(opts) {
+        const pushHorizontalLoadsToExcel = withBtnSyncIndicator('tgPushHLoadsBtn', pushHorizontalLoadsToExcelImpl);
+        async function pushHorizontalLoadsToExcelImpl(opts) {
             const silent = !!(opts && opts.silent);
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push Horizontal Loads.');
@@ -7752,6 +7791,31 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // the one exception: each LC/LC-Slope cell there flags red when
         // it's OVER that row's OWN Static (B3) value instead of the
         // fixed threshold — see flagCellOverStatic() below.
+        // Parses a Static-column condition such as "<1", "< 1.0", "<=1",
+        // "≤1", ">8", ">8 [deg]" into { op, n }. Returns null when the
+        // text isn't a recognisable numeric condition (then nothing is
+        // flagged for that row — we can't tell what "pass" means).
+        function parseCogEnvCondition(raw) {
+            if (raw === null || raw === undefined) return null;
+            const m = String(raw).trim().match(/^(<=|>=|≤|≥|=<|=>|<|>|==|=)\s*(-?\d+(?:[.,]\d+)?)/);
+            if (!m) return null;
+            const opMap = { '≤': '<=', '≥': '>=', '=<': '<=', '=>': '>=', '==': '=' };
+            return { op: opMap[m[1]] || m[1], n: parseFloat(m[2].replace(',', '.')) };
+        }
+        // true = value follows the condition (or there's no usable
+        // condition, so nothing to violate).
+        function cogEnvConditionHolds(v, cond) {
+            if (!cond || !Number.isFinite(cond.n)) return true;
+            switch (cond.op) {
+                case '<': return v < cond.n;
+                case '<=': return v <= cond.n;
+                case '>': return v > cond.n;
+                case '>=': return v >= cond.n;
+                case '=': return v === cond.n;
+                default: return true;
+            }
+        }
+
         function renderTgCogEnvSummary() {
             const el = document.getElementById('tgCogEnvSummaryTable');
             if (!el) return;
@@ -7762,8 +7826,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
             const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : '—');
             const plainCell = v => `<td>${fmt(v)}</td>`;
-            const flagCellOver = v => `<td${(typeof v === 'number' && v > COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
-            const flagCellUnder = v => `<td${(typeof v === 'number' && v < COGENV_SUMMARY_UNITY_THRESHOLD) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
+            // Condition-driven flagging: every LC0-LC4 / LC1-Slope..LC4-Slope
+            // cell is checked against the condition shown in ITS OWN row's
+            // Static column (e.g. "<1", ">8 [deg]") — red text + red
+            // background (tg-dt-notok) when the value does NOT satisfy it.
+            // The only exception is MAX GBP (ALL CASES), whose Static is a
+            // plain number and which flags when the value is MORE than
+            // Static (flagCellOverStatic below). Blank cells never flag.
+            const flagCellByCond = (v, cond) => `<td${(typeof v === 'number' && !cogEnvConditionHolds(v, cond)) ? ' class="tg-dt-notok"' : ''}>${fmt(v)}</td>`;
             // MAX GBP (ALL CASES) row only — per KKKai's spec, each LC0-LC4/
             // LC-Slope cell (D3:L3) flags red (same tg-dt-notok red text +
             // red background as "DETAIL CHECK REQUIRED" in 📋 Drawing
@@ -7784,7 +7854,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // threshold label itself (not a pulled value); no unit and
             // no with-slope columns exist for this row.
             html += `<tr><td>UNITY CHECK</td><td>&lt;1</td><td></td>` +
-                [0, 1, 2, 3, 4].map(i => flagCellOver(s.lc[i].row2)).join('') +
+                [0, 1, 2, 3, 4].map(i => flagCellByCond(s.lc[i].row2, parseCogEnvCondition('<1'))).join('') +
                 blank() + blank() + blank() + blank() + `</tr>`;
             // Row 3 — MAX GBP (ALL CASES). Every column populated,
             // including the 4 with-slope ones.
@@ -7804,7 +7874,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // ">8 [deg]". Per KKKai's spec, this column is still
                 // never flagged red.
                 html += `<tr><td>${label}</td>${staticStabCell(s.b5_11[i])}<td>[deg]</td>` +
-                    [0, 1, 2, 3, 4].map(lcIndex => flagCellUnder(s.lc[lcIndex].rows5_11[i])).join('') +
+                    [0, 1, 2, 3, 4].map(lcIndex => flagCellByCond(s.lc[lcIndex].rows5_11[i], { op: '>', n: s.b5_11[i] })).join('') +
                     blank() + blank() + blank() + blank() + `</tr>`;
             });
             // Rows from Drawing_table!A63:E81 — 4 more sections below
@@ -7822,8 +7892,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const renderCogEnvExtraSection = (sectionTitle, rowLabels, staticKey, lcKey) => {
                 html += `<tr class="tg-dt-bold"><td colspan="12">${sectionTitle}</td></tr>`;
                 rowLabels.forEach((label, i) => {
+                    const rowCond = parseCogEnvCondition((s[staticKey] || [])[i]);
                     html += `<tr><td>${label}</td>${staticLimitCell((s[staticKey] || [])[i])}<td></td>` +
-                        [0, 1, 2, 3, 4].map(lcIndex => flagCellOver(s.lc[lcIndex][lcKey][i])).join('') +
+                        [0, 1, 2, 3, 4].map(lcIndex => flagCellByCond(s.lc[lcIndex][lcKey][i], rowCond)).join('') +
                         blank() + blank() + blank() + blank() + `</tr>`;
                 });
             };
