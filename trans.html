@@ -78,17 +78,17 @@
             cursor: pointer; white-space: nowrap;
         }
         #themeModeToggle:hover { border-color: var(--accent-blue); color: var(--text-main); }
-        #appExportBtn, #appImportBtn, #appMinimizeAllBtn, #appToggleInputsBtn, #appSplitDirBtn, #tgDispWinBtn, .tg-hdr-iconbtn {
+        #appExportBtn, #appImportBtn, #appMinimizeAllBtn, #appToggleInputsBtn, #appTogglePreviewBtn, #appSplitDirBtn, #tgDispWinBtn, .tg-hdr-iconbtn {
             padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
             border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
             cursor: pointer; white-space: nowrap;
         }
-        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover, #appToggleInputsBtn:hover, #appSplitDirBtn:hover, #tgDispWinBtn:hover, .tg-hdr-iconbtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover, #appToggleInputsBtn:hover, #appTogglePreviewBtn:hover, #appSplitDirBtn:hover, #tgDispWinBtn:hover, .tg-hdr-iconbtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
         /* icon-only header toggles (Preview beside = label + hidden checkbox; 🗗 Display window = button):
            highlighted while on / open */
         .tg-hdr-iconbtn { display: inline-flex; align-items: center; user-select: none; }
         .tg-hdr-iconbtn input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
-        .tg-hdr-iconbtn:has(input:checked), #tgDispWinBtn.tg-hdr-on { border-color: var(--accent-blue); color: var(--accent-blue); }
+        .tg-hdr-iconbtn:has(input:checked), #tgDispWinBtn.tg-hdr-on, #appToggleInputsBtn.tg-hdr-on, #appTogglePreviewBtn.tg-hdr-on { border-color: var(--accent-blue); color: var(--accent-blue); }
         .tg-hdr-iconbtn:has(input:disabled) { opacity: 0.5; cursor: default; }
         #appSplitDirBtn:disabled { opacity: 0.5; cursor: default; }
 
@@ -182,6 +182,12 @@
         .tg-modal-body.tg-side-layout .tg-split-handle:hover,
         .tg-modal-body.tg-split-dragging .tg-split-handle { background: var(--accent-blue); }
         .tg-modal-body.tg-inputs-hidden .tg-split-handle { display: none; }
+        /* ◨ header button: hides the whole preview / output column — only the input cards stay, full width. */
+        .tg-modal-body.tg-preview-hidden .tg-modal-col-right,
+        .tg-modal-body.tg-preview-hidden .tg-split-handle { display: none !important; }
+        .tg-modal-body.tg-side-layout.tg-preview-hidden .tg-modal-col-left { flex: 1 1 100%; max-width: none; max-height: none; }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal.tg-preview-hidden .tg-modal-col-left { flex: 1 1 0; }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal.tg-preview-hidden #tgTabbarBottom { display: none; }
         .tg-modal-body.tg-side-layout.tg-split-horizontal {
             flex-direction: column;
             align-items: stretch;
@@ -1024,7 +1030,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.157)</h1>
+            <h1>🚂 Transport Dashboard (Rev.158)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1035,6 +1041,7 @@
             <span id="autoSyncStatus"><span style="color:var(--accent-green);">✓ Synced</span></span>
             <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
             <button type="button" id="appToggleInputsBtn" title="Hide the left-side input cards (Generate Trailer → CoG Envelope) so the preview gets the full width" onclick="toggleTgInputsPanel(this)">◧</button>
+            <button type="button" id="appTogglePreviewBtn" title="Hide the preview / output cards (2D Drawing → Transport Data w/ CoG Env Summary) and show only the input fields" onclick="toggleTgPreviewPanel(this)">◨</button>
             <label class="tg-hdr-iconbtn" id="tgPreviewSideLabel" title="Preview beside: lay the input cards (left) and preview/output cards (right) side by side instead of stacked. Applies to the whole dashboard layout, not just 🖼 2D Drawing. Highlighted = on.">
                 <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
                 <span>◫</span>
@@ -1365,20 +1372,19 @@
                             <div class="tg-preview-toggles-right" style="margin-left: auto;">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
-                                    ⧉ Show preview in separate window
+                                    ⧉ Separate window
                                 </label>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgGroupLabelToggle" checked onchange="toggleTgGroupLabels(this.checked)">
-                                    🏷 Show group label in preview
+                                    🏷 Show group
                                 </label>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgDimensionToggle" checked onchange="toggleTgDimensions(this.checked)">
-
-                                    📏 Show dimensions
+                                    📏 Dimension
                                 </label>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgShowLashingToggle" checked onchange="toggleTgShowLashing(this.checked)">
-                                    ⚓ Show lashing
+                                    ⚓ Lashing
                                 </label>
                                 <label class="tg-preview-toggle">
                                     Scale:
@@ -1403,7 +1409,6 @@
                                     🔍 Magnifier
                                 </label>
                                 <label class="tg-preview-toggle">
-                                    Window:
                                     <select id="tgMagnifierSizeSelect" onchange="setTgMagnifierSize(this.value)" title="Size of the floating magnifier lens window">
                                         <option value="1">1x (220px)</option>
                                         <option value="2">2x (440px)</option>
@@ -6472,6 +6477,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (activeLashingPointId === id) return;
             activeLashingPointId = id;
             renderLashingList(); // refresh the active-row outline — same cost as any other lashing edit
+            try { renderTrailerGenPreview(); } catch (e) { /* preview not ready yet */ }   // 2D drawing: re-ring the signs of the newly active Lashing point
         }
         // Resolves to a real point even if activeLashingPointId is
         // unset or points at a since-removed type — falls back to (and
@@ -9825,16 +9831,42 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             doc.body.style.background = mainCs.getPropertyValue('--tank-box-bg').trim() || '#0b1220';
         }
 
+        // ◧ hides the input cards, ◨ hides the preview/output cards; only one can be on at a time.
+        function tgSyncHideBtns() {
+            const body = document.getElementById('tgModalBody');
+            if (!body) return;
+            const inHid = body.classList.contains('tg-inputs-hidden'), pvHid = body.classList.contains('tg-preview-hidden');
+            const ib = document.getElementById('appToggleInputsBtn'), pb = document.getElementById('appTogglePreviewBtn');
+            if (ib) {
+                ib.textContent = '◧';
+                ib.classList.toggle('tg-hdr-on', inHid);
+                ib.title = inHid ? 'Show the left-side input cards again' : 'Hide the left-side input cards (Generate Trailer → CoG Envelope) so the preview gets the full width';
+            }
+            if (pb) {
+                pb.textContent = '◨';
+                pb.classList.toggle('tg-hdr-on', pvHid);
+                pb.title = pvHid ? 'Show the preview / output cards again' : 'Hide the preview / output cards (2D Drawing → Transport Data w/ CoG Env Summary) and show only the input fields';
+            }
+        }
+        function tgRefitAfterPanelToggle() {
+            try { if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview(); } catch (e) {}
+            window.dispatchEvent(new Event('resize'));   // let the 2D/3D previews re-fit the new width
+        }
         function toggleTgInputsPanel(btn) {
             const body = document.getElementById('tgModalBody');
             if (!body) return;
             const hidden = body.classList.toggle('tg-inputs-hidden');
-            if (btn) {
-                btn.textContent = hidden ? '◨' : '◧';
-                btn.title = hidden ? 'Show the left-side input cards (Generate Trailer → CoG Envelope)' : 'Hide the left-side input cards (Generate Trailer → CoG Envelope) so the preview gets the full width';
-            }
-            try { if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview(); } catch (e) {}
-            window.dispatchEvent(new Event('resize'));   // let the 2D/3D previews re-fit the new width
+            if (hidden) body.classList.remove('tg-preview-hidden');
+            tgSyncHideBtns();
+            tgRefitAfterPanelToggle();
+        }
+        function toggleTgPreviewPanel(btn) {
+            const body = document.getElementById('tgModalBody');
+            if (!body) return;
+            const hidden = body.classList.toggle('tg-preview-hidden');
+            if (hidden) body.classList.remove('tg-inputs-hidden');
+            tgSyncHideBtns();
+            tgRefitAfterPanelToggle();
         }
 
         function toggleTgPreviewSide(checked) {
@@ -10319,7 +10351,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const TG_DISP_TAB_STORAGE_KEY = 'tgDispTab';
         let tgDispActiveTitle = '';            // tab showing in the display window (same tab style as the docked top/bottom display)
         const tgDispZoomState = { zoom: 1 };   // the display window's own 2D wheel-zoom level
-        let tgDispR3d = null, tgDispR3dFailed = false, tgDispRaf = 0, tgDispMouseDown = false;
+        let tgDispCv = null, tgDispSig = '', tgDispRaf = 0, tgDispMouseDown = false;
         // Layout of the display window: tab bar on top, the active tab fills the rest.
         const TG_DISP_CSS = `
             html, body { height: 100%; }
@@ -10479,43 +10511,54 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             tgRefreshLashBar(tgDispWin);
             try { tgDispRender3D(); } catch (e) { /* next frame retries */ }   // re-attach + redraw before the browser paints, so the rebuild doesn't flicker
         }
-        // 3D in the display window: a second WebGL renderer draws the SAME scene and the SAME camera
-        // into the popup, at the popup's own size (crisp, correct aspect). The camera's aspect / ortho
-        // frustum are swapped for the duration of that one draw and restored right after, so the docked
-        // 3D view is unaffected.
+        // 3D in the display window: shows exactly what the docked 3D renderer draws — same scene, same
+        // materials, so Transparent / Solid, edges, ground, labels all match the docked view. Each time
+        // something changed (camera, scene rebuild, popup size, Transparent/Solid, theme, labels) the docked
+        // renderer is briefly resized to the popup's size, drawn, copied into a 2D canvas in the popup, then
+        // put back — all in one task, so the docked view never flickers. An idle popup costs nothing.
+        let tg3dBuildSeq = 0;   // bumped by every renderTrailerGen3D() rebuild
         function tgDispRender3D() {
             if (!tgDispWin || tgDispWin.closed || typeof THREE === 'undefined') return;
-            if (!scene3dTG || !perspCamera3dTG || !camera3dTG) return;
+            if (!renderer3dTG || !scene3dTG || !perspCamera3dTG || !camera3dTG) return;
             const doc = tgDispWin.document, cont = doc.getElementById('tgViewer3d');
             if (!cont) return;
             const w = cont.clientWidth, h = cont.clientHeight;
             if (!w || !h) return;   // 3D tab not showing
-            if (!tgDispR3d) {
-                if (tgDispR3dFailed) return;
-                try {
-                    const cv = doc.createElement('canvas');
-                    cv.style.display = 'block';
-                    tgDispR3d = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
-                    tgDispR3d.setPixelRatio(tgDispWin.devicePixelRatio || 1);
-                } catch (e) {
-                    tgDispR3d = null; tgDispR3dFailed = true;
-                    cont.textContent = '3D view could not start in the display window (WebGL unavailable there). Use the docked 3D Drawing.';
-                    return;
-                }
+            if (!tgDispCv || tgDispCv.ownerDocument !== doc) {
+                tgDispCv = doc.createElement('canvas');
+                tgDispCv.style.cssText = 'display:block;width:100%;height:100%;';
+                tgDispSig = '';
             }
-            const cv = tgDispR3d.domElement;
-            if (cv.parentNode !== cont) cont.appendChild(cv);
-            if (cv._tgW !== w || cv._tgH !== h) { tgDispR3d.setSize(w, h); cv._tgW = w; cv._tgH = h; }
-            const aspect = w / Math.max(h, 1), savedAspect = perspCamera3dTG.aspect;
-            perspCamera3dTG.aspect = aspect; perspCamera3dTG.updateProjectionMatrix();
-            updateOrthoFrustumTG(aspect);
+            const attached = tgDispCv.parentNode === cont;
+            if (!attached) cont.appendChild(tgDispCv);   // popup content was rebuilt -> re-attach, then redraw
+            const dpr = tgDispWin.devicePixelRatio || 1;
+            const bw = Math.max(1, Math.round(w * dpr)), bh = Math.max(1, Math.round(h * dpr));
+            const sig = [theta3dTG, phi3dTG, radius3dTG, panOffset3dTG.x, panOffset3dTG.y, panOffset3dTG.z,
+                lookAt3dTG.x, lookAt3dTG.y, lookAt3dTG.z, camera3dTG === orthoCamera3dTG ? 'o' : 'p',
+                bw, bh, tg3dBuildSeq, tg3dSolidModeTG ? 1 : 0, tg3dLabelsHiddenTG ? 1 : 0,
+                document.body.classList.contains('tg-light-theme') ? 1 : 0].join(',');
+            if (attached && sig === tgDispSig) return;
+            tgDispSig = sig;
+            const r = renderer3dTG, dom = r.domElement;
+            const prevPR = r.getPixelRatio(), prevSize = r.getSize(new THREE.Vector2());
+            const savedAspect = perspCamera3dTG.aspect;
             try {
-                tgDispR3d.render(scene3dTG, camera3dTG);
+                r.setPixelRatio(1);
+                r.setSize(bw, bh, false);
+                perspCamera3dTG.aspect = w / h; perspCamera3dTG.updateProjectionMatrix();
+                updateOrthoFrustumTG(w / h);
+                r.render(scene3dTG, camera3dTG);
+                if (tgDispCv.width !== bw) tgDispCv.width = bw;
+                if (tgDispCv.height !== bh) tgDispCv.height = bh;
+                tgDispCv.getContext('2d').drawImage(dom, 0, 0, bw, bh);
                 const lbl = doc.getElementById('tgLabels3d');
-                if (lbl) renderLabels3DTG(lbl, cont);
+                if (lbl) renderLabels3DTG(lbl, cont);   // floating labels projected with the popup's aspect
             } finally {
                 perspCamera3dTG.aspect = savedAspect; perspCamera3dTG.updateProjectionMatrix();
                 updateOrthoFrustumTG();
+                r.setPixelRatio(prevPR);
+                r.setSize(prevSize.x, prevSize.y, false);
+                r.render(scene3dTG, camera3dTG);   // docked canvas is valid again immediately
             }
         }
         function tgDispFrame() {
@@ -10570,7 +10613,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const w = window.open('', 'trailerDisplayWindow', 'width=1180,height=860');
             if (!w) { alert('Please allow pop-ups to open the display in a separate window.'); return; }
             tgDispWin = w;
-            tgDispR3dFailed = false;
+            tgDispCv = null; tgDispSig = '';
             const doc = w.document;
             doc.open();
             doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Transport Dashboard — Display</title></head><body><div id="tgDispTabbar" role="tablist"></div><div id="tgDispRoot"></div></body></html>');
@@ -10607,7 +10650,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             clearTimeout(tgDispTimer);
             if (tgDispRaf && tgDispWin && !tgDispWin.closed) { try { tgDispWin.cancelAnimationFrame(tgDispRaf); } catch (e) { /* ignore */ } }
             tgDispRaf = 0;
-            if (tgDispR3d) { try { tgDispR3d.dispose(); if (tgDispR3d.forceContextLoss) tgDispR3d.forceContextLoss(); } catch (e) { /* ignore */ } tgDispR3d = null; }
+            tgDispCv = null; tgDispSig = '';
             tgDispMouseDown = false;
             if (!alreadyClosed && tgDispWin && !tgDispWin.closed) { try { tgDispWin.close(); } catch (e) { /* ignore */ } }
             tgDispWin = null;
@@ -13842,7 +13885,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             perspCamera3dTG = new THREE.PerspectiveCamera(45, aspect0, 0.05, 5000);
             orthoCamera3dTG = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.05, 5000);
             camera3dTG = perspCamera3dTG; // active camera pointer — see set3DCameraTG()
-            renderer3dTG = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); // (the 🗗 Display window now draws with its own second renderer — see tgDispRender3D)
+            renderer3dTG = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); // (the 🗗 Display window copies this renderer's output — see tgDispRender3D)
             renderer3dTG.setSize(container.clientWidth, container.clientHeight);
             renderer3dTG.setPixelRatio(window.devicePixelRatio || 1);
             container.appendChild(renderer3dTG.domElement);
@@ -13922,6 +13965,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function renderTrailerGen3D() {
             if (!tg3dInitialized) init3DSceneTG();
             if (!tg3dInitialized || !world3dGroupTG) return; // three.js unavailable
+            tg3dBuildSeq++;   // tells the 🗗 Display window's 3D copy to redraw
 
             while (world3dGroupTG.children.length) {
                 const child = world3dGroupTG.children.pop();
