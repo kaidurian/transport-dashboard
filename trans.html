@@ -61,7 +61,7 @@
             gap: 10px;
             width: 100%;
         }
-        /* ONE row: title + every toggle (Status, ◧, Preview beside, ⬌, Auto-sync, Day/Night, ▢);
+        /* ONE row: title + every toggle (Status, Auto-sync, ✓ Synced, Day/Night, ◧, Preview beside, ⬍, 🗗 Display window, ▢);
            scrolls sideways instead of wrapping on a very narrow window. */
         header { flex-wrap: nowrap; overflow-x: auto; gap: 8px; }
         header > div:first-child { flex: 0 0 auto; }
@@ -78,12 +78,19 @@
             cursor: pointer; white-space: nowrap;
         }
         #themeModeToggle:hover { border-color: var(--accent-blue); color: var(--text-main); }
-        #appExportBtn, #appImportBtn, #appMinimizeAllBtn, #appToggleInputsBtn, #appSplitDirBtn {
+        #appExportBtn, #appImportBtn, #appMinimizeAllBtn, #appToggleInputsBtn, #appSplitDirBtn, #tgDispWinBtn, .tg-hdr-iconbtn {
             padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
             border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
             cursor: pointer; white-space: nowrap;
         }
-        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover, #appToggleInputsBtn:hover, #appSplitDirBtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover, #appToggleInputsBtn:hover, #appSplitDirBtn:hover, #tgDispWinBtn:hover, .tg-hdr-iconbtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        /* icon-only header toggles (Preview beside = label + hidden checkbox; 🗗 Display window = button):
+           highlighted while on / open */
+        .tg-hdr-iconbtn { display: inline-flex; align-items: center; user-select: none; }
+        .tg-hdr-iconbtn input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+        .tg-hdr-iconbtn:has(input:checked), #tgDispWinBtn.tg-hdr-on { border-color: var(--accent-blue); color: var(--accent-blue); }
+        .tg-hdr-iconbtn:has(input:disabled) { opacity: 0.5; cursor: default; }
+        #appSplitDirBtn:disabled { opacity: 0.5; cursor: default; }
 
         .tg-page {
             width: 100%;
@@ -902,7 +909,7 @@
         .tg-hover-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
 
         .tg-footer { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 8px; margin-top: 4px; }
-        .tg-footer #autoSyncStatus { font-size: 11px; white-space: nowrap; }
+        #autoSyncStatus { font-size: 11px; white-space: nowrap; }
         .tg-footer .tg-btn-primary { background: var(--accent-blue); border-color: var(--accent-blue); color: #06202e; }
 
         .tg-log { font-size: 11px; color: var(--text-muted); background: var(--tank-box-bg); border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px; margin-top: 10px; max-height: 110px; overflow-y: auto; }
@@ -1017,21 +1024,23 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.156)</h1>
+            <h1>🚂 Transport Dashboard (Rev.157)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
             <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
-            <button type="button" id="appToggleInputsBtn" title="Hide the left-side input cards (Generate Trailer → CoG Envelope) so the preview gets the full width" onclick="toggleTgInputsPanel(this)">◧</button>
-            <label class="tg-preview-toggle" title="Lay the input cards (left) and preview/output cards (right) side by side instead of stacked. Applies to the whole dashboard layout, not just 🖼 2D Drawing.">
-                <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
-                Preview beside
-            </label>
-            <button type="button" id="appSplitDirBtn" title="Split direction (needs Preview beside on): currently left | right. Click for top / bottom — input tabs above, display tabs below (click a tab for its full view); drag the bar between them to resize." onclick="toggleTgSplitDir(this)">⬍</button>
             <label style="font-size:11px; color:var(--text-muted); display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="When on, every dashboard edit is pushed to Excel automatically (no button press needed), and a small set of read-only values (Z Trailer Height, Horizontal Loads, CoG signs, Stability, Transport Data) are pulled back automatically too. Turn off to go back to manual 📤 Push / ⇩ Refresh buttons only.">
                 <input type="checkbox" id="autoSyncToggle" checked onchange="toggleAutoSync(this.checked)"> Auto-sync
             </label>
+            <span id="autoSyncStatus"><span style="color:var(--accent-green);">✓ Synced</span></span>
             <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
+            <button type="button" id="appToggleInputsBtn" title="Hide the left-side input cards (Generate Trailer → CoG Envelope) so the preview gets the full width" onclick="toggleTgInputsPanel(this)">◧</button>
+            <label class="tg-hdr-iconbtn" id="tgPreviewSideLabel" title="Preview beside: lay the input cards (left) and preview/output cards (right) side by side instead of stacked. Applies to the whole dashboard layout, not just 🖼 2D Drawing. Highlighted = on.">
+                <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
+                <span>◫</span>
+            </label>
+            <button type="button" id="appSplitDirBtn" title="Split direction (needs Preview beside on): currently left | right. Click for top / bottom — input tabs above, display tabs below (click a tab for its full view); drag the bar between them to resize." onclick="toggleTgSplitDir(this)">⬍</button>
+            <button type="button" id="tgDispWinBtn" title="Display window: open 2D Drawing → Transport Data w/ CoG Env Summary in a separate window (second monitor), as tabs. Clicks, toggles and selects there act on this dashboard; 2D and 3D take the same mouse controls there as here; the Active-lashing picker there sets which Lashing point a click on an L# sign in the 2D drawing assigns to." onclick="toggleTgDisplayWindow()">🗗</button>
             <button type="button" id="appMinimizeAllBtn" title="Minimize all cards and previews (show only their headers)" onclick="toggleAllTgMinimize(this)">▢</button>
         </div>
     </header>
@@ -1649,7 +1658,6 @@
             </div>
 
             <div class="tg-footer">
-                <span id="autoSyncStatus"><span style="color:var(--accent-green);">✓ Synced</span></span>
                 <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, Z Trailer Height, and other settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
                 <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
                 <input type="file" id="appImportFileInput" accept=".json,application/json" style="display:none" onchange="importAppState(event)">
@@ -1662,7 +1670,6 @@
                 </label>
                 <button type="button" class="tg-btn" title="Download an AutoCAD script (.scr) that inserts top/side/end view blocks per train (offset in Y so the 3 views don't overlap), the Transport Data table (rows 2 and 82 hidden for a shorter table), and — once 🚚 Transport Data w/ CoG Env has been pulled — the 4 TRANSPORT TABLE LC1-4 tables shown there (each with rows 1-2, 4-8 and 82 hidden for a shorter table), anchored LC1 top-right / LC2 top-left / LC3 bottom-left / LC4 bottom-right to the actual corners of their Layout. If the drawing already has 1 Layout tab, that layout is copied to make the second one; if it has none, both are created fresh. Either way the Transport Data table and the LC1-4 tables land on 2 Layout tabs (existing, reused as-is with no resize, or new ISO A3 landscape 420 x 297 mm). Run with the SCRIPT command in a drawing that already has the SPMT blocks defined."
                         onclick="exportTrailerLayoutToCADScript()">📐 Export AutoCAD Script</button>
-                <button type="button" class="tg-btn" id="tgDispWinBtn" title="Open 2D Drawing → Transport Data w/ CoG Env Summary in a separate window (second monitor). Clicks, toggles and selects there act on this dashboard; the Active-lashing picker there sets which Lashing point a click on an L# sign in the 2D drawing assigns to." onclick="toggleTgDisplayWindow()">🗗 Display window</button>
                 <button type="button" class="tg-btn" id="tgLogToggleBtn" title="Show / hide the progress log below" onclick="toggleTgLog()">📜 Log</button>
             </div>
 
@@ -10309,12 +10316,30 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
         let tgDispWin = null, tgDispItems = [], tgDispTimer = null, tgDispObs = null, tgPopTick = null;
         const TG_DISP_SEL = '.tg-preview-wrap, .tg-3d-wrap, .tg-cargo-card, .tg-totals';
+        const TG_DISP_TAB_STORAGE_KEY = 'tgDispTab';
+        let tgDispActiveTitle = '';            // tab showing in the display window (same tab style as the docked top/bottom display)
+        const tgDispZoomState = { zoom: 1 };   // the display window's own 2D wheel-zoom level
+        let tgDispR3d = null, tgDispR3dFailed = false, tgDispRaf = 0, tgDispMouseDown = false;
+        // Layout of the display window: tab bar on top, the active tab fills the rest.
+        const TG_DISP_CSS = `
+            html, body { height: 100%; }
+            body { margin: 0 !important; padding: 0 10px 10px !important; gap: 6px !important; height: 100vh; min-height: 0 !important; overflow: hidden; }
+            #tgDispTabbar { display: flex; flex: 0 0 auto; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--panel-border); margin: 4px 0 0; }
+            #tgDispRoot { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+            #tgDispRoot > .tg-disp-hidden { display: none !important; }
+            #tgDispRoot > * { margin: 0 !important; width: 100%; max-width: none; flex: 0 0 auto; }
+            #tgDispRoot > .tg-preview-wrap, #tgDispRoot > .tg-3d-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+            #tgDispRoot > .tg-preview-wrap #tgPreview { flex: 1 1 auto; min-height: 0; max-height: none; }
+            #tgDispRoot > .tg-3d-wrap #tgViewer3dWrap { flex: 1 1 auto; min-height: 260px; height: auto; }
+            #tgDispRoot .tg-minimize-btn { display: none; }
+            #tgDispRoot .tg-card-header-clickable { cursor: default; }
+        `;
         function tgPopTickStart() { if (!tgPopTick) tgPopTick = setInterval(tgPopTickRun, 700); }
         function tgPopTickRun() {
             let any = false;
             if (tgDispWin) {
                 if (tgDispWin.closed) tgDispClose(true);
-                else { any = true; tgRefreshLashBar(tgDispWin); tgDispRefreshCanvases(); }
+                else { any = true; tgRefreshLashBar(tgDispWin); }
             }
             if (typeof tgPreviewWindow !== 'undefined' && tgPreviewWindow && !tgPreviewWindow.closed && tgPreviewWindow._lashBar) {
                 any = true; tgRefreshLashBar(tgPreviewWindow);
@@ -10345,6 +10370,54 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             clearTimeout(tgDispTimer);
             tgDispTimer = setTimeout(tgDispSync, ms || 250);
         }
+        // Tabs (same look as the docked top/bottom display tabs): one tab per
+        // display card; the clicked card is shown full size. The title-less
+        // totals line stays visible under whichever tab is active.
+        function tgDispTitles() { return tgDispItems.map(tgTabTitle).filter(Boolean); }
+        function tgDispBuildTabbar() {
+            const doc = tgDispWin.document, bar = doc.getElementById('tgDispTabbar');
+            if (!bar) return;
+            const titles = tgDispTitles();
+            const sig = titles.join('|');
+            if (bar.dataset.sig !== sig) {
+                bar.dataset.sig = sig;
+                bar.innerHTML = '';
+                titles.forEach(t => {
+                    const btn = doc.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'tg-tab-btn';
+                    btn.setAttribute('role', 'tab');
+                    btn.textContent = t;
+                    btn.onclick = () => tgDispSelectTab(t);
+                    bar.appendChild(btn);
+                });
+            }
+            Array.from(bar.children).forEach(b => b.classList.toggle('active', b.textContent === tgDispActiveTitle));
+        }
+        function tgDispApplyTab() {
+            if (!tgDispWin || tgDispWin.closed) return;
+            const root = tgDispWin.document.getElementById('tgDispRoot');
+            if (!root) return;
+            const titles = tgDispTitles();
+            if (!titles.includes(tgDispActiveTitle)) {
+                let saved = '';
+                try { saved = localStorage.getItem(TG_DISP_TAB_STORAGE_KEY) || ''; } catch (e) { /* ignore */ }
+                tgDispActiveTitle = titles.includes(saved) ? saved : (titles[0] || '');
+            }
+            tgDispItems.forEach((src, i) => {
+                const c = root.children[i];
+                if (!c) return;
+                const t = tgTabTitle(src);
+                c.classList.toggle('tg-disp-hidden', !!t && t !== tgDispActiveTitle);
+            });
+            tgDispBuildTabbar();
+        }
+        function tgDispSelectTab(title) {
+            tgDispActiveTitle = title;
+            try { localStorage.setItem(TG_DISP_TAB_STORAGE_KEY, title); } catch (e) { /* ignore */ }
+            tgDispApplyTab();
+            try { tgDispRender3D(); } catch (e) { /* 3D tab sizes itself on the next frame */ }
+        }
         function tgDispSync() {
             if (!tgDispWin) return;
             if (tgDispWin.closed) { tgDispClose(true); return; }
@@ -10352,13 +10425,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!root) return;
             const ae = doc.activeElement;
             if (ae && ae.tagName === 'INPUT' && (ae.type === 'text' || ae.type === 'number') && root.contains(ae)) { tgDispSchedule(400); return; }   // don't pull a field out from under typing
+            if (tgDispMouseDown) { tgDispSchedule(300); return; }   // never rebuild under an in-progress drag / pan
             tgDispItems = tgDispSourceItems();
+            const old2d = root.querySelector('#tgPreview');
+            const keep2d = old2d ? { l: old2d.scrollLeft, t: old2d.scrollTop } : null;   // keep the 2D view where the user panned it
             const frag = doc.createDocumentFragment();
             tgDispItems.forEach(src => {
                 const c = doc.importNode(src, true);
                 c.classList.remove('tg-tab-item', 'tg-tab-active', 'tg-card-minimized', 'tg-preview-minimized');
                 const srcC = src.querySelectorAll('canvas');
                 c.querySelectorAll('canvas').forEach((dc, i) => {
+                    if (dc.closest('#tgViewer3d')) { dc.remove(); return; }   // the 3D view is drawn live by the display window's own renderer (tgDispRender3D)
                     const img = doc.createElement('img');
                     img.setAttribute('data-src-canvas', '1');
                     img.style.maxWidth = '100%';
@@ -10367,6 +10444,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
                 [c].concat(Array.from(c.querySelectorAll('*'))).forEach(el => {
                     Array.from(el.attributes).forEach(a => { if (/^on/i.test(a.name)) el.removeAttribute(a.name); });   // the real handlers run on the dashboard via forwarding
+                    ['data-tg-pan-bound', 'data-tg-zoom-bound', 'data-tg-orient-observed'].forEach(n => el.removeAttribute(n));   // copied "already bound" flags would block the display window's own pan/zoom binding
                 });
                 const sIn = src.querySelectorAll('input,select,textarea'), dIn = c.querySelectorAll('input,select,textarea');
                 dIn.forEach((d, i) => {
@@ -10378,25 +10456,73 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
                 frag.appendChild(c);
             });
-            const sy = tgDispWin.scrollY;
+            const rsy = root.scrollTop;
             root.replaceChildren(frag);
-            tgDispWin.scrollTo(0, sy);
+            root.scrollTop = rsy;
             doc.body.className = document.body.className;
+            // 2D drawing: same mouse controls as the docked view (left/middle drag = pan, wheel = zoom,
+            // double middle-click = reset) with the display window's own zoom level and scroll position.
+            const w2 = root.querySelector('#tgPreview');
+            if (w2) {
+                const inner = w2.querySelector('#tgPreviewScaleInner');
+                if (inner) inner.style.width = (Math.max(1, tgPreviewScaleMult || 1) * tgDispZoomState.zoom * 100) + '%';
+                tgAttachMiddlePan(w2);
+                tgAttachWheelZoom(w2, tgDispZoomState);
+                tgApplyOrientScale(w2);
+                if (tgOrientResizeObserver) { w2.dataset.tgOrientObserved = '1'; try { tgOrientResizeObserver.observe(w2); } catch (e) { /* ignore */ } }
+                if (keep2d) { w2.scrollLeft = keep2d.l; w2.scrollTop = keep2d.t; }
+            }
+            // 3D drawing: same orbit / pan / zoom / touch controls as the docked view.
+            const v3 = root.querySelector('#tgViewer3d');
+            if (v3) tg3dBindContainer(v3);
+            tgDispApplyTab();
             tgRefreshLashBar(tgDispWin);
+            try { tgDispRender3D(); } catch (e) { /* next frame retries */ }   // re-attach + redraw before the browser paints, so the rebuild doesn't flicker
         }
-        function tgDispRefreshCanvases() {   // 3D view: pixels change without any DOM change
-            const doc = tgDispWin.document, root = doc.getElementById('tgDispRoot');
-            if (!root) return;
-            tgDispItems.forEach((src, xi) => {
-                const clone = root.children[xi];
-                if (!clone) return;
-                const sc = src.querySelectorAll('canvas');
-                clone.querySelectorAll('img[data-src-canvas]').forEach((img, i) => {
-                    const c = sc[i];
-                    if (!c || !c.width) return;
-                    try { img.src = c.toDataURL(); } catch (e) { /* ignore */ }
-                });
-            });
+        // 3D in the display window: a second WebGL renderer draws the SAME scene and the SAME camera
+        // into the popup, at the popup's own size (crisp, correct aspect). The camera's aspect / ortho
+        // frustum are swapped for the duration of that one draw and restored right after, so the docked
+        // 3D view is unaffected.
+        function tgDispRender3D() {
+            if (!tgDispWin || tgDispWin.closed || typeof THREE === 'undefined') return;
+            if (!scene3dTG || !perspCamera3dTG || !camera3dTG) return;
+            const doc = tgDispWin.document, cont = doc.getElementById('tgViewer3d');
+            if (!cont) return;
+            const w = cont.clientWidth, h = cont.clientHeight;
+            if (!w || !h) return;   // 3D tab not showing
+            if (!tgDispR3d) {
+                if (tgDispR3dFailed) return;
+                try {
+                    const cv = doc.createElement('canvas');
+                    cv.style.display = 'block';
+                    tgDispR3d = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+                    tgDispR3d.setPixelRatio(tgDispWin.devicePixelRatio || 1);
+                } catch (e) {
+                    tgDispR3d = null; tgDispR3dFailed = true;
+                    cont.textContent = '3D view could not start in the display window (WebGL unavailable there). Use the docked 3D Drawing.';
+                    return;
+                }
+            }
+            const cv = tgDispR3d.domElement;
+            if (cv.parentNode !== cont) cont.appendChild(cv);
+            if (cv._tgW !== w || cv._tgH !== h) { tgDispR3d.setSize(w, h); cv._tgW = w; cv._tgH = h; }
+            const aspect = w / Math.max(h, 1), savedAspect = perspCamera3dTG.aspect;
+            perspCamera3dTG.aspect = aspect; perspCamera3dTG.updateProjectionMatrix();
+            updateOrthoFrustumTG(aspect);
+            try {
+                tgDispR3d.render(scene3dTG, camera3dTG);
+                const lbl = doc.getElementById('tgLabels3d');
+                if (lbl) renderLabels3DTG(lbl, cont);
+            } finally {
+                perspCamera3dTG.aspect = savedAspect; perspCamera3dTG.updateProjectionMatrix();
+                updateOrthoFrustumTG();
+            }
+        }
+        function tgDispFrame() {
+            tgDispRaf = 0;
+            if (!tgDispWin || tgDispWin.closed) return;
+            try { tgDispRender3D(); } catch (e) { console.warn('Display window 3D:', e); }
+            tgDispRaf = tgDispWin.requestAnimationFrame(tgDispFrame);
         }
         function tgDispForward(ev) {
             const t = ev.target;
@@ -10406,6 +10532,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const isCtl = /^(INPUT|SELECT|TEXTAREA)$/.test(tag);
             if (ev.type === 'click') {
                 if (isCtl || tag === 'OPTION') return;                       // controls forward via input/change
+                if (t.closest && t.closest('#tgViewer3d')) return;           // 3D viewport: mouse controls act on the shared camera directly
                 const lbl = t.closest && t.closest('label');
                 if (lbl && lbl.querySelector('input,select,textarea')) return; // the label's own control handles it
                 const path = tgDispPath(root, t);
@@ -10426,35 +10553,62 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
         function tgDispUpdateBtn() {
             const b = document.getElementById('tgDispWinBtn');
-            if (b) b.textContent = tgDispWin ? '🗗 Close display window' : '🗗 Display window';
+            if (!b) return;
+            if (!b.dataset.openTitle) b.dataset.openTitle = b.title;   // remember the "open" hover text
+            const open = !!tgDispWin;
+            b.textContent = '🗗';   // icon only; the hover text names it
+            b.classList.toggle('tg-hdr-on', open);
+            b.title = open ? 'Display window is open — click to close it.' : b.dataset.openTitle;
+        }
+        // Mutations that only come from the 3D view redrawing itself (the floating labels are rebuilt
+        // every frame) must not trigger a rebuild of the whole display window.
+        function tgDispIsNoise(n) {
+            const el = n && (n.nodeType === 1 ? n : n.parentElement);
+            return !!(el && el.closest && el.closest('#tgLabels3d, #tgViewer3d'));
         }
         function tgDispOpen() {
             const w = window.open('', 'trailerDisplayWindow', 'width=1180,height=860');
             if (!w) { alert('Please allow pop-ups to open the display in a separate window.'); return; }
             tgDispWin = w;
+            tgDispR3dFailed = false;
             const doc = w.document;
             doc.open();
-            doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Transport Dashboard — Display</title></head><body><div id="tgDispRoot"></div></body></html>');
+            doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Transport Dashboard — Display</title></head><body><div id="tgDispTabbar" role="tablist"></div><div id="tgDispRoot"></div></body></html>');
             doc.close();
             document.querySelectorAll('head style, head link[rel="stylesheet"]').forEach(n => doc.head.appendChild(doc.importNode(n, true)));
+            const st = doc.createElement('style');
+            st.textContent = TG_DISP_CSS;
+            doc.head.appendChild(st);
             doc.body.className = document.body.className;
-            doc.body.style.cssText = 'margin:0;padding:0 10px 10px;';
             tgMakeLashBar(w);
             const root = doc.getElementById('tgDispRoot');
             ['click', 'input', 'change'].forEach(t => root.addEventListener(t, tgDispForward, true));
             root.addEventListener('focusout', () => tgDispSchedule(200));
+            // a rebuild is held off while a mouse button is down (orbit / pan in progress)
+            root.addEventListener('mousedown', () => { tgDispMouseDown = true; }, true);
+            w.addEventListener('mouseup', () => { tgDispMouseDown = false; }, true);
+            w.addEventListener('blur', () => { tgDispMouseDown = false; });
+            tg3dBindWindow(w);   // orbit / pan drags are tracked on the popup window
             const col = document.querySelector('.tg-modal-col-right');
             if (col) {
-                tgDispObs = new MutationObserver(() => tgDispSchedule(250));
+                tgDispObs = new MutationObserver(recs => {
+                    if (recs.every(r => tgDispIsNoise(r.target))) return;
+                    tgDispSchedule(250);
+                });
                 tgDispObs.observe(col, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] });
             }
             tgDispUpdateBtn();
             tgDispSync();
             tgPopTickStart();
+            tgDispRaf = w.requestAnimationFrame(tgDispFrame);
         }
         function tgDispClose(alreadyClosed) {
             if (tgDispObs) { tgDispObs.disconnect(); tgDispObs = null; }
             clearTimeout(tgDispTimer);
+            if (tgDispRaf && tgDispWin && !tgDispWin.closed) { try { tgDispWin.cancelAnimationFrame(tgDispRaf); } catch (e) { /* ignore */ } }
+            tgDispRaf = 0;
+            if (tgDispR3d) { try { tgDispR3d.dispose(); if (tgDispR3d.forceContextLoss) tgDispR3d.forceContextLoss(); } catch (e) { /* ignore */ } tgDispR3d = null; }
+            tgDispMouseDown = false;
             if (!alreadyClosed && tgDispWin && !tgDispWin.closed) { try { tgDispWin.close(); } catch (e) { /* ignore */ } }
             tgDispWin = null;
             tgDispUpdateBtn();
@@ -10916,7 +11070,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // innerHTML replace on every re-render) and bound once per wrap
         // element, same pattern as tgAttachMiddlePan.
         let tgPreviewZoom = 1;
-        function tgAttachWheelZoom(wrap) {
+        // Zoom level holder: the docked 2D view uses tgPreviewZoom; the
+        // 🗗 Display window passes its own {zoom} object so the two
+        // views zoom independently.
+        const TG_MAIN_ZOOM_STATE = { get zoom() { return tgPreviewZoom; }, set zoom(v) { tgPreviewZoom = v; } };
+        function tgAttachWheelZoom(wrap, zs) {
+            zs = zs || TG_MAIN_ZOOM_STATE;
             if (!wrap || wrap.dataset.tgZoomBound === '1') return;
             wrap.dataset.tgZoomBound = '1';
             wrap.addEventListener('wheel', (e) => {
@@ -10930,7 +11089,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // change) scrolled coordinate space.
                 const offsetX = wrap.scrollLeft + cursorX;
                 const offsetY = wrap.scrollTop + cursorY;
-                const oldZoom = tgPreviewZoom;
+                const oldZoom = zs.zoom;
                 // Exponential step so equal-sized notches feel like equal
                 // zoom increments near both ends of the range (matches
                 // AutoCAD's feel better than a flat +/-0.1 per notch);
@@ -10939,7 +11098,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const newZoom = Math.min(8, Math.max(0.25, oldZoom * factor));
                 if (newZoom === oldZoom) return;
                 const ratio = newZoom / oldZoom;
-                tgPreviewZoom = newZoom;
+                zs.zoom = newZoom;
                 // Real CSS width (%), same mechanism the Scale select
                 // already uses above — not `zoom`/`transform: scale`,
                 // which some Office WebView hosts don't support, silently
@@ -10959,7 +11118,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (e.button !== 1) return;
                 const inner = wrap.querySelector('#tgPreviewScaleInner');
                 if (!inner) return;
-                tgPreviewZoom = 1;
+                zs.zoom = 1;
                 inner.style.width = (Math.max(1, tgPreviewScaleMult || 1) * 100) + '%';
             });
         }
@@ -13383,10 +13542,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // radius3dTG the perspective camera uses for distance, so the
         // mouse wheel / pinch zoom (which only ever touches radius3dTG)
         // keeps working identically for both camera types.
-        function updateOrthoFrustumTG() {
+        function updateOrthoFrustumTG(aspectOverride) {
             if (!orthoCamera3dTG) return;
             const container = document.getElementById('tgViewer3d');
-            const aspect = (container && container.clientWidth) ? container.clientWidth / Math.max(container.clientHeight, 1) : 1;
+            const aspect = aspectOverride || ((container && container.clientWidth) ? container.clientWidth / Math.max(container.clientHeight, 1) : 1);
             const halfH = Math.max(0.1, radius3dTG * 0.62);
             const halfW = halfH * aspect;
             orthoCamera3dTG.left = -halfW; orthoCamera3dTG.right = halfW;
@@ -13560,9 +13719,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderer3dTG.setSize(container.clientWidth, container.clientHeight);
         }
 
-        function renderLabels3DTG() {
-            const layer = document.getElementById('tgLabels3d');
-            const container = document.getElementById('tgViewer3d');
+        function renderLabels3DTG(layerArg, containerArg) {
+            const layer = layerArg || document.getElementById('tgLabels3d');
+            const container = containerArg || document.getElementById('tgViewer3d');
             if (!layer || !container || !camera3dTG) return;
             if (tg3dLabelsHiddenTG || !labelAnchors3dTG.length) { layer.innerHTML = ''; return; }
             const w = container.clientWidth, h = container.clientHeight;
@@ -13585,6 +13744,92 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             layer.innerHTML = html;
         }
 
+        // ---- 3D camera controls, shared by the docked 3D view and the
+        // 🗗 Display window. Container part: press / wheel / touch on the
+        // 3D viewport. All state (theta/phi/radius/pan/lock) is the one
+        // module-level camera, so both views always move together. ----
+        function tg3dBindContainer(container) {
+            container.addEventListener('mousedown', (e) => {
+                if (is3DViewLockedTG) return;
+                tg3dUserAdjustedCamera = true;
+                if (e.button === 1) {
+                    isPanning3dTG = true; lastPanX3dTG = e.clientX; lastPanY3dTG = e.clientY; e.preventDefault();
+                } else if (e.button === 0) {
+                    isDragging3dTG = true; lastX3dTG = e.clientX; lastY3dTG = e.clientY;
+                }
+            });
+            container.addEventListener('contextmenu', (e) => e.preventDefault());
+            container.addEventListener('wheel', (e) => {
+                if (is3DViewLockedTG) return;
+                tg3dUserAdjustedCamera = true;
+                e.preventDefault();
+                radius3dTG = Math.max(3, Math.min(400, radius3dTG + e.deltaY * 0.02 * Math.max(1, radius3dTG * 0.05)));
+                updateCamera3DPositionTG();
+            }, { passive: false });
+
+            // ---- Touch interaction: one-finger orbit, two-finger pan/pinch ----
+            let lastTouchDist = null;
+            container.addEventListener('touchstart', (e) => {
+                if (is3DViewLockedTG) return;
+                tg3dUserAdjustedCamera = true;
+                if (e.touches.length === 1) {
+                    isDragging3dTG = true; isPanning3dTG = false;
+                    lastX3dTG = e.touches[0].clientX; lastY3dTG = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    isDragging3dTG = false; isPanning3dTG = true;
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    lastTouchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    lastPanX3dTG = (t0.clientX + t1.clientX) / 2; lastPanY3dTG = (t0.clientY + t1.clientY) / 2;
+                }
+                e.preventDefault();
+            }, { passive: false });
+            container.addEventListener('touchmove', (e) => {
+                if (is3DViewLockedTG) return;
+                if (e.touches.length === 1 && isDragging3dTG) {
+                    const dx = e.touches[0].clientX - lastX3dTG, dy = e.touches[0].clientY - lastY3dTG;
+                    theta3dTG -= dx * 0.006;
+                    phi3dTG = Math.max(0.05, Math.min(1.55, phi3dTG - dy * 0.006));
+                    lastX3dTG = e.touches[0].clientX; lastY3dTG = e.touches[0].clientY;
+                    updateCamera3DPositionTG();
+                } else if (e.touches.length === 2) {
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    const midX = (t0.clientX + t1.clientX) / 2, midY = (t0.clientY + t1.clientY) / 2;
+                    if (lastTouchDist !== null) {
+                        radius3dTG = Math.max(3, Math.min(400, radius3dTG - (dist - lastTouchDist) * 0.05 * Math.max(1, radius3dTG * 0.05)));
+                    }
+                    if (isPanning3dTG) applyPan3DTG(midX - lastPanX3dTG, midY - lastPanY3dTG);
+                    lastTouchDist = dist;
+                    lastPanX3dTG = midX; lastPanY3dTG = midY;
+                    updateCamera3DPositionTG();
+                }
+                e.preventDefault();
+            }, { passive: false });
+            container.addEventListener('touchend', (e) => {
+                if (e.touches.length === 0) { isDragging3dTG = false; isPanning3dTG = false; lastTouchDist = null; }
+                else if (e.touches.length === 1) { isPanning3dTG = false; lastTouchDist = null; }
+            });
+        }
+        // Window part: the drag itself (move / release) is tracked on the
+        // window that owns the viewport, so a drag can leave the 3D box.
+        function tg3dBindWindow(win) {
+            win.addEventListener('mouseup', () => { isDragging3dTG = false; isPanning3dTG = false; });
+            win.addEventListener('mousemove', (e) => {
+                if (is3DViewLockedTG) return;
+                if (isPanning3dTG) {
+                    applyPan3DTG(e.clientX - lastPanX3dTG, e.clientY - lastPanY3dTG);
+                    lastPanX3dTG = e.clientX; lastPanY3dTG = e.clientY;
+                    return;
+                }
+                if (!isDragging3dTG) return;
+                const dx = e.clientX - lastX3dTG, dy = e.clientY - lastY3dTG;
+                theta3dTG -= dx * 0.006;
+                phi3dTG = Math.max(0.05, Math.min(1.55, phi3dTG - dy * 0.006));
+                lastX3dTG = e.clientX; lastY3dTG = e.clientY;
+                updateCamera3DPositionTG();
+            });
+        }
+
         function init3DSceneTG() {
             const container = document.getElementById('tgViewer3d');
             if (!container || tg3dInitialized) return;
@@ -13597,7 +13842,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             perspCamera3dTG = new THREE.PerspectiveCamera(45, aspect0, 0.05, 5000);
             orthoCamera3dTG = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.05, 5000);
             camera3dTG = perspCamera3dTG; // active camera pointer — see set3DCameraTG()
-            renderer3dTG = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); // preserveDrawingBuffer: lets the 🗗 Display window snapshot the canvas
+            renderer3dTG = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); // (the 🗗 Display window now draws with its own second renderer — see tgDispRender3D)
             renderer3dTG.setSize(container.clientWidth, container.clientHeight);
             renderer3dTG.setPixelRatio(window.devicePixelRatio || 1);
             container.appendChild(renderer3dTG.domElement);
@@ -13649,79 +13894,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             updateCamera3DPositionTG();
 
-            // ---- Mouse interaction: left-drag = orbit, middle-drag = pan ----
-            container.addEventListener('mousedown', (e) => {
-                if (is3DViewLockedTG) return;
-                if (e.button === 1) {
-                    isPanning3dTG = true; lastPanX3dTG = e.clientX; lastPanY3dTG = e.clientY; e.preventDefault();
-                } else if (e.button === 0) {
-                    isDragging3dTG = true; lastX3dTG = e.clientX; lastY3dTG = e.clientY;
-                }
-            });
-            container.addEventListener('contextmenu', (e) => e.preventDefault());
-            window.addEventListener('mouseup', () => { isDragging3dTG = false; isPanning3dTG = false; });
-            window.addEventListener('mousemove', (e) => {
-                if (is3DViewLockedTG) return;
-                if (isPanning3dTG) {
-                    applyPan3DTG(e.clientX - lastPanX3dTG, e.clientY - lastPanY3dTG);
-                    lastPanX3dTG = e.clientX; lastPanY3dTG = e.clientY;
-                    return;
-                }
-                if (!isDragging3dTG) return;
-                const dx = e.clientX - lastX3dTG, dy = e.clientY - lastY3dTG;
-                theta3dTG -= dx * 0.006;
-                phi3dTG = Math.max(0.05, Math.min(1.55, phi3dTG - dy * 0.006));
-                lastX3dTG = e.clientX; lastY3dTG = e.clientY;
-                updateCamera3DPositionTG();
-            });
-            container.addEventListener('wheel', (e) => {
-                if (is3DViewLockedTG) return;
-                e.preventDefault();
-                radius3dTG = Math.max(3, Math.min(400, radius3dTG + e.deltaY * 0.02 * Math.max(1, radius3dTG * 0.05)));
-                updateCamera3DPositionTG();
-            }, { passive: false });
-
-            // ---- Touch interaction: one-finger orbit, two-finger pan/pinch ----
-            let lastTouchDist = null;
-            container.addEventListener('touchstart', (e) => {
-                if (is3DViewLockedTG) return;
-                if (e.touches.length === 1) {
-                    isDragging3dTG = true; isPanning3dTG = false;
-                    lastX3dTG = e.touches[0].clientX; lastY3dTG = e.touches[0].clientY;
-                } else if (e.touches.length === 2) {
-                    isDragging3dTG = false; isPanning3dTG = true;
-                    const t0 = e.touches[0], t1 = e.touches[1];
-                    lastTouchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-                    lastPanX3dTG = (t0.clientX + t1.clientX) / 2; lastPanY3dTG = (t0.clientY + t1.clientY) / 2;
-                }
-                e.preventDefault();
-            }, { passive: false });
-            container.addEventListener('touchmove', (e) => {
-                if (is3DViewLockedTG) return;
-                if (e.touches.length === 1 && isDragging3dTG) {
-                    const dx = e.touches[0].clientX - lastX3dTG, dy = e.touches[0].clientY - lastY3dTG;
-                    theta3dTG -= dx * 0.006;
-                    phi3dTG = Math.max(0.05, Math.min(1.55, phi3dTG - dy * 0.006));
-                    lastX3dTG = e.touches[0].clientX; lastY3dTG = e.touches[0].clientY;
-                    updateCamera3DPositionTG();
-                } else if (e.touches.length === 2) {
-                    const t0 = e.touches[0], t1 = e.touches[1];
-                    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-                    const midX = (t0.clientX + t1.clientX) / 2, midY = (t0.clientY + t1.clientY) / 2;
-                    if (lastTouchDist !== null) {
-                        radius3dTG = Math.max(3, Math.min(400, radius3dTG - (dist - lastTouchDist) * 0.05 * Math.max(1, radius3dTG * 0.05)));
-                    }
-                    if (isPanning3dTG) applyPan3DTG(midX - lastPanX3dTG, midY - lastPanY3dTG);
-                    lastTouchDist = dist;
-                    lastPanX3dTG = midX; lastPanY3dTG = midY;
-                    updateCamera3DPositionTG();
-                }
-                e.preventDefault();
-            }, { passive: false });
-            container.addEventListener('touchend', (e) => {
-                if (e.touches.length === 0) { isDragging3dTG = false; isPanning3dTG = false; lastTouchDist = null; }
-                else if (e.touches.length === 1) { isPanning3dTG = false; lastTouchDist = null; }
-            });
+            // ---- Mouse / touch interaction (left-drag = orbit, middle-drag = pan,
+            // wheel = zoom, touch) — see tg3dBindContainer / tg3dBindWindow.
+            // The 🗗 Display window binds the very same handlers to its own
+            // 3D container + window, so it is controlled exactly like this one.
+            tg3dBindContainer(container);
+            tg3dBindWindow(window);
 
             window.addEventListener('resize', resize3DViewerTG);
 
