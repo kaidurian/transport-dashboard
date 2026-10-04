@@ -820,6 +820,58 @@
         }
         .tg-add-group-btn:hover { border-color: var(--accent-blue); }
 
+
+        /* ============================================================
+           EXCEL-STYLE INPUT TABLES — top/bottom (tab) mode ONLY.
+           The tables are built by JS (tgXl* below) by MOVING the existing
+           field elements into <table> cells, so these rules only ever
+           match in that mode; left|right and stacked keep the original
+           card look. Reference layout: Input_table_style.xlsx — one
+           header row of column titles, one row per train / cargo item /
+           lashing type. Long explanations live in hover tooltips (title).
+           ============================================================ */
+        :root, body { --xl-line: color-mix(in srgb, var(--text-muted) 40%, transparent); --xl-head: color-mix(in srgb, var(--text-muted) 18%, var(--tank-box-bg)); --xl-lock: color-mix(in srgb, var(--text-muted) 14%, var(--input-bg)); }
+        .tg-xl-wrap { overflow-x: auto; margin: 6px 0; border: 1px solid var(--xl-line); background: var(--input-bg); }
+        table.tg-xl-table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 11.5px; color: var(--text-main); }
+        .tg-xl-table th {
+            background: var(--xl-head); border: 1px solid var(--xl-line); padding: 3px 8px;
+            font-size: 10.5px; font-weight: 700; text-align: center; white-space: nowrap; color: var(--text-main);
+        }
+        .tg-xl-table th.xl-super { background: color-mix(in srgb, var(--accent-blue) 22%, var(--xl-head)); }
+        .tg-xl-table th[title], .tg-xl-table td[title] { cursor: help; }
+        .tg-xl-table td { border: 1px solid var(--xl-line); padding: 0; background: var(--input-bg); vertical-align: middle; }
+        .tg-xl-table td.xl-lock { background: var(--xl-lock); }
+        .tg-xl-table td.xl-na { background: var(--xl-lock); opacity: 0.6; }
+        .tg-xl-table td.xl-sep { padding: 0; height: 3px; background: var(--xl-line); border: none; }
+        .tg-xl-table td.xl-note { padding: 3px 8px; background: var(--xl-head); font-size: 11px; }
+        .tg-xl-table td.xl-local { position: relative; }
+        .tg-xl-table td.xl-local::after {
+            content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 7px 7px 0;
+            border-color: transparent #f59e0b transparent transparent; pointer-events: none;
+        }
+        .tg-xl-table tr.tg-group-row-active td { background: color-mix(in srgb, var(--accent-blue) 12%, var(--input-bg)); }
+        .xl-cell { display: flex; align-items: center; gap: 3px; padding: 0 2px; min-width: 0; }
+        .xl-cell.xl-col { flex-wrap: wrap; }
+        .tg-xl-table .xl-cell > * { margin: 0; }
+        .tg-xl-table input[type="text"], .tg-xl-table input[type="number"], .tg-xl-table select {
+            flex: 1 1 auto; width: 100%; min-width: 64px; box-sizing: border-box; margin: 0;
+            padding: 4px 6px; font-size: 11.5px; border: none; border-radius: 0;
+            background: transparent; color: var(--text-main);
+        }
+        .tg-xl-table input[type="number"] { text-align: right; }
+        .tg-xl-table td.xl-name input[type="text"], .tg-xl-table td.xl-split input[type="text"] { min-width: 96px; font-weight: 700; }
+        .tg-xl-table td.xl-wide input[type="text"] { min-width: 170px; }
+        .tg-xl-table input:focus, .tg-xl-table select:focus { outline: 2px solid var(--accent-green); outline-offset: -2px; background: var(--input-bg); }
+        .tg-xl-table input:disabled, .tg-xl-table input[readonly] { background: var(--xl-lock); color: var(--text-muted); cursor: default; opacity: 1; }
+        .tg-xl-table .xl-cell button { flex: 0 0 auto; margin: 0; padding: 1px 5px; font-size: 11px; line-height: 1.3; }
+        .tg-xl-table .xl-cell label { display: inline-flex; align-items: center; gap: 3px; margin: 0; padding: 0 4px; white-space: nowrap; font-size: 10.5px; }
+        .tg-xl-table .tg-cad-split-status {
+            flex: 1 1 100%; max-width: 190px; padding: 0 6px 2px; font-size: 9.5px; color: var(--text-muted);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0;
+        }
+        .tg-xl-table .tg-group-swatch { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-left: 3px; }
+        .tg-xl-popovers { margin-top: 6px; }
+
         .tg-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px; }
         .tg-footer .tg-btn-primary { background: var(--accent-blue); border-color: var(--accent-blue); color: #06202e; }
 
@@ -933,7 +985,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.153)</h1>
+            <h1>🚂 Transport Dashboard (Rev.155)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -6564,7 +6616,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!el) return;
             const activeId = activeLashingPoint() ? activeLashingPoint().id : null;
             const idKey = lashingPoints.map(p => p.id).join(',');
-            const rowEls = Array.from(el.children).filter(c => c.classList && c.classList.contains('tg-group-row'));
+            const rowEls = Array.from(el.querySelectorAll('.tg-group-row')); // plain cards OR <tr> rows of the Excel-style table (top/bottom mode)
             if (el.dataset.lashIds === idKey && rowEls.length === lashingPoints.length) {
                 // Same set of lashing types as last render -> patch the
                 // existing inputs IN PLACE instead of rebuilding the
@@ -9749,6 +9801,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (body) body.classList.toggle('tg-side-layout', checked);
             const sdBtn = document.getElementById('appSplitDirBtn');
             if (sdBtn) sdBtn.disabled = !checked;
+            try { if (typeof syncTgXl === 'function') syncTgXl(); } catch (e) { /* not ready during first init */ }
             window.dispatchEvent(new Event('resize'));
         }
 
@@ -9766,6 +9819,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const leftCol = body.querySelector('.tg-modal-col-left');
             if (leftCol) { leftCol.style.flexBasis = ''; leftCol.style.maxWidth = ''; }   // drop any left|right drag width
             if (horiz) enterTgTabs(); else exitTgTabs();
+            try { syncTgXl(); } catch (e) { console.error(e); }
             const mb = document.getElementById('appMinimizeAllBtn');
             if (mb) mb.disabled = horiz;   // tabs control what's expanded in top/bottom mode
             const btn = document.getElementById('appSplitDirBtn');
@@ -9778,6 +9832,300 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             try { if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview(); } catch (e) {}
             window.dispatchEvent(new Event('resize'));   // let 2D/3D previews re-fit
         }
+
+        // ============================================================
+        // EXCEL-STYLE INPUT TABLES (top/bottom tab mode only)
+        // Builds <table>s from the ALREADY-RENDERED input cards by moving
+        // the real <input>/<select>/<button> elements into table cells —
+        // ids, inline onchange/onclick handlers and Excel sync are
+        // untouched. A MutationObserver re-applies it after every
+        // re-render; leaving the mode re-renders the cards back to the
+        // original look. Reference: Input_table_style.xlsx.
+        // ============================================================
+        let tgXlActive = false, tgXlBusy = false, tgXlObs = null;
+        const XL_FIELD = '.tg-field, .tg-cargo-field, .tg-group-field';
+        function xlMk(tag, cls, parent) { const e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; }
+        function xlKids(el, sel) { return Array.from(el.children).filter(c => c.matches(sel)); }
+        function xlTxt(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+        // Column title for a field: label text without buttons; long hint spans + the label/control
+        // titles become the header's hover tooltip.
+        function xlLabelInfo(field) {
+            const label = xlKids(field, 'label')[0];
+            const info = { text: '', tip: '', buttons: [] };
+            const ctl = xlControl(field);
+            const tips = [];
+            if (label) {
+                info.buttons = Array.from(label.querySelectorAll('button'));
+                const c = label.cloneNode(true);
+                c.querySelectorAll('button,input,select').forEach(x => x.remove());
+                if (label.getAttribute('title')) tips.push(label.getAttribute('title'));
+                c.querySelectorAll('span').forEach(sp => { const t = xlTxt(sp); if (t.length > 14) { tips.push(t); sp.remove(); } });
+                info.text = xlTxt(c);
+            }
+            if (ctl && ctl.getAttribute('title')) tips.push(ctl.getAttribute('title'));
+            info.tip = tips.join(' — ');
+            return info;
+        }
+        function xlControl(field) { return field.querySelector('input:not([type="checkbox"]), select, textarea'); }
+        function xlTh(tr, text, tip, attrs) {
+            const th = xlMk('th', (attrs && attrs.cls) || '', tr);
+            th.textContent = text;
+            if (tip) th.title = tip;
+            if (attrs) { if (attrs.rowSpan) th.rowSpan = attrs.rowSpan; if (attrs.colSpan) th.colSpan = attrs.colSpan; }
+            return th;
+        }
+        // Moves one field's control(s) (+ the pull/help buttons that sat in its label) into a new <td>.
+        function xlCell(field, tr, colSpan) {
+            const info = xlLabelInfo(field);
+            const cls = [];
+            if (field.matches('.tg-field-readonly, .tg-cargo-field-readonly')) cls.push('xl-lock');
+            if (field.matches('.tg-cargo-field-local')) cls.push('xl-local');
+            if (/grid-column/.test(field.getAttribute('style') || '')) cls.push('xl-wide');
+            const td = xlMk('td', cls.join(' '), tr);
+            if (colSpan > 1) td.colSpan = colSpan;
+            if (field.getAttribute('title')) td.title = field.getAttribute('title');
+            const w = xlMk('div', 'xl-cell', td);
+            // some fields (e.g. Lashing point) wrap their <input> INSIDE the <label> -> take those controls too
+            const lbl = xlKids(field, 'label')[0];
+            const inner = lbl ? Array.from(lbl.querySelectorAll('input, select, textarea')) : [];
+            inner.forEach(c => w.appendChild(c));
+            Array.from(field.children).forEach(ch => { if (ch.tagName !== 'LABEL') w.appendChild(ch); });
+            info.buttons.forEach(b => w.appendChild(b));
+            return td;
+        }
+        function xlEmpty(tr, n) { for (let i = 0; i < n; i++) xlMk('td', 'xl-na', tr); }
+
+        // Generic: any label-over-input grid -> header row + value row(s) (global settings,
+        // Horizontal Loads, Traction, CoG Envelope, accessory block, "move all cargo" ...).
+        function xlGridToTable(grid) {
+            const kids = Array.from(grid.children);
+            const isWide = f => /grid-column/.test(f.getAttribute('style') || '');
+            const fields = kids.filter(k => k.matches(XL_FIELD));
+            if (!fields.length) return;
+            let seg = 0, maxSeg = 0;
+            kids.forEach(k => {
+                if (k.matches('.tg-field-divider')) { seg = 0; return; }
+                if (k.matches(XL_FIELD) && !isWide(k)) { seg++; maxSeg = Math.max(maxSeg, seg); }
+            });
+            const cols = Math.min(6, Math.max(1, maxSeg));
+            const table = xlMk('table', 'tg-xl-table');
+            let chunk = [];
+            const flush = () => {
+                if (!chunk.length) return;
+                const infos = chunk.map(f => xlLabelInfo(f));
+                const trH = xlMk('tr', '', table);
+                infos.forEach(i => xlTh(trH, i.text, i.tip));
+                const trV = xlMk('tr', '', table);
+                chunk.forEach(f => xlCell(f, trV));
+                chunk = [];
+            };
+            kids.forEach(k => {
+                if (k.matches('.tg-field-divider')) { flush(); const tr = xlMk('tr', '', table); const td = xlMk('td', 'xl-sep', tr); td.colSpan = cols; return; }
+                if (k.matches(XL_FIELD)) {
+                    if (isWide(k)) {
+                        flush();
+                        const info = xlLabelInfo(k);
+                        const trH = xlMk('tr', '', table); xlTh(trH, info.text, info.tip, { colSpan: cols });
+                        const trV = xlMk('tr', '', table); xlCell(k, trV, cols);
+                    } else { chunk.push(k); if (chunk.length >= cols) flush(); }
+                    return;
+                }
+                flush();
+                const tr = xlMk('tr', '', table); const td = xlMk('td', 'xl-note', tr); td.colSpan = cols; td.appendChild(k);
+            });
+            flush();
+            const wrap = xlMk('div', 'tg-xl-wrap');
+            wrap.appendChild(table);
+            grid.replaceWith(wrap);
+        }
+
+        // Generate Trailer: one row per train (Train No | Trailer type | Line spacing | X offset |
+        // Y offset | Trailer split | per axle group: Group, From, To, Axle row, Load type, Load per axle).
+        function xlTrains(list) {
+            const cards = xlKids(list, '.tg-train-card');
+            if (!cards.length) return;
+            const data = cards.map(card => {
+                const head = xlKids(card, '.tg-train-card-header')[0];
+                const grid = xlKids(card, '.tg-field-grid')[0];
+                return {
+                    nameInput: head && head.querySelector('.tg-train-name-input'),
+                    removeBtn: head && head.querySelector('.tg-remove-train'),
+                    fields: grid ? xlKids(grid, '.tg-field') : [],
+                    popovers: xlKids(card, '.tg-field-help-popover'),
+                    split: xlKids(card, '.tg-cad-split-row')[0],
+                    groups: xlKids(card, '.tg-group-row').map(g => {
+                        const gh = xlKids(g, '.tg-group-row-header')[0];
+                        const gg = xlKids(g, '.tg-group-field-grid')[0];
+                        return { head: gh, fields: gg ? xlKids(gg, '.tg-group-field') : [], summary: xlTxt(xlKids(g, '.tg-group-summary')[0]) };
+                    }),
+                    addBtn: xlKids(card, '.tg-add-group-btn')[0],
+                    summary: xlTxt(xlKids(card, '.tg-train-summary')[0])
+                };
+            });
+            const G = Math.max(1, ...data.map(d => d.groups.length));
+            const hasRow = data.some(d => d.groups.some(g => g.fields.length >= 5));
+            const gCols = ['Group', 'From axle line', 'To axle line'].concat(hasRow ? ['Axle row'] : [], ['Load type', '📥 Load per axle (t)']);
+            const K = gCols.length;
+            // header titles + tooltips come from the first train's own labels / control titles
+            const d0 = data[0];
+            const topInfo = d0.fields.map(f => xlLabelInfo(f));
+            const g0 = d0.groups[0];
+            const gTips = {};
+            if (g0) {
+                const infos = g0.fields.map(f => xlLabelInfo(f));
+                gTips.from = infos[0] && infos[0].tip; gTips.to = infos[1] && infos[1].tip;
+                if (g0.fields.length >= 5) { gTips.row = infos[2].tip; gTips.mode = infos[3].tip; gTips.load = infos[4].tip; }
+                else { gTips.mode = infos[2] && infos[2].tip; gTips.load = infos[3] && infos[3].tip; }
+            }
+            const splitLbl = d0.split && d0.split.querySelector('label');
+            const table = xlMk('table', 'tg-xl-table');
+            const r1 = xlMk('tr', '', table), r2 = xlMk('tr', '', table), r3 = xlMk('tr', '', table);
+            xlTh(r1, 'Train No', d0.nameInput && d0.nameInput.title, { rowSpan: 3 });
+            topInfo.forEach(i => xlTh(r1, i.text, i.tip, { rowSpan: 3 }));
+            xlTh(r1, (splitLbl && xlTxt(splitLbl)) || 'Trailer split', splitLbl && splitLbl.title, { rowSpan: 3 });
+            xlTh(r1, 'Axle groups (custom load per axle range)', 'Split each train\'s axle-line range into axle groups, each with its own load per axle.', { colSpan: G * K, cls: 'xl-super' });
+            xlTh(r1, '', '', { rowSpan: 3 });
+            for (let g = 0; g < G; g++) {
+                xlTh(r2, 'Group ' + (g + 1), '', { colSpan: K });
+                const tipFor = ['', gTips.from, gTips.to].concat(hasRow ? [gTips.row] : [], [gTips.mode, gTips.load]);
+                gCols.forEach((c, i) => xlTh(r3, c, tipFor[i] || ''));
+            }
+            const popWrap = xlMk('div', 'xl-popovers');
+            data.forEach(d => {
+                const tr = xlMk('tr', '', table);
+                const tdN = xlMk('td', 'xl-name', tr); const wN = xlMk('div', 'xl-cell', tdN);
+                if (d.nameInput) wN.appendChild(d.nameInput);
+                if (d.removeBtn) wN.appendChild(d.removeBtn);
+                if (d.summary) tdN.title = d.summary;
+                d.fields.forEach(f => xlCell(f, tr));
+                const tdS = xlMk('td', 'xl-split', tr); const wS = xlMk('div', 'xl-cell xl-col', tdS);
+                if (d.split) {
+                    const inp = d.split.querySelector('input[type="text"]'), btn = d.split.querySelector('.tg-cad-split-auto-btn'), st = d.split.querySelector('.tg-cad-split-status');
+                    if (inp) wS.appendChild(inp);
+                    if (btn) wS.appendChild(btn);
+                    if (st) { st.onmouseenter = () => { st.title = st.textContent.trim(); }; st.title = st.textContent.trim(); wS.appendChild(st); }
+                }
+                for (let gi = 0; gi < G; gi++) {
+                    const g = d.groups[gi];
+                    if (!g) { xlEmpty(tr, K); continue; }
+                    const tdG = xlMk('td', '', tr); const wG = xlMk('div', 'xl-cell', tdG);
+                    if (g.head) Array.from(g.head.children).forEach(ch => wG.appendChild(ch));
+                    if (g.summary) tdG.title = g.summary;
+                    const f = g.fields; const rowF = f.length >= 5 ? f[2] : null;
+                    xlCell(f[0], tr); xlCell(f[1], tr);
+                    if (hasRow) { if (rowF) xlCell(rowF, tr); else xlEmpty(tr, 1); }
+                    xlCell(f[f.length - 2], tr); xlCell(f[f.length - 1], tr);
+                }
+                const tdA = xlMk('td', '', tr); if (d.addBtn) xlMk('div', 'xl-cell', tdA).appendChild(d.addBtn);
+                d.popovers.forEach(p => popWrap.appendChild(p));
+            });
+            const wrap = xlMk('div', 'tg-xl-wrap'); wrap.appendChild(table);
+            list.replaceChildren(wrap, popWrap);
+        }
+
+        // Generate Cargo: one row per cargo item, one column per field (Name, W, CoGx … Gap above deck).
+        function xlCargo(list) {
+            const cards = xlKids(list, '.tg-cargo-item-card');
+            if (!cards.length) return;
+            const items = cards.map(card => {
+                const head = xlKids(card, '.tg-train-card-header')[0];
+                return {
+                    swatch: head && head.querySelector(':scope > span'),
+                    name: head && head.querySelector('.tg-train-name-input'),
+                    toggles: head ? Array.from(head.querySelectorAll('label.tg-cargo-link-toggle, label.tg-cargo-group-toggle')) : [],
+                    btns: head ? Array.from(head.querySelectorAll('button.tg-remove-train')) : [],
+                    fields: Array.from(card.querySelectorAll('.tg-cargo-field'))
+                };
+            });
+            const infos = items[0].fields.map(f => xlLabelInfo(f));
+            const table = xlMk('table', 'tg-xl-table');
+            const trH = xlMk('tr', '', table);
+            xlTh(trH, 'Name', items[0].name && items[0].name.title);
+            infos.forEach(i => xlTh(trH, i.text, i.tip));
+            xlTh(trH, 'Link / Group', 'Link Length/Width/Height to Excel Horizontal loads, or group the CoG sign with the cargo box (hover each toggle for details).');
+            xlTh(trH, '', '');
+            items.forEach(it => {
+                const tr = xlMk('tr', '', table);
+                const tdN = xlMk('td', 'xl-name', tr); const wN = xlMk('div', 'xl-cell', tdN);
+                if (it.swatch) wN.appendChild(it.swatch);
+                if (it.name) wN.appendChild(it.name);
+                it.fields.forEach(f => xlCell(f, tr));
+                const tdT = xlMk('td', '', tr); const wT = xlMk('div', 'xl-cell', tdT);
+                it.toggles.forEach(t => wT.appendChild(t));
+                const tdB = xlMk('td', '', tr); const wB = xlMk('div', 'xl-cell', tdB);
+                it.btns.forEach(b => wB.appendChild(b));
+            });
+            const wrap = xlMk('div', 'tg-xl-wrap'); wrap.appendChild(table);
+            list.replaceChildren(wrap);
+        }
+
+        // Lashing: one row per lashing type (No. | Lashing point | SWL | QTY | dx | dy | dz).
+        // Rows keep class tg-group-row so renderLashingList's in-place patch path still works.
+        function xlLashing(list) {
+            const rows = xlKids(list, '.tg-group-row');
+            if (!rows.length) return;
+            const parsed = rows.map(row => {
+                const head = xlKids(row, '.tg-group-row-header')[0];
+                const grid = xlKids(row, '.tg-group-field-grid')[0];
+                return { row, head, fields: grid ? xlKids(grid, '.tg-group-field') : [] };
+            });
+            const infos = parsed[0].fields.map(f => xlLabelInfo(f));
+            const table = xlMk('table', 'tg-xl-table');
+            const trH = xlMk('tr', '', table);
+            xlTh(trH, '⚓ Lashing No.', 'Click a row to make it the active lashing type for 2D-drawing clicks.');
+            infos.forEach(i => xlTh(trH, i.text, i.tip));
+            parsed.forEach(p => {
+                const tr = xlMk('tr', p.row.className, table);
+                const td = xlMk('td', '', tr); const w = xlMk('div', 'xl-cell', td);
+                if (p.head) {
+                    const oc = p.head.getAttribute('onclick'); if (oc) td.setAttribute('onclick', oc);
+                    if (p.head.title) td.title = p.head.title;
+                    Array.from(p.head.children).forEach(ch => w.appendChild(ch));
+                }
+                p.fields.forEach(f => xlCell(f, tr));
+            });
+            const wrap = xlMk('div', 'tg-xl-wrap'); wrap.appendChild(table);
+            list.replaceChildren(wrap);
+        }
+
+        function tgXlConvertAll() {
+            if (tgXlBusy) return;
+            tgXlBusy = true;
+            try {
+                const tl = document.getElementById('tgTrainList'); if (tl) xlTrains(tl);
+                const cl = document.getElementById('tgCargoList'); if (cl) xlCargo(cl);
+                const ll = document.getElementById('tgLashingList'); if (ll) xlLashing(ll);
+                document.querySelectorAll('.tg-modal-col-left .tg-field-grid, .tg-modal-col-left .tg-cargo-field-grid, .tg-modal-col-left .tg-group-field-grid')
+                    .forEach(g => { if (!g.closest('.tg-xl-wrap')) xlGridToTable(g); });
+            } catch (e) { console.error('Excel-style table build failed', e); }
+            finally { if (tgXlObs) tgXlObs.takeRecords(); tgXlBusy = false; }
+        }
+        function tgXlRestoreAll() {   // re-render every input card from state -> original look
+            tgXlBusy = true;
+            try {
+                const ll = document.getElementById('tgLashingList'); if (ll) delete ll.dataset.lashIds;   // force full rebuild
+                ['renderTrailerDashboard', 'renderLashingList', 'renderTgTractionFields', 'renderTgHLoadsFields', 'renderTgCogEnvFields', 'renderCargoGroupAllSection']
+                    .forEach(fn => { try { if (typeof window[fn] === 'function') window[fn](); } catch (e) { console.error(fn, e); } });
+            } finally { if (tgXlObs) tgXlObs.takeRecords(); tgXlBusy = false; }
+        }
+        function syncTgXl() {
+            const on = tgTabsOn();
+            if (on && !tgXlActive) {
+                tgXlActive = true;
+                if (!tgXlObs) {
+                    const col = document.querySelector('.tg-modal-col-left');
+                    if (col) {
+                        tgXlObs = new MutationObserver(() => { if (!tgXlBusy && tgXlActive && tgTabsOn()) tgXlConvertAll(); });
+                        tgXlObs.observe(col, { childList: true, subtree: true });
+                    }
+                }
+                tgXlConvertAll();
+            } else if (!on && tgXlActive) {
+                tgXlActive = false;
+                tgXlRestoreAll();
+            }
+        }
+
         // ---- Tabs for top/bottom mode ---------------------------------
         const TAB_TOP_STORAGE_KEY = 'tgTabTop', TAB_BOTTOM_STORAGE_KEY = 'tgTabBottom';
         const TG_TAB_SEL = '.tg-trailer-card, .tg-cargo-card, .tg-preview-wrap, .tg-3d-wrap';
