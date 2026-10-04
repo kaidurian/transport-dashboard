@@ -71,12 +71,12 @@
             cursor: pointer; white-space: nowrap;
         }
         #themeModeToggle:hover { border-color: var(--accent-blue); color: var(--text-main); }
-        #appExportBtn, #appImportBtn, #appMinimizeAllBtn, #appToggleInputsBtn {
+        #appExportBtn, #appImportBtn, #appMinimizeAllBtn, #appToggleInputsBtn, #appSplitDirBtn {
             padding: 5px 9px; font-size: 11px; font-weight: 700; border-radius: 6px;
             border: 1px solid var(--panel-border); background: var(--tank-box-bg); color: var(--text-muted);
             cursor: pointer; white-space: nowrap;
         }
-        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover, #appToggleInputsBtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
+        #appExportBtn:hover, #appImportBtn:hover, #appMinimizeAllBtn:hover, #appToggleInputsBtn:hover, #appSplitDirBtn:hover { border-color: var(--accent-blue); color: var(--text-main); }
 
         .tg-page {
             width: 100%;
@@ -154,6 +154,78 @@
             position: sticky;
             top: 0;
         }
+
+        /* ⬍ Top/bottom split (header button #appSplitDirBtn): same two
+           areas as the ⬌ side-by-side layout, but the divider is
+           HORIZONTAL — input cards on top, preview/output cards below,
+           each with its OWN scrollbar. Only applies while
+           .tg-side-layout is on. Top height is --tg-split-top, dragged
+           with .tg-split-handle (persisted, see initTgSplitDir). Because
+           the input area is now full width again, the narrow-column
+           field-grid packing above is reverted to the normal grids. */
+        .tg-split-handle { display: none; flex: 0 0 auto; background: var(--panel-border); border-radius: 3px; }
+        .tg-modal-body.tg-side-layout .tg-split-handle { display: block; width: 6px; align-self: stretch; cursor: col-resize; }
+        .tg-modal-body.tg-side-layout .tg-split-handle:hover,
+        .tg-modal-body.tg-split-dragging .tg-split-handle { background: var(--accent-blue); }
+        .tg-modal-body.tg-inputs-hidden .tg-split-handle { display: none; }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+            height: calc(100vh - 80px);
+            min-height: 420px;
+        }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-split-handle {
+            width: auto; height: 6px; margin: 4px 0; cursor: row-resize;
+        }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-modal-col-left {
+            flex: 0 0 var(--tg-split-top, 50%);
+            max-width: none;
+            max-height: none;
+            min-height: 60px;
+            padding-right: 4px;
+        }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-modal-col-right {
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 60px;
+            max-height: none;
+            position: static;
+        }
+        /* TABS (top/bottom mode). Top area = tab bar of the input cards
+           (Generate Trailer → CoG Envelope); bottom area = tab bar of the
+           display cards (2D Drawing → Transport Data w/ CoG Env Summary).
+           Only the clicked tab's card is shown, expanded, at the full
+           width of its area, with that area's own scrollbar. Tab bars and
+           the .tg-tab-item / .tg-tab-active classes are built by JS
+           (buildTgTabs / selectTgTab). */
+        .tg-tabbar { display: none; }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-tabbar {
+            display: flex; flex: 0 0 auto; gap: 2px; overflow-x: auto;
+            border-bottom: 1px solid var(--panel-border); margin-bottom: 6px;
+        }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal.tg-inputs-hidden #tgTabbarTop { display: none; }
+        .tg-tab-btn {
+            flex: 0 0 auto; padding: 6px 12px; font-size: 11px; font-weight: 700; white-space: nowrap;
+            border: 1px solid var(--panel-border); border-bottom: none; border-radius: 6px 6px 0 0;
+            background: var(--tank-box-bg); color: var(--text-muted); cursor: pointer;
+        }
+        .tg-tab-btn:hover { color: var(--text-main); border-color: var(--accent-blue); }
+        .tg-tab-btn.active {
+            background: var(--panel-bg); color: var(--text-main); border-color: var(--accent-blue);
+            box-shadow: inset 0 2px 0 var(--accent-blue); margin-bottom: -1px;
+        }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-modal-col-left { display: block; overflow-x: hidden; overflow-y: auto; }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-tab-item:not(.tg-tab-active) { display: none !important; }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-tab-item.tg-tab-active { width: 100%; max-width: none; margin-top: 0; }
+        /* the tab itself is the minimize/expand control here */
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-tab-item .tg-minimize-btn { display: none; }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-tab-item .tg-card-header-clickable { cursor: default; }
+        /* full-width area again -> normal (wide) field grids instead of the narrow-column packing */
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-field-grid { grid-template-columns: repeat(3, 1fr); }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-group-field-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+        .tg-modal-body.tg-side-layout.tg-split-horizontal .tg-cargo-field-grid { grid-template-columns: repeat(4, 1fr); }
+        .tg-modal-body.tg-split-dragging { user-select: none; }
 
         /* Side-layout mode only: pack the trailer/group fields 1–2 per
            row (instead of the normal 3-per-row grid) so the narrower
@@ -861,7 +933,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.152)</h1>
+            <h1>🚂 Transport Dashboard (Rev.153)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -871,6 +943,7 @@
                 <input type="checkbox" id="tgPreviewSideToggle" checked onchange="toggleTgPreviewSide(this.checked)">
                 ⬌ Show preview beside input data
             </label>
+            <button type="button" id="appSplitDirBtn" title="Split direction (needs ⬌ Show preview beside input data on): currently left | right. Click for top / bottom — input tabs above, display tabs below (click a tab for its full view); drag the bar between them to resize." onclick="toggleTgSplitDir(this)">⬍</button>
             <label style="font-size:11px; color:var(--text-muted); display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="When on, every dashboard edit is pushed to Excel automatically (no button press needed), and a small set of read-only values (Z Trailer Height, Horizontal Loads, CoG signs, Stability, Transport Data) are pulled back automatically too. Turn off to go back to manual 📤 Push / ⇩ Refresh buttons only.">
                 <input type="checkbox" id="autoSyncToggle" checked onchange="toggleAutoSync(this.checked)"> Auto-sync
             </label>
@@ -1190,6 +1263,8 @@
                     </div>
 
                 </div>
+
+                <div class="tg-split-handle" id="tgSplitHandle" title="Drag to resize"></div>
 
                 <div class="tg-modal-col-right">
                     <div class="tg-preview-wrap">
@@ -9672,6 +9747,182 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function toggleTgPreviewSide(checked) {
             const body = document.getElementById('tgModalBody');
             if (body) body.classList.toggle('tg-side-layout', checked);
+            const sdBtn = document.getElementById('appSplitDirBtn');
+            if (sdBtn) sdBtn.disabled = !checked;
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        // ⬍ Split direction: left|right (default) <-> top/bottom. Only
+        // visible effect while ⬌ side layout is on (CSS gates on
+        // .tg-side-layout). Choice + dragged top-panel height persist in
+        // localStorage, same pattern as the day/night theme.
+        const SPLIT_DIR_STORAGE_KEY = 'tgSplitDir';       // 'vertical' (left|right) | 'horizontal' (top/bottom)
+        const SPLIT_TOP_STORAGE_KEY = 'tgSplitTopPx';
+        function applyTgSplitDir(dir) {
+            const body = document.getElementById('tgModalBody');
+            if (!body) return;
+            const horiz = dir === 'horizontal';
+            body.classList.toggle('tg-split-horizontal', horiz);
+            const leftCol = body.querySelector('.tg-modal-col-left');
+            if (leftCol) { leftCol.style.flexBasis = ''; leftCol.style.maxWidth = ''; }   // drop any left|right drag width
+            if (horiz) enterTgTabs(); else exitTgTabs();
+            const mb = document.getElementById('appMinimizeAllBtn');
+            if (mb) mb.disabled = horiz;   // tabs control what's expanded in top/bottom mode
+            const btn = document.getElementById('appSplitDirBtn');
+            if (btn) {
+                btn.textContent = horiz ? '⬌' : '⬍';
+                btn.title = horiz
+                    ? 'Split direction: currently top / bottom. Click for left | right.'
+                    : 'Split direction (needs ⬌ Show preview beside input data on): currently left | right. Click for top / bottom — input tabs above, display tabs below (click a tab for its full view); drag the bar between them to resize.';
+            }
+            try { if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview(); } catch (e) {}
+            window.dispatchEvent(new Event('resize'));   // let 2D/3D previews re-fit
+        }
+        // ---- Tabs for top/bottom mode ---------------------------------
+        const TAB_TOP_STORAGE_KEY = 'tgTabTop', TAB_BOTTOM_STORAGE_KEY = 'tgTabBottom';
+        const TG_TAB_SEL = '.tg-trailer-card, .tg-cargo-card, .tg-preview-wrap, .tg-3d-wrap';
+        const TG_TAB_AREAS = [
+            { key: 'top',    colSel: '.tg-modal-col-left',  barId: 'tgTabbarTop',    store: TAB_TOP_STORAGE_KEY },
+            { key: 'bottom', colSel: '.tg-modal-col-right', barId: 'tgTabbarBottom', store: TAB_BOTTOM_STORAGE_KEY }
+        ];
+        function tgTabItems(col) { return col ? Array.from(col.children).filter(el => el.matches(TG_TAB_SEL)) : []; }
+        function tgTabTitle(el) { const h = el.querySelector('.tg-cargo-title'); return h ? h.textContent.trim() : ''; }
+        function tgIsMinimized(el) { return el.classList.contains('tg-card-minimized') || el.classList.contains('tg-preview-minimized'); }
+        function tgSetMinimized(el, min) {
+            el.classList.toggle(el.matches('.tg-preview-wrap, .tg-3d-wrap') ? 'tg-preview-minimized' : 'tg-card-minimized', min);
+            const b = el.querySelector('.tg-minimize-btn');
+            if (b) {
+                b.textContent = min ? '▢' : '—';
+                b.title = min ? 'Expand this card' : 'Minimize this card (show only the header)';
+            }
+        }
+        function tgTabsOn() {
+            const body = document.getElementById('tgModalBody');
+            return !!body && body.classList.contains('tg-side-layout') && body.classList.contains('tg-split-horizontal');
+        }
+        function buildTgTabs() {
+            const body = document.getElementById('tgModalBody');
+            if (!body) return;
+            TG_TAB_AREAS.forEach(area => {
+                const col = body.querySelector(area.colSel);
+                let bar = document.getElementById(area.barId);
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.id = area.barId;
+                    bar.className = 'tg-tabbar';
+                    bar.setAttribute('role', 'tablist');
+                    body.insertBefore(bar, col);   // top bar above input area, bottom bar above display area
+                }
+                bar.innerHTML = '';
+                tgTabItems(col).forEach(el => {
+                    el.classList.add('tg-tab-item');
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'tg-tab-btn';
+                    btn.setAttribute('role', 'tab');
+                    btn.textContent = tgTabTitle(el);
+                    btn.onclick = () => selectTgTab(area.key, el);
+                    el._tgTabBtn = btn;
+                    bar.appendChild(btn);
+                });
+            });
+        }
+        function selectTgTab(key, el, noSave) {
+            const body = document.getElementById('tgModalBody');
+            const area = TG_TAB_AREAS.find(a => a.key === key);
+            if (!body || !area) return;
+            tgTabItems(body.querySelector(area.colSel)).forEach(item => {
+                const on = item === el;
+                item.classList.toggle('tg-tab-active', on);
+                if (item._tgTabBtn) item._tgTabBtn.classList.toggle('active', on);
+            });
+            if (tgTabsOn()) tgSetMinimized(el, false);   // tab click = full (expanded) view
+            if (!noSave) { try { localStorage.setItem(area.store, tgTabTitle(el)); } catch (e) {} }
+            setTimeout(() => {   // hidden canvases/SVGs report 0 size -> re-fit now that this one is visible
+                try { if (typeof resize3DViewerTG === 'function') resize3DViewerTG(); } catch (e) {}
+                try { if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview(); } catch (e) {}
+                try { if (typeof renderTrailerGen3D === 'function') renderTrailerGen3D(); } catch (e) {}
+                window.dispatchEvent(new Event('resize'));
+            }, 0);
+        }
+        function enterTgTabs() {
+            const body = document.getElementById('tgModalBody');
+            if (!body) return;
+            TG_TAB_AREAS.forEach(area => {
+                const items = tgTabItems(body.querySelector(area.colSel));
+                items.forEach(el => { if (el.dataset.tgPreMin === undefined) el.dataset.tgPreMin = tgIsMinimized(el) ? '1' : '0'; });
+                let saved = '';
+                try { saved = localStorage.getItem(area.store) || ''; } catch (e) {}
+                const pick = items.find(el => tgTabTitle(el) === saved) || items[0];
+                if (pick) selectTgTab(area.key, pick, true);
+            });
+        }
+        function exitTgTabs() {   // back to the stacked / left|right look: put back each card's own minimized state
+            const body = document.getElementById('tgModalBody');
+            if (!body) return;
+            TG_TAB_AREAS.forEach(area => {
+                tgTabItems(body.querySelector(area.colSel)).forEach(el => {
+                    el.classList.remove('tg-tab-active');
+                    if (el.dataset.tgPreMin !== undefined) { tgSetMinimized(el, el.dataset.tgPreMin === '1'); delete el.dataset.tgPreMin; }
+                });
+            });
+        }
+        function toggleTgSplitDir(btn) {
+            const body = document.getElementById('tgModalBody');
+            if (!body) return;
+            const next = body.classList.contains('tg-split-horizontal') ? 'vertical' : 'horizontal';
+            try { localStorage.setItem(SPLIT_DIR_STORAGE_KEY, next); } catch (e) { /* ignore storage errors */ }
+            applyTgSplitDir(next);
+        }
+        function initTgSplitDir() {
+            let dir = 'horizontal';   // default: inputs in one top row, display section below
+            try { dir = localStorage.getItem(SPLIT_DIR_STORAGE_KEY) || 'horizontal'; } catch (e) {}
+            const body = document.getElementById('tgModalBody');
+            try {
+                const px = parseInt(localStorage.getItem(SPLIT_TOP_STORAGE_KEY), 10);
+                if (body && px > 0) body.style.setProperty('--tg-split-top', px + 'px');
+            } catch (e) {}
+            buildTgTabs();
+            // header-click / minimize-all must not collapse the visible tab
+            const mo = new MutationObserver(muts => {
+                if (!tgTabsOn()) return;
+                muts.forEach(m => { const el = m.target; if (el.classList.contains('tg-tab-active') && tgIsMinimized(el)) tgSetMinimized(el, false); });
+            });
+            document.querySelectorAll('.tg-tab-item').forEach(el => mo.observe(el, { attributes: true, attributeFilter: ['class'] }));
+            applyTgSplitDir(dir);
+            const handle = document.getElementById('tgSplitHandle');
+            if (!handle || !body) return;
+            handle.addEventListener('pointerdown', ev => {
+                const horiz = body.classList.contains('tg-split-horizontal');
+                const left = body.querySelector('.tg-modal-col-left');
+                if (!left) return;
+                ev.preventDefault();
+                handle.setPointerCapture(ev.pointerId);
+                body.classList.add('tg-split-dragging');
+                const rect = body.getBoundingClientRect();
+                const move = e => {
+                    if (horiz) {
+                        const px = Math.max(60, Math.min(rect.height - 100, e.clientY - rect.top));
+                        body.style.setProperty('--tg-split-top', px + 'px');
+                    } else {
+                        const px = Math.max(220, Math.min(rect.width - 360, e.clientX - rect.left));
+                        left.style.flexBasis = px + 'px';
+                        left.style.maxWidth = 'none';
+                    }
+                };
+                const up = () => {
+                    handle.removeEventListener('pointermove', move);
+                    handle.removeEventListener('pointerup', up);
+                    body.classList.remove('tg-split-dragging');
+                    if (horiz) {
+                        const px = parseInt(getComputedStyle(body).getPropertyValue('--tg-split-top'), 10);
+                        try { if (px > 0) localStorage.setItem(SPLIT_TOP_STORAGE_KEY, String(px)); } catch (e) {}
+                    }
+                    window.dispatchEvent(new Event('resize'));
+                };
+                handle.addEventListener('pointermove', move);
+                handle.addEventListener('pointerup', up);
+            });
         }
 
         function toggleTgPreviewWindow(checked) {
@@ -15707,6 +15958,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTrailerDashboard();
             init3DSceneTG();
             initTgPreviewDefaults(); // side-by-side layout + all preview panels minimized by default — see its own comment above
+            initTgSplitDir();       // ⬍ top/bottom split option + draggable divider
             setTimeout(resize3DViewerTG, 50); // container may report 0 width on first paint
             const dirSelect = document.getElementById('tgLoadDirectionSelect');
             if (dirSelect) dirSelect.value = (trailerGenLoadDirection === 'out') ? 'out' : 'in';
