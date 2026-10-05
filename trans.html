@@ -10478,7 +10478,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
                 [c].concat(Array.from(c.querySelectorAll('*'))).forEach(el => {
                     Array.from(el.attributes).forEach(a => { if (/^on/i.test(a.name)) el.removeAttribute(a.name); });   // the real handlers run on the dashboard via forwarding
-                    ['data-tg-pan-bound', 'data-tg-zoom-bound', 'data-tg-orient-observed'].forEach(n => el.removeAttribute(n));   // copied "already bound" flags would block the display window's own pan/zoom binding
+                    ['data-tg-pan-bound', 'data-tg-zoom-bound', 'data-tg-orient-observed', 'data-tg-arrows'].forEach(n => el.removeAttribute(n));   // copied "already bound" flags would block the display window's own pan/zoom binding
                 });
                 const sIn = src.querySelectorAll('input,select,textarea'), dIn = c.querySelectorAll('input,select,textarea');
                 dIn.forEach((d, i) => {
@@ -10501,6 +10501,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const inner = w2.querySelector('#tgPreviewScaleInner');
                 if (inner) inner.style.width = (Math.max(1, tgPreviewScaleMult || 1) * tgDispZoomState.zoom * 100) + '%';
                 tgAttachMiddlePan(w2);
+                tgAttachGroupArrows(w2);   // re-group arrows: the copied drawing needs its own drag handler (commit still runs on the dashboard's data)
                 tgAttachWheelZoom(w2, tgDispZoomState);
                 tgApplyOrientScale(w2);
                 if (tgOrientResizeObserver) { w2.dataset.tgOrientObserved = '1'; try { tgOrientResizeObserver.observe(w2); } catch (e) { /* ignore */ } }
@@ -10631,7 +10632,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             root.addEventListener('focusout', () => tgDispSchedule(200));
             // a rebuild is held off while a mouse button is down (orbit / pan in progress)
             root.addEventListener('mousedown', () => { tgDispMouseDown = true; }, true);
+            root.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('.tg-grp-arrow')) tgDispMouseDown = true; }, true);
             w.addEventListener('mouseup', () => { tgDispMouseDown = false; }, true);
+            w.addEventListener('pointerup', () => { tgDispMouseDown = false; }, true);
+            w.addEventListener('pointercancel', () => { tgDispMouseDown = false; }, true);
             w.addEventListener('blur', () => { tgDispMouseDown = false; });
             tg3dBindWindow(w);   // orbit / pan drags are tracked on the popup window
             const col = document.querySelector('.tg-modal-col-right');
@@ -11255,6 +11259,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const d = drag; drag = null;
                 d.h.style.cursor = 'grab'; d.h.removeAttribute('transform');
                 if (cancel) return;
+                if (!d.svg.isConnected || !d.svg.getScreenCTM()) return;   // drawing was re-rendered mid-drag
                 const p = toSvg(e, d.svg), ds = d.h.dataset, edge = ds.edge;
                 let val;
                 if (edge === 'L' || edge === 'R') {
