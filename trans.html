@@ -1030,7 +1030,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.158)</h1>
+            <h1>🚂 Transport Dashboard (Rev.159)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9344,6 +9344,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const gNum = group.groupNumber;
                     groupLineCounters[gNum] = (groupLineCounters[gNum] || 0) + 1;
                     rows.push({
+                        trainId: train.id,
+                        groupId: group.id,
                         trainName: train.name,
                         groupNumber: gNum,
                         groupName: getGroupLabel(gNum),
@@ -11170,6 +11172,104 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return markup.replace(/font-size="([0-9.]+)"/g, (m, v) => `font-size="${+(parseFloat(v) * k).toFixed(3)}"`);
         }
 
+
+        // ---- Draggable group arrows (plan view) ----------------------
+        // Cell model: every (axle line, side) belongs to exactly one axle-
+        // group range. Dragging an edge arrow covers more axles (taken from
+        // whichever range owned them) or fewer (handed to the nearest
+        // neighbouring range on the same row; refused if there is none, or
+        // if another range would end up with no axle). Ranges are then
+        // rebuilt as from/to/row records, split where needed, so Excel push
+        // and every view keep using the same data as the field editor.
+        function tgApplyGroupDrag(trainId, groupId, edge, val, topSide) {
+            const t = trailerGenTrains.find(x => x.id === trainId); if (!t) return false;
+            const A = t.groups.find(g => g.id === groupId); if (!A) return false;
+            const sides = t.axlePairOffsetY ? ['right', 'left'] : ['both'];
+            const maxL = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+            const own = {};
+            t.groups.forEach(g => {
+                for (let n = parseInt(g.from, 10) || 1; n <= (parseInt(g.to, 10) || 0); n++) sides.forEach(s => {
+                    const r = g.row || 'both';
+                    if ((r === 'both' || r === s) && own[n + ':' + s] === undefined) own[n + ':' + s] = g.id;
+                });
+            });
+            let a = Infinity, b = -Infinity; const SA = new Set();
+            Object.keys(own).forEach(k => { if (own[k] !== A.id) return; const [n, s] = k.split(':'); a = Math.min(a, +n); b = Math.max(b, +n); SA.add(s); });
+            if (!SA.size) return false;
+            if (edge === 'L') b = Math.min(maxL, Math.max(a, val));
+            else if (edge === 'R') a = Math.max(1, Math.min(b, val));
+            else if (sides.length === 2) {
+                const side = edge === 'U' ? topSide : (topSide === 'right' ? 'left' : 'right');
+                if (val) SA.add(side); else if (SA.size > 1) SA.delete(side);
+            }
+            const next = {}; Object.keys(own).forEach(k => { if (own[k] !== A.id) next[k] = own[k]; });
+            for (let n = a; n <= b; n++) SA.forEach(s => { next[n + ':' + s] = A.id; });
+            for (const k of Object.keys(own)) {          // cells A released -> nearest neighbour on that row
+                if (own[k] !== A.id || next[k] === A.id) continue;
+                const [n0, s] = k.split(':'); const n = +n0; let taker;
+                for (let d = 1; d <= maxL && taker === undefined; d++) {
+                    [n + d, n - d].forEach(m => { if (taker === undefined && own[m + ':' + s] !== undefined && own[m + ':' + s] !== A.id) taker = own[m + ':' + s]; });
+                }
+                if (taker === undefined) return false;
+                next[k] = taker;
+            }
+            const counts = {}; Object.values(next).forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+            if (t.groups.some(g => !counts[g.id])) return false;
+            const out = [];
+            t.groups.forEach(g => {
+                const runs = []; let cur = null;
+                for (let n = 1; n <= maxL; n++) {
+                    const ss = sides.filter(s => next[n + ':' + s] === g.id);
+                    const key = ss.join(',');
+                    if (!key) { cur = null; continue; }
+                    if (cur && cur.key === key) cur.to = n; else { cur = { key, ss, from: n, to: n }; runs.push(cur); }
+                }
+                runs.forEach((r, i) => {
+                    const row = (t.axlePairOffsetY && r.ss.length === 1) ? r.ss[0] : 'both';
+                    out.push(i === 0 ? Object.assign(g, { from: r.from, to: r.to, row }) : Object.assign({}, g, { id: trailerGenNextGroupId++, from: r.from, to: r.to, row }));
+                });
+            });
+            t.groups = out;
+            renderTrailerDashboard();
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
+            return true;
+        }
+        function tgAttachGroupArrows(wrap) {
+            if (!wrap || wrap.dataset.tgArrows) return;
+            wrap.dataset.tgArrows = '1';
+            let drag = null;
+            const toSvg = (e, svg) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+            wrap.addEventListener('pointerdown', e => {
+                const h = e.target.closest && e.target.closest('.tg-grp-arrow'); if (!h || e.button > 0) return;
+                e.preventDefault(); e.stopPropagation();
+                drag = { h, svg: h.ownerSVGElement, start: toSvg(e, h.ownerSVGElement) };
+                h.setPointerCapture(e.pointerId); h.style.cursor = 'grabbing';
+            }, true);
+            wrap.addEventListener('pointermove', e => {
+                if (!drag) return;
+                const p = toSvg(e, drag.svg);
+                drag.h.setAttribute('transform', `translate(${p.x - drag.start.x} ${p.y - drag.start.y})`);
+            }, true);
+            const finish = (e, cancel) => {
+                if (!drag) return;
+                const d = drag; drag = null;
+                d.h.style.cursor = 'grab'; d.h.removeAttribute('transform');
+                if (cancel) return;
+                const p = toSvg(e, d.svg), ds = d.h.dataset, edge = ds.edge;
+                let val;
+                if (edge === 'L' || edge === 'R') {
+                    const step = parseFloat(ds.step); if (!(step > 0)) return;
+                    val = Math.round((parseFloat(ds.line1) - p.x) / step) + 1;
+                } else {
+                    const mid = (parseFloat(ds.ytop) + parseFloat(ds.ybot)) / 2;
+                    val = edge === 'U' ? p.y < mid : p.y > mid;
+                }
+                tgApplyGroupDrag(parseInt(ds.train, 10), parseInt(ds.group, 10), edge, val, ds.topside);
+            };
+            wrap.addEventListener('pointerup', e => finish(e, false), true);
+            wrap.addEventListener('pointercancel', e => finish(e, true), true);
+        }
+
         function renderTrailerGenPreview() {
             let wrap;
             const inlineWrap = document.getElementById('tgPreview');
@@ -11254,6 +11354,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // #tgPreviewExternalRoot) stays the same node, so re-observing
             // it every render would just pile up duplicate observers.
             tgAttachMiddlePan(wrap);
+            tgAttachGroupArrows(wrap);
             tgAttachWheelZoom(wrap);
             tgApplyOrientScale(wrap);
             if (tgOrientResizeObserver && !wrap.dataset.tgOrientObserved) {
@@ -12057,6 +12158,40 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 }
             }
 
+            // Draggable group arrows (plan view only): each axle-group range
+            // gets a dashed coverage box + 4 edge arrows. Screen-left edge =
+            // highest axle line, screen-right edge = axle line 1 side (lines
+            // count leftwards, +X is right). Up/down arrows only on paired
+            // (Goldhofer/SPMT) trains, where they include/exclude the top or
+            // bottom axle row. Commit happens in tgApplyGroupDrag().
+            let groupArrowSvg = '';
+            (() => {
+                const ent = {};
+                rows.forEach(r => { if (r.groupId == null) return; const k = r.trainId + ':' + r.groupId; (ent[k] = ent[k] || []).push(r); });
+                Object.values(ent).forEach(rs => {
+                    const t = trailerGenTrains.find(tr => tr.id === rs[0].trainId); if (!t) return;
+                    const color = rs[0].color, paired = !!t.axlePairOffsetY;
+                    const px = rs.map(r => sx(r.x)), py = rs.map(r => sy(r.y));
+                    const x1 = Math.min(...px), x2 = Math.max(...px), y1 = Math.min(...py), y2 = Math.max(...py);
+                    const trRows = rows.filter(r => r.trainId === t.id);
+                    const minY = Math.min(...trRows.map(r => r.y)), maxY = Math.max(...trRows.map(r => r.y));
+                    const topSide = (trRows.find(r => r.y === minY) || {}).side || 'both';
+                    const stepPx = (parseFloat(t.spacing) || 0) * scale;
+                    const line1Px = sx(rs[0].x) + (rs[0].axleNumber - 1) * stepPx;
+                    const padX = tgDot(11), padY = tgDot(paired ? 12 : 18), a = tgDot(5);
+                    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+                    groupArrowSvg += `<rect x="${x1 - padX}" y="${y1 - padY}" width="${x2 - x1 + 2 * padX}" height="${y2 - y1 + 2 * padY}" fill="none" stroke="${color}" stroke-width="1" stroke-dasharray="4 3" opacity="0.7" pointer-events="none"/>`;
+                    const mk = (edge, pts, label) => `<polygon class="tg-grp-arrow" data-edge="${edge}" data-train="${t.id}" data-group="${rs[0].groupId}" data-line1="${line1Px}" data-step="${stepPx}" data-ytop="${sy(minY)}" data-ybot="${sy(maxY)}" data-topside="${topSide}" points="${pts}" fill="${color}" stroke="var(--tank-box-bg, #0b1220)" stroke-width="1" style="cursor:grab;touch-action:none"><title>${label}</title></polygon>`;
+                    const hx = x2 + padX, lx = x1 - padX;
+                    groupArrowSvg += mk('R', `${hx + a * 1.6},${my} ${hx},${my - a} ${hx},${my + a}`, 'Drag left/right to change which axle lines this group covers');
+                    groupArrowSvg += mk('L', `${lx - a * 1.6},${my} ${lx},${my - a} ${lx},${my + a}`, 'Drag left/right to change which axle lines this group covers');
+                    if (paired) {
+                        groupArrowSvg += mk('U', `${mx},${y1 - padY - a * 1.6} ${mx - a},${y1 - padY} ${mx + a},${y1 - padY}`, 'Drag up/down to include or exclude the top axle row');
+                        groupArrowSvg += mk('D', `${mx},${y2 + padY + a * 1.6} ${mx - a},${y2 + padY} ${mx + a},${y2 + padY}`, 'Drag up/down to include or exclude the bottom axle row');
+                    }
+                });
+            })();
+
             let splitMarkersSvg = '';
             trailerGenTrains.forEach(train => {
                 const segments = parseCadSplitString(train.cadSplit);
@@ -12105,7 +12240,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}
+                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}${groupArrowSvg}
                 <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
