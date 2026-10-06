@@ -1046,7 +1046,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.161)</h1>
+            <h1>🚂 Transport Dashboard (Rev.161.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9327,24 +9327,29 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             tgAxleSel = { trainId: null, set: new Set(), anchor: null, sides: 'both' };
             renderTrailerGenPreview();
         }
-        function tgAxleClick(ev, trainId, axleNum) {
+        function tgAxleClick(ev, trainId, axleNum, side) {
             if (ev && ev.stopPropagation) ev.stopPropagation();
             const s = tgAxleSel;
+            const sd = (side === 'right' || side === 'left') ? side : 'both';   // wheel clicked (paired trailers) — selects just that wheel
             const toggle = !!(ev && (ev.ctrlKey || ev.metaKey));
             const range = !!(ev && ev.shiftKey);
-            if (s.trainId !== trainId) { s.trainId = trainId; s.set = new Set(); s.anchor = null; s.sides = 'both'; }
+            if (s.trainId !== trainId) { s.trainId = trainId; s.set = new Set(); s.anchor = null; s.sides = sd; }
+            const fresh = s.set.size === 0;
             if (range && s.anchor != null) {
                 const a = Math.min(s.anchor, axleNum), b = Math.max(s.anchor, axleNum);
                 if (!toggle) s.set = new Set();
                 for (let i = a; i <= b; i++) s.set.add(i);
+                s.sides = (fresh || s.sides === sd) ? sd : 'both';
             } else if (toggle) {
                 if (s.set.has(axleNum)) s.set.delete(axleNum); else s.set.add(axleNum);
                 s.anchor = axleNum;
+                s.sides = (fresh || s.sides === sd) ? sd : 'both';
             } else {
-                if (s.set.size === 1 && s.set.has(axleNum)) s.set = new Set(); else s.set = new Set([axleNum]);
+                if (s.set.size === 1 && s.set.has(axleNum) && s.sides === sd) s.set = new Set();
+                else { s.set = new Set([axleNum]); s.sides = sd; }
                 s.anchor = axleNum;
             }
-            if (!s.set.size) { s.trainId = null; s.anchor = null; }
+            if (!s.set.size) { s.trainId = null; s.anchor = null; s.sides = 'both'; }
             renderTrailerGenPreview();
         }
         function tgAxleSetSides(v) {
@@ -11675,8 +11680,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     if (axTr) {
                         const sideTxt = r.side === 'both' ? '' : ` (${r.side})`;
                         axleHitSvg += `<rect x="${(cx - tgDot(7)).toFixed(1)}" y="${(y - tgDot(axHalfH + 1)).toFixed(1)}" width="${tgDot(14)}" height="${tgDot(2 * axHalfH + 2)}" fill="transparent" style="cursor:pointer;user-select:none;" data-axgrp="${axKey}" ` +
-                            `onmouseenter="tgAxleHover(this,true)" onmouseleave="tgAxleHover(this,false)" onclick="tgAxleClick(event,${axTr.id},${r.axleNumber})">` +
-                            `<title>${escapeHtml(r.trainName)} · axle ${r.axleNumber}${sideTxt} · ${escapeHtml(r.groupName)} · ${r.noLoad ? 'no load' : 'load ' + r.load} — click: select · shift-click: range · ctrl-click: add/remove, then pick a group</title></rect>`;
+                            `onmouseenter="tgAxleHover(this,true)" onmouseleave="tgAxleHover(this,false)" onclick="tgAxleClick(event,${axTr.id},${r.axleNumber},'${r.side}')">` +
+                            `<title>${escapeHtml(r.trainName)} · axle ${r.axleNumber}${sideTxt} · ${escapeHtml(r.groupName)} · ${r.noLoad ? 'no load' : 'load ' + r.load} — click: select this wheel/axle · shift-click: range · ctrl-click: add/remove, then pick a group</title></rect>`;
                     }
                     if (axSel) {
                         const affected = !r.paired || tgAxleSel.sides === 'both' || tgAxleSel.sides === r.side;
@@ -12304,12 +12309,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         } else if (it.kind === 'side') {
                             const on = tgAxleSel.sides === it.v;
                             g += `<g style="cursor:pointer;" onclick="event.stopPropagation();tgAxleSetSides('${it.v}')">` +
-                                `<rect x="${px.toFixed(1)}" y="${py0.toFixed(1)}" width="${it.w.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${on ? 'var(--accent-blue, #38bdf8)' : 'none'}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                                `<rect x="${px.toFixed(1)}" y="${py0.toFixed(1)}" width="${it.w.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${on ? 'var(--accent-blue, #38bdf8)' : 'transparent'}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
                                 `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="7" font-weight="700" text-anchor="middle" fill="${on ? '#06202e' : 'var(--accent-blue, #38bdf8)'}" pointer-events="none">${it.t}</text>` +
                                 `<title>${it.v === 'both' ? 'Change both wheels of the selected axle line(s)' : 'Change only the ' + it.v + ' wheel of the selected axle line(s)'}</title></g>`;
                         } else {
                             g += `<g style="cursor:pointer;" onclick="event.stopPropagation();tgAxleSelClear()">` +
-                                `<rect x="${px.toFixed(1)}" y="${py0.toFixed(1)}" width="${it.w.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
+                                `<rect x="${px.toFixed(1)}" y="${py0.toFixed(1)}" width="${it.w.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="transparent" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
                                 `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="7.5" font-weight="700" text-anchor="middle" fill="var(--text-muted, #94a3b8)" pointer-events="none">✕</text>` +
                                 `<title>Clear axle selection (Esc)</title></g>`;
                         }
