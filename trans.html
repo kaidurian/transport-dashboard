@@ -791,7 +791,7 @@
             cursor: pointer; white-space: nowrap;
         }
         .tg-cad-split-auto-btn:hover { background: var(--accent-blue); color: #06202e; }
-        .tg-cad-split-status { margin-top: 5px; font-size: 10.5px; color: var(--text-muted); }
+        .tg-cad-split-status { margin-top: 5px; font-size: 10.5px; color: var(--text-muted); cursor: help; }
         .tg-cad-split-status.tg-cad-split-error { color: #ef4444; }
 
         .tg-add-train-btn {
@@ -1046,7 +1046,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.160)</h1>
+            <h1>🚂 Transport Dashboard (Rev.161)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9231,31 +9231,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
         }
 
-        // Live "N + M = total ✓/✗" validation line shown under a train's
-        // AutoCAD split input.
+        // Split status: compact text ("= 12 ✓") in the cell, full explanation ("4 + 4 + 4 = 12 ✓ ...") in the hover tooltip.
+        function cadSplitStatusInfo(train, axleCount) {
+            const segments = parseCadSplitString(train.cadSplit);
+            if (!segments) return { short: 'Auto', full: `Auto — one AutoCAD block for all ${axleCount} axle line(s).`, error: false };
+            const sum = segments.reduce((s, n) => s + n, 0);
+            const unmapped = segments.filter(n => !CAD_BLOCK_MAP[n]);
+            const eq = segments.join(' + ');
+            if (sum !== axleCount) return { short: `= ${sum} ✗`, full: `${eq} = ${sum}, but this train has ${axleCount} axle line(s) — fix before export.`, error: true };
+            if (unmapped.length) return { short: `= ${sum} ✓ ⚠`, full: `${eq} = ${sum} ✓, but ${unmapped.join('/')}-line block(s) not mapped in CAD_BLOCK_MAP.`, error: true };
+            return { short: `= ${sum} ✓`, full: `${eq} = ${sum} ✓`, error: false };
+        }
+
+        // Live validation shown next to a train's AutoCAD split input.
         function updateCadSplitStatus(trainId) {
             const train = trailerGenTrains.find(t => t.id === trainId);
             const el = document.getElementById(`tgCadSplitStatus_${trainId}`);
             if (!train || !el) return;
             const axleCount = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
-            const segments = parseCadSplitString(train.cadSplit);
-            if (!segments) {
-                el.textContent = `Auto — one AutoCAD block for all ${axleCount} axle line(s).`;
-                el.classList.remove('tg-cad-split-error');
-                return;
-            }
-            const sum = segments.reduce((s, n) => s + n, 0);
-            const unmapped = segments.filter(n => !CAD_BLOCK_MAP[n]);
-            if (sum !== axleCount) {
-                el.textContent = `${segments.join(' + ')} = ${sum}, but this train has ${axleCount} axle line(s) — fix before export.`;
-                el.classList.add('tg-cad-split-error');
-            } else if (unmapped.length) {
-                el.textContent = `${segments.join(' + ')} = ${sum} ✓, but ${unmapped.join('/')}-line block(s) not mapped in CAD_BLOCK_MAP.`;
-                el.classList.add('tg-cad-split-error');
-            } else {
-                el.textContent = `${segments.join(' + ')} = ${sum} ✓ `;
-                el.classList.remove('tg-cad-split-error');
-            }
+            const info = cadSplitStatusInfo(train, axleCount);
+            el.textContent = info.short;
+            el.title = info.full;
+            el.classList.toggle('tg-cad-split-error', info.error);
         }
 
         function addAxleGroup(trainId) {
@@ -9319,6 +9316,118 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTrailerGenPreview();
             scheduleAutoPush('pushDataToExcel', pushDataToExcel);
         }
+
+        // ---- 2D plan view: select axle lines by clicking, then assign them to a hydraulic group ----
+        // click = select one line (click again = deselect) · shift-click = range from the last click ·
+        // ctrl/cmd-click = add/remove one line · then pick G1..G4 in the popup above the selection.
+        // Preset trailers (right/left wheel pair per line): the popup's Both / R / L switch decides which side(s) change.
+        // Assigning rewrites the train's axle-group ranges (split/merge as needed) and auto-pushes to Excel.
+        let tgAxleSel = { trainId: null, set: new Set(), anchor: null, sides: 'both' };
+        function tgAxleSelClear() {
+            tgAxleSel = { trainId: null, set: new Set(), anchor: null, sides: 'both' };
+            renderTrailerGenPreview();
+        }
+        function tgAxleClick(ev, trainId, axleNum) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            const s = tgAxleSel;
+            const toggle = !!(ev && (ev.ctrlKey || ev.metaKey));
+            const range = !!(ev && ev.shiftKey);
+            if (s.trainId !== trainId) { s.trainId = trainId; s.set = new Set(); s.anchor = null; s.sides = 'both'; }
+            if (range && s.anchor != null) {
+                const a = Math.min(s.anchor, axleNum), b = Math.max(s.anchor, axleNum);
+                if (!toggle) s.set = new Set();
+                for (let i = a; i <= b; i++) s.set.add(i);
+            } else if (toggle) {
+                if (s.set.has(axleNum)) s.set.delete(axleNum); else s.set.add(axleNum);
+                s.anchor = axleNum;
+            } else {
+                if (s.set.size === 1 && s.set.has(axleNum)) s.set = new Set(); else s.set = new Set([axleNum]);
+                s.anchor = axleNum;
+            }
+            if (!s.set.size) { s.trainId = null; s.anchor = null; }
+            renderTrailerGenPreview();
+        }
+        function tgAxleSetSides(v) {
+            tgAxleSel.sides = (v === 'right' || v === 'left') ? v : 'both';
+            renderTrailerGenPreview();
+        }
+        // Hover: outline every axle of the same train + group (works in the separate display window too).
+        function tgAxleHover(el, on) {
+            const key = el.getAttribute('data-axgrp');
+            if (!key) return;
+            el.ownerDocument.querySelectorAll('rect[data-axvis]').forEach(n => {
+                if (n.getAttribute('data-axgrp') !== key) return;
+                n.style.stroke = on ? '#ffffff' : '';
+                n.style.strokeWidth = on ? '1.6' : '';
+            });
+        }
+        function tgAxleAssign(groupNumber) {
+            const s = tgAxleSel;
+            const train = trailerGenTrains.find(t => t.id === s.trainId);
+            if (!train || !s.set.size) return;
+            const maxAxle = train.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
+            const paired = !!train.axlePairOffsetY;
+            const sides = paired ? ['right', 'left'] : ['both'];
+            const targetSides = paired ? (s.sides === 'both' ? ['right', 'left'] : [s.sides]) : ['both'];
+            const findG = (axleNum, side) => train.groups.find(g => {
+                const from = parseInt(g.from, 10) || 0, to = parseInt(g.to, 10) || 0;
+                if (axleNum < from || axleNum > to) return false;
+                const r = g.row || 'both';
+                return r === 'both' || r === side;
+            });
+            const info = {};
+            sides.forEach(sd => {
+                info[sd] = [];
+                for (let a = 1; a <= maxAxle; a++) {
+                    const g = findG(a, sd);
+                    info[sd].push(g ? { groupNumber: g.groupNumber, load: Number(g.load) || 0, noLoad: !!g.noLoad } : null);
+                }
+            });
+            const nums = [...s.set].filter(a => a >= 1 && a <= maxAxle).sort((a, b) => a - b);
+            if (!nums.length) return;
+            // Load for the target group: reuse the load of the train's existing group with that number, else keep the replaced axle's load.
+            const same = train.groups.find(g => g.groupNumber === groupNumber);
+            const prev = info[targetSides[0]][nums[0] - 1];
+            const tgt = same ? { load: Number(same.load) || 0, noLoad: !!same.noLoad }
+                : prev ? { load: prev.load, noLoad: prev.noLoad } : { load: 25, noLoad: false };
+            nums.forEach(a => targetSides.forEach(sd => { info[sd][a - 1] = { groupNumber, load: tgt.load, noLoad: tgt.noLoad }; }));
+            const runs = sd => {
+                const out = []; let cur = null;
+                info[sd].forEach((v, i) => {
+                    const a = i + 1;
+                    if (!v) { cur = null; return; }
+                    if (cur && cur.groupNumber === v.groupNumber && cur.load === v.load && cur.noLoad === v.noLoad && cur.to === a - 1) cur.to = a;
+                    else { cur = { ...v, from: a, to: a }; out.push(cur); }
+                });
+                return out;
+            };
+            let ranges;
+            if (!paired) ranges = runs('both').map(r => ({ ...r, row: 'both' }));
+            else {
+                const L = runs('left'), R = runs('right'), used = new Set();
+                ranges = [];
+                L.forEach(lr => {
+                    const i = R.findIndex((rr, k) => !used.has(k) && rr.from === lr.from && rr.to === lr.to && rr.groupNumber === lr.groupNumber && rr.load === lr.load && rr.noLoad === lr.noLoad);
+                    if (i !== -1) { used.add(i); ranges.push({ ...lr, row: 'both' }); } else ranges.push({ ...lr, row: 'left' });
+                });
+                R.forEach((rr, k) => { if (!used.has(k)) ranges.push({ ...rr, row: 'right' }); });
+                ranges.sort((a, b) => a.from - b.from || (a.row === 'both' ? -1 : 0) - (b.row === 'both' ? -1 : 0));
+            }
+            train.groups = ranges.map(r => {
+                const g = defaultAxleGroup(r.from, r.to, r.load, r.groupNumber, r.row);
+                g.noLoad = r.noLoad;
+                return g;
+            });
+            const txt = nums.length === 1 ? `axle ${nums[0]}` : `axles ${nums[0]}–${nums[nums.length - 1]}`;
+            logMsg(`⬌ ${train.name}: ${txt}${paired && targetSides.length === 1 ? ` (${targetSides[0]})` : ''} → ${getGroupLabel(groupNumber)}`);
+            tgAxleSel = { trainId: null, set: new Set(), anchor: null, sides: 'both' };
+            renderTrailerDashboard();
+            if (trailerGenTrains[0]) pushValueToInputCell(INPUT_NUM_GROUPS_CELL, trailerGenTrains[0].groups.length, 'Number of Hydraulic Groups');
+            scheduleAutoPush('pushDataToExcel', pushDataToExcel);
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && tgAxleSel.set.size && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '')) tgAxleSelClear();
+        });
 
         // Expands all trains into individual PHYSICAL axle rows, in train
         // then axle-line then side (right, then left) order, matching the
@@ -9558,19 +9667,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                    title="Leave blank for one AutoCAD block covering all axle lines. Enter comma-separated axle-line counts (matching CAD_BLOCK_MAP, e.g. 4,6) to insert one block per physical unit instead."
                                    onchange="updateTrailerGenField(${train.id}, 'cadSplit', this.value)">
                             <button type="button" class="tg-cad-split-auto-btn"
-                                    title="Recalculate the AutoCAD split from this train's CURRENT axle line count — fills in as many 4-line modules as fit, with the final module (up to 6 lines) taking whatever's left over (e.g. 10 axle lines -> 4,6). Trailer-type presets already auto-fill this on selection; use this button after manually changing axle groups so a stale split doesn't go stale/mismatched."
-                                    onclick="applyAutoCadSplit(${train.id})">↻ Recalc Split</button>
+                                    title="↻ Recalc Split — recalculate the AutoCAD split from this train's CURRENT axle line count — fills in as many 4-line modules as fit, with the final module (up to 6 lines) taking whatever's left over (e.g. 10 axle lines -> 4,6). Trailer-type presets already auto-fill this on selection; use this button after manually changing axle groups so a stale split doesn't go stale/mismatched."
+                                    onclick="applyAutoCadSplit(${train.id})" aria-label="Recalc Split">↻</button>
                         </div>
-                        <div class="tg-cad-split-status" id="tgCadSplitStatus_${train.id}">${(() => {
-                            const axleCount = maxAxle;
-                            const segments = parseCadSplitString(train.cadSplit);
-                            if (!segments) return `Auto — one AutoCAD block for all ${axleCount} axle line(s).`;
-                            const sum = segments.reduce((s, n) => s + n, 0);
-                            const unmapped = segments.filter(n => !CAD_BLOCK_MAP[n]);
-                            if (sum !== axleCount) return `${segments.join(' + ')} = ${sum}, but this train has ${axleCount} axle line(s) — fix before export.`;
-                            if (unmapped.length) return `${segments.join(' + ')} = ${sum} ✓, but ${unmapped.join('/')}-line block(s) not mapped in CAD_BLOCK_MAP.`;
-                            return `${segments.join(' + ')} = ${sum} ✓ `;
-                        })()}</div>
+                        ${(() => {
+                            const info = cadSplitStatusInfo(train, maxAxle);
+                            return `<div class="tg-cad-split-status${info.error ? ' tg-cad-split-error' : ''}" id="tgCadSplitStatus_${train.id}" title="${info.full.replace(/"/g, '&quot;')}">${info.short}</div>`;
+                        })()}
                     </div>
 
                     <div class="tg-groups-label">Axle groups (custom load per axle range)</div>
@@ -10111,7 +10214,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const inp = d.split.querySelector('input[type="text"]'), btn = d.split.querySelector('.tg-cad-split-auto-btn'), st = d.split.querySelector('.tg-cad-split-status');
                     if (inp) wS.appendChild(inp);
                     if (btn) wS.appendChild(btn);
-                    if (st) { st.title = st.textContent.trim(); wS.appendChild(st); }
+                    if (st) { if (!st.title) st.title = st.textContent.trim(); wS.appendChild(st); }
                 }
                 for (let gi = 0; gi < G; gi++) {
                     const g = d.groups[gi];
@@ -11554,6 +11657,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             let linesSvg = '';
             let axlesSvg = '';
+            let axleHitSvg = '';   // transparent click targets + selection rings, drawn ABOVE cargo so cargo boxes never block axle clicks
             const trainSpines = {};
             trainClusterOrder.forEach(key => {
                 const c = trainClusters[key];
@@ -11564,14 +11668,30 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 c.rows.forEach(r => {
                     const cx = sx(r.x);
                     const opacity = r.noLoad ? 0.35 : 0.9;
+                    const axTr = trailerGenTrains.find(t => t.name === r.trainName);
+                    const axKey = `${axTr ? axTr.id : 0}|${r.groupNumber}`;
+                    const axHalfH = r.paired ? 6 : 12;
+                    const axSel = !!(axTr && tgAxleSel.trainId === axTr.id && tgAxleSel.set.has(r.axleNumber));
+                    if (axTr) {
+                        const sideTxt = r.side === 'both' ? '' : ` (${r.side})`;
+                        axleHitSvg += `<rect x="${(cx - tgDot(7)).toFixed(1)}" y="${(y - tgDot(axHalfH + 1)).toFixed(1)}" width="${tgDot(14)}" height="${tgDot(2 * axHalfH + 2)}" fill="transparent" style="cursor:pointer;user-select:none;" data-axgrp="${axKey}" ` +
+                            `onmouseenter="tgAxleHover(this,true)" onmouseleave="tgAxleHover(this,false)" onclick="tgAxleClick(event,${axTr.id},${r.axleNumber})">` +
+                            `<title>${escapeHtml(r.trainName)} · axle ${r.axleNumber}${sideTxt} · ${escapeHtml(r.groupName)} · ${r.noLoad ? 'no load' : 'load ' + r.load} — click: select · shift-click: range · ctrl-click: add/remove, then pick a group</title></rect>`;
+                    }
+                    if (axSel) {
+                        const affected = !r.paired || tgAxleSel.sides === 'both' || tgAxleSel.sides === r.side;
+                        axleHitSvg += `<rect x="${(cx - tgDot(7)).toFixed(1)}" y="${(y - tgDot(axHalfH + 2)).toFixed(1)}" width="${tgDot(14)}" height="${tgDot(2 * axHalfH + 4)}" rx="${tgDot(3)}" fill="none" ` +
+                            `stroke="var(--accent-blue, #38bdf8)" stroke-width="${affected ? 2 : 1}" ${affected ? '' : 'stroke-dasharray="2 2"'} pointer-events="none"/>`;
+                    }
+                    const axAttr = `data-axvis="1" data-axgrp="${axKey}"`;
                     if (r.paired) {
                         // Preset trailer: this row is ONE physical axle
                         // (right or left) of a line — draw it as a small
                         // wheel box; the connecting beam to its opposite
                         // side is drawn separately in pairBeamSvg.
-                        axlesSvg += `<rect x="${cx - tgDot(5)}" y="${y - tgDot(6)}" width="${tgDot(10)}" height="${tgDot(12)}" rx="${tgDot(2.5)}" fill="${c.color}" opacity="${opacity}"/>`;
+                        axlesSvg += `<rect ${axAttr} x="${cx - tgDot(5)}" y="${y - tgDot(6)}" width="${tgDot(10)}" height="${tgDot(12)}" rx="${tgDot(2.5)}" fill="${c.color}" opacity="${opacity}"/>`;
                     } else {
-                        axlesSvg += `<rect x="${cx - tgDot(5)}" y="${y - tgDot(12)}" width="${tgDot(10)}" height="${tgDot(24)}" rx="${tgDot(3)}" fill="${c.color}" opacity="${opacity}"/>`;
+                        axlesSvg += `<rect ${axAttr} x="${cx - tgDot(5)}" y="${y - tgDot(12)}" width="${tgDot(10)}" height="${tgDot(24)}" rx="${tgDot(3)}" fill="${c.color}" opacity="${opacity}"/>`;
                     }
                 });
                 const centerX = pts.reduce((a, b) => a + b, 0) / pts.length;
@@ -12143,6 +12263,63 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // already-computed position; it just adds blank margin
             // past the (fixed-size) bordered plot box.
             const svgW = Math.max(layoutSvgW, forcedSvgW || 0);
+            // Axle-selection popup (SVG, so it also works in the separate display window): [axles] [G1..G4] [Both|R|L] [✕]
+            let axlePopupSvg = '';
+            if (tgAxleSel.trainId != null && tgAxleSel.set.size) {
+                const pTrain = trailerGenTrains.find(t => t.id === tgAxleSel.trainId);
+                const trAll = pTrain ? rows.filter(r => r.trainName === pTrain.name) : [];
+                const selRows = trAll.filter(r => tgAxleSel.set.has(r.axleNumber));
+                if (pTrain && selRows.length) {
+                    const nums = [...new Set(selRows.map(r => r.axleNumber))].sort((a, b) => a - b);
+                    const contiguous = nums.every((n, i) => i === 0 || n === nums[i - 1] + 1);
+                    const axTxt = nums.length === 1 ? `axle ${nums[0]}` : contiguous ? `axles ${nums[0]}–${nums[nums.length - 1]}` : `axles ${nums.length > 6 ? nums.slice(0, 6).join(',') + '…' : nums.join(',')}`;
+                    const lbl = `${String(pTrain.name).replace(/^\s*train\s*/i, 'T')} · ${axTxt}`;
+                    const bh = tgDot(14), gap = tgDot(3);
+                    const lblW = Math.max(tgDot(46), lbl.length * tgDot(3.8) + tgDot(8));
+                    const paired = !!pTrain.axlePairOffsetY;
+                    const items = [{ kind: 'label', w: lblW }];
+                    TRAILER_GROUP_DEFS.forEach(gd => items.push({ kind: 'grp', w: tgDot(24), gd }));
+                    if (paired) [['both', 'Both'], ['right', 'R'], ['left', 'L']].forEach(([v, t]) => items.push({ kind: 'side', w: tgDot(v === 'both' ? 26 : 16), v, t }));
+                    items.push({ kind: 'x', w: tgDot(14) });
+                    const totalW = items.reduce((a, it) => a + it.w + gap, -gap);
+                    const cxs = selRows.map(r => sx(r.x));
+                    const midX = (Math.min(...cxs) + Math.max(...cxs)) / 2;
+                    const topY = Math.min(...trAll.map(r => sy(r.y))) - tgDot(paired ? 6 : 12);
+                    const botY = Math.max(...trAll.map(r => sy(r.y))) + tgDot(paired ? 6 : 12);
+                    let px0 = Math.min(Math.max(2, midX - totalW / 2), Math.max(2, svgW - totalW - 2));
+                    let py0 = topY - tgDot(10) - bh;
+                    if (py0 < 2) py0 = botY + tgDot(10);
+                    let px = px0;
+                    let g = `<g>`;
+                    g += `<rect x="${(px0 - 3).toFixed(1)}" y="${(py0 - 3).toFixed(1)}" width="${(totalW + 6).toFixed(1)}" height="${(bh + 6).toFixed(1)}" rx="4" fill="var(--tank-box-bg, #0b1220)" stroke="var(--accent-blue, #38bdf8)" stroke-width="1" opacity="0.97"/>`;
+                    items.forEach(it => {
+                        const cx = px + it.w / 2, cy = py0 + bh / 2 + 2.4;
+                        if (it.kind === 'label') {
+                            g += `<text x="${(px + it.w / 2).toFixed(1)}" y="${cy.toFixed(1)}" font-size="7" font-weight="700" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${escapeHtml(lbl)}</text>`;
+                        } else if (it.kind === 'grp') {
+                            g += `<g style="cursor:pointer;" onclick="event.stopPropagation();tgAxleAssign(${it.gd.number})">` +
+                                `<rect x="${px.toFixed(1)}" y="${py0.toFixed(1)}" width="${it.w.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${it.gd.color}"/>` +
+                                `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="7.5" font-weight="700" text-anchor="middle" fill="#fff" pointer-events="none">G${it.gd.number}</text>` +
+                                `<title>Assign ${escapeHtml(lbl)} to ${it.gd.label}${paired ? ' (' + (tgAxleSel.sides === 'both' ? 'both wheels' : tgAxleSel.sides + ' wheel only') + ')' : ''}</title></g>`;
+                        } else if (it.kind === 'side') {
+                            const on = tgAxleSel.sides === it.v;
+                            g += `<g style="cursor:pointer;" onclick="event.stopPropagation();tgAxleSetSides('${it.v}')">` +
+                                `<rect x="${px.toFixed(1)}" y="${py0.toFixed(1)}" width="${it.w.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${on ? 'var(--accent-blue, #38bdf8)' : 'none'}" stroke="var(--accent-blue, #38bdf8)" stroke-width="1"/>` +
+                                `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="7" font-weight="700" text-anchor="middle" fill="${on ? '#06202e' : 'var(--accent-blue, #38bdf8)'}" pointer-events="none">${it.t}</text>` +
+                                `<title>${it.v === 'both' ? 'Change both wheels of the selected axle line(s)' : 'Change only the ' + it.v + ' wheel of the selected axle line(s)'}</title></g>`;
+                        } else {
+                            g += `<g style="cursor:pointer;" onclick="event.stopPropagation();tgAxleSelClear()">` +
+                                `<rect x="${px.toFixed(1)}" y="${py0.toFixed(1)}" width="${it.w.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1"/>` +
+                                `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="7.5" font-weight="700" text-anchor="middle" fill="var(--text-muted, #94a3b8)" pointer-events="none">✕</text>` +
+                                `<title>Clear axle selection (Esc)</title></g>`;
+                        }
+                        px += it.w + gap;
+                    });
+                    g += `</g>`;
+                    axlePopupSvg = g;
+                }
+            }
+
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH + 12 + 8 * Math.max(1, tgFontK)}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -12153,7 +12330,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}
+                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${axleHitSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}${axlePopupSvg}
                 <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
