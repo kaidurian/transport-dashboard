@@ -1046,7 +1046,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.161.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.163)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1065,6 +1065,7 @@
             <button type="button" id="appSplitDirBtn" title="Split direction (needs Preview beside on): currently left | right. Click for top / bottom — input tabs above, display tabs below (click a tab for its full view); drag the bar between them to resize." onclick="toggleTgSplitDir(this)">⬍</button>
             <button type="button" id="appBesideBtn" title="Top / bottom only: show the preview beside the inputs — input tabs on the left, display tabs (2D Drawing → Transport Data) on the right. Click again to put the display tabs back below." onclick="toggleTgBeside()">⇔</button>
             <button type="button" id="tgDispWinBtn" title="Display window: open 2D Drawing → Transport Data w/ CoG Env Summary in a separate window (second monitor), as tabs. Clicks, toggles and selects there act on this dashboard; 2D and 3D take the same mouse controls there as here; the Active-lashing picker there sets which Lashing point a click on an L# sign in the 2D drawing assigns to." onclick="toggleTgDisplayWindow()">🗗</button>
+            <button type="button" id="tgChallengeBtn" title="Challenge: practice game (Plan the Move). Training-grade, offline — does not read or write Excel." onclick="tgChallengeOpen()">🎮</button>
             <button type="button" id="appMinimizeAllBtn" title="Minimize all cards and previews (show only their headers)" onclick="toggleAllTgMinimize(this)">▢</button>
         </div>
     </header>
@@ -17173,5 +17174,258 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (trailerGenTrains.length === 0) initDashboard();
         }, 1500);
     </script>
+<script>
+/* ===== Challenge mode (training-grade) — self-contained, lazy UI, never touches Excel or trailer/cargo state ===== */
+(function () {
+    'use strict';
+
+    // ---- Training constants (simplified model, NOT the Excel method) ----
+    const PITCH = 1.5;      // m between axle lines
+    const TRK = 2.43;       // m width of one trailer
+    const DECK = 1.5;       // m deck height above ground
+    const AXW = 3.5;        // t self-weight per axle line
+    const TRAILER_Z = 0.9;  // m trailer CoG height
+    const OVERHANG = 1.0;   // m max cargo overhang each side of platform
+    const SIDE_OFF = 0.4;   // m, rear support points sit this far inside the platform edge
+    const ENV = 0.05;       // 5 % CoG envelope (same idea as the CoG Envelope card)
+    const SWAY_DEG = 1.5;   // allowance on top of slope + crossfall
+    const G = 9.81;
+
+    const SCENARIOS = [
+        { id: 'S1', title: 'Pump skid on a gentle ramp',
+          brief: 'Easy start. One trailer is enough, but watch the overhang and keep the front/rear groups reasonable.',
+          cargo: { mass: 180, dim: [12, 4, 3.5], cog: [0.8, 0.0, 1.6] },
+          route: { slope: 3, crossfall: 1, gbp: 150, widthMax: 6 }, axleLimit: 36, maxLines: 40, par: 8 },
+        { id: 'S2', title: 'Reactor on a 6 % ramp',
+          brief: 'Heavy and wide: 620 t, 6 m across. Find enough axle lines and keep the support triangle under the CoG.',
+          cargo: { mass: 620, dim: [16, 6, 6], cog: [1.5, 0.3, 2.9] },
+          route: { slope: 6, crossfall: 2, gbp: 120, widthMax: 7.5 }, axleLimit: 36, maxLines: 48, par: 24 },
+        { id: 'S3', title: 'Offset module on soft ground',
+          brief: 'CoG sits well off-centre and the ground is soft. Shift the cargo, use enough area, and keep the groups balanced.',
+          cargo: { mass: 340, dim: [16, 5.5, 4], cog: [-2.4, 0.6, 2.0] },
+          route: { slope: 4, crossfall: 2, gbp: 60, widthMax: 7 }, axleLimit: 36, maxLines: 48, par: 28 }
+    ];
+
+    // ---- Calc core -------------------------------------------------------------
+    function reactions(P, W, cx, cy) {            // 3-point support: P = {F:[x,0], L:[x,-y], R:[x,y]}
+        const xF = P.F[0], xR = P.L[0], wy = P.R[1];
+        const R1 = W * (cx - xR) / (xF - xR);
+        const rest = W - R1, d = W * cy / wy;
+        return { F: R1, L: (rest - d) / 2, R: (rest + d) / 2 };
+    }
+    function edgeDist(p, a, b) {                  // signed distance, + = inside (triangle is CCW)
+        const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+        return (dx * (p[1] - a[1]) - dy * (p[0] - a[0])) / len;
+    }
+    function evaluate(sc, cfg) {
+        const nT = cfg.nT, N = cfg.N, k = Math.max(1, Math.min(N - 1, cfg.k)), shift = cfg.shift, shiftY = cfg.shiftY || 0;
+        const Lp = N * PITCH, Wp = nT * TRK;
+        const Mt = AXW * N * nT, Mc = sc.cargo.mass, M = Mc + Mt;
+        const [Lc, Wc, Hc] = sc.cargo.dim;
+        const xs = i => (i - (N - 1) / 2) * PITCH;
+        const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+        const idxF = [], idxR = [];
+        for (let i = 0; i < N; i++) (i >= N - k ? idxF : idxR).push(i);
+        const xF = mean(idxF.map(xs)), xR = mean(idxR.map(xs));
+        const wy = Wp / 2 - SIDE_OFF;
+        const P = { F: [xF, 0], L: [xR, -wy], R: [xR, wy] };
+        // CCW order for the signed distances: F -> R? build so inside is positive
+        const tri = [P.F, P.L, P.R];
+        const area2 = (tri[1][0] - tri[0][0]) * (tri[2][1] - tri[0][1]) - (tri[2][0] - tri[0][0]) * (tri[1][1] - tri[0][1]);
+        if (area2 < 0) tri.reverse();
+
+        const zC = DECK + sc.cargo.cog[2];
+        const down = zC * sc.route.slope / 100;               // slope widens the X envelope (downhill shift)
+        const envX = Lc * ENV, envY = Wc * ENV, envZ = Hc * ENV;
+        const mk = (name, sx, sy, hx) => ({ name, dx: sx * hx, dy: sy * envY / 2, dz: envZ / 2 });
+        const cases = [{ name: 'Nominal', dx: 0, dy: 0, dz: 0 }];
+        const hx = envX / 2, hxs = (envX + down) / 2;
+        [[1, -1], [-1, -1], [-1, 1], [1, 1]].forEach((s, i) => cases.push(mk('LC' + (i + 1), s[0], s[1], hx)));
+        [[1, -1], [-1, -1], [-1, 1], [1, 1]].forEach((s, i) => cases.push(mk('LC' + (i + 1) + '-Slope', s[0], s[1], hxs)));
+
+        const res = cases.map(c => {
+            const cxc = shift + sc.cargo.cog[0] + c.dx, cyc = shiftY + sc.cargo.cog[1] + c.dy, czc = zC + c.dz;
+            const cx = Mc * cxc / M, cy = Mc * cyc / M, cz = (Mc * czc + Mt * TRAILER_Z) / M;
+            const R = reactions(P, M, cx, cy);
+            const aF = R.F / (k * nT);
+            const aL = 2 * R.L / ((N - k) * nT), aR = 2 * R.R / ((N - k) * nT);
+            const dmin = Math.min(edgeDist([cx, cy], tri[0], tri[1]), edgeDist([cx, cy], tri[1], tri[2]), edgeDist([cx, cy], tri[2], tri[0]));
+            return { name: c.name, cx, cy, cz, R, aF, aL, aR, peak: Math.max(aF, aL, aR), minR: Math.min(R.F, R.L, R.R),
+                     tip: Math.atan(dmin / cz) * 180 / Math.PI };
+        });
+        const nom = res[0];
+        const worst = (f, dir) => res.reduce((w, r) => (dir > 0 ? f(r) > f(w) : f(r) < f(w)) ? r : w, res[0]);
+        const wPeak = worst(r => r.peak, 1), wLift = worst(r => r.minR, -1), wTip = worst(r => r.tip, -1);
+        const reqTip = Math.atan(sc.route.slope / 100) * 180 / Math.PI + Math.atan(sc.route.crossfall / 100) * 180 / Math.PI + SWAY_DEG;
+        const gbp = wPeak.peak * G / (PITCH * TRK);
+        const ovF = shift + Lc / 2 - Lp / 2, ovR = -shift + Lc / 2 - Lp / 2, ovY = Wc / 2 + Math.abs(shiftY) - Wp / 2;
+        const ov = Math.max(ovF, ovR, ovY, 0);
+        const lines = N * nT;
+        const checks = [
+            { id: 'axle', label: 'Peak axle line load', value: wPeak.peak, limit: sc.axleLimit, unit: 't', ok: wPeak.peak <= sc.axleLimit, dir: '≤', at: wPeak.name },
+            { id: 'lift', label: 'Smallest group reaction (no lift-off)', value: wLift.minR, limit: 0, unit: 't', ok: wLift.minR > 0.5, dir: '>', at: wLift.name },
+            { id: 'gbp', label: 'Ground bearing pressure', value: gbp, limit: sc.route.gbp, unit: 'kPa', ok: gbp <= sc.route.gbp, dir: '≤', at: wPeak.name },
+            { id: 'tip', label: 'Tipping angle vs required', value: wTip.tip, limit: reqTip, unit: '°', ok: wTip.tip >= reqTip, dir: '≥', at: wTip.name },
+            { id: 'ov', label: 'Cargo overhang past platform', value: ov, limit: OVERHANG, unit: 'm', ok: ov <= OVERHANG, dir: '≤' },
+            { id: 'wid', label: 'Overall width on route', value: Math.max(Wp, Wc), limit: sc.route.widthMax, unit: 'm', ok: Math.max(Wp, Wc) <= sc.route.widthMax, dir: '≤' },
+            { id: 'cnt', label: 'Axle lines available', value: lines, limit: sc.maxLines, unit: '', ok: lines <= sc.maxLines, dir: '≤' }
+        ];
+        const allOk = checks.every(c => c.ok);
+        const nl = [nom.aF, nom.aL, nom.aR];
+        const spread = (Math.max(...nl) - Math.min(...nl)) / Math.max(...nl);
+        const stars = allOk ? 1 + (lines <= sc.par ? 1 : 0) + (lines <= sc.par && spread <= 0.12 ? 1 : 0) : 0;
+        return { checks, allOk, stars, lines, spread, nom, res, geom: { N, k, nT, Lp, Wp, P, xs, shift, shiftY, wy }, Mt, M };
+    }
+
+    if (typeof module !== 'undefined' && module.exports) { module.exports = { SCENARIOS, evaluate }; return; }
+
+    // ---- UI (built lazily on first open) ----------------------------------------
+    let root = null, sc = SCENARIOS[0], cfg = null;
+    const bestKey = 'tgChallengeBest';
+    function loadBest() { try { return JSON.parse(localStorage.getItem(bestKey) || '{}'); } catch (e) { return {}; } }
+    function saveBest(id, s) { try { const b = loadBest(); if ((b[id] || 0) < s) { b[id] = s; localStorage.setItem(bestKey, JSON.stringify(b)); } } catch (e) {} }
+    const $ = id => root.querySelector('#' + id);
+    const f1 = v => (Math.round(v * 10) / 10).toFixed(1);
+
+    function css() {
+        const s = document.createElement('style');
+        s.textContent = `
+        #tgChallenge{position:fixed;inset:0;z-index:99999;background:var(--bg-dark);color:var(--text-main);display:none;flex-direction:column;font-size:13px}
+        #tgChallenge.open{display:flex}
+        #tgChallenge *{font-family:'Calibri','Segoe UI',sans-serif}
+        .ch-top{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--panel-border);background:var(--panel-bg)}
+        .ch-top h2{font-size:16px;flex:0 0 auto}
+        .ch-top select,.ch-top button{background:var(--input-bg);color:var(--text-main);border:1px solid var(--panel-border);border-radius:6px;padding:4px 8px;cursor:pointer}
+        .ch-top .ch-sp{flex:1}
+        .ch-body{flex:1;display:flex;gap:12px;padding:12px;overflow:auto;min-height:0}
+        .ch-col{display:flex;flex-direction:column;gap:12px;min-width:0}
+        .ch-left{flex:0 0 330px}.ch-right{flex:1}
+        .ch-card{background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:8px;padding:10px 12px}
+        .ch-card h3{font-size:13px;margin-bottom:6px;color:var(--accent-blue)}
+        .ch-brief{color:var(--text-muted);line-height:1.4}
+        .ch-row{display:grid;grid-template-columns:118px 1fr 52px;gap:8px;align-items:center;margin:7px 0}
+        .ch-row input[type=range]{width:100%}
+        .ch-row b{text-align:right}
+        .ch-stars{font-size:26px;letter-spacing:3px;color:#eab308}
+        .ch-res{display:grid;grid-template-columns:20px 1fr auto;gap:8px;padding:4px 0;border-bottom:1px solid var(--panel-border);align-items:center}
+        .ch-ok{color:var(--accent-green);font-weight:700}
+        .ch-bad{background:#7f1d1d;color:#fecaca;padding:0 6px;border-radius:4px;font-weight:700}
+        .ch-sub{color:var(--text-muted);font-size:11px}
+        .ch-svg{width:100%;background:var(--tank-box-bg);border-radius:6px;display:block}
+        .ch-leg{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;color:var(--text-muted);font-size:11px}
+        .ch-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+        @media(max-width:760px){.ch-body{flex-direction:column}.ch-left{flex:0 0 auto}}`;
+        document.head.appendChild(s);
+    }
+    function build() {
+        css();
+        root = document.createElement('div');
+        root.id = 'tgChallenge';
+        root.innerHTML = `
+        <div class="ch-top">
+            <h2>🎮 Challenge — Plan the Move</h2>
+            <select id="chSel"></select>
+            <span class="ch-sub" title="Simplified statics model for practice. It does not use or change Excel, and it is not the Excel calculation.">training-grade · offline · does not touch Excel</span>
+            <span class="ch-sp"></span>
+            <button id="chReset" title="Reset the controls for this scenario">↺ Reset</button>
+            <button id="chClose" title="Close (Esc)">✕</button>
+        </div>
+        <div class="ch-body">
+            <div class="ch-col ch-left">
+                <div class="ch-card"><h3 id="chTitle"></h3><div class="ch-brief" id="chBrief"></div><div class="ch-sub" id="chFacts" style="margin-top:6px"></div></div>
+                <div class="ch-card"><h3>Your plan</h3>
+                    <div class="ch-row"><span title="Trailers side by side, acting as one wide platform">Trailers abreast</span><input type="range" id="chNT" min="1" max="2" step="1"><b id="chNTv"></b></div>
+                    <div class="ch-row"><span title="Axle lines per trailer">Axle lines / trailer</span><input type="range" id="chN" min="2" max="28" step="1"><b id="chNv"></b></div>
+                    <div class="ch-row"><span title="Axle lines in the front group G1. The rest form the rear groups G2 (left) and G3 (right).">Front group G1 lines</span><input type="range" id="chK" min="1" max="27" step="1"><b id="chKv"></b></div>
+                    <div class="ch-row"><span title="Move the cargo along the platform (+ = forward)">Cargo shift X (m)</span><input type="range" id="chSh" min="-4" max="4" step="0.1"><b id="chShv"></b></div>
+                    <div class="ch-row"><span title="Move the cargo across the platform (+ = towards G3 / right side)">Cargo shift Y (m)</span><input type="range" id="chSY" min="-1.5" max="1.5" step="0.1"><b id="chSYv"></b></div>
+                </div>
+                <div class="ch-card"><div class="ch-stars" id="chStars"></div><div class="ch-sub" id="chStarTxt"></div></div>
+            </div>
+            <div class="ch-col ch-right">
+                <div class="ch-card"><h3>Plan view</h3><svg class="ch-svg" id="chPlan" viewBox="0 0 800 230"></svg>
+                    <h3 style="margin-top:8px">Side view</h3><svg class="ch-svg" id="chSide" viewBox="0 0 800 150"></svg>
+                    <div class="ch-leg"><span><i style="background:#38bdf8"></i>G1 front</span><span><i style="background:#f59e0b"></i>G2 rear left</span><span><i style="background:#a78bfa"></i>G3 rear right</span><span><i style="background:#ef4444"></i>CoG (nominal)</span><span><i style="background:#ef4444;opacity:.4"></i>CoG envelope</span></div></div>
+                <div class="ch-card"><h3>Checks (worst of nominal + LC1-4 + slope cases)</h3><div id="chRes"></div></div>
+            </div>
+        </div>`;
+        document.body.appendChild(root);
+        const sel = $('chSel'), best = loadBest();
+        SCENARIOS.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = s.id + ' — ' + s.title + (best[s.id] ? '  ' + '★'.repeat(best[s.id]) : ''); sel.appendChild(o); });
+        sel.onchange = () => setScenario(+sel.value);
+        $('chClose').onclick = close;
+        $('chReset').onclick = () => setScenario(SCENARIOS.indexOf(sc));
+        ['chNT', 'chN', 'chK', 'chSh', 'chSY'].forEach(id => $(id).oninput = onInput);
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && root.classList.contains('open')) close(); });
+        setScenario(0);
+    }
+    function setScenario(i) {
+        sc = SCENARIOS[i]; $('chSel').value = i;
+        cfg = { nT: 1, N: 8, k: 4, shift: 0, shiftY: 0 };
+        $('chTitle').textContent = sc.id + ' — ' + sc.title;
+        $('chBrief').textContent = sc.brief;
+        const c = sc.cargo;
+        $('chFacts').textContent = `Cargo ${c.mass} t · ${c.dim.join(' × ')} m · CoG offset x ${c.cog[0]} / y ${c.cog[1]} / z ${c.cog[2]} m · slope ${sc.route.slope} % · ground ${sc.route.gbp} kPa · par ${sc.par} axle lines`;
+        syncInputs(); run();
+    }
+    function syncInputs() {
+        $('chNT').value = cfg.nT; $('chN').value = cfg.N; $('chSh').value = cfg.shift; $('chSY').value = cfg.shiftY;
+        $('chK').max = Math.max(1, cfg.N - 1); cfg.k = Math.max(1, Math.min(cfg.N - 1, cfg.k)); $('chK').value = cfg.k;
+        $('chNTv').textContent = cfg.nT; $('chNv').textContent = cfg.N; $('chKv').textContent = cfg.k + ' / ' + (cfg.N - cfg.k);
+        $('chShv').textContent = f1(cfg.shift); $('chSYv').textContent = f1(cfg.shiftY);
+    }
+    function onInput() {
+        cfg.nT = +$('chNT').value; cfg.N = +$('chN').value; cfg.k = +$('chK').value; cfg.shift = +$('chSh').value; cfg.shiftY = +$('chSY').value;
+        syncInputs(); run();
+    }
+    function run() {
+        const r = evaluate(sc, cfg);
+        $('chStars').textContent = r.allOk ? '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars) : '☆☆☆';
+        $('chStarTxt').textContent = !r.allOk ? 'Not safe yet — fix the red checks.'
+            : r.stars === 1 ? `Safe. ★★ needs ≤ ${sc.par} axle lines in total (you use ${r.lines}).`
+            : r.stars === 2 ? `Efficient. ★★★ also needs the nominal group loads within 12 % of each other (now ${Math.round(r.spread * 100)} %).`
+            : 'Safe, efficient and balanced. Nice.';
+        if (r.allOk) { saveBest(sc.id, r.stars); }
+        $('chRes').innerHTML = r.checks.map(c => {
+            const v = (c.unit === '' ? c.value : f1(c.value)) + (c.unit ? ' ' + c.unit : ''), l = (c.unit === '' ? c.limit : f1(c.limit)) + (c.unit ? ' ' + c.unit : '');
+            return `<div class="ch-res"><span class="${c.ok ? 'ch-ok' : ''}">${c.ok ? '✓' : '✗'}</span><span>${c.label}${c.at ? ` <span class="ch-sub">(${c.at})</span>` : ''}</span><span class="${c.ok ? '' : 'ch-bad'}">${c.ok ? v + ' ' + c.dir + ' ' + l : 'NOT OK! ' + v + ' (need ' + c.dir + ' ' + l + ')'}</span></div>`;
+        }).join('');
+        draw(r);
+    }
+    function draw(r) {
+        const g = r.geom, [Lc, Wc, Hc] = sc.cargo.dim;
+        const x0 = Math.min(-g.Lp / 2, g.shift - Lc / 2) - 1.5, x1 = Math.max(g.Lp / 2, g.shift + Lc / 2) + 1.5;
+        const W = 800, s = (W - 20) / (x1 - x0), X = x => 10 + (x - x0) * s;
+        const yMax = Math.max(g.Wp / 2, Wc / 2 + Math.abs(g.shiftY)) + 0.8, Hp = 230, sy = Math.min(s, (Hp - 20) / (2 * yMax)), Y = y => Hp / 2 - y * sy;
+        const colF = '#38bdf8', colL = '#f59e0b', colR = '#a78bfa';
+        let p = '';
+        for (let i = 0; i < g.N; i++) {
+            const xc = g.xs(i), front = i >= g.N - g.k, wx = X(xc - PITCH * 0.45), ww = PITCH * 0.9 * s;
+            if (front) p += `<rect x="${wx}" y="${Y(g.Wp / 2)}" width="${ww}" height="${g.Wp * sy}" fill="${colF}" opacity=".85"/>`;
+            else p += `<rect x="${wx}" y="${Y(g.Wp / 2)}" width="${ww}" height="${g.Wp / 2 * sy}" fill="${colR}" opacity=".85"/><rect x="${wx}" y="${Y(0)}" width="${ww}" height="${g.Wp / 2 * sy}" fill="${colL}" opacity=".85"/>`;
+        }
+        // NOTE: +y is drawn upward, so the upper half is +y = G3 (right), lower half = G2 (left)
+        p += `<rect x="${X(g.shift - Lc / 2)}" y="${Y(g.shiftY + Wc / 2)}" width="${Lc * s}" height="${Wc * sy}" fill="none" stroke="var(--text-main)" stroke-dasharray="6 4" stroke-width="1.5"/>`;
+        const P = g.P;
+        p += `<polygon points="${[P.F, P.L, P.R].map(q => X(q[0]) + ',' + Y(q[1])).join(' ')}" fill="rgba(16,185,129,.12)" stroke="#10b981" stroke-width="1.5"/>`;
+        [P.F, P.L, P.R].forEach(q => p += `<circle cx="${X(q[0])}" cy="${Y(q[1])}" r="4" fill="#10b981"/>`);
+        r.res.slice(1).forEach(c => p += `<circle cx="${X(c.cx)}" cy="${Y(c.cy)}" r="3" fill="#ef4444" opacity=".4"/>`);
+        p += `<circle cx="${X(r.nom.cx)}" cy="${Y(r.nom.cy)}" r="5" fill="#ef4444"/>`;
+        $('chPlan').innerHTML = p;
+        // side view
+        const Hs = 150, zMax = DECK + Hc + 0.5, ss = Math.min(s, (Hs - 25) / zMax), Z = z => Hs - 12 - z * ss;
+        let q = `<line x1="0" x2="${W}" y1="${Z(0)}" y2="${Z(0)}" stroke="var(--text-muted)"/>`;
+        q += `<rect x="${X(-g.Lp / 2)}" y="${Z(DECK)}" width="${g.Lp * s}" height="${DECK * ss}" fill="var(--tank-box-bg)" stroke="var(--text-muted)"/>`;
+        for (let i = 0; i < g.N; i++) q += `<rect x="${X(g.xs(i) - PITCH * 0.4)}" y="${Z(DECK * 0.55)}" width="${PITCH * 0.8 * s}" height="${DECK * 0.55 * ss}" fill="${i >= g.N - g.k ? colF : colL}" opacity=".85"/>`;
+        q += `<rect x="${X(g.shift - Lc / 2)}" y="${Z(DECK + Hc)}" width="${Lc * s}" height="${Hc * ss}" fill="rgba(148,163,184,.15)" stroke="var(--text-main)" stroke-dasharray="6 4"/>`;
+        q += `<circle cx="${X(r.nom.cx)}" cy="${Z(r.nom.cz)}" r="5" fill="#ef4444"/>`;
+        $('chSide').innerHTML = q;
+    }
+    function open() { if (!root) build(); root.classList.add('open'); }
+    function close() { if (root) root.classList.remove('open'); }
+    window.tgChallengeOpen = open;
+})();
+
+</script>
 </body>
 </html>
