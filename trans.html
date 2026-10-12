@@ -394,6 +394,30 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #14b8a6 10%);
         }
+        /* 🚚 Trailer Concept (input) + 🚚 Trailer Concept (display) share one indigo tint; no other card uses it. */
+        .tg-card-concept {
+            border-left: 4px solid #6366f1;
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #6366f1 10%);
+        }
+        .tg-card-concept-bg {
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, #6366f1 10%);
+        }
+        .tg-concept-part-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin: 8px 0 4px; }
+        .tg-concept-part-title:first-child { margin-top: 2px; }
+        .tg-concept-block { margin: 0 0 10px; }
+        .tg-concept-block-title { font-size: 11px; font-weight: 700; margin: 2px 0 4px; color: var(--text-main); }
+        .tg-concept-block-title span { font-weight: 400; color: var(--text-muted); }
+        .tg-concept-wrap { overflow-x: auto; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel-bg); }
+        table.tg-concept-table { border-collapse: collapse; font-size: 10.5px; color: var(--text-main); }
+        table.tg-concept-table td { padding: 2px 6px; border: 1px solid var(--panel-border); white-space: nowrap; text-align: left; vertical-align: middle; }
+        table.tg-concept-table td.tg-cn-num { text-align: right; font-variant-numeric: tabular-nums; }
+        table.tg-concept-table td.tg-cn-head { font-weight: 700; }
+        table.tg-concept-table tr.tg-concept-img-row td { padding: 6px; text-align: center; white-space: normal; background: var(--panel-bg); }
+        .tg-concept-img-box { overflow: auto; max-width: 100%; }
+        .tg-concept-img-box img { display: block; margin: 0 auto; max-width: 100%; height: auto; background: #fff; border-radius: 4px; cursor: zoom-in; }
+        .tg-concept-img-box img.tg-concept-img-zoom { max-width: none; cursor: zoom-out; }
         .tg-card-lashing {
             border-left: 4px solid #ec4899;
             background: var(--tank-box-bg);
@@ -918,6 +942,7 @@
         .tg-modal-body.tg-side-layout.tg-split-horizontal #tgHLoadsFields .tg-field-grid,
         .tg-modal-body.tg-side-layout.tg-split-horizontal #tgHLoadsFields .tg-cargo-field-grid,
         .tg-modal-body.tg-side-layout.tg-split-horizontal #tgHLoadsFields .tg-group-field-grid,
+        .tg-modal-body.tg-side-layout.tg-split-horizontal #tgConceptFields .tg-field-grid,
         .tg-modal-body.tg-side-layout.tg-split-horizontal #tgTractionFields .tg-field-grid,
         .tg-modal-body.tg-side-layout.tg-split-horizontal #tgTractionFields .tg-cargo-field-grid,
         .tg-modal-body.tg-side-layout.tg-split-horizontal #tgTractionFields .tg-group-field-grid,
@@ -1046,7 +1071,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.163)</h1>
+            <h1>🚂 Transport Dashboard (Rev.164)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1075,6 +1100,78 @@
 
             <div class="tg-modal-body" id="tgModalBody">
                 <div class="tg-modal-col-left">
+                    <div class="tg-cargo-card tg-card-cargo">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgCargoHelpPanel">
+                            Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
+                            <strong>AZ35:BD39</strong> (Name / W [mTe] / X [m] / Y [m] / Z [m]) and
+                            <strong>BE35:BJ39</strong> (Length [m] / Width [m] / Height [m] / CoG to Left [m] /
+                            CoG to Rear [m] / CoG to Bottom [m]) — all in <strong>meters</strong>, unlike the mm
+                            trailer fields above. <strong>X</strong> and <strong>Y</strong> are the cargo's
+                            <strong>Center of Gravity (CoG) distance from world origin (0,0)</strong> — the same
+                            origin the trailer's X offset/Y offset use, just in meters instead of mm — and
+                            <strong>Z</strong> is the CoG <strong>height above the trailer deck</strong>.
+                            <strong>Length</strong>, <strong>Width</strong>, and <strong>Height</strong> size the
+                            box drawn in the preview, and <strong>CoG to Left</strong>/<strong>CoG to
+                            Rear</strong>/<strong>CoG to Bottom</strong> position that box — each is the distance
+                            from this item's own CoG to the box's left/rear/bottom edge. Editing a CoG field
+                            (CoGx/CoGy/CoGz) moves only the CoG sign, and editing a CoG-to-edge field moves only
+                            the box — unless the item's <strong>🧲 Group</strong> toggle is on, in which case
+                            editing CoGx/CoGy/CoGz drags the box along with it (the offsets stay fixed) and every
+                            other field on that item is disabled, leaving only CoGx/CoGy/CoGz editable. All of
+                            these are pulled/pushed as written in Excel. Pulled automatically when this panel
+                            opens or refreshes; press <strong>"📤 Push Cargo to Excel"</strong> to write changes
+                            back (row 40's TOTAL stays a live Excel formula and is never overwritten). Below the
+                            cargo list, the <strong>🧲 Group All</strong> section lets you nudge every cargo item
+                            — CoG sign AND drawn box together — at once: tick its toggle, then edit its own
+                            CoGx/CoGy/CoGz fields — each edit applies that same X/Y/Z delta to EVERY cargo item's
+                            CoG and box alike (regardless of that item's own individual 🧲 Group toggle), so the
+                            whole cargo set — position and shape both — slides together while every item keeps
+                            its size and its offsets from its own CoG unchanged. It resets to 0/0/0 each time it's
+                            switched on and is local-only (not written to Excel).
+                        </p>
+                        <div id="tgCargoList"><!-- cargo item cards rendered by JS --></div>
+                        <div id="tgCargoGroupAllSection"><!-- "move all cargo together" master card rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39 + BE35:BJ39)"
+                                    onclick="addCargoItem()">+ Add Cargo</button>
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshCargoBtn" title="Pull Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom for every cargo item from Excel Input!AZ35:BD39 + BE35:BJ39"
+                                    onclick="pullCargoFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" id="tgPushCargoBtn" title="Write every cargo item's Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom to Excel Input!AZ35:BD39 + BE35:BJ39"
+                                    onclick="pushCargoToExcel()">📤 Push Cargo to Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-concept" id="tgConceptCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgConceptHelpToggleBtn" onclick="toggleTgConceptHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgConceptHelpPanel">
+                            Preliminary trailer concept, in two parts. <strong>Part 1</strong> syncs with Excel sheet
+                            <strong>"Trailer_Port"</strong>: <strong>A1</strong> = header, <strong>B5</strong> = Cargo + Auxillary weight
+                            (read-only, mirrors Excel), <strong>B7</strong> = Trailer (drop-down list), <strong>B9</strong> = GH or BS in 3 Files
+                            (drop-down list), <strong>B16</strong> = Jetty (drop-down list). <strong>Part 2</strong> syncs with sheet
+                            <strong>"Trailer_DOH"</strong>: <strong>A1</strong> = header, <strong>B2</strong> = DOH Pay load (drop-down list, the cargo names of
+                            <strong>Input!AZ35:AZ40</strong>), <strong>D2</strong> = the weight linked to the selected list entry (read-only; follows
+                            the cargo weight in <strong>Input!BA</strong>). The drop-down options are read from each cell's own Excel validation list.
+                            Pulled on open/refresh and by the background poll; edits push automatically (or with 📤 Push to Excel).
+                            The calculation tables and pictures of both sheets are shown in the <strong>Trailer Concept</strong> display card above the 2D Drawing.
+                        </p>
+                        <div id="tgConceptFields"><!-- Trailer Concept fields rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshConceptBtn" title="Pull the Trailer Concept inputs from Excel 'Trailer_Port' (A1, B5, B7, B9, B16) and 'Trailer_DOH' (A1, B2, D2)"
+                                    onclick="pullConceptFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" id="tgPushConceptBtn" title="Write Trailer (B7), GH or BS in 3 Files (B9), Jetty (B16) to 'Trailer_Port' and DOH Pay load (B2) + its linked weight (D2) to 'Trailer_DOH'"
+                                    onclick="pushConceptToExcel()">📤 Push to Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-trailer-card">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🚂 Generate Trailer</h2>
@@ -1163,52 +1260,6 @@
                                     onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
                             <button type="button" class="tg-add-train-btn" id="tgPushWheelsBtn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
                                     onclick="pushDataToExcel()">📤 Push to Excel</button>
-                        </div>
-                    </div>
-
-                    <div class="tg-cargo-card tg-card-cargo">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgCargoHelpPanel">
-                            Up to 5 cargo items, linked to Excel sheet <strong>"Input"</strong>, cells
-                            <strong>AZ35:BD39</strong> (Name / W [mTe] / X [m] / Y [m] / Z [m]) and
-                            <strong>BE35:BJ39</strong> (Length [m] / Width [m] / Height [m] / CoG to Left [m] /
-                            CoG to Rear [m] / CoG to Bottom [m]) — all in <strong>meters</strong>, unlike the mm
-                            trailer fields above. <strong>X</strong> and <strong>Y</strong> are the cargo's
-                            <strong>Center of Gravity (CoG) distance from world origin (0,0)</strong> — the same
-                            origin the trailer's X offset/Y offset use, just in meters instead of mm — and
-                            <strong>Z</strong> is the CoG <strong>height above the trailer deck</strong>.
-                            <strong>Length</strong>, <strong>Width</strong>, and <strong>Height</strong> size the
-                            box drawn in the preview, and <strong>CoG to Left</strong>/<strong>CoG to
-                            Rear</strong>/<strong>CoG to Bottom</strong> position that box — each is the distance
-                            from this item's own CoG to the box's left/rear/bottom edge. Editing a CoG field
-                            (CoGx/CoGy/CoGz) moves only the CoG sign, and editing a CoG-to-edge field moves only
-                            the box — unless the item's <strong>🧲 Group</strong> toggle is on, in which case
-                            editing CoGx/CoGy/CoGz drags the box along with it (the offsets stay fixed) and every
-                            other field on that item is disabled, leaving only CoGx/CoGy/CoGz editable. All of
-                            these are pulled/pushed as written in Excel. Pulled automatically when this panel
-                            opens or refreshes; press <strong>"📤 Push Cargo to Excel"</strong> to write changes
-                            back (row 40's TOTAL stays a live Excel formula and is never overwritten). Below the
-                            cargo list, the <strong>🧲 Group All</strong> section lets you nudge every cargo item
-                            — CoG sign AND drawn box together — at once: tick its toggle, then edit its own
-                            CoGx/CoGy/CoGz fields — each edit applies that same X/Y/Z delta to EVERY cargo item's
-                            CoG and box alike (regardless of that item's own individual 🧲 Group toggle), so the
-                            whole cargo set — position and shape both — slides together while every item keeps
-                            its size and its offsets from its own CoG unchanged. It resets to 0/0/0 each time it's
-                            switched on and is local-only (not written to Excel).
-                        </p>
-                        <div id="tgCargoList"><!-- cargo item cards rendered by JS --></div>
-                        <div id="tgCargoGroupAllSection"><!-- "move all cargo together" master card rendered by JS --></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Add another cargo item (up to 5 — Input!AZ35:BD39 + BE35:BJ39)"
-                                    onclick="addCargoItem()">+ Add Cargo</button>
-                            <button type="button" class="tg-add-train-btn" id="tgRefreshCargoBtn" title="Pull Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom for every cargo item from Excel Input!AZ35:BD39 + BE35:BJ39"
-                                    onclick="pullCargoFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgPushCargoBtn" title="Write every cargo item's Name/W/X/Y/Z and Length/Width/Height/CoG-to-Left/CoG-to-Rear/CoG-to-Bottom to Excel Input!AZ35:BD39 + BE35:BJ39"
-                                    onclick="pushCargoToExcel()">📤 Push Cargo to Excel</button>
                         </div>
                     </div>
 
@@ -1381,6 +1432,25 @@
                 <div class="tg-split-handle" id="tgSplitHandle" title="Drag to resize"></div>
 
                 <div class="tg-modal-col-right">
+                    <div class="tg-cargo-card tg-card-concept-bg" id="tgConceptDisplayCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgConceptDisplayHelpToggleBtn" onclick="toggleTgConceptDisplayHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgConceptDisplayHelpPanel">
+                            Read-only mirror of Excel sheets <strong>"Trailer_Port"</strong> (A1:N36) and <strong>"Trailer_DOH"</strong> (A1:M133),
+                            with the pictures of the sheet shown where they sit in Excel (click a picture to zoom). Pull-only, never pushed;
+                            change the inputs in the <strong>Trailer Concept</strong> card between Generate Cargo and Generate Trailer.
+                            Pictures are read with the Excel add-in; over the standalone bridge only the tables are available.
+                        </p>
+                        <div id="tgConceptDisplay"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshConceptViewBtn" title="Pull the tables and the pictures from Excel 'Trailer_Port' and 'Trailer_DOH'"
+                                    onclick="pullConceptDisplayFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-preview-wrap">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
@@ -1964,6 +2034,20 @@ class XLBridge {
             const isOpen = panel.classList.toggle('tg-help-open');
             if (btn) btn.textContent = isOpen ? '✕' : '❓';
         }
+        function toggleTgConceptHelp() {
+            const panel = document.getElementById('tgConceptHelpPanel');
+            const btn = document.getElementById('tgConceptHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
+        }
+        function toggleTgConceptDisplayHelp() {
+            const panel = document.getElementById('tgConceptDisplayHelpPanel');
+            const btn = document.getElementById('tgConceptDisplayHelpToggleBtn');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('tg-help-open');
+            if (btn) btn.textContent = isOpen ? '✕' : '❓';
+        }
         function toggleTgHLoadsHelp() {
             const panel = document.getElementById('tgHLoadsHelpPanel');
             const btn = document.getElementById('tgHLoadsHelpToggleBtn');
@@ -2186,6 +2270,7 @@ class XLBridge {
             pushCargoToExcel: 'tgPushCargoBtn',
             pushHorizontalLoadsToExcel: 'tgPushHLoadsBtn',
             pushTractionToExcel: 'tgPushTractionBtn',
+            pushConceptToExcel: 'tgPushConceptBtn',
         };
         function setPushPendingForBtn(btnId, on) {
             const btn = document.getElementById(btnId);
@@ -2425,6 +2510,8 @@ class XLBridge {
                     await pullLashingCalcTableFromExcel({ silent: true });
                     await pullTractionFromExcelImpl({ silent: true });   // unwrapped: no flash on every poll tick (same reason as the Lashing pull above)
                     await pullTractionDataFromExcel({ silent: true });
+                    await pullConceptFromExcelImpl({ silent: true });   // unwrapped: no flash on every poll tick
+                    await pullConceptDisplayFromExcelImpl({ silent: true, images: false });   // tables only; pictures are pulled on open / Refresh
                 }
                 renderTrailerGenPreview();
             } catch (e) {
@@ -2549,7 +2636,7 @@ class XLBridge {
         // individually.
         function toggleAllTgMinimize(btn) {
             const cardEls = Array.from(document.querySelectorAll(
-                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, .tg-card-lashing-bg, .tg-card-traction, .tg-card-traction-bg, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
+                '.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, .tg-card-lashing-bg, .tg-card-traction, .tg-card-traction-bg, .tg-card-concept, .tg-card-concept-bg, #tgCogEnvTableCard, #tgDrawingTableCard, #tgTransportLcCard, #tgCogEnvSummaryCard'
             )).filter(tgNotTabbed);   // a tabbed card (display tabs beside/below) always stays expanded
             const previewEls = Array.from(document.querySelectorAll('.tg-preview-wrap, .tg-3d-wrap')).filter(tgNotTabbed);
             const anyExpanded =
@@ -2604,7 +2691,7 @@ class XLBridge {
             // .tg-cargo-card variants) PLUS the 2 output table cards (by
             // id) all use the same .tg-card-minimized mechanism as
             // toggleTgCardMinimize().
-            document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, .tg-card-lashing-bg, .tg-card-traction, .tg-card-traction-bg').forEach(card => {   // lashing = ⚓ Lashing + ⚓ Lashing calculation table; traction = 🚛 Traction Capacity + 🚛 Traction Capacity Data
+            document.querySelectorAll('.tg-trailer-card, .tg-card-cargo, .tg-card-hloads, .tg-card-cogenv, .tg-card-lashing, .tg-card-lashing-bg, .tg-card-traction, .tg-card-traction-bg, .tg-card-concept, .tg-card-concept-bg').forEach(card => {   // lashing = ⚓ Lashing + ⚓ Lashing calculation table; traction = 🚛 Traction Capacity + 🚛 Traction Capacity Data
                 card.classList.add('tg-card-minimized');
                 const btn = card.querySelector('.tg-minimize-btn');
                 if (btn) { btn.textContent = '▢'; btn.title = 'Expand this card'; }
@@ -9566,6 +9653,478 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 </div>`;
         }
 
+
+        // ============================================================
+        // 🚚 TRAILER CONCEPT  (input card between Generate Cargo and Generate Trailer
+        //                       + display card above 2D Drawing)
+        // Input, Part 1  = Excel "Trailer_Port": A1 header, B5 weight (read-only),
+        //                  B7 / B9 / B16 drop-down lists (B7, B9, B16 are written).
+        // Input, Part 2  = Excel "Trailer_DOH": A1 header, B2 drop-down list (cargo names of
+        //                  Input!AZ35:AZ40), D2 = weight linked to the selected list entry
+        //                  (Input!BA of the same row) - written together with B2.
+        // Display        = pull-only mirror of Trailer_Port!A1:N36 + Trailer_DOH!A1:M133 with the
+        //                  sheet pictures (Office.js Shape.getAsImage) placed where they sit in Excel.
+        // Each Excel write is its own Excel.run so one failing cell never rolls back the others.
+        // ============================================================
+        const CONCEPT_PORT_SHEET = 'Trailer_Port';
+        const CONCEPT_DOH_SHEET = 'Trailer_DOH';
+        const CONCEPT_PORT_INPUT_RANGE = 'A1:C16';   // A1 header, A5:C5 weight, A7:B7 trailer, A9:C9 3-files, A16:B16 jetty
+        const CONCEPT_DOH_INPUT_RANGE = 'A1:E2';     // A1 header, A2:E2 DOH Pay load row (B2 list, D2 weight)
+        const CONCEPT_PORT_VIEW_RANGE = 'A1:N36';
+        const CONCEPT_DOH_VIEW_RANGE = 'A1:M133';
+        const CONCEPT_CARGO_SHEET = 'Input';
+        const CONCEPT_CARGO_LIST_RANGE = 'AZ35:BA40';   // name + W [mTe] of the cargo list (same rows as B2's list)
+        const CONCEPT_YESNO_FALLBACK = ['Yes', 'No'];    // B9's own list range (P11:P12) is empty in the workbook
+        let tgConcept = {
+            port: {
+                header: 'Port : Preliminary axle line',
+                weightLabel: 'Cargo + Auxillary weight', weight: '', weightUnit: 'tonnes',
+                trailerLabel: 'Trailer', trailer: '', trailerOptions: [],
+                filesLabel: 'GH or BS in 3 Files (Yes or No)', files: '', filesOptions: [], filesNote: '',
+                jettyLabel: 'Jetty', jetty: '', jettyOptions: []
+            },
+            doh: {
+                header: 'DOH : Preliminary axle line.',
+                payloadLabel: 'DOH Pay load', payload: '', payloadOptions: [],
+                weight: '', weightUnit: 'Ton.', note: ''
+            }
+        };
+        let tgConceptView = {
+            port: { rows: [], images: [] },
+            doh: { rows: [], images: [] },
+            sig: '', imagesLoaded: false, imagesNote: ''
+        };
+
+        function conceptText(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
+        function conceptNum(v) { const n = parseFloat(v); return Number.isFinite(n) ? n : ''; }
+        function conceptFlat(arr) {
+            const out = [];
+            (arr || []).forEach(r => (r || []).forEach(x => {
+                const t = conceptText(x);
+                if (t !== '' && !out.includes(t)) out.push(t);
+            }));
+            return out;
+        }
+
+        // Resolves a cell's drop-down list into an array of strings. Handles a cell-range source
+        // ("=$P$11:$P$12" or "=Input!$AZ$35:$AZ$40", also from another sheet) and an inline
+        // comma list. `fallback` (optional async fn) is used when nothing could be read.
+        async function conceptReadListOptions(sheetName, cell, fallback) {
+            let opts = [];
+            try {
+                await Excel.run(async (context) => {
+                    const dv = context.workbook.worksheets.getItem(sheetName).getRange(cell).dataValidation;
+                    dv.load('type,rule');
+                    await context.sync();
+                    const src = dv.type === 'List' && dv.rule && dv.rule.list ? conceptText(dv.rule.list.source) : '';
+                    if (!src) return;
+                    const ref = src.replace(/^=/, '');
+                    if (/^(('[^']+'|[A-Za-z0-9_]+)!)?\$?[A-Z]{1,3}\$?\d+(:\$?[A-Z]{1,3}\$?\d+)?$/.test(ref)) {
+                        const parts = ref.split('!');
+                        const addr = parts.pop().replace(/\$/g, '');
+                        const shName = parts.length ? parts[0].replace(/^'|'$/g, '') : sheetName;
+                        const r = context.workbook.worksheets.getItem(shName).getRange(addr);
+                        r.load('values');
+                        await context.sync();
+                        opts = conceptFlat(r.values);
+                    } else {
+                        opts = src.split(',').map(x => x.trim()).filter(Boolean);
+                    }
+                });
+            } catch (e) { console.warn(`Trailer Concept: could not read the ${sheetName}!${cell} validation list`, e); }
+            if (!opts.length && typeof fallback === 'function') {
+                try { opts = (await fallback()) || []; } catch (e) { /* no list available - the select just shows the current value */ }
+            }
+            return opts;
+        }
+
+        async function conceptReadCargoRows() {
+            let rows = null;
+            try {
+                await Excel.run(async (context) => {
+                    const r = context.workbook.worksheets.getItem(CONCEPT_CARGO_SHEET).getRange(CONCEPT_CARGO_LIST_RANGE);
+                    r.load('values');
+                    await context.sync();
+                    rows = r.values;
+                });
+            } catch (e) { /* sheet not readable - callers fall back to the dashboard's cargo list */ }
+            return rows;
+        }
+
+        // Weight linked to a list entry: the same row of Input!AZ35:BA40 (name -> W [mTe]);
+        // falls back to the dashboard's own Generate Cargo list when Excel has no match.
+        async function conceptLookupCargoWeight(name) {
+            const key = conceptText(name).toLowerCase();
+            if (!key) return null;
+            if (isOfficeInitialized) {
+                const rows = await conceptReadCargoRows();
+                if (rows) {
+                    for (const row of rows) {
+                        if (conceptText(row[0]).toLowerCase() === key) {
+                            const w = conceptNum(row[1]);
+                            if (w !== '') return w;
+                        }
+                    }
+                }
+            }
+            if (typeof cargoItems !== 'undefined') {
+                const it = cargoItems.find(ci => conceptText(ci.name).toLowerCase() === key);
+                if (it && Number.isFinite(parseFloat(it.weight))) return parseFloat(it.weight);
+            }
+            return null;
+        }
+
+        async function pullConceptFromExcelImpl(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel - open this add-in inside an Excel workbook to pull Trailer Concept data.');
+                return;
+            }
+            const c = tgConcept;
+            const before = JSON.stringify(c);
+            const pending = !!autoPushTimers['pushConceptToExcel'] || isAutoPushing;   // a local edit is still waiting to be pushed: don't overwrite it
+            let port = null, doh = null;
+            try {
+                await Excel.run(async (context) => {
+                    const r = context.workbook.worksheets.getItem(CONCEPT_PORT_SHEET).getRange(CONCEPT_PORT_INPUT_RANGE);
+                    r.load('values');
+                    await context.sync();
+                    port = r.values;
+                });
+            } catch (e) {
+                console.warn(`Could not read '${CONCEPT_PORT_SHEET}' (${CONCEPT_PORT_INPUT_RANGE})`, e);
+                if (!silent) alert(`Could not read sheet "${CONCEPT_PORT_SHEET}". Make sure it exists.`);
+            }
+            try {
+                await Excel.run(async (context) => {
+                    const r = context.workbook.worksheets.getItem(CONCEPT_DOH_SHEET).getRange(CONCEPT_DOH_INPUT_RANGE);
+                    r.load('values');
+                    await context.sync();
+                    doh = r.values;
+                });
+            } catch (e) {
+                console.warn(`Could not read '${CONCEPT_DOH_SHEET}' (${CONCEPT_DOH_INPUT_RANGE})`, e);
+                if (!silent) alert(`Could not read sheet "${CONCEPT_DOH_SHEET}". Make sure it exists.`);
+            }
+            if (port) {
+                const p = c.port;
+                p.header = conceptText(port[0][0]) || p.header;
+                p.weightLabel = conceptText(port[4][0]) || p.weightLabel;
+                p.weight = conceptNum(port[4][1]);                       // B5: read-only mirror
+                p.weightUnit = conceptText(port[4][2]) || p.weightUnit;
+                p.trailerLabel = conceptText(port[6][0]) || p.trailerLabel;
+                p.filesLabel = conceptText(port[8][0]) || p.filesLabel;
+                p.filesNote = conceptText(port[8][2]);
+                p.jettyLabel = conceptText(port[15][0]) || p.jettyLabel;
+                if (!pending) {
+                    p.trailer = conceptText(port[6][1]);
+                    p.files = conceptText(port[8][1]);
+                    p.jetty = conceptText(port[15][1]);
+                }
+                p.trailerOptions = await conceptReadListOptions(CONCEPT_PORT_SHEET, 'B7');
+                p.filesOptions = await conceptReadListOptions(CONCEPT_PORT_SHEET, 'B9', async () => CONCEPT_YESNO_FALLBACK.slice());
+                p.jettyOptions = await conceptReadListOptions(CONCEPT_PORT_SHEET, 'B16');
+            }
+            if (doh) {
+                const d = c.doh;
+                d.header = conceptText(doh[0][0]) || d.header;
+                d.payloadLabel = conceptText(doh[1][0]) || d.payloadLabel;
+                d.note = conceptText(doh[1][4]);
+                if (!pending) {
+                    d.payload = conceptText(doh[1][1]);
+                    d.weight = conceptNum(doh[1][3]);                    // D2
+                }
+                d.payloadOptions = await conceptReadListOptions(CONCEPT_DOH_SHEET, 'B2', async () => {
+                    const rows = await conceptReadCargoRows();
+                    return rows ? conceptFlat(rows.map(r => [r[0]])) : [];
+                });
+            }
+            if (JSON.stringify(c) !== before) renderTgConceptFields();
+            if (!silent && (port || doh)) logMsg(`✓ Pulled Trailer Concept inputs from '${CONCEPT_PORT_SHEET}' + '${CONCEPT_DOH_SHEET}'.`);
+        }
+        const pullConceptFromExcel = withBtnSyncIndicator('tgRefreshConceptBtn', pullConceptFromExcelImpl);
+
+        async function conceptWriteCell(sheetName, addr, value) {
+            try {
+                await Excel.run(async (context) => {
+                    context.workbook.worksheets.getItem(sheetName).getRange(addr).values = [[value]];
+                    await context.sync();
+                });
+                return true;
+            } catch (e) {
+                console.warn(`Could not write '${sheetName}'!${addr}`, e);
+                return false;
+            }
+        }
+        // D2 is written as a plain value unless Excel already links it with a formula.
+        async function conceptWriteDohWeight(value) {
+            try {
+                await Excel.run(async (context) => {
+                    const r = context.workbook.worksheets.getItem(CONCEPT_DOH_SHEET).getRange('D2');
+                    r.load('formulas');
+                    await context.sync();
+                    const f = r.formulas;
+                    if (f && f[0] && typeof f[0][0] === 'string' && f[0][0].charAt(0) === '=') return;
+                    r.values = [[value]];
+                    await context.sync();
+                });
+                return true;
+            } catch (e) {
+                console.warn(`Could not write '${CONCEPT_DOH_SHEET}'!D2`, e);
+                return false;
+            }
+        }
+
+        async function pushConceptToExcelImpl(opts) {
+            const silent = !!(opts && opts.silent);
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel - open this add-in inside an Excel workbook to push Trailer Concept data.');
+                return;
+            }
+            const c = tgConcept;
+            let ok = true;
+            // Part 1 - Trailer_Port: B7, B9, B16 (B5 is not editable)
+            if (c.port.trailer !== '') ok = (await conceptWriteCell(CONCEPT_PORT_SHEET, 'B7', c.port.trailer)) && ok;
+            if (c.port.files !== '') ok = (await conceptWriteCell(CONCEPT_PORT_SHEET, 'B9', c.port.files)) && ok;
+            if (c.port.jetty !== '') ok = (await conceptWriteCell(CONCEPT_PORT_SHEET, 'B16', c.port.jetty)) && ok;
+            // Part 2 - Trailer_DOH: B2 and its linked weight D2
+            if (c.doh.payload !== '') {
+                ok = (await conceptWriteCell(CONCEPT_DOH_SHEET, 'B2', c.doh.payload)) && ok;
+                const w = await conceptLookupCargoWeight(c.doh.payload);
+                if (w !== null) c.doh.weight = w;
+                if (c.doh.weight !== '') ok = (await conceptWriteDohWeight(c.doh.weight)) && ok;
+                renderTgConceptFields();
+            }
+            if (ok) {
+                if (!silent) logMsg(`✓ Pushed Trailer Concept to '${CONCEPT_PORT_SHEET}' (B7, B9, B16) and '${CONCEPT_DOH_SHEET}' (B2, D2).`);
+            } else if (!silent) {
+                alert('Could not write every Trailer Concept cell - make sure the sheets exist and are not protected.');
+            }
+            try { await pullConceptDisplayFromExcelImpl({ silent: true, images: false }); } catch (e) { /* the poll catches up */ }
+        }
+        const pushConceptToExcel = withBtnSyncIndicator('tgPushConceptBtn', pushConceptToExcelImpl);
+
+        async function conceptRefreshWeightLocal() {
+            const w = await conceptLookupCargoWeight(tgConcept.doh.payload);
+            if (w !== null && w !== tgConcept.doh.weight) {
+                tgConcept.doh.weight = w;
+                renderTgConceptFields();
+            }
+        }
+
+        function updateConceptField(key, raw) {
+            const c = tgConcept, v = String(raw);
+            if (key === 'trailer') c.port.trailer = v;
+            else if (key === 'files') c.port.files = v;
+            else if (key === 'jetty') c.port.jetty = v;
+            else if (key === 'payload') { c.doh.payload = v; conceptRefreshWeightLocal(); }
+            else return;
+            scheduleAutoPush('pushConceptToExcel', pushConceptToExcelImpl);
+        }
+
+        function conceptSelectHtml(key, value, options, where) {
+            const opts = options.slice();
+            if (value && !opts.includes(value)) opts.unshift(value);
+            if (!opts.length) {
+                return `<input type="text" value="${escapeHtml(value)}" title="No drop-down list could be read from ${where} - type the exact Excel value." onchange="updateConceptField('${key}', this.value)">`;
+            }
+            return `<select onchange="updateConceptField('${key}', this.value)" title="Synced with Excel ${where} (drop-down list).">` +
+                (value ? '' : '<option value="" selected></option>') +
+                opts.map(o => `<option value="${escapeHtml(o)}"${o === value ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('') + '</select>';
+        }
+
+        function renderTgConceptFields() {
+            const el = document.getElementById('tgConceptFields');
+            if (!el) return;
+            const p = tgConcept.port, d = tgConcept.doh;
+            const pw = `'${CONCEPT_PORT_SHEET}'!`, dw = `'${CONCEPT_DOH_SHEET}'!`;
+            const pull = `<button type="button" class="tg-xy-sync-btn" title="Pull from Excel" onclick="pullConceptFromExcel()">⇩</button>`;
+            el.innerHTML = `
+                <div class="tg-concept-part-title" title="Excel sheet ${CONCEPT_PORT_SHEET}, A1">Part 1 · ${escapeHtml(p.header)} ${pull}</div>
+                <div class="tg-field-grid">
+                    <div class="tg-field tg-field-readonly" title="Read-only - mirrors Excel ${pw}B5.">
+                        <label>${escapeHtml(p.weightLabel)}${p.weightUnit ? ` (${escapeHtml(p.weightUnit)})` : ''}</label>
+                        <input type="number" value="${p.weight}" readonly tabindex="-1">
+                    </div>
+                    <div class="tg-field">
+                        <label>${escapeHtml(p.trailerLabel)}</label>
+                        ${conceptSelectHtml('trailer', p.trailer, p.trailerOptions, pw + 'B7')}
+                    </div>
+                    <div class="tg-field" ${p.filesNote ? `title="${escapeHtml(p.filesNote)}"` : ''}>
+                        <label>${escapeHtml(p.filesLabel)}</label>
+                        ${conceptSelectHtml('files', p.files, p.filesOptions, pw + 'B9')}
+                    </div>
+                    <div class="tg-field">
+                        <label>${escapeHtml(p.jettyLabel)}</label>
+                        ${conceptSelectHtml('jetty', p.jetty, p.jettyOptions, pw + 'B16')}
+                    </div>
+                </div>
+                <div class="tg-concept-part-title" title="Excel sheet ${CONCEPT_DOH_SHEET}, A1">Part 2 · ${escapeHtml(d.header)} ${pull}</div>
+                <div class="tg-field-grid">
+                    <div class="tg-field">
+                        <label>${escapeHtml(d.payloadLabel)}</label>
+                        ${conceptSelectHtml('payload', d.payload, d.payloadOptions, dw + 'B2')}
+                    </div>
+                    <div class="tg-field tg-field-readonly" title="Read-only - linked to the selected list entry (the cargo weight of Input!BA). Written to Excel ${dw}D2 together with B2.${d.note ? ' ' + escapeHtml(d.note) : ''}">
+                        <label>Weight${d.weightUnit ? ` (${escapeHtml(d.weightUnit)})` : ''}</label>
+                        <input type="number" value="${d.weight}" readonly tabindex="-1">
+                    </div>
+                </div>`;
+        }
+
+        // ---- display: tables + pictures -------------------------------------------------
+        function conceptRowsFromGrid(grid) {
+            const rows = [];
+            let maxCol = 0;
+            (grid || []).forEach((r, i) => {
+                const cells = (r || []).map(conceptText);
+                let last = cells.length - 1;
+                while (last >= 0 && cells[last] === '') last--;
+                if (last < 0) return;                              // fully empty row: dropped
+                maxCol = Math.max(maxCol, last + 1);
+                rows.push({ n: i + 1, cells: cells.slice(0, last + 1) });
+            });
+            rows.forEach(r => { while (r.cells.length < maxCol) r.cells.push(''); });
+            return rows;
+        }
+
+        async function conceptReadSheetView(sheetName, addr) {
+            let grid = null;
+            await Excel.run(async (context) => {
+                const r = context.workbook.worksheets.getItem(sheetName).getRange(addr);
+                r.load('values,text');
+                await context.sync();
+                grid = r.text || r.values;
+            });
+            return conceptRowsFromGrid(grid);
+        }
+
+        // Pictures of a sheet as data URIs, each with the row it is anchored at (from its top edge
+        // against the cumulative row tops). Needs the Excel add-in (Shape.getAsImage, ExcelApi 1.9).
+        async function conceptReadSheetImages(sheetName, rowCount) {
+            const imgs = [];
+            let note = '';
+            try {
+                await Excel.run(async (context) => {
+                    const sheet = context.workbook.worksheets.getItem(sheetName);
+                    const shapes = sheet.shapes;
+                    if (!shapes || typeof shapes.load !== 'function') throw new Error('shapes API not available');
+                    shapes.load('items/name,items/top,items/left,items/width,items/height');
+                    await context.sync();
+                    const items = shapes.items.filter(sh => sh.width >= 30 && sh.height >= 30)
+                        .sort((a, b) => (a.top - b.top) || (a.left - b.left));
+                    if (!items.length) return;
+                    let tops = null;
+                    try {
+                        const cells = [];
+                        for (let r = 1; r <= rowCount; r++) { const cell = sheet.getRange('A' + r); cell.load('top'); cells.push(cell); }
+                        await context.sync();
+                        tops = cells.map(cell => cell.top);
+                    } catch (e) { tops = null; }
+                    const fmt = (typeof Excel !== 'undefined' && Excel.PictureFormat && Excel.PictureFormat.png) || 'Png';
+                    const res = items.map(sh => sh.getAsImage(fmt));
+                    await context.sync();
+                    items.forEach((sh, i) => {
+                        let anchor = null;
+                        if (tops) { for (let r = 0; r < tops.length; r++) { if (tops[r] <= sh.top + 1) anchor = r + 1; else break; } }
+                        imgs.push({ name: sh.name, src: 'data:image/png;base64,' + res[i].value, w: sh.width, h: sh.height, anchorRow: anchor, order: i });
+                    });
+                });
+            } catch (e) {
+                console.warn(`Trailer Concept: could not read the pictures of '${sheetName}'`, e);
+                note = 'Pictures need the Excel add-in (Office.js shapes) - not available in this connection.';
+            }
+            return { imgs, note };
+        }
+
+        async function pullConceptDisplayFromExcelImpl(opts = {}) {
+            const silent = opts.silent === true;
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel - open this add-in inside an Excel workbook to pull the Trailer Concept tables and pictures.');
+                return;
+            }
+            const wantImages = opts.images === true || (opts.images !== false && !tgConceptView.imagesLoaded);
+            const v = tgConceptView;
+            let okAny = false;
+            try { v.port.rows = await conceptReadSheetView(CONCEPT_PORT_SHEET, CONCEPT_PORT_VIEW_RANGE); okAny = true; }
+            catch (e) { console.warn(`Could not read '${CONCEPT_PORT_SHEET}' (${CONCEPT_PORT_VIEW_RANGE})`, e); if (!silent) alert(`Could not read sheet "${CONCEPT_PORT_SHEET}". Make sure it exists.`); }
+            try { v.doh.rows = await conceptReadSheetView(CONCEPT_DOH_SHEET, CONCEPT_DOH_VIEW_RANGE); okAny = true; }
+            catch (e) { console.warn(`Could not read '${CONCEPT_DOH_SHEET}' (${CONCEPT_DOH_VIEW_RANGE})`, e); if (!silent) alert(`Could not read sheet "${CONCEPT_DOH_SHEET}". Make sure it exists.`); }
+            let changed = false;
+            if (wantImages) {
+                const pr = await conceptReadSheetImages(CONCEPT_PORT_SHEET, 36);
+                const dr = await conceptReadSheetImages(CONCEPT_DOH_SHEET, 133);
+                v.port.images = pr.imgs;
+                v.doh.images = dr.imgs;
+                v.imagesNote = (pr.note || dr.note) && !(pr.imgs.length || dr.imgs.length) ? (dr.note || pr.note) : '';
+                v.imagesLoaded = true;
+                changed = true;
+            }
+            const sig = JSON.stringify([v.port.rows, v.doh.rows]);
+            if (sig !== v.sig) { v.sig = sig; changed = true; }
+            if (changed) renderTgConceptDisplay();
+            if (!silent && okAny) logMsg(`✓ Pulled Trailer Concept tables${wantImages ? ' + pictures' : ''} from '${CONCEPT_PORT_SHEET}' + '${CONCEPT_DOH_SHEET}'.`);
+        }
+        const pullConceptDisplayFromExcel = withBtnSyncIndicator('tgRefreshConceptViewBtn', (o) => pullConceptDisplayFromExcelImpl(Object.assign({ images: true }, o || {})));
+
+        function conceptCellsHtml(cells, nCols, isHeaderRow) {
+            let h = '', i = 0;
+            while (i < nCols) {
+                const t = cells[i] || '';
+                let j = i + 1;
+                while (j < nCols && !(cells[j] || '')) j++;        // an empty neighbour is absorbed (Excel text overflow / merged header)
+                const span = j - i;
+                if (t === '') {
+                    h += `<td${span > 1 ? ` colspan="${span}"` : ''}></td>`;
+                } else {
+                    const isNum = span === 1 && /^-?[\d.,]+%?$/.test(t);
+                    const cls = isHeaderRow && i === 0 ? 'tg-cn-head' : (isNum ? 'tg-cn-num' : '');
+                    h += `<td${span > 1 ? ` colspan="${span}"` : ''}${cls ? ` class="${cls}"` : ''}>${escapeHtml(t)}</td>`;
+                }
+                i = j;
+            }
+            return h;
+        }
+
+        function buildConceptTableHtml(block, sheetLabel) {
+            const rows = block.rows || [];
+            if (!rows.length) return `<div class="tg-modal-sub" style="margin:0;">No data pulled from ${escapeHtml(sheetLabel)}.</div>`;
+            const nCols = rows[0].cells.length;
+            // a picture without a measured anchor row goes above the k-th "Trailer N Tyre/Line" title row
+            const titleRows = rows.filter(r => r.cells.some(t => /trailer\s+\d+.*tyre/i.test(t))).map(r => r.n);
+            const imgs = (block.images || []).map((im, k) => ({
+                im, at: im.anchorRow != null ? im.anchorRow : (titleRows[k] != null ? titleRows[k] : 1), k
+            })).sort((a, b) => (a.at - b.at) || (a.k - b.k));
+            let html = '<table class="tg-concept-table">';
+            let ii = 0;
+            const flush = (upTo) => {
+                while (ii < imgs.length && imgs[ii].at <= upTo) {
+                    const im = imgs[ii].im;
+                    html += `<tr class="tg-concept-img-row"><td colspan="${nCols}"><div class="tg-concept-img-box"><img src="${im.src}" alt="${escapeHtml(im.name || 'Excel picture')}" title="Click to zoom in / out" onclick="this.classList.toggle('tg-concept-img-zoom')"></div></td></tr>`;
+                    ii++;
+                }
+            };
+            rows.forEach(r => { flush(r.n); html += `<tr>${conceptCellsHtml(r.cells, nCols, r.n === 1)}</tr>`; });
+            flush(Infinity);
+            return html + '</table>';
+        }
+
+        function renderTgConceptDisplay() {
+            const el = document.getElementById('tgConceptDisplay');
+            if (!el) return;
+            const v = tgConceptView;
+            if (!v.port.rows.length && !v.doh.rows.length) {
+                el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet - click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${CONCEPT_PORT_SHEET}' and '${CONCEPT_DOH_SHEET}'.</div>`;
+                return;
+            }
+            const block = (sheet, header, data) =>
+                `<div class="tg-concept-block"><div class="tg-concept-block-title">${escapeHtml(sheet)}${header ? ` <span>- ${escapeHtml(header)}</span>` : ''}</div>` +
+                `<div class="tg-concept-wrap">${buildConceptTableHtml(data, sheet)}</div></div>`;
+            el.innerHTML = block(CONCEPT_PORT_SHEET, tgConcept.port.header, v.port) +
+                block(CONCEPT_DOH_SHEET, tgConcept.doh.header, v.doh) +
+                (v.imagesNote ? `<div class="tg-modal-sub" style="margin:0;">${escapeHtml(v.imagesNote)}</div>` : '');
+        }
+
         function renderTrailerDashboard() {
             renderTgHLoadsFields();
             renderTgDrawingTable();
@@ -9574,6 +10133,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderLashingList();
             renderTgTractionFields();
             renderTgTractionDataTable();
+            renderTgConceptFields();
+            renderTgConceptDisplay();
             // Auto-refresh each train's AutoCAD split on every dashboard
             // load/refresh, so a stale split (axle groups changed by
             // hand, a preset swap, an Excel pull, etc.) never needs a
@@ -17121,6 +17682,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 await pullLashingCalcTableFromExcel({ silent: true });
                 await pullTractionFromExcel({ silent: true });
                 await pullTractionDataFromExcel({ silent: true });
+                await pullConceptFromExcel({ silent: true });
+                await pullConceptDisplayFromExcel({ silent: true });
                 if (autoSyncEnabled) startAutoPullPolling();
             }
         }
