@@ -396,27 +396,20 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #14b8a6 10%);
         }
-        /* 🚚 Trailer Concept (input) + 🚚 Trailer Concept (display) share ONE lime colour (identical background,
-           left accent and title colour; also their tab labels) — no other card/tab uses this hue
-           (amber = Generate Trailer, green = Cargo, blue = Horizontal Loads, violet = CoG Envelope,
-           teal = Traction, pink = Lashing). Slightly stronger tint (18%) than the others so it stands out. */
-        .tg-card-concept, .tg-card-concept-bg {
+        /* 🚚 Trailer Concept (input) + 🚚 Trailer Concept (display): same card style as every other input/output
+           pair (10% tint; the input card also carries the 4px left accent), just its own hue — lime. */
+        .tg-card-concept {
             border-left: 4px solid var(--concept-accent);
             background: var(--tank-box-bg);
-            background: color-mix(in srgb, var(--tank-box-bg) 82%, var(--concept-accent) 18%);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--concept-accent) 10%);
         }
-        .tg-card-concept .tg-cargo-title, .tg-card-concept-bg .tg-cargo-title,
-        .tg-concept-part-title { color: var(--concept-accent); }
-        .tg-tab-btn.tg-tab-concept {
-            background: color-mix(in srgb, var(--tank-box-bg) 82%, var(--concept-accent) 18%);
-            border-color: var(--concept-accent); color: var(--concept-accent);
+        .tg-card-concept-bg {
+            background: var(--tank-box-bg);
+            background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--concept-accent) 10%);
         }
-        .tg-tab-btn.tg-tab-concept.active {
-            background: color-mix(in srgb, var(--panel-bg) 78%, var(--concept-accent) 22%);
-            color: var(--text-main); border-color: var(--concept-accent);
-            box-shadow: inset 0 2px 0 var(--concept-accent);
-        }
-        .tg-concept-part-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; margin: 8px 0 4px; }
+        .tg-tab-btn.tg-tab-concept { border-color: var(--concept-accent); color: var(--concept-accent); }
+        .tg-tab-btn.tg-tab-concept.active { color: var(--text-main); border-color: var(--concept-accent); box-shadow: inset 0 2px 0 var(--concept-accent); }
+        .tg-concept-part-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin: 8px 0 4px; }
         .tg-concept-part-title:first-child { margin-top: 2px; }
         .tg-concept-block { margin: 0 0 10px; }
         .tg-concept-block-title { font-size: 11px; font-weight: 700; margin: 2px 0 4px; color: var(--text-main); }
@@ -1178,7 +1171,7 @@
                             <strong>Input!AZ35:AZ40</strong>), <strong>D2</strong> = the weight linked to the selected list entry (read-only; follows
                             the cargo weight in <strong>Input!BA</strong>). The drop-down options are read from each cell's own Excel validation list.
                             Pulled on open/refresh and by the background poll; edits push automatically (or with 📤 Push to Excel).
-                            The calculation tables and pictures of both sheets are shown in the <strong>Trailer Concept</strong> display card above the 2D Drawing.
+                            The calculation tables and pictures of both sheets are shown in the <strong>Trailer Concept</strong> display card below the 2D Drawing.
                         </p>
                         <div id="tgConceptFields"><!-- Trailer Concept fields rendered by JS --></div>
                         <div class="tg-train-list-actions">
@@ -1449,26 +1442,6 @@
                 <div class="tg-split-handle" id="tgSplitHandle" title="Drag to resize"></div>
 
                 <div class="tg-modal-col-right">
-                    <div class="tg-cargo-card tg-card-concept-bg" id="tgConceptDisplayCard">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgConceptDisplayHelpToggleBtn" onclick="toggleTgConceptDisplayHelp()">❓</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgConceptDisplayHelpPanel">
-                            Read-only mirror of Excel sheets <strong>"Trailer_Port"</strong> (<strong>A5:C24</strong> only; highlighted: B5, B7, B9, B16, B17, B18, B24) and
-                            <strong>"Trailer_DOH"</strong> (<strong>A2:M73</strong> only; highlighted: B2, D2, C13, C31, C48, C66),
-                            with the pictures of the sheet shown where they sit in Excel (click a picture to zoom). Pull-only, never pushed;
-                            change the inputs in the <strong>Trailer Concept</strong> card between Generate Cargo and Generate Trailer.
-                            Pictures are read with the Excel add-in; over the standalone bridge only the tables are available.
-                        </p>
-                        <div id="tgConceptDisplay"></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" id="tgRefreshConceptViewBtn" title="Pull the tables and the pictures from Excel 'Trailer_Port' and 'Trailer_DOH'"
-                                    onclick="pullConceptDisplayFromExcel()">⇩ Refresh from Excel</button>
-                        </div>
-                    </div>
-
                     <div class="tg-preview-wrap">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
@@ -1526,6 +1499,26 @@
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
                         <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
                         <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-concept-bg" id="tgConceptDisplayCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgConceptDisplayHelpToggleBtn" onclick="toggleTgConceptDisplayHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgConceptDisplayHelpPanel">
+                            Read-only mirror of Excel sheets <strong>"Trailer_Port"</strong> (<strong>A5:C24</strong> only; highlighted: B5, B7, B9, B16, B17, B18, B24) and
+                            <strong>"Trailer_DOH"</strong> (<strong>A2:M73</strong> only; highlighted: B2, D2, C13, C31, C48, C66),
+                            with the pictures of the sheet shown where they sit in Excel (click a picture to zoom). Pull-only, never pushed;
+                            change the inputs in the <strong>Trailer Concept</strong> card between Generate Cargo and Generate Trailer.
+                            Pictures are read with the Excel add-in; over the standalone bridge only the tables are available.
+                        </p>
+                        <div id="tgConceptDisplay"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshConceptViewBtn" title="Pull the tables and the pictures from Excel 'Trailer_Port' and 'Trailer_DOH'"
+                                    onclick="pullConceptDisplayFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
                     </div>
 
                     <div class="tg-3d-wrap">
