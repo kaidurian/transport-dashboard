@@ -17,6 +17,7 @@
             --text-muted: #94a3b8;
             --accent-blue: #38bdf8;
             --accent-green: #10b981;
+            --concept-accent: #84cc16;
         }
 
         /* ---- Day (light) mode — toggled via #themeModeToggle / body.tg-light-theme ---- */
@@ -30,6 +31,7 @@
             --text-muted: #5b6b81;
             --accent-blue: #0284c7;
             --accent-green: #059669;
+            --concept-accent: #65a30d;
         }
 
         * {
@@ -394,17 +396,27 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, #14b8a6 10%);
         }
-        /* 🚚 Trailer Concept (input) + 🚚 Trailer Concept (display) share one indigo tint; no other card uses it. */
-        .tg-card-concept {
-            border-left: 4px solid #6366f1;
+        /* 🚚 Trailer Concept (input) + 🚚 Trailer Concept (display) share ONE lime colour (identical background,
+           left accent and title colour; also their tab labels) — no other card/tab uses this hue
+           (amber = Generate Trailer, green = Cargo, blue = Horizontal Loads, violet = CoG Envelope,
+           teal = Traction, pink = Lashing). Slightly stronger tint (18%) than the others so it stands out. */
+        .tg-card-concept, .tg-card-concept-bg {
+            border-left: 4px solid var(--concept-accent);
             background: var(--tank-box-bg);
-            background: color-mix(in srgb, var(--tank-box-bg) 90%, #6366f1 10%);
+            background: color-mix(in srgb, var(--tank-box-bg) 82%, var(--concept-accent) 18%);
         }
-        .tg-card-concept-bg {
-            background: var(--tank-box-bg);
-            background: color-mix(in srgb, var(--tank-box-bg) 90%, #6366f1 10%);
+        .tg-card-concept .tg-cargo-title, .tg-card-concept-bg .tg-cargo-title,
+        .tg-concept-part-title { color: var(--concept-accent); }
+        .tg-tab-btn.tg-tab-concept {
+            background: color-mix(in srgb, var(--tank-box-bg) 82%, var(--concept-accent) 18%);
+            border-color: var(--concept-accent); color: var(--concept-accent);
         }
-        .tg-concept-part-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin: 8px 0 4px; }
+        .tg-tab-btn.tg-tab-concept.active {
+            background: color-mix(in srgb, var(--panel-bg) 78%, var(--concept-accent) 22%);
+            color: var(--text-main); border-color: var(--concept-accent);
+            box-shadow: inset 0 2px 0 var(--concept-accent);
+        }
+        .tg-concept-part-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; margin: 8px 0 4px; }
         .tg-concept-part-title:first-child { margin-top: 2px; }
         .tg-concept-block { margin: 0 0 10px; }
         .tg-concept-block-title { font-size: 11px; font-weight: 700; margin: 2px 0 4px; color: var(--text-main); }
@@ -414,6 +426,11 @@
         table.tg-concept-table td { padding: 2px 6px; border: 1px solid var(--panel-border); white-space: nowrap; text-align: left; vertical-align: middle; }
         table.tg-concept-table td.tg-cn-num { text-align: right; font-variant-numeric: tabular-nums; }
         table.tg-concept-table td.tg-cn-head { font-weight: 700; }
+        /* highlighted cells of the display tables (Trailer_Port: B5 B7 B9 B16 B17 B18 B24; Trailer_DOH: B2 D2 C13 C31 C48 C66) */
+        table.tg-concept-table td.tg-cn-hl {
+            background: rgba(250, 204, 21, 0.38); color: var(--text-main); font-weight: 700;
+            outline: 2px solid #eab308; outline-offset: -2px;
+        }
         table.tg-concept-table tr.tg-concept-img-row td { padding: 6px; text-align: center; white-space: normal; background: var(--panel-bg); }
         .tg-concept-img-box { overflow: auto; max-width: 100%; }
         .tg-concept-img-box img { display: block; margin: 0 auto; max-width: 100%; height: auto; background: #fff; border-radius: 4px; cursor: zoom-in; }
@@ -1071,7 +1088,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.164)</h1>
+            <h1>🚂 Transport Dashboard (Rev.165)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1439,7 +1456,8 @@
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub" id="tgConceptDisplayHelpPanel">
-                            Read-only mirror of Excel sheets <strong>"Trailer_Port"</strong> (A1:N36) and <strong>"Trailer_DOH"</strong> (A1:M133),
+                            Read-only mirror of Excel sheets <strong>"Trailer_Port"</strong> (<strong>A5:C24</strong> only; highlighted: B5, B7, B9, B16, B17, B18, B24) and
+                            <strong>"Trailer_DOH"</strong> (<strong>A2:M73</strong> only; highlighted: B2, D2, C13, C31, C48, C66),
                             with the pictures of the sheet shown where they sit in Excel (click a picture to zoom). Pull-only, never pushed;
                             change the inputs in the <strong>Trailer Concept</strong> card between Generate Cargo and Generate Trailer.
                             Pictures are read with the Excel add-in; over the standalone bridge only the tables are available.
@@ -9662,16 +9680,18 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Input, Part 2  = Excel "Trailer_DOH": A1 header, B2 drop-down list (cargo names of
         //                  Input!AZ35:AZ40), D2 = weight linked to the selected list entry
         //                  (Input!BA of the same row) - written together with B2.
-        // Display        = pull-only mirror of Trailer_Port!A1:N36 + Trailer_DOH!A1:M133 with the
-        //                  sheet pictures (Office.js Shape.getAsImage) placed where they sit in Excel.
+        // Display        = pull-only mirror of Trailer_Port!A5:C24 + Trailer_DOH!A2:M73 (highlighted cells:
+        //                  see CONCEPT_PORT_HILITE / CONCEPT_DOH_HILITE) with the sheet pictures (Office.js Shape.getAsImage) placed where they sit in Excel.
         // Each Excel write is its own Excel.run so one failing cell never rolls back the others.
         // ============================================================
         const CONCEPT_PORT_SHEET = 'Trailer_Port';
         const CONCEPT_DOH_SHEET = 'Trailer_DOH';
         const CONCEPT_PORT_INPUT_RANGE = 'A1:C16';   // A1 header, A5:C5 weight, A7:B7 trailer, A9:C9 3-files, A16:B16 jetty
         const CONCEPT_DOH_INPUT_RANGE = 'A1:E2';     // A1 header, A2:E2 DOH Pay load row (B2 list, D2 weight)
-        const CONCEPT_PORT_VIEW_RANGE = 'A1:N36';
-        const CONCEPT_DOH_VIEW_RANGE = 'A1:M133';
+        const CONCEPT_PORT_VIEW_RANGE = 'A5:C24';   // display shows ONLY this block of Trailer_Port ...
+        const CONCEPT_DOH_VIEW_RANGE = 'A2:M73';    // ... and ONLY this block of Trailer_DOH
+        const CONCEPT_PORT_HILITE = ['B5', 'B7', 'B9', 'B16', 'B17', 'B18', 'B24'];   // highlighted cells of the Port display
+        const CONCEPT_DOH_HILITE = ['B2', 'D2', 'C13', 'C31', 'C48', 'C66'];          // highlighted cells of the DOH display
         const CONCEPT_CARGO_SHEET = 'Input';
         const CONCEPT_CARGO_LIST_RANGE = 'AZ35:BA40';   // name + W [mTe] of the cargo list (same rows as B2's list)
         const CONCEPT_YESNO_FALLBACK = ['Yes', 'No'];    // B9's own list range (P11:P12) is empty in the workbook
@@ -9973,22 +9993,40 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
         // ---- display: tables + pictures -------------------------------------------------
-        function conceptRowsFromGrid(grid) {
+        // 'A5:C24' -> { c0:0, r0:5, c1:2, r1:24 } (0-based columns, 1-based rows)
+        function conceptParseAddr(addr) {
+            const m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i.exec(String(addr).replace(/\$/g, ''));
+            const col = t => t.toUpperCase().split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+            return m ? { c0: col(m[1]), r0: +m[2], c1: col(m[3]), r1: +m[4] } : { c0: 0, r0: 1, c1: 0, r1: 1 };
+        }
+        // Rows keep their ABSOLUTE sheet row number (n); `hl` lists the highlighted column offsets of the row.
+        // A row is dropped only when it is empty AND holds no highlighted cell.
+        function conceptRowsFromGrid(grid, addr, hiliteList) {
+            const a = conceptParseAddr(addr || 'A1:A1');
+            const hlByRow = {};
+            (hiliteList || []).forEach(ref => {
+                const q = conceptParseAddr(ref + ':' + ref);
+                if (q.c0 < a.c0 || q.c0 > a.c1 || q.r0 < a.r0 || q.r0 > a.r1) return;   // highlight outside the shown block: ignored
+                (hlByRow[q.r0] = hlByRow[q.r0] || []).push(q.c0 - a.c0);
+            });
             const rows = [];
             let maxCol = 0;
             (grid || []).forEach((r, i) => {
+                const n = a.r0 + i;
                 const cells = (r || []).map(conceptText);
+                const hl = (hlByRow[n] || []).slice().sort((x, y) => x - y);
                 let last = cells.length - 1;
                 while (last >= 0 && cells[last] === '') last--;
-                if (last < 0) return;                              // fully empty row: dropped
+                if (hl.length) last = Math.max(last, hl[hl.length - 1]);
+                if (last < 0) return;                              // fully empty row without highlight: dropped
                 maxCol = Math.max(maxCol, last + 1);
-                rows.push({ n: i + 1, cells: cells.slice(0, last + 1) });
+                rows.push({ n, cells: cells.slice(0, last + 1), hl });
             });
             rows.forEach(r => { while (r.cells.length < maxCol) r.cells.push(''); });
             return rows;
         }
 
-        async function conceptReadSheetView(sheetName, addr) {
+        async function conceptReadSheetView(sheetName, addr, hiliteList) {
             let grid = null;
             await Excel.run(async (context) => {
                 const r = context.workbook.worksheets.getItem(sheetName).getRange(addr);
@@ -9996,12 +10034,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 await context.sync();
                 grid = r.text || r.values;
             });
-            return conceptRowsFromGrid(grid);
+            return conceptRowsFromGrid(grid, addr, hiliteList);
         }
 
         // Pictures of a sheet as data URIs, each with the row it is anchored at (from its top edge
         // against the cumulative row tops). Needs the Excel add-in (Shape.getAsImage, ExcelApi 1.9).
-        async function conceptReadSheetImages(sheetName, rowCount) {
+        async function conceptReadSheetImages(sheetName, addr) {
+            const rg = conceptParseAddr(addr);
             const imgs = [];
             let note = '';
             try {
@@ -10011,13 +10050,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     if (!shapes || typeof shapes.load !== 'function') throw new Error('shapes API not available');
                     shapes.load('items/name,items/top,items/left,items/width,items/height');
                     await context.sync();
-                    const items = shapes.items.filter(sh => sh.width >= 30 && sh.height >= 30)
+                    let items = shapes.items.filter(sh => sh.width >= 30 && sh.height >= 30)
                         .sort((a, b) => (a.top - b.top) || (a.left - b.left));
+                    if (!items.length) return;
+                    // the display shows only `addr`: keep the pictures whose top-left corner sits inside that block
+                    try {
+                        const area = sheet.getRange(addr);
+                        area.load('top,left,width,height');
+                        await context.sync();
+                        items = items.filter(sh => sh.top >= area.top - 1 && sh.top <= area.top + area.height &&
+                                                   sh.left >= area.left - 1 && sh.left <= area.left + area.width);
+                    } catch (e) { /* keep every picture when the block cannot be measured */ }
                     if (!items.length) return;
                     let tops = null;
                     try {
                         const cells = [];
-                        for (let r = 1; r <= rowCount; r++) { const cell = sheet.getRange('A' + r); cell.load('top'); cells.push(cell); }
+                        for (let r = rg.r0; r <= rg.r1; r++) { const cell = sheet.getRange('A' + r); cell.load('top'); cells.push(cell); }
                         await context.sync();
                         tops = cells.map(cell => cell.top);
                     } catch (e) { tops = null; }
@@ -10026,7 +10074,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     await context.sync();
                     items.forEach((sh, i) => {
                         let anchor = null;
-                        if (tops) { for (let r = 0; r < tops.length; r++) { if (tops[r] <= sh.top + 1) anchor = r + 1; else break; } }
+                        if (tops) { for (let r = 0; r < tops.length; r++) { if (tops[r] <= sh.top + 1) anchor = rg.r0 + r; else break; } }
                         imgs.push({ name: sh.name, src: 'data:image/png;base64,' + res[i].value, w: sh.width, h: sh.height, anchorRow: anchor, order: i });
                     });
                 });
@@ -10046,14 +10094,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const wantImages = opts.images === true || (opts.images !== false && !tgConceptView.imagesLoaded);
             const v = tgConceptView;
             let okAny = false;
-            try { v.port.rows = await conceptReadSheetView(CONCEPT_PORT_SHEET, CONCEPT_PORT_VIEW_RANGE); okAny = true; }
+            try { v.port.rows = await conceptReadSheetView(CONCEPT_PORT_SHEET, CONCEPT_PORT_VIEW_RANGE, CONCEPT_PORT_HILITE); okAny = true; }
             catch (e) { console.warn(`Could not read '${CONCEPT_PORT_SHEET}' (${CONCEPT_PORT_VIEW_RANGE})`, e); if (!silent) alert(`Could not read sheet "${CONCEPT_PORT_SHEET}". Make sure it exists.`); }
-            try { v.doh.rows = await conceptReadSheetView(CONCEPT_DOH_SHEET, CONCEPT_DOH_VIEW_RANGE); okAny = true; }
+            try { v.doh.rows = await conceptReadSheetView(CONCEPT_DOH_SHEET, CONCEPT_DOH_VIEW_RANGE, CONCEPT_DOH_HILITE); okAny = true; }
             catch (e) { console.warn(`Could not read '${CONCEPT_DOH_SHEET}' (${CONCEPT_DOH_VIEW_RANGE})`, e); if (!silent) alert(`Could not read sheet "${CONCEPT_DOH_SHEET}". Make sure it exists.`); }
             let changed = false;
             if (wantImages) {
-                const pr = await conceptReadSheetImages(CONCEPT_PORT_SHEET, 36);
-                const dr = await conceptReadSheetImages(CONCEPT_DOH_SHEET, 133);
+                const pr = await conceptReadSheetImages(CONCEPT_PORT_SHEET, CONCEPT_PORT_VIEW_RANGE);
+                const dr = await conceptReadSheetImages(CONCEPT_DOH_SHEET, CONCEPT_DOH_VIEW_RANGE);
                 v.port.images = pr.imgs;
                 v.doh.images = dr.imgs;
                 v.imagesNote = (pr.note || dr.note) && !(pr.imgs.length || dr.imgs.length) ? (dr.note || pr.note) : '';
@@ -10067,18 +10115,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
         const pullConceptDisplayFromExcel = withBtnSyncIndicator('tgRefreshConceptViewBtn', (o) => pullConceptDisplayFromExcelImpl(Object.assign({ images: true }, o || {})));
 
-        function conceptCellsHtml(cells, nCols, isHeaderRow) {
+        function conceptCellsHtml(cells, nCols, isHeaderRow, hlCols) {
+            const hl = new Set(hlCols || []);
             let h = '', i = 0;
             while (i < nCols) {
                 const t = cells[i] || '';
                 let j = i + 1;
-                while (j < nCols && !(cells[j] || '')) j++;        // an empty neighbour is absorbed (Excel text overflow / merged header)
+                if (!hl.has(i)) while (j < nCols && !(cells[j] || '') && !hl.has(j)) j++;   // an empty neighbour is absorbed (Excel text overflow / merged header) - never a highlighted one
                 const span = j - i;
+                const isHl = hl.has(i);
                 if (t === '') {
-                    h += `<td${span > 1 ? ` colspan="${span}"` : ''}></td>`;
+                    h += `<td${span > 1 ? ` colspan="${span}"` : ''}${isHl ? ' class="tg-cn-hl"' : ''}></td>`;
                 } else {
                     const isNum = span === 1 && /^-?[\d.,]+%?$/.test(t);
-                    const cls = isHeaderRow && i === 0 ? 'tg-cn-head' : (isNum ? 'tg-cn-num' : '');
+                    const cls = [isHeaderRow && i === 0 ? 'tg-cn-head' : (isNum ? 'tg-cn-num' : ''), isHl ? 'tg-cn-hl' : ''].filter(Boolean).join(' ');
                     h += `<td${span > 1 ? ` colspan="${span}"` : ''}${cls ? ` class="${cls}"` : ''}>${escapeHtml(t)}</td>`;
                 }
                 i = j;
@@ -10104,7 +10154,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     ii++;
                 }
             };
-            rows.forEach(r => { flush(r.n); html += `<tr>${conceptCellsHtml(r.cells, nCols, r.n === 1)}</tr>`; });
+            rows.forEach(r => { flush(r.n); html += `<tr>${conceptCellsHtml(r.cells, nCols, false, r.hl)}</tr>`; });
             flush(Infinity);
             return html + '</table>';
         }
@@ -11401,7 +11451,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     el.classList.add('tg-tab-item');
                     const btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.className = 'tg-tab-btn';
+                    btn.className = 'tg-tab-btn' + (el.matches('.tg-card-concept, .tg-card-concept-bg') ? ' tg-tab-concept' : '');
                     btn.setAttribute('role', 'tab');
                     btn.textContent = tgTabTitle(el);
                     btn.onclick = () => selectTgTab(area.key, el);
@@ -11410,6 +11460,33 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
             });
         }
+        // Trailer Concept (input) clicked -> show the Trailer Concept (display) automatically:
+        // tabbed layouts switch the display tab, stacked layouts expand the display card; the tables are
+        // pulled once if nothing was ever pulled. Only fires on a user click, never on a layout restore.
+        let tgConceptAutoPulled = false;
+        function tgConceptShowDisplay() {
+            const disp = document.getElementById('tgConceptDisplayCard');
+            if (!disp) return;
+            if (tgTabsOnFor('bottom')) { if (!disp.classList.contains('tg-tab-active')) selectTgTab('bottom', disp); }
+            else expandTgCardById('tgConceptDisplayCard');
+            if (!tgConceptAutoPulled && isOfficeInitialized && !tgConceptView.port.rows.length && !tgConceptView.doh.rows.length) {
+                tgConceptAutoPulled = true;
+                pullConceptDisplayFromExcelImpl({ silent: true }).catch(() => {});
+            }
+        }
+        (function wireTgConceptAutoShow() {
+            const wire = () => {
+                const c = document.getElementById('tgConceptCard');
+                if (!c || c._tgAutoShow) return;
+                c._tgAutoShow = true;
+                c.addEventListener('click', () => {
+                    // a header click that just MINIMIZED the card (stacked layout) must not pop the display open
+                    if (c.classList.contains('tg-card-minimized') && !tgTabsOnFor('top')) return;
+                    tgConceptShowDisplay();
+                });
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+        })();
         function selectTgTab(key, el, noSave) {
             const body = document.getElementById('tgModalBody');
             const area = TG_TAB_AREAS.find(a => a.key === key);
@@ -11421,6 +11498,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             if (tgTabsOnFor(key)) tgSetMinimized(el, false);   // tab click = full (expanded) view
             if (!noSave) { try { localStorage.setItem(area.store, tgTabTitle(el)); } catch (e) {} }
+            if (!noSave && key === 'top' && el.id === 'tgConceptCard') tgConceptShowDisplay();   // Trailer Concept input tab -> its display tab follows
             setTimeout(() => {   // hidden canvases/SVGs report 0 size -> re-fit now that this one is visible
                 try { if (typeof resize3DViewerTG === 'function') resize3DViewerTG(); } catch (e) {}
                 try { if (typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview(); } catch (e) {}
