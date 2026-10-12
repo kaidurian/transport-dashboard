@@ -1081,7 +1081,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.166)</h1>
+            <h1>🚂 Transport Dashboard (Rev.166.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -12082,8 +12082,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // isn't known until the geometry below is computed).
             const dimTierCount = 2 + trailerGenTrains.length + cargoItems.length;
             const dimTierHalf = tgShowDimensions ? Math.ceil(dimTierCount / 2) : 0;   // no dimension tiers to reserve room for when hidden
-            const padT = Math.max(34, 24 + dimTierHalf * 13);
-            const padB0 = Math.max(30, 24 + dimTierHalf * 13);
+            // Dimensions hidden -> no tier stacks to clear, so the Top view's own
+            // top/bottom padding shrinks to just what the frame + "Top View"
+            // caption need (brings the Top view closer to the Side view below).
+            const padT = tgShowDimensions ? Math.max(34, 24 + dimTierHalf * 13) : 20;
+            const padB0 = tgShowDimensions ? Math.max(30, 24 + dimTierHalf * 13) : 8;
             let svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30) ;
             const padL = 55, padR = 50, padB = padB0;
             const plotW = layoutSvgW - padL - padR;
@@ -13072,7 +13075,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 for (let j = i + 1; j < frontCargoYsMm.length; j++)
                     if (frontCargoYsMm[i] !== frontCargoYsMm[j]) frontChainPairCount++;
             const TG_FRONT_CHAIN_MAX_TIERS = Math.max(1, frontChainSegCount + frontChainPairCount);
-            const TG_FRONT_DIM_HEADER_H = tgShowDimensions ? 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP : 8;
+            const TG_FRONT_DIM_HEADER_H = tgShowDimensions ? 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP : 0;   // hidden: no header band
             // Fixed clearance between the LAST (lowest) dimension row of
             // the header band above and the panel's own top border —
             // tightened to 5px (from 30, then 14, then 8) so the chain
@@ -13082,7 +13085,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // leaving enough room for that row's own tick marks
             // (extending ±3px past the dimension line) to clear the
             // border line cleanly.
-            const padT = 5 + TG_FRONT_DIM_HEADER_H, padB = tgShowDimensions ? 60 : 12;
+            const padT = (tgShowDimensions ? 5 : 4) + TG_FRONT_DIM_HEADER_H, padB = tgShowDimensions ? 60 : 12;
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
             // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
@@ -13090,7 +13093,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // has room above the end panels without crowding the side
             // view.
             const endXDimCount = cargoItems.length + (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
-            const padGap = tgShowDimensions ? Math.max(56, 20 + endXDimCount * 13) : Math.round(28 + 14 * Math.max(1, tgFontK));   // hidden: just clears the "Side View" caption
+            const padGap = tgShowDimensions ? Math.max(56, 20 + endXDimCount * 13) : Math.round(22 + 14 * Math.max(1, tgFontK));   // hidden: just clears the "Side View" caption (tight)
             // Cargo boxes span base .. base + Height, where "base" is
             // each item's own Height-start reference: the trailer's own
             // top deck, or the top of the PREVIOUS cargo item's box, for
@@ -13193,7 +13196,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // breathing room so the Left/Right End View panels (and their
             // now below-ground labels) read as clearly separate groups
             // rather than crowding together.
-            const endGap = tgShowDimensions ? Math.max(90, cargoZInwardMargin * 2 + 40) : 40;   // hidden: panels' own 15px borders leave a ~10px gap
+            const endGap = tgShowDimensions ? Math.max(90, cargoZInwardMargin * 2 + 40) : 34;   // hidden: panels' own 15px borders leave a ~4px gap
             const endsTotalW = endW * 2 + endGap;
 
             // Outward margin reserved to the right of the FRONT (side)
@@ -13891,7 +13894,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // since the train-number labels and Left/Right End View
             // captions below always need to sit under it, even when the
             // dimension toggle itself is off and the chain isn't drawn.
-            const endChainRowY = stabArmLabelMaxY != null ? (stabArmLabelMaxY + 14) : (endGroundY + 8);
+            const endChainRowY = stabArmLabelMaxY != null ? (stabArmLabelMaxY + (tgShowDimensions ? 14 : 4)) : (endGroundY + (tgShowDimensions ? 8 : 0));
 
             // ---- End-view width-direction (world-Y) chain breakpoints
             // — computed unconditionally (not gated by tgShowDimensions,
@@ -14303,7 +14306,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // svgH now accounts for however low endChainRowY/captionY
             // actually landed (can sit well past the old fixed padB when
             // a stability triangle's arm label is the deepest element).
-            const svgH = Math.max(endGroundY + padB, captionY + 16 * kk, sideCaptionY + 8 * kk);
+            const svgH = Math.max(endGroundY + padB, captionY + (tgShowDimensions ? 16 : 8) * kk, sideCaptionY + 8 * kk);
 
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
                 <rect x="${sideOffsetX - 15}" y="${padT}" width="${sideW + 30}" height="${panelH + 12}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
