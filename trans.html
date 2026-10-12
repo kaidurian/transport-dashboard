@@ -1081,7 +1081,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.165)</h1>
+            <h1>🚂 Transport Dashboard (Rev.166)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -12081,12 +12081,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // count each (a safe over-estimate; the exact front/back split
             // isn't known until the geometry below is computed).
             const dimTierCount = 2 + trailerGenTrains.length + cargoItems.length;
-            const dimTierHalf = Math.ceil(dimTierCount / 2);
+            const dimTierHalf = tgShowDimensions ? Math.ceil(dimTierCount / 2) : 0;   // no dimension tiers to reserve room for when hidden
             const padT = Math.max(34, 24 + dimTierHalf * 13);
             const padB0 = Math.max(30, 24 + dimTierHalf * 13);
-            const svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30) ;
+            let svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30) ;
             const padL = 55, padR = 50, padB = padB0;
-            const plotW = layoutSvgW - padL - padR, plotH = svgH - padT - padB;
+            const plotW = layoutSvgW - padL - padR;
+            let plotH = svgH - padT - padB;
 
             // Bounding box always includes the world origin (0,0) — so
             // the origin sign/arrows are always in view — plus every
@@ -12145,7 +12146,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const usedW = spanX * scale, usedH = spanY * scale;
             // Center the (possibly narrower) used area within the padded box.
             const offsetX = padL + (plotW - usedW) / 2;
-            const offsetY = padT + (plotH - usedH) / 2;
+            let offsetY = padT + (plotH - usedH) / 2;
+            // Dimensions hidden -> shrink the plan panel to hug the drawing (scale above is
+            // already final) so the Top view sits right above the Side view.
+            if (!tgShowDimensions) { plotH = usedH; svgH = padT + usedH + padB; offsetY = padT; }
             const sx = x => offsetX + (x - minX) * scale;
             // No vertical flip: +Y renders DOWNWARD on screen, matching
             // the origin sign (X-axis arrow points right, Y-axis arrow
@@ -13068,7 +13072,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 for (let j = i + 1; j < frontCargoYsMm.length; j++)
                     if (frontCargoYsMm[i] !== frontCargoYsMm[j]) frontChainPairCount++;
             const TG_FRONT_CHAIN_MAX_TIERS = Math.max(1, frontChainSegCount + frontChainPairCount);
-            const TG_FRONT_DIM_HEADER_H = 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP;
+            const TG_FRONT_DIM_HEADER_H = tgShowDimensions ? 26 + (TG_FRONT_CHAIN_MAX_TIERS - 1) * TG_FRONT_CHAIN_TIER_STEP : 8;
             // Fixed clearance between the LAST (lowest) dimension row of
             // the header band above and the panel's own top border —
             // tightened to 5px (from 30, then 14, then 8) so the chain
@@ -13078,7 +13082,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // leaving enough room for that row's own tick marks
             // (extending ±3px past the dimension line) to clear the
             // border line cleanly.
-            const padT = 5 + TG_FRONT_DIM_HEADER_H, padB = 60;
+            const padT = 5 + TG_FRONT_DIM_HEADER_H, padB = tgShowDimensions ? 60 : 12;
             // Gap between the stacked side-view panel and the end-view
             // panels below it — grows with the number of end-view "X
             // direction" baseline call-outs (cargo CoG Y + Trailer CoG Y
@@ -13086,7 +13090,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // has room above the end panels without crowding the side
             // view.
             const endXDimCount = cargoItems.length + (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
-            const padGap = Math.max(56, 20 + endXDimCount * 13);
+            const padGap = tgShowDimensions ? Math.max(56, 20 + endXDimCount * 13) : Math.round(28 + 14 * Math.max(1, tgFontK));   // hidden: just clears the "Side View" caption
             // Cargo boxes span base .. base + Height, where "base" is
             // each item's own Height-start reference: the trailer's own
             // top deck, or the top of the PREVIOUS cargo item's box, for
@@ -13178,9 +13182,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const TG_COGZ_TIER_STEP = 26;  // successive tiers' line spacing (must clear the rotated text below)
             const TG_COGZ_TEXT_GAP = 10;   // dimension line -> its own rotated label
             const cogZDimCount = (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
-            const cogZOutwardMargin = cogZDimCount > 0
+            const cogZOutwardMargin = (tgShowDimensions && cogZDimCount > 0)
                 ? TG_COGZ_LINE_GAP + (cogZDimCount - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
-            const cargoZInwardMargin = cargoItems.length > 0
+            const cargoZInwardMargin = (tgShowDimensions && cargoItems.length > 0)
                 ? TG_COGZ_LINE_GAP + (cargoItems.length - 1) * TG_COGZ_TIER_STEP + TG_COGZ_TEXT_GAP + 10 : 0;
             const leftDimMargin = cogZOutwardMargin;
             const rightDimMargin = cogZOutwardMargin;
@@ -13189,7 +13193,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // breathing room so the Left/Right End View panels (and their
             // now below-ground labels) read as clearly separate groups
             // rather than crowding together.
-            const endGap = Math.max(90, cargoZInwardMargin * 2 + 40);
+            const endGap = tgShowDimensions ? Math.max(90, cargoZInwardMargin * 2 + 40) : 40;   // hidden: panels' own 15px borders leave a ~10px gap
             const endsTotalW = endW * 2 + endGap;
 
             // Outward margin reserved to the right of the FRONT (side)
@@ -13201,7 +13205,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const TG_CARGO_HGT_LINE_GAP = 10;   // panel edge -> first tier's dimension line
             const TG_CARGO_HGT_TIER_STEP = 20;  // successive tiers' X spacing
             const TG_CARGO_HGT_TEXT_GAP = 10;   // last tier's line -> its own rotated label
-            const cargoHgtOutwardMargin = cargoItems.length > 0
+            const cargoHgtOutwardMargin = (tgShowDimensions && cargoItems.length > 0)
                 ? TG_CARGO_HGT_LINE_GAP + (cargoItems.length - 1) * TG_CARGO_HGT_TIER_STEP + TG_CARGO_HGT_TEXT_GAP + 20 : 0;
 
             // Extra outside-the-panel margin reserved for the CoG Z
@@ -13238,8 +13242,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // edge and Right End View out to the right edge instead of
             // padding both sides equally, so the two stay visually
             // separated instead of reading as one crowded middle group.
-            const endOffsetX1 = padL + leftDimMargin;                           // left end-view panel — pinned left
-            const endOffsetX2 = padL + leftDimMargin + contentW - endW;         // right end-view panel — pinned right
+            const endOffsetX1 = padL + leftDimMargin + (tgShowDimensions ? 0 : (contentW - endsTotalW) / 2);                           // left end-view panel — pinned left
+            const endOffsetX2 = tgShowDimensions ? padL + leftDimMargin + contentW - endW : endOffsetX1 + endW + endGap;         // right end-view panel — pinned right
 
             const sideGroundY = padT + panelH;
             const endPadT = padT + panelH + padGap;
@@ -13926,7 +13930,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // endChainRowY itself when there's nothing to chain), used
             // below so the train-number labels/captions always sit
             // clear of every tier, not just the first one.
-            const endChainMaxY = endChainDeckWidthRowY != null ? endChainDeckWidthRowY : (endChainRowY + Math.max(0, endChainTierCount - 1) * TG_END_CHAIN_TIER_STEP);
+            const endChainMaxY = !tgShowDimensions ? endChainRowY : endChainDeckWidthRowY != null ? endChainDeckWidthRowY : (endChainRowY + Math.max(0, endChainTierCount - 1) * TG_END_CHAIN_TIER_STEP);
 
             // ---- Dimensions ----
             let dimSvg = '';
