@@ -407,8 +407,10 @@
             background: var(--tank-box-bg);
             background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--concept-accent) 10%);
         }
-        .tg-tab-btn.tg-tab-concept { border-color: var(--concept-accent); color: var(--concept-accent); }
-        .tg-tab-btn.tg-tab-concept.active { color: var(--text-main); border-color: var(--concept-accent); box-shadow: inset 0 2px 0 var(--concept-accent); }
+        /* Trailer Concept tab header: uses the same text/border colour style as every other tab (.tg-tab-btn) */
+        .tg-cargo-note { flex: 0 1 auto; font-size: 11px; font-weight: 600; color: var(--text-muted); margin: 0 6px; line-height: 1.3; }
+        .tg-cargo-main-note { flex: 0 0 auto; font-size: 10px; font-weight: 600; color: var(--text-muted); white-space: nowrap; margin-left: 6px; }
+        .tg-xl-table th .tg-xl-th-note { display: block; font-size: 9px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
         .tg-concept-part-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin: 8px 0 4px; }
         .tg-concept-part-title:first-child { margin-top: 2px; }
         .tg-concept-block { margin: 0 0 10px; }
@@ -416,8 +418,8 @@
         .tg-concept-block-title span { font-weight: 400; color: var(--text-muted); }
         .tg-concept-wrap { overflow-x: auto; border: 1px solid var(--panel-border); border-radius: 6px; background: var(--panel-bg); }
         table.tg-concept-table { border-collapse: collapse; font-size: 10.5px; color: var(--text-main); }
-        table.tg-concept-table td { padding: 2px 6px; border: 1px solid var(--panel-border); white-space: nowrap; text-align: left; vertical-align: middle; }
-        table.tg-concept-table td.tg-cn-num { text-align: right; font-variant-numeric: tabular-nums; }
+        table.tg-concept-table td { padding: 2px 6px; border: 1px solid var(--panel-border); white-space: nowrap; text-align: center; vertical-align: middle; }
+        table.tg-concept-table td.tg-cn-num { text-align: center; font-variant-numeric: tabular-nums; }
         table.tg-concept-table td.tg-cn-head { font-weight: 700; }
         /* highlighted cells of the display tables (Trailer_Port: B5 B7 B9 B16 B17 B18 B24; Trailer_DOH: B2 D2 C13 C31 C48 C66) */
         table.tg-concept-table td.tg-cn-hl {
@@ -1081,7 +1083,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.166)</h1>
+            <h1>🚂 Transport Dashboard (Rev.167)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1113,6 +1115,7 @@
                     <div class="tg-cargo-card tg-card-cargo">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
+                            <span class="tg-cargo-note">(Put only weight first for Trailer Concept.)</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -5876,6 +5879,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                title="${cargo.groupCog ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.' : `Synced with Excel 'Input'!${CARGO_NAME_COL}${cell}`}"
                                ${cargo.groupCog ? 'disabled' : ''}
                                onchange="updateCargoField(${cargo.id}, 'name', this.value)">
+                        ${idx === 0 ? '<span class="tg-cargo-main-note" title="The first cargo row is the main cargo.">(1st row is main cargo)</span>' : ''}
                         <label class="tg-cargo-link-toggle ${cargo.linkExcelDim ? 'tg-cargo-link-active' : ''}"
                                title="${cargo.groupCog
                                    ? 'Disabled while grouped (🧲 Group toggle) — only CoGx/CoGy/CoGz stay editable. Untick Group to edit this again.'
@@ -10016,6 +10020,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 rows.push({ n, cells: cells.slice(0, last + 1), hl });
             });
             rows.forEach(r => { while (r.cells.length < maxCol) r.cells.push(''); });
+            // Highlight the data of every column headed "Line": from the header row down through the
+            // consecutive rows below it, until a blank gap or the next "Trailer N ..." title row.
+            let lineCol = -1, prevN = -1;
+            rows.forEach(r => {
+                const hi = r.cells.findIndex(t => /^line$/i.test(String(t).trim()));
+                if (hi >= 0) { lineCol = hi; prevN = r.n; r.hl = (r.hl || []).concat(hi); r.hl = Array.from(new Set(r.hl)).sort((x, y) => x - y); return; }
+                if (lineCol < 0) return;
+                if (r.n !== prevN + 1 || r.cells.some(t => /trailer\s+\d+/i.test(t))) { lineCol = -1; return; }
+                prevN = r.n;
+                if (String(r.cells[lineCol] || '').trim() !== '' && !(r.hl || []).includes(lineCol)) { r.hl = (r.hl || []).concat(lineCol).sort((x, y) => x - y); }
+            });
             return rows;
         }
 
@@ -10884,7 +10899,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const infos = items[0].fields.map(f => xlLabelInfo(f));
             const table = xlMk('table', 'tg-xl-table');
             const trH = xlMk('tr', '', table);
-            xlTh(trH, 'Name', items[0].name && items[0].name.title);
+            { const thN = xlTh(trH, 'Name', items[0].name && items[0].name.title); const nt = document.createElement('span'); nt.className = 'tg-xl-th-note'; nt.textContent = '(1st row is main cargo)'; thN.appendChild(nt); }
             infos.forEach(i => xlTh(trH, i.text, i.tip));
             xlTh(trH, 'Link / Group', 'Link Length/Width/Height to Excel Horizontal loads, or group the CoG sign with the cargo box (hover each toggle for details).');
             xlTh(trH, '', '');
