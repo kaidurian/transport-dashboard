@@ -408,7 +408,8 @@
             background: color-mix(in srgb, var(--tank-box-bg) 90%, var(--concept-accent) 10%);
         }
         /* Trailer Concept tab header: uses the same text/border colour style as every other tab (.tg-tab-btn) */
-        .tg-cargo-note { flex: 0 1 auto; font-size: 11px; font-weight: 600; color: var(--text-muted); margin: 0 6px; line-height: 1.3; }
+        .tg-cargo-note { flex: 1 1 auto; min-width: 0; font-size: 11px; font-weight: 600; color: var(--text-muted); margin: 0 6px 0 0; line-height: 1.3; text-align: left; }
+        .tg-card-cargo > .tg-train-card-header > .tg-cargo-title { flex: 0 0 auto; margin-right: 8px; }   /* Generate Cargo title hugs its note (note takes the free space) */
         .tg-cargo-main-note { flex: 0 0 auto; font-size: 10px; font-weight: 600; color: var(--text-muted); white-space: nowrap; margin-left: 6px; }
         .tg-xl-table th .tg-xl-th-note { display: block; font-size: 9px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
         .tg-concept-part-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin: 8px 0 4px; }
@@ -1083,7 +1084,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.167)</h1>
+            <h1>🚂 Transport Dashboard (Rev.168)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1115,7 +1116,7 @@
                     <div class="tg-cargo-card tg-card-cargo">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">📦 Generate Cargo</h2>
-                            <span class="tg-cargo-note">(Put only weight first for Trailer Concept.)</span>
+                            <span class="tg-cargo-note">(Only weight can put first for Trailer Concept.)</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgCargoHelpToggleBtn" onclick="toggleTgCargoHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -10167,6 +10168,48 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return html + '</table>';
         }
 
+        // Width rules of the display tables (measured after layout, only while the table is visible):
+        //  - the data cell after "Payload (ton.)" gets the width of the Payload cell,
+        //  - the "4" data cell gets the width of the Trailer cell,
+        //  - the cells of the 2nd "ton." column under "Prime Mover" never stick out past the Prime Mover cell.
+        function conceptFixWidths() {
+            const root = document.getElementById('tgConceptDisplay');
+            if (!root) return;
+            root.querySelectorAll('table.tg-concept-table').forEach(tbl => {
+                if (tbl.dataset.cwApplied || !tbl.offsetWidth) return;   // already done, or still hidden (0 size)
+                tbl.dataset.cwApplied = '1';
+                const txt = td => (td.textContent || '').trim();
+                const lock = (td, w) => { if (w > 0) { td.style.boxSizing = 'border-box'; td.style.width = td.style.minWidth = td.style.maxWidth = w + 'px'; td.style.overflow = 'hidden'; td.style.textOverflow = 'ellipsis'; } };
+                const tds = Array.from(tbl.querySelectorAll('td'));
+                const widths = new Map(tds.map(td => [td, td.getBoundingClientRect().width]));
+                tds.forEach(td => {
+                    const t = txt(td), next = td.nextElementSibling;
+                    if (/pay\s*load\s*\(?\s*ton/i.test(t) && next) lock(next, widths.get(td));            // Payload (ton.) -> data cell after it
+                    else if (/^trailer$/i.test(t) && next && txt(next) === '4') lock(next, widths.get(td));   // Trailer -> its "4" cell
+                });
+                const pm = tds.find(td => /prime\s*mover/i.test(txt(td)));
+                if (pm) {
+                    const pr = pm.getBoundingClientRect();
+                    tds.forEach(td => {
+                        if (td === pm) return;
+                        const r = td.getBoundingClientRect();
+                        if (r.left >= pr.left - 1 && r.left < pr.right - 1 && r.right > pr.right + 1) {   // sticks out past Prime Mover
+                            lock(td, Math.max(20, pr.right - r.left));
+                        }
+                    });
+                }
+            });
+        }
+        (function wireConceptWidthObserver() {
+            const wire = () => {
+                const el = document.getElementById('tgConceptDisplay');
+                if (!el || el._cwObs || typeof ResizeObserver === 'undefined') return;
+                el._cwObs = new ResizeObserver(() => { try { conceptFixWidths(); } catch (e) { /* ignore */ } });
+                el._cwObs.observe(el);
+            };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+        })();
+
         function renderTgConceptDisplay() {
             const el = document.getElementById('tgConceptDisplay');
             if (!el) return;
@@ -10181,6 +10224,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             el.innerHTML = block(CONCEPT_PORT_SHEET, tgConcept.port.header, v.port) +
                 block(CONCEPT_DOH_SHEET, tgConcept.doh.header, v.doh) +
                 (v.imagesNote ? `<div class="tg-modal-sub" style="margin:0;">${escapeHtml(v.imagesNote)}</div>` : '');
+            requestAnimationFrame(() => { try { conceptFixWidths(); } catch (e) { /* ignore */ } });
         }
 
         function renderTrailerDashboard() {
@@ -11514,6 +11558,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 window.dispatchEvent(new Event('resize'));
             }, 0);
         }
+        const tgTabsStartDone = { top: false, bottom: false };
         function refreshTgTabs() {
             const body = document.getElementById('tgModalBody');
             if (!body) return;
@@ -11523,6 +11568,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     items.forEach(el => { if (el.dataset.tgPreMin === undefined) el.dataset.tgPreMin = tgIsMinimized(el) ? '1' : '0'; });
                     let saved = '';
                     try { saved = localStorage.getItem(area.store) || ''; } catch (e) {}
+                    // first build after a start / page refresh: always open on 📦 Generate Cargo (top) + 🖼 2D Drawing (bottom)
+                    if (!tgTabsStartDone[area.key]) {
+                        tgTabsStartDone[area.key] = true;
+                        const want = area.key === 'top' ? '📦 Generate Cargo' : '🖼 2D Drawing';
+                        const startEl = items.find(el => tgTabTitle(el) === want);
+                        if (startEl) { saved = want; try { localStorage.setItem(area.store, want); } catch (e) {} }
+                    }
                     const pick = items.find(el => tgTabTitle(el) === saved) || items[0];
                     if (pick) selectTgTab(area.key, pick, true);
                 } else {   // back to the stacked look: put back each card's own minimized state
