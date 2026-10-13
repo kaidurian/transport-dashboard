@@ -1084,7 +1084,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.168)</h1>
+            <h1>🚂 Transport Dashboard (Rev.169)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1269,6 +1269,8 @@
                         <div id="tgAccessoryCard"><!-- shared Header/Dbar block + prime mover fields (all trains), rendered by JS --></div>
 
                         <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" id="tgMoveTrailerCogBtn" title="Moves ALL trains (X/Y offset, same shift for every train so the assembly keeps its shape) so the Trailer CoG (Display!B15:C15) lands on the Cargo CoG (Total CoG, Input!AZ40:BD40) in plan view, then pushes to Excel. Height (Z) is not changed."
+                                    onclick="moveTrailerCogToCargoCog()">🎯 Move Trailer CoG → Cargo CoG</button>
                             <button type="button" class="tg-add-train-btn" onclick="addTrailerGenTrain()">+ Add Train</button>
                             <button type="button" class="tg-add-train-btn" id="tgRefreshWheelsBtn" title="Read axle line X/Y positions and group numbers back from Adjust_Wheels into these trains for editing (this also runs automatically whenever the panel opens or refreshes, if Adjust_Wheels isn't blank)"
                                     onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
@@ -5133,6 +5135,60 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // "📤 Push to Excel" button — pulses tgPushWheelsBtn amber while
         // in flight, flashes green/red on settle. See withBtnSyncIndicator.
         const pushDataToExcel = withBtnSyncIndicator('tgPushWheelsBtn', pushDataToExcelImpl);
+
+        // 🎯 Move Trailer CoG -> Cargo CoG (plan view X/Y).
+        // Trailer CoG (Display!B15:C15, world mm) is Excel-computed from
+        // the whole assembly's axle positions, so every train is shifted
+        // by the SAME (dx, dy) = Cargo CoG - Trailer CoG — the assembly
+        // keeps its shape (and Header/Dbar blocks + prime movers, which
+        // are anchored to the train bounds, move with it) and the Trailer
+        // CoG moves by exactly (dx, dy). Cargo CoG = cargoTotal (Total
+        // CoG, Input!AZ40:BD40, meters -> *1000). Z is NOT touched: the
+        // Trailer CoG height is a trailer property, not an offset.
+        // Then pushes (X/Y offsets + Adjust_Wheels) and re-reads the
+        // Trailer CoG from Excel to verify / redraw.
+        async function moveTrailerCogToCargoCogImpl() {
+            if (!isOfficeInitialized) {
+                alert('Not connected to Excel — the Trailer CoG is an Excel output (Display!B15:D15), so this needs the add-in running inside the workbook.');
+                return;
+            }
+            if (trailerGenTrains.length === 0) {
+                alert('Add at least one train first.');
+                return;
+            }
+            if (!(cargoTotal && cargoTotal.weight > 0)) {
+                alert('No Cargo CoG yet — add cargo (weight > 0) and sync it with Excel first.');
+                return;
+            }
+            await pullCogSignsFromExcel(); // freshest Trailer CoG before computing the shift
+            if (!cogTrailerSignLoaded) {
+                alert(`Could not read the Trailer CoG from '${DISPLAY_SHEET_NAME}'!${COG_TRAILER_RANGE}.`);
+                return;
+            }
+            const cargoX = (parseFloat(cargoTotal.x) || 0) * 1000;
+            const cargoY = (parseFloat(cargoTotal.y) || 0) * 1000;
+            const dx = Math.round(cargoX - (parseFloat(cogTrailerSign.x) || 0));
+            const dy = Math.round(cargoY - (parseFloat(cogTrailerSign.y) || 0));
+            if (dx === 0 && dy === 0) {
+                logMsg('🎯 Trailer CoG already at the Cargo CoG (X/Y) — nothing to move.');
+                return;
+            }
+            trailerGenTrains.forEach(t => {
+                t.x = (parseFloat(t.x) || 0) + dx;
+                t.y = (parseFloat(t.y) || 0) + dy;
+            });
+            await pushDataToExcelImpl({ silent: true });
+            clearPushPendingForKey('pushDataToExcel');
+            await pullCogSignsFromExcel(); // Excel recalculated -> new Trailer CoG
+            renderTrailerDashboard();
+            const rx = Math.round(cargoX - (parseFloat(cogTrailerSign.x) || 0));
+            const ry = Math.round(cargoY - (parseFloat(cogTrailerSign.y) || 0));
+            logMsg(`🎯 Moved all ${trailerGenTrains.length} train(s) by dX = ${dx} mm, dY = ${dy} mm → Trailer CoG now (${Math.round(parseFloat(cogTrailerSign.x) || 0)}, ${Math.round(parseFloat(cogTrailerSign.y) || 0)}) vs Cargo CoG (${Math.round(cargoX)}, ${Math.round(cargoY)}); residual dX = ${rx}, dY = ${ry} mm.`);
+            if (Math.abs(rx) > 2 || Math.abs(ry) > 2) {
+                logMsg('⚠ Residual > 2 mm — Excel may not have recalculated yet; press ⇩ Refresh and check Display!B15:C15.');
+            }
+        }
+        const moveTrailerCogToCargoCog = withBtnSyncIndicator('tgMoveTrailerCogBtn', moveTrailerCogToCargoCogImpl);
 
         // Consecutive-run compression: turns a flat array of group
         // numbers (indexed by axleNum-1, null = no group) into axle-line
