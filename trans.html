@@ -587,6 +587,12 @@
         .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
         .tg-preview-toggle input { cursor: pointer; }
         .tg-preview-toggles-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        /* 2D Drawing: every toggle/select sits on the SAME row as the card header, right after the
+           title (title shrinks to its own width; toggles take the free space; Minimize stays at the right edge).
+           Clicks on a toggle must not minimize the card, and the toggles hide while minimized. */
+        .tg-preview-wrap > .tg-train-card-header > .tg-cargo-title { flex: 0 0 auto; margin-right: 4px; }
+        .tg-preview-wrap > .tg-train-card-header > .tg-header-toggles { flex: 1 1 0; min-width: 0; gap: 4px 12px; cursor: default; }
+        .tg-preview-wrap.tg-preview-minimized .tg-header-toggles { display: none; }
         .tg-preview-external-note { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--text-muted); font-style: italic; }
 
         #tgPreview { overflow: auto; max-height: 70vh; position: relative; cursor: default; }
@@ -1084,7 +1090,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.170.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.170.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1451,10 +1457,7 @@
                     <div class="tg-preview-wrap">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
-                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">—</button>
-                        </div>
-                        <div class="tg-preview-toolbar">
-                            <div class="tg-preview-toggles-right" style="margin-left: auto;">
+                            <div class="tg-preview-toggles-right tg-header-toggles" id="tgPreviewHeaderToggles" onclick="event.stopPropagation()">
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
                                     ⧉ Separate window
@@ -1505,6 +1508,7 @@
                                     </select>
                                 </label>
                             </div>
+                            <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <div id="tgPreview"><!-- live plan-view preview rendered by JS --></div>
                         <div id="tgPreviewGroupDetails" class="tg-preview-group-details"><!-- group detail legend rendered by JS when labels are hidden --></div>
@@ -12216,12 +12220,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // — so both edges need room, roughly half the total tier
             // count each (a safe over-estimate; the exact front/back split
             // isn't known until the geometry below is computed).
-            const dimTierCount = 2 + trailerGenTrains.length + cargoItems.length;
-            const dimTierHalf = tgShowDimensions ? Math.ceil(dimTierCount / 2) : 0;   // no dimension tiers to reserve room for when hidden
-            const padT = Math.max(34, 24 + dimTierHalf * 13);
-            const padB0 = Math.max(30, 24 + dimTierHalf * 13);
+            // Dimension rows (X, horizontal) are balanced ABOVE / BELOW the top view and
+            // dimension columns (Y, vertical) LEFT / RIGHT of it, so the exact counts are
+            // pre-computed here (mirrors the tgShowDimensions block below one-to-one) and
+            // every margin is sized to fit ALL of them — nothing clips off the canvas.
+            //   X rows: per-train axle chain + per-train origin→corner + per-cargo (CoG-to-Left + origin→CoG)
+            //           + Trailer CoG + CCoG
+            //   Y cols: per-train origin→corner chain + per-cargo (CoG-to-Rear + origin→CoG) + Trailer CoG + CCoG
+            const dimNTrains = trailerGenTrains.length, dimNCargo = cargoItems.length;
+            const dimNAxleChains = trailerGenTrains.filter(t => t.axle1OffsetX != null && t.axle1OffsetY != null).length;
+            const dimNCogs = (cogTrailerSignLoaded ? 1 : 0) + (cogCombinedSignLoaded ? 1 : 0);
+            const dimRowsX = tgShowDimensions ? dimNAxleChains + dimNTrains + 2 * dimNCargo + dimNCogs : 0;
+            const dimColsY = tgShowDimensions ? dimNTrains + 2 * dimNCargo + dimNCogs : 0;
+            const dimRowsAbove = Math.ceil(dimRowsX / 2), dimRowsBelow = Math.floor(dimRowsX / 2);
+            const dimColsLeft = Math.ceil(dimColsY / 2), dimColsRight = Math.floor(dimColsY / 2);
+            const padT = Math.max(34, 24 + dimRowsAbove * 13);
+            const padB0 = Math.max(30, 24 + dimRowsBelow * 13);
             let svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30) ;
-            const padL = 55, padR = 50, padB = padB0;
+            const padL = Math.max(55, 28 + dimColsLeft * 12), padR = Math.max(50, 28 + dimColsRight * 12), padB = padB0;
             const plotW = layoutSvgW - padL - padR;
             let plotH = svgH - padT - padB;
 
@@ -12731,12 +12747,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const dimColorSpacing = 'var(--text-muted, #94a3b8)';
 
                 // ---- Front/back dimension stacks ----
-                // Every call-out is assigned to a ZONE — 'front' (the -X
-                // end of the whole trailer+cargo assembly) or 'back' (the
-                // +X end) — based on where the thing it measures actually
-                // sits, so the two stacks separate naturally instead of
-                // all piling up in one ever-growing column near a single
-                // shared reference row/column. Each stack is anchored
+                // Every call-out is assigned to a ZONE — X rows: 'front' =
+                // ABOVE / 'back' = BELOW the top view; Y columns: 'front' =
+                // LEFT / 'back' = RIGHT — by the balanced allocators below
+                // (nextH/nextV), so the two stacks stay even instead of
+                // all piling up on one side. Each stack is anchored
                 // fully OUTSIDE the assembly's own bounding box (rawMinY/
                 // rawMaxY for the horizontal-line stack, rawMinX/rawMaxX
                 // for the vertical-line stack) rather than at each
@@ -12749,7 +12764,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const backBottomY = sy(rawMaxY) + dimOutMargin;
                 const frontLeftX = sx(rawMinX) - dimOutMargin;
                 const backRightX = sx(rawMaxX) + dimOutMargin;
-                const zoneOf = xWorld => xWorld < (rawMinX + rawMaxX) / 2 ? 'front' : 'back';
+                // Balanced allocators: every X row goes to whichever of ABOVE ('front') / BELOW ('back')
+                // currently has fewer rows (ties -> above); every Y column likewise to LEFT ('front') /
+                // RIGHT ('back'). Called in drawing order, so the chains stay closest to the drawing.
+                const dimCnt = { hFront: 0, hBack: 0, vFront: 0, vBack: 0 };
+                const nextH = () => { const zone = dimCnt.hFront <= dimCnt.hBack ? 'front' : 'back'; return { zone, tier: zone === 'front' ? dimCnt.hFront++ : dimCnt.hBack++ }; };
+                const nextV = () => { const zone = dimCnt.vFront <= dimCnt.vBack ? 'front' : 'back'; return { zone, tier: zone === 'front' ? dimCnt.vFront++ : dimCnt.vBack++ }; };
 
                 const dimH = (xa, xb, zone, tier, label, color) => {
                     const x1 = sx(xa), x2 = sx(xb);
@@ -12784,7 +12804,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 };
 
                 const dimColorOffset = '#f59e0b'; // amber — distinct from the corner→axle1 blue
-                let frontTier = 0, backTier = 0; // separate running tier counters per zone
 
                 // Baseline-style dims (all measured from the shared world
                 // origin 0,0) are collected here instead of drawn
@@ -12793,11 +12812,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // to the drawing, the longest sits farthest out, standard
                 // baseline-dimension convention — rather than in
                 // whatever order trains/cargo/CoG happen to be processed.
-                const baselineItems = { front: [], back: [] };
+                const baselineItems = [];
 
                 trailerGenTrains.forEach((t) => {
                     const ox = parseFloat(t.x) || 0, oy = parseFloat(t.y) || 0;
-                    const zone = zoneOf(ox);
 
                     // ---- Continuous-style local chain (closest tier) ----
                     // X: deck corner → axle line 1 → axle line 2, drawn as
@@ -12813,33 +12831,33 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const spacing = parseFloat(t.spacing) || 0;
                         const maxAxleForTrain = t.groups.reduce((m, g) => Math.max(m, parseInt(g.to, 10) || 0), 0);
 
-                        const chainTierX = zone === 'front' ? frontTier++ : backTier++;
-                        dimensionsSvg += dimH(ox, axle1X, zone, chainTierX, `${Math.round(axle1OffsetX)}`, dimColorCorner);
+                        const chX = nextH();
+                        dimensionsSvg += dimH(ox, axle1X, chX.zone, chX.tier, `${Math.round(axle1OffsetX)}`, dimColorCorner);
                         if (maxAxleForTrain >= 2 && spacing) {
                             const axle2X = axle1X - spacing;
-                            dimensionsSvg += dimH(axle1X, axle2X, zone, chainTierX, `${Math.abs(Math.round(spacing))}`, dimColorSpacing);
+                            dimensionsSvg += dimH(axle1X, axle2X, chX.zone, chX.tier, `${Math.abs(Math.round(spacing))}`, dimColorSpacing);
                         }
 
-                        const chainTierY = zone === 'front' ? frontTier++ : backTier++;
-                        dimensionsSvg += dimV(0, oy, zone, chainTierY, `${Math.round(oy)}`, dimColorOffset);
-                        dimensionsSvg += dimV(oy, axle1Y, zone, chainTierY, `${Math.round(axle1OffsetY)}`, dimColorCorner);
+                        const chY = nextV();
+                        dimensionsSvg += dimV(0, oy, chY.zone, chY.tier, `${Math.round(oy)}`, dimColorOffset);
+                        dimensionsSvg += dimV(oy, axle1Y, chY.zone, chY.tier, `${Math.round(axle1OffsetY)}`, dimColorCorner);
                         if (t.axlePairOffsetY) {
                             const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
-                            dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, zone, chainTierY, `${Math.round(axlePairOffsetY)}`, dimColorPair);
+                            dimensionsSvg += dimV(axle1Y, axle1Y + axlePairOffsetY, chY.zone, chY.tier, `${Math.round(axlePairOffsetY)}`, dimColorPair);
                         }
                     } else {
                         // Custom/manual trailer — no deck reference corner
                         // for the axle chain, but the Y origin→corner
                         // offset still applies on its own chained row.
-                        const chainTierY = zone === 'front' ? frontTier++ : backTier++;
-                        dimensionsSvg += dimV(0, oy, zone, chainTierY, `${Math.round(oy)}`, dimColorOffset);
+                        const chY = nextV();
+                        dimensionsSvg += dimV(0, oy, chY.zone, chY.tier, `${Math.round(oy)}`, dimColorOffset);
                     }
 
                     // ---- Baseline dim — origin(0,0) → deck corner, X ----
                     // A genuine overall span from the world origin (not a
                     // local spacing), so it's queued with the other
                     // baseline dims below rather than drawn here.
-                    baselineItems[zone].push({ dist: Math.abs(ox), x: ox, xLabel: `${Math.round(ox)}`, color: dimColorOffset });
+                    baselineItems.push({ dist: Math.abs(ox), x: ox, xLabel: `${Math.round(ox)}`, color: dimColorOffset });
                 });
 
                 // World origin (0,0) → each cargo item's CoG, in X and Y
@@ -12848,8 +12866,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 cargoItems.forEach((c) => {
                     const cargoColor = cargoColorFor(cargoItems.indexOf(c));
                     const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
-                    const zone = zoneOf(cxMm);
-                    baselineItems[zone].push({
+                    baselineItems.push({
                         dist: Math.max(Math.abs(cxMm), Math.abs(cyMm)), x: cxMm, y: cyMm,
                         xLabel: `${(parseFloat(c.x) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`,
                         yLabel: `${(parseFloat(c.y) || 0).toFixed(3)} m (${escapeHtml(c.name)} CoG)`,
@@ -12868,13 +12885,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const lMm = (parseFloat(c.length) || 0) * 1000, wMm = (parseFloat(c.width) || 0) * 1000;
                     const tlXMm = (parseFloat(c.tlX) || 0) * 1000, tlYMm = (parseFloat(c.tlY) || 0) * 1000;
                     const cxMm = (parseFloat(c.x) || 0) * 1000, cyMm = (parseFloat(c.y) || 0) * 1000;
-                    const zone = zoneOf(cxMm);
                     const offLeftM = cargoOffsetLeft(c);
                     const offRearM = cargoOffsetRear(c);
-                    const tierX = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimH(tlXMm - lMm / 2, cxMm, zone, tierX, `${offLeftM.toFixed(3)} (${c.name} CoG to Left)`, cargoColor);
-                    const tierY = zone === 'front' ? frontTier++ : backTier++;
-                    dimensionsSvg += dimV(tlYMm - wMm / 2, cyMm, zone, tierY, `${offRearM.toFixed(3)} (${c.name} CoG to Rear)`, cargoColor);
+                    const cgX = nextH();
+                    dimensionsSvg += dimH(tlXMm - lMm / 2, cxMm, cgX.zone, cgX.tier, `${offLeftM.toFixed(3)} (${c.name} CoG to Left)`, cargoColor);
+                    const cgY = nextV();
+                    dimensionsSvg += dimV(tlYMm - wMm / 2, cyMm, cgY.zone, cgY.tier, `${offRearM.toFixed(3)} (${c.name} CoG to Rear)`, cargoColor);
                 });
 
                 // World origin (0,0) → Trailer CoG and → Combined CoG —
@@ -12885,8 +12901,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // instead of always landing in its own fixed slot.
                 if (cogTrailerSignLoaded) {
                     const tCxMm = parseFloat(cogTrailerSign.x) || 0, tCyMm = parseFloat(cogTrailerSign.y) || 0;
-                    const zone = zoneOf(tCxMm);
-                    baselineItems[zone].push({
+                    baselineItems.push({
                         dist: Math.max(Math.abs(tCxMm), Math.abs(tCyMm)), x: tCxMm, y: tCyMm,
                         xLabel: `${Math.round(tCxMm)} (Trailer CoG)`, yLabel: `${Math.round(tCyMm)} (Trailer CoG)`,
                         color: TG_COG_TRAILER_COLOR
@@ -12894,8 +12909,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 }
                 if (cogCombinedSignLoaded) {
                     const cCxMm = parseFloat(cogCombinedSign.x) || 0, cCyMm = parseFloat(cogCombinedSign.y) || 0;
-                    const zone = zoneOf(cCxMm);
-                    baselineItems[zone].push({
+                    baselineItems.push({
                         dist: Math.max(Math.abs(cCxMm), Math.abs(cCyMm)), x: cCxMm, y: cCyMm,
                         xLabel: `${Math.round(cCxMm)} (CCoG)`, yLabel: `${Math.round(cCyMm)} (CCoG)`,
                         color: TG_CARGO_TOTAL_COLOR
@@ -12904,12 +12918,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                 // Draw the queued baseline dims, shortest distance first
                 // (closest tier) — standard baseline-dimension ordering.
-                ['front', 'back'].forEach(zone => {
-                    baselineItems[zone].sort((a, b) => a.dist - b.dist).forEach(item => {
-                        const tier = zone === 'front' ? frontTier++ : backTier++;
-                        if (item.xLabel != null) dimensionsSvg += dimH(0, item.x, zone, tier, item.xLabel, item.color);
-                        if (item.yLabel != null) dimensionsSvg += dimV(0, item.y, zone, tier, item.yLabel, item.color);
-                    });
+                baselineItems.sort((a, b) => a.dist - b.dist).forEach(item => {
+                    if (item.xLabel != null) { const h = nextH(); dimensionsSvg += dimH(0, item.x, h.zone, h.tier, item.xLabel, item.color); }
+                    if (item.yLabel != null) { const v = nextV(); dimensionsSvg += dimV(0, item.y, v.zone, v.tier, item.yLabel, item.color); }
                 });
             }
 
@@ -12989,9 +13000,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         ? `${shortTag} · ${n} axle(s) · ${(parseFloat(uniformLoad) || 0).toFixed(1)} Te/axle · ${totalLoad.toFixed(1)} Te`
                         : `${shortTag} · ${n} axle(s) · ${totalLoad.toFixed(1)} Te total`);
                 if (tgShowGroupLabels) {
-                    // On-canvas label is just "G1"/"G2"/"G3"/"G4"; the per-axle load is drawn on each
+                    // On-canvas label is "G1-42.2Te" (group name + total group load); the per-axle load is drawn on each
                     // axle (see axleLoadSvg, ⚖ Axle load toggle) and the legend below keeps the details.
-                    labelsSvg += `<g>` + planLeaderBoxLabel(overallX, overallY, escapeHtml(shortTag), g.color) + `</g>`;
+                    const groupCanvasTag = allNoLoad ? shortTag : `${shortTag}-${totalLoad.toFixed(1)}Te`;   // e.g. "G1-42.2Te" = group name + total group load
+                    labelsSvg += `<g>` + planLeaderBoxLabel(overallX, overallY, escapeHtml(groupCanvasTag), g.color) + `</g>`;
                 }
                 // Legend rows are collected unconditionally now — the
                 // detail legend is a PERMANENT fixture below the preview
