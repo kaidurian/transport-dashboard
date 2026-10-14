@@ -1090,7 +1090,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.171)</h1>
+            <h1>🚂 Transport Dashboard (Rev.172)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -4728,15 +4728,26 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
         // ---- Push "Set Train Group" data (AutoCAD split type + Group
         // Nr Left/Right per split segment) to Input!A11:C30 ----
-        async function pushSetTrainGroupToExcel() {
+        async function pushSetTrainGroupToExcel(force) {
             if (!isOfficeInitialized) return;
+            if (force) invalidateSetGroupPushCache();
+            // Per-train-slot signature of the rows to write; unchanged
+            // slots are skipped (no clear, no write).
+            const plan = [];
+            for (let idx = 0; idx < SETGROUP_MAX_TRAINS; idx++) {
+                const train = trailerGenTrains[idx]; // undefined once past the current train count — that slot just gets cleared
+                const rows = train ? computeSetTrainGroupRows(train).slice(0, SETGROUP_MAX_ROWS) : [];
+                const sig = JSON.stringify(rows.map(r => [r.label, r.left, r.right]));
+                if (setGroupPushCache[idx] === sig) continue;
+                plan.push({ idx, rows, sig });
+            }
+            if (plan.length === 0) return;
             try {
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
                     const lastRow = SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1;
 
-                    for (let idx = 0; idx < SETGROUP_MAX_TRAINS; idx++) {
-                        const train = trailerGenTrains[idx]; // undefined once past the current train count — that slot just gets cleared below
+                    for (const { idx, rows } of plan) {
                         const startCol = SETGROUP_FIRST_TRAIN_COL + idx * SETGROUP_BLOCK_WIDTH;
                         const c0 = colLetter(startCol);
                         const c2 = colLetter(startCol + 2);
@@ -4746,8 +4757,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         // leave stale rows behind.
                         sheet.getRange(`${c0}${SETGROUP_START_ROW}:${c2}${lastRow}`).clear(Excel.ClearApplyTo.contents);
 
-                        if (!train) continue;
-                        const rows = computeSetTrainGroupRows(train).slice(0, SETGROUP_MAX_ROWS);
                         if (rows.length === 0) continue;
                         const values = rows.map(r => [r.label, r.left, r.right]);
                         const endRow = SETGROUP_START_ROW + rows.length - 1;
@@ -4756,8 +4765,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                     await context.sync();
                 });
-                logMsg(`📤 Wrote Set Train Group data for ${Math.min(trailerGenTrains.length, SETGROUP_MAX_TRAINS)} train(s) to ${INPUT_SHEET_NAME}!A${SETGROUP_START_ROW}:C${SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1} (and onward per train).`);
+                plan.forEach(p => { setGroupPushCache[p.idx] = p.sig; });
+                logMsg(`📤 Wrote Set Train Group data for ${plan.length} changed train slot(s) to ${INPUT_SHEET_NAME}!A${SETGROUP_START_ROW}:C${SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1} (and onward per train)${force ? ' (full)' : ''}.`);
             } catch (e) {
+                invalidateSetGroupPushCache();
                 console.warn('Set Train Group push error', e);
                 logMsg(`⚠ Could not write Set Train Group data to ${INPUT_SHEET_NAME}!A${SETGROUP_START_ROW}:C${SETGROUP_START_ROW + SETGROUP_MAX_ROWS - 1}. See console for details.`);
             }
@@ -4953,6 +4964,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         const ADJUST_BLOCK_WIDTH = 6;        // columns per train
         const ADJUST_MAX_TRAIN_BLOCKS = 40;  // fixed clear-range safety cap
 
+        // ---- Incremental push caches ----
+        // Snapshot of what was LAST pushed to Excel, so an auto-push
+        // (e.g. after editing "X offset for Train (mm)") rewrites only
+        // what actually changed instead of clearing + rewriting every
+        // train. The manual "📤 Push to Excel" button (non-silent) and
+        // an Excel pull on open/refresh always reset these = full push.
+        //   wheelPushCache : Adjust_Wheels block (per-train signature + line count)
+        //   offsetPushCache: Input X/Y offset cells, per slot ('x|y', '' = cleared)
+        //   setGroupPushCache: Input!A11:C30 Set Train Group, per train slot
+        const wheelPushCache = { valid: false, maxLines: 0, trainSigs: [], lineCounts: [] };
+        const offsetPushCache = [];
+        const setGroupPushCache = [];
+        function invalidateWheelPushCache() {
+            wheelPushCache.valid = false; wheelPushCache.maxLines = 0;
+            wheelPushCache.trainSigs = []; wheelPushCache.lineCounts = [];
+        }
+        function invalidateOffsetPushCache() { offsetPushCache.length = 0; }
+        function invalidateSetGroupPushCache() { setGroupPushCache.length = 0; }
+        function invalidateAllPushCaches() {
+            invalidateWheelPushCache(); invalidateOffsetPushCache(); invalidateSetGroupPushCache();
+        }
+
         // 1-indexed column number -> Excel column letter(s) (1 -> "A").
         function colLetter(n) {
             let s = '';
@@ -5027,6 +5060,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // inside this same function so it stays under one button.
         async function pushDataToExcelImpl(opts) {
             const silent = !!(opts && opts.silent);
+            // Manual button press (non-silent) or {force:true} = full
+            // rewrite; silent auto-pushes are incremental.
+            const force = !silent || !!(opts && opts.force);
             if (!isOfficeInitialized) {
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push wheel data.');
                 return;
@@ -5053,52 +5089,80 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // BEFORE anything is written to Adjust_Wheels below. Each is
             // kept in its own try/catch internally so a problem here
             // doesn't block the Adjust_Wheels write that follows.
-            await pushSetTrainGroupToExcel();
-            await pushTrainOffsetsToExcel();
+            await pushSetTrainGroupToExcel(force);
+            await pushTrainOffsetsToExcel(force);
             await pushValueToSheetCell(ZHEIGHT_SHEET_NAME, ZHEIGHT_CELL, tgZTrailerHeightMm, 'Z Trailer Height');
             await pushHeaderDbarWeightToExcel();
 
-            // ---- Step 2: clear the fixed Adjust_Wheels block + write
-            // axle-line labels ----
+            // ---- Step 2: clear/label the Adjust_Wheels block ----
+            // Full push (manual / first push): clear the whole fixed
+            // block + write all labels. Incremental auto-push: touch
+            // only the "Line n" labels if the max line count changed,
+            // and clear only the columns of trains that were removed.
             // Kept as its own Excel.run/sync so a problem with an
             // individual train's write below (step 3) can never prevent
             // the clear/labels from landing.
+            const incremental = !force && wheelPushCache.valid;
+            if (!incremental) invalidateWheelPushCache();
+            const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
             try {
+                let step2Ops = 0;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
-                    const lastRow = ADJUST_START_ROW + ADJUST_MAX_LINES - 1;
-                    const lastClearCol = colLetter(ADJUST_FIRST_TRAIN_COL + ADJUST_MAX_TRAIN_BLOCKS * ADJUST_BLOCK_WIDTH - 1);
-
-                    // Clear the whole fixed block first so a smaller/
-                    // shorter push doesn't leave stale data behind from a
-                    // previous, larger push.
-                    sheet.getRange(`A${ADJUST_START_ROW}:${lastClearCol}${lastRow}`).clear(Excel.ClearApplyTo.contents);
-
-                    const lineLabels = [];
-                    for (let i = 0; i < maxLines; i++) lineLabels.push([`Line ${i + 1}`]);
-                    sheet.getRange(`A${ADJUST_START_ROW}:A${ADJUST_START_ROW + maxLines - 1}`).values = lineLabels;
-
-                    await context.sync();
+                    const writeLabels = () => {
+                        const lineLabels = [];
+                        for (let i = 0; i < maxLines; i++) lineLabels.push([`Line ${i + 1}`]);
+                        sheet.getRange(`A${ADJUST_START_ROW}:A${ADJUST_START_ROW + maxLines - 1}`).values = lineLabels;
+                    };
+                    if (!incremental) {
+                        const lastClearCol = colLetter(ADJUST_FIRST_TRAIN_COL + ADJUST_MAX_TRAIN_BLOCKS * ADJUST_BLOCK_WIDTH - 1);
+                        // Clear the whole fixed block first so a smaller/
+                        // shorter push doesn't leave stale data behind.
+                        sheet.getRange(`A${ADJUST_START_ROW}:${lastClearCol}${lastRow}`).clear(Excel.ClearApplyTo.contents);
+                        writeLabels();
+                        step2Ops++;
+                    } else {
+                        if (maxLines !== wheelPushCache.maxLines) {
+                            writeLabels();
+                            if (maxLines < wheelPushCache.maxLines) {
+                                sheet.getRange(`A${ADJUST_START_ROW + maxLines}:A${ADJUST_START_ROW + wheelPushCache.maxLines - 1}`).clear(Excel.ClearApplyTo.contents);
+                            }
+                            step2Ops++;
+                        }
+                        const oldCount = wheelPushCache.trainSigs.length;
+                        if (trainsData.length < oldCount) {
+                            const c0 = colLetter(ADJUST_FIRST_TRAIN_COL + trainsData.length * ADJUST_BLOCK_WIDTH);
+                            const c1 = colLetter(ADJUST_FIRST_TRAIN_COL + oldCount * ADJUST_BLOCK_WIDTH - 1);
+                            sheet.getRange(`${c0}${ADJUST_START_ROW}:${c1}${lastRow}`).clear(Excel.ClearApplyTo.contents);
+                            step2Ops++;
+                        }
+                    }
+                    if (step2Ops > 0) await context.sync();
                 });
             } catch (e) {
+                invalidateWheelPushCache();
                 console.warn('Adjust_Wheels clear/label error', e);
                 if (!silent) alert(`Could not push wheel data to Excel. Make sure a sheet named "${ADJUST_SHEET_NAME}" exists. See console for details.`);
                 return;
             }
+            wheelPushCache.maxLines = maxLines;
 
-            // ---- Step 3: write each train's block in its OWN Excel.run/
-            // sync, so a failure on one train's range (e.g. a merged
-            // cell, a protected column, or an invalid value in that
-            // train's block) can't silently abort — or partially commit
-            // and then blank out — every train queued after it. Each
-            // train is tried independently and any failure is reported
-            // by name instead of failing the whole push silently.
+            // ---- Step 3: write each CHANGED train's block in its OWN
+            // Excel.run/sync, so a failure on one train's range (e.g. a
+            // merged cell, a protected column, or an invalid value in
+            // that train's block) can't silently abort the trains after
+            // it. Unchanged trains (same name + axle lines as the last
+            // push) are skipped on auto-push. A train that got fewer
+            // lines than before only has its leftover rows cleared.
             const writeErrors = [];   // {name, error}
             const emptyTrains = [];   // train names with zero axle lines
-            let writtenCount = 0;
+            let writtenCount = 0, skippedCount = 0;
             for (let idx = 0; idx < trainsData.length; idx++) {
                 const train = trainsData[idx];
                 if (train.lines.length === 0) emptyTrains.push(train.name);
+                const sig = JSON.stringify([train.name, train.lines]);
+                if (incremental && wheelPushCache.trainSigs[idx] === sig) { skippedCount++; continue; }
+                const prevLineCount = incremental ? (wheelPushCache.lineCounts[idx] || 0) : 0;
                 try {
                     await Excel.run(async (context) => {
                         const sheet = context.workbook.worksheets.getItem(ADJUST_SHEET_NAME);
@@ -5111,6 +5175,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         sheet.getRange(`${colLetter(blockStart + 4)}2`).values = [['Right']];
                         sheet.getRange(`${c0}3:${c5}3`).values = [['x-pos', 'y-pos', 'Group', 'x-pos', 'y-pos', 'Group']];
 
+                        if (prevLineCount > train.lines.length) {
+                            sheet.getRange(`${c0}${ADJUST_START_ROW + train.lines.length}:${c5}${ADJUST_START_ROW + prevLineCount - 1}`).clear(Excel.ClearApplyTo.contents);
+                        }
                         if (train.lines.length > 0) {
                             const values = train.lines.map(l => [
                                 l.x, l.leftY, l.leftGroupNumber,
@@ -5122,15 +5189,23 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
                         await context.sync();
                     });
+                    wheelPushCache.trainSigs[idx] = sig;
+                    wheelPushCache.lineCounts[idx] = train.lines.length;
                     writtenCount++;
                 } catch (e) {
                     console.warn(`Adjust_Wheels push error on "${train.name}" (block ${idx + 1})`, e);
+                    // Unknown partial state: force a rewrite + full leftover clear next time.
+                    wheelPushCache.trainSigs[idx] = null;
+                    wheelPushCache.lineCounts[idx] = ADJUST_MAX_LINES;
                     writeErrors.push({ name: train.name, error: (e && e.message) ? e.message : String(e) });
                 }
             }
+            wheelPushCache.trainSigs.length = trainsData.length;
+            wheelPushCache.lineCounts.length = trainsData.length;
+            wheelPushCache.valid = true;
 
             const lastUsedCol = colLetter(ADJUST_FIRST_TRAIN_COL + trainsData.length * ADJUST_BLOCK_WIDTH - 1);
-            logMsg(`📤 Pushed ${writtenCount}/${trainsData.length} train(s) / ${maxLines} axle line(s) to ${ADJUST_SHEET_NAME}!A${ADJUST_START_ROW}:${lastUsedCol}${ADJUST_START_ROW + maxLines - 1}.`);
+            logMsg(`📤 Pushed ${writtenCount}/${trainsData.length} train(s) / ${maxLines} axle line(s) to ${ADJUST_SHEET_NAME}!A${ADJUST_START_ROW}:${lastUsedCol}${ADJUST_START_ROW + maxLines - 1}${incremental ? ` (incremental — ${skippedCount} unchanged train(s) skipped)` : ' (full)'}.`);
             if (emptyTrains.length) {
                 logMsg(`⚠️ ${emptyTrains.length} train(s) had 0 axle lines (no data rows written, only headers): ${emptyTrains.join(', ')}. Check their axle groups.`);
             }
@@ -9212,16 +9287,25 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // "Input" sheet cells (see offsetCellForTrainIndex()). Called
         // from pushDataToExcel() — the "📤 Push to Excel" button — so
         // offsets are only ever pushed on demand, not on every edit.
-        async function pushTrainOffsetsToExcel() {
+        async function pushTrainOffsetsToExcel(force) {
             if (!isOfficeInitialized) return;
-            const n = Math.min(trailerGenTrains.length, OFFSET_LINK_MAX_TRAINS);
+            if (force) invalidateOffsetPushCache();
+            // Only slots whose X/Y (or existence) changed since the
+            // last push are written; unchanged slots are left alone.
+            const changes = [];
+            for (let i = 0; i < OFFSET_LINK_MAX_TRAINS; i++) {
+                const train = trailerGenTrains[i];
+                const sig = train ? `${parseFloat(train.x) || 0}|${parseFloat(train.y) || 0}` : '';
+                if (offsetPushCache[i] === sig) continue;
+                changes.push({ i, train, sig });
+            }
+            if (changes.length === 0) return;
             try {
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(INPUT_SHEET_NAME);
-                    for (let i = 0; i < OFFSET_LINK_MAX_TRAINS; i++) {
+                    for (const { i, train } of changes) {
                         const xCell = offsetCellForTrainIndex(i + 1, 'x');
                         const yCell = offsetCellForTrainIndex(i + 1, 'y');
-                        const train = trailerGenTrains[i];
                         if (train) {
                             // "X offset for Train (mm)" (train.x) maps 1:1
                             // to Input!B5 (Train 1) etc. — no Header/Dbar
@@ -9237,8 +9321,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     }
                     await context.sync();
                 });
-                logMsg(`📤 Pushed X/Y offset for ${n} train(s) to ${INPUT_SHEET_NAME}!B5:${offsetCellForTrainIndex(OFFSET_LINK_MAX_TRAINS, 'y')} (unused slots cleared).`);
+                changes.forEach(c => { offsetPushCache[c.i] = c.sig; });
+                logMsg(`📤 Pushed X/Y offset for ${changes.filter(c => c.train).length} changed train slot(s) to ${INPUT_SHEET_NAME}!B5:${offsetCellForTrainIndex(OFFSET_LINK_MAX_TRAINS, 'y')}${force ? ' (full)' : ''}.`);
             } catch (e) {
+                invalidateOffsetPushCache();
                 console.warn('Train X/Y offset push error', e);
                 logMsg(`⚠ Could not write train X/Y offsets to ${INPUT_SHEET_NAME}. See console for details.`);
             }
@@ -9252,6 +9338,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const idx = trailerGenTrains.findIndex(t => t.id === trainId);
             const train = trailerGenTrains[idx];
             if (!train) return;
+            invalidateOffsetPushCache();
             const cell = offsetCellForTrainIndex(idx + 1, field);
             if (!cell) {
                 alert(`"${train.name}" isn't linked to Excel — the X/Y offset auto-link only covers Train 1-${OFFSET_LINK_MAX_TRAINS}.`);
@@ -9288,6 +9375,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // see offsetCellForTrainIndex().
         async function seedInitialOffsetsFromExcel() {
             if (!isOfficeInitialized || trailerGenTrains.length === 0) return;
+            invalidateAllPushCaches(); // Excel is the source on open/refresh -> next push is a full one
             try {
                 let numTrainsRaw = null, numGroupsRaw = null, zHeightRaw = null;
                 const offsetRanges = [];
