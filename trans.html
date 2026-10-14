@@ -636,19 +636,19 @@
             padding: 10px 12px;
         }
         .tg-hloads-panel-title {
-            font-size: 12px; font-weight: 700; color: var(--text-main, #e2e8f0);
-            margin-bottom: 8px;
+            font-size: 15px; font-weight: 700; color: var(--text-main, #e2e8f0);
+            margin-bottom: 10px;
         }
         .tg-hloads-panel-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 6px 12px;
+            grid-template-columns: repeat(var(--hl-cols, 5), minmax(0, 1fr));   /* 2 balanced rows (10 items -> 5 + 5) */
+            gap: 10px 14px;
         }
         .tg-hloads-panel-row {
-            font-size: 11px; color: var(--text-muted, #94a3b8);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-size: 14px; font-weight: 600; color: var(--text-muted, #94a3b8);
+            white-space: normal; overflow-wrap: anywhere; line-height: 1.3;
         }
-        .tg-hloads-panel-icon { margin-right: 4px; }
+        .tg-hloads-panel-icon { margin-right: 5px; font-size: 18px; vertical-align: -2px; }
         /* Orientation cube overlaid in the top-left corner of the whole
            preview (plan + elevation stack), instead of taking up its
            own stacked section or being scoped to just the plan view.
@@ -1090,7 +1090,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.170.6)</h1>
+            <h1>🚂 Transport Dashboard (Rev.171)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1192,6 +1192,40 @@
                         </div>
                     </div>
 
+                    <div class="tg-cargo-card tg-card-hloads">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgHLoadsHelpPanel">
+                            Wind, speed/acceleration, road-gradient, curve, and friction inputs used for the
+                            horizontal-load / stability calc, linked to their own Excel sheet
+                            <strong>"Input horizontal loads"</strong>: <strong>H14</strong> (Centre of Wind
+                            height, m), <strong>H16</strong> (Operational allowable wind speed, m/s),
+                            <strong>H18</strong> (Drag coefficient), <strong>H20</strong> (Trailer speed,
+                            km/h), <strong>H21</strong> (Max. acceleration, m/sec&sup2;), <strong>H22</strong>
+                            (Max. deceleration, m/sec&sup2;), <strong>B23/E23</strong> (Transverse road
+                            gradient / inc. stroke compensation, %) with <strong>H23</strong> (Gr_trans, deg)
+                            as its Excel-computed result, <strong>B24/E24</strong> (Longitudinal road
+                            gradient / inc. stroke compensation, %) with <strong>H24</strong> (Gr_long, deg)
+                            as its Excel-computed result, <strong>H25</strong> (Curve impact, %), and
+                            <strong>H26</strong> (Friction Steel/Wood). Every field except H23/H24 (🔒
+                            read-only — Excel computes those) is pulled/pushed like the fields above: pulled
+                            automatically when this panel opens or refreshes, on-demand via each field's own
+                            ⇩ button, and written back with <strong>"📤 Push to Excel"</strong> below. The
+                            current values are also drawn as a small callout in the plan-view preview,
+                            top-right of the origin sign.
+                        </p>
+                        <div id="tgHLoadsFields"><!-- Horizontal Loads field grid rendered by JS --></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" title="Pull every Horizontal Loads field from Excel 'Input horizontal loads'!H14/H16/H18/H20/H21/H22/B23/E23/H23/B24/E24/H24/H25/H26"
+                                    onclick="pullHorizontalLoadsFromExcel()">⇩ Refresh from Excel</button>
+                            <button type="button" class="tg-add-train-btn" id="tgPushHLoadsBtn" title="Write every editable Horizontal Loads field to Excel 'Input horizontal loads' (H23/H24 skipped — Excel-computed)"
+                                    onclick="pushHorizontalLoadsToExcel()">📤 Push to Excel</button>
+                        </div>
+                    </div>
+
                     <div class="tg-trailer-card">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🚂 Generate Trailer</h2>
@@ -1282,40 +1316,6 @@
                                     onclick="pullWheelDataFromExcel()">⇩ Refresh from Adjust_Wheels</button>
                             <button type="button" class="tg-add-train-btn" id="tgPushWheelsBtn" title="Writes each axle line's X/Y position and group number to sheet Adjust_Wheels (one 6-column block per train), and each train's AutoCAD split type + Group Nr Left/Right to Input!A11:C30."
                                     onclick="pushDataToExcel()">📤 Push to Excel</button>
-                        </div>
-                    </div>
-
-                    <div class="tg-cargo-card tg-card-hloads">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🌬 Horizontal Loads</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgHLoadsHelpToggleBtn" onclick="toggleTgHLoadsHelp()">❓</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgHLoadsHelpPanel">
-                            Wind, speed/acceleration, road-gradient, curve, and friction inputs used for the
-                            horizontal-load / stability calc, linked to their own Excel sheet
-                            <strong>"Input horizontal loads"</strong>: <strong>H14</strong> (Centre of Wind
-                            height, m), <strong>H16</strong> (Operational allowable wind speed, m/s),
-                            <strong>H18</strong> (Drag coefficient), <strong>H20</strong> (Trailer speed,
-                            km/h), <strong>H21</strong> (Max. acceleration, m/sec&sup2;), <strong>H22</strong>
-                            (Max. deceleration, m/sec&sup2;), <strong>B23/E23</strong> (Transverse road
-                            gradient / inc. stroke compensation, %) with <strong>H23</strong> (Gr_trans, deg)
-                            as its Excel-computed result, <strong>B24/E24</strong> (Longitudinal road
-                            gradient / inc. stroke compensation, %) with <strong>H24</strong> (Gr_long, deg)
-                            as its Excel-computed result, <strong>H25</strong> (Curve impact, %), and
-                            <strong>H26</strong> (Friction Steel/Wood). Every field except H23/H24 (🔒
-                            read-only — Excel computes those) is pulled/pushed like the fields above: pulled
-                            automatically when this panel opens or refreshes, on-demand via each field's own
-                            ⇩ button, and written back with <strong>"📤 Push to Excel"</strong> below. The
-                            current values are also drawn as a small callout in the plan-view preview,
-                            top-right of the origin sign.
-                        </p>
-                        <div id="tgHLoadsFields"><!-- Horizontal Loads field grid rendered by JS --></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" title="Pull every Horizontal Loads field from Excel 'Input horizontal loads'!H14/H16/H18/H20/H21/H22/B23/E23/H23/B24/E24/H24/H25/H26"
-                                    onclick="pullHorizontalLoadsFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgPushHLoadsBtn" title="Write every editable Horizontal Loads field to Excel 'Input horizontal loads' (H23/H24 skipped — Excel-computed)"
-                                    onclick="pushHorizontalLoadsToExcel()">📤 Push to Excel</button>
                         </div>
                     </div>
 
@@ -11919,7 +11919,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return `
                 <div class="tg-hloads-panel">
                     <div class="tg-hloads-panel-title">⚠ Horizontal Loads</div>
-                    <div class="tg-hloads-panel-grid">
+                    <div class="tg-hloads-panel-grid" style="--hl-cols:${Math.ceil(hlRows.length / 2)}">
                         ${hlRows.map(row => `<div class="tg-hloads-panel-row"><span class="tg-hloads-panel-icon">${row[0]}</span>${escapeHtml(row[1])}</div>`).join('')}
                     </div>
                 </div>`;
@@ -12875,7 +12875,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         }
 
                         const chY = nextV();
-                        dimensionsSvg += dimV(0, oy, chY.zone, chY.tier, `${Math.round(oy)}`, dimColorOffset);
                         dimensionsSvg += dimV(oy, axle1Y, chY.zone, chY.tier, `${Math.round(axle1OffsetY)}`, dimColorCorner);
                         if (t.axlePairOffsetY) {
                             const axlePairOffsetY = parseFloat(t.axlePairOffsetY) || 0;
@@ -12885,8 +12884,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         // Custom/manual trailer — no deck reference corner
                         // for the axle chain, but the Y origin→corner
                         // offset still applies on its own chained row.
-                        const chY = nextV();
-                        dimensionsSvg += dimV(0, oy, chY.zone, chY.tier, `${Math.round(oy)}`, dimColorOffset);
                     }
 
                     // ---- Baseline dim — origin(0,0) → deck corner, X ----
@@ -12894,6 +12891,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // local spacing), so it's queued with the other
                     // baseline dims below rather than drawn here.
                     baselineItems.push({ dist: Math.abs(ox), x: ox, xLabel: `${Math.round(ox)}`, color: dimColorOffset });
+                    // Same for Y: origin(0,0) -> deck corner gets its OWN tier (like X above) instead of sharing the
+                    // axle chain's row, so it never overlaps the other Y dimensions.
+                    baselineItems.push({ dist: Math.abs(oy), y: oy, yLabel: `${Math.round(oy)}`, color: dimColorOffset });
                 });
 
                 // World origin (0,0) → each cargo item's CoG, in X and Y
@@ -13073,7 +13073,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (tgShowGroupLabels) {
                     // On-canvas label is "G1-42.2Te" (group name + total group load); the per-axle load is drawn on each
                     // axle (see axleLoadSvg, ⚖ Axle load toggle) and the legend below keeps the details.
-                    const groupCanvasTag = allNoLoad ? shortTag : `${shortTag}-${totalLoad.toFixed(1)}Te`;   // e.g. "G1-42.2Te" = group name + total group load
+                    const groupCanvasTag = allNoLoad ? `${shortTag}-${n} Axle` : `${shortTag}-${n} Axle-${+totalLoad.toFixed(1)}Te`;   // e.g. "G1-8 Axle-28Te" = group name + axle count + total group load
                     labelsSvg += `<g>` + placeGroupLabel(overallX, overallY, escapeHtml(groupCanvasTag), g.color) + `</g>`;
                 }
                 // Legend rows are collected unconditionally now — the
@@ -13212,9 +13212,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (detailsEl) {
                 // Permanent legend — always shown now, regardless of the
                 // 🏷 on-canvas label toggle.
-                detailsEl.innerHTML = groupDetailRows.map(r =>
-                    `<div class="tg-preview-group-detail-row" style="border-left-color:${r.color}; color:${r.color};">${escapeHtml(r.text)}</div>`
-                ).join('');
+                detailsEl.innerHTML = '';   // group summary legend removed (the on-canvas labels carry group / axle count / load)
             }
 
             return {
