@@ -1084,7 +1084,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.169)</h1>
+            <h1>🚂 Transport Dashboard (Rev.170)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1464,6 +1464,10 @@
                                     🏷 Show group
                                 </label>
                                 <label class="tg-preview-toggle">
+                                    <input type="checkbox" id="tgAxleLoadToggle" checked onchange="toggleTgAxleLoads(this.checked)">
+                                    ⚖ Axle load
+                                </label>
+                                <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgDimensionToggle" checked onchange="toggleTgDimensions(this.checked)">
                                     📏 Dimension
                                 </label>
@@ -1507,26 +1511,6 @@
                         <div id="tgMagnifierLens" class="tg-magnifier-lens"></div>
                     </div>
 
-                    <div class="tg-cargo-card tg-card-concept-bg" id="tgConceptDisplayCard">
-                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2>
-                            <button type="button" class="tg-help-btn" title="Help" id="tgConceptDisplayHelpToggleBtn" onclick="toggleTgConceptDisplayHelp()">❓</button>
-                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
-                        </div>
-                        <p class="tg-modal-sub" id="tgConceptDisplayHelpPanel">
-                            Read-only mirror of Excel sheets <strong>"Trailer_Port"</strong> (<strong>A5:C24</strong> only; highlighted: B5, B7, B9, B16, B17, B18, B24) and
-                            <strong>"Trailer_DOH"</strong> (<strong>A2:M73</strong> only; highlighted: B2, D2, C13, C31, C48, C66),
-                            with the pictures of the sheet shown where they sit in Excel (click a picture to zoom). Pull-only, never pushed;
-                            change the inputs in the <strong>Trailer Concept</strong> card between Generate Cargo and Generate Trailer.
-                            Pictures are read with the Excel add-in; over the standalone bridge only the tables are available.
-                        </p>
-                        <div id="tgConceptDisplay"></div>
-                        <div class="tg-train-list-actions">
-                            <button type="button" class="tg-add-train-btn" id="tgRefreshConceptViewBtn" title="Pull the tables and the pictures from Excel 'Trailer_Port' and 'Trailer_DOH'"
-                                    onclick="pullConceptDisplayFromExcel()">⇩ Refresh from Excel</button>
-                        </div>
-                    </div>
-
                     <div class="tg-3d-wrap">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🧊 3D Drawing</h2>
@@ -1565,6 +1549,26 @@
                             <div id="tg3dHLoadsOverlay" class="tg-3d-hloads-overlay"></div>
                         </div>
                         <div class="tg-3d-hint">Drag = orbit · middle-drag / two-finger drag = pan · scroll / pinch = zoom</div>
+                    </div>
+
+                    <div class="tg-cargo-card tg-card-concept-bg" id="tgConceptDisplayCard">
+                        <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
+                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2>
+                            <button type="button" class="tg-help-btn" title="Help" id="tgConceptDisplayHelpToggleBtn" onclick="toggleTgConceptDisplayHelp()">❓</button>
+                            <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
+                        </div>
+                        <p class="tg-modal-sub" id="tgConceptDisplayHelpPanel">
+                            Read-only mirror of Excel sheets <strong>"Trailer_Port"</strong> (<strong>A5:C24</strong> only; highlighted: B5, B7, B9, B16, B17, B18, B24) and
+                            <strong>"Trailer_DOH"</strong> (<strong>A2:M73</strong> only; highlighted: B2, D2, C13, C31, C48, C66),
+                            with the pictures of the sheet shown where they sit in Excel (click a picture to zoom). Pull-only, never pushed;
+                            change the inputs in the <strong>Trailer Concept</strong> card between Generate Cargo and Generate Trailer.
+                            Pictures are read with the Excel add-in; over the standalone bridge only the tables are available.
+                        </p>
+                        <div id="tgConceptDisplay"></div>
+                        <div class="tg-train-list-actions">
+                            <button type="button" class="tg-add-train-btn" id="tgRefreshConceptViewBtn" title="Pull the tables and the pictures from Excel 'Trailer_Port' and 'Trailer_DOH'"
+                                    onclick="pullConceptDisplayFromExcel()">⇩ Refresh from Excel</button>
+                        </div>
                     </div>
 
                     <div class="tg-cargo-card tg-card-traction-bg" id="tgTractionDataCard">
@@ -10546,6 +10550,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTrailerGenPreview();
         }
 
+        // When true (default), each axle in the Top view gets its load per axle drawn next to it
+        // (number only, no unit). Display toggle only — never changes the underlying loads.
+        let tgShowAxleLoads = true;
+
+        function toggleTgAxleLoads(checked) {
+            tgShowAxleLoads = checked;
+            renderTrailerGenPreview();
+        }
+
         // When true (default), the preview draws small CAD-style
         // dimension call-outs for each preset (Goldhofer/SPMT) trailer:
         // deck top-left corner → axle line 1 in X and Y, the +X spacing
@@ -12422,6 +12435,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             let linesSvg = '';
             let axlesSvg = '';
+            let axleLoadSvg = '';   // per-axle load numbers (⚖ Axle load toggle)
             let axleHitSvg = '';   // transparent click targets + selection rings, drawn ABOVE cargo so cargo boxes never block axle clicks
             const trainSpines = {};
             trainClusterOrder.forEach(key => {
@@ -12449,6 +12463,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             `stroke="var(--accent-blue, #38bdf8)" stroke-width="${affected ? 2 : 1}" ${affected ? '' : 'stroke-dasharray="2 2"'} pointer-events="none"/>`;
                     }
                     const axAttr = `data-axvis="1" data-axgrp="${axKey}"`;
+                    if (tgShowAxleLoads) {
+                        // Load per axle, number only (no unit). Goldhofer/tall axle: above it. SPMT
+                        // wheel pairs: upper wheel's label above, lower wheel's label below, so the two
+                        // numbers of one axle line never collide.
+                        const loadNum = +(parseFloat(r.load) || 0).toFixed(1);
+                        const isLowerWheel = r.paired && rows.some(o => o !== r && o.paired && o.trainName === r.trainName && o.x === r.x && o.y < r.y);
+                        const lblY = isLowerWheel ? y + tgDot(axHalfH) + tgDot(8) : y - tgDot(axHalfH) - tgDot(3);
+                        axleLoadSvg += `<text x="${cx.toFixed(1)}" y="${lblY.toFixed(1)}" font-size="7" font-weight="700" text-anchor="middle" fill="${c.color}" opacity="${r.noLoad ? 0.55 : 1}" pointer-events="none" style="user-select:none;">${loadNum}</text>`;
+                    }
                     if (r.paired) {
                         // Preset trailer: this row is ONE physical axle
                         // (right or left) of a line — draw it as a small
@@ -12960,14 +12983,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const labelText = allNoLoad
                     ? `${shortTag} · ${n} axle(s) · no line load`
                     : (uniformLoad !== null
-                        ? `${shortTag} · ${n} axle(s) · ${(parseFloat(uniformLoad) || 0).toFixed(1)} t/axle · ${totalLoad.toFixed(1)} t`
-                        : `${shortTag} · ${n} axle(s) · ${totalLoad.toFixed(1)} t total`);
+                        ? `${shortTag} · ${n} axle(s) · ${(parseFloat(uniformLoad) || 0).toFixed(1)} Te/axle · ${totalLoad.toFixed(1)} Te`
+                        : `${shortTag} · ${n} axle(s) · ${totalLoad.toFixed(1)} Te total`);
                 if (tgShowGroupLabels) {
-                    // On-canvas tag is just the short "G1"/"G2" form now —
-                    // the full detail string (axle count, t/axle, total)
-                    // still goes in the permanent legend below via
-                    // groupDetailRows, so nothing is lost, it's just not
-                    // repeated on the drawing itself.
+                    // On-canvas label is just "G1"/"G2"/"G3"/"G4"; the per-axle load is drawn on each
+                    // axle (see axleLoadSvg, ⚖ Axle load toggle) and the legend below keeps the details.
                     labelsSvg += `<g>` + planLeaderBoxLabel(overallX, overallY, escapeHtml(shortTag), g.color) + `</g>`;
                 }
                 // Legend rows are collected unconditionally now — the
@@ -13095,7 +13115,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </marker>
                 </defs>
                 <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${axleHitSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}${axlePopupSvg}
+                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${axleLoadSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${axleHitSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}${axlePopupSvg}
                 <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
@@ -17639,6 +17659,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 lashingIdCounter: lashingIdCounter,
                 tgZTrailerHeightMm: tgZTrailerHeightMm,
                 tgShowGroupLabels: tgShowGroupLabels,
+                tgShowAxleLoads: tgShowAxleLoads,
                 tgShowDimensions: tgShowDimensions,
                 tgShowLashing: tgShowLashing,
                 tgPrimeMover: tgPrimeMover,
@@ -17725,6 +17746,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         tgZTrailerHeightMm = state.tgZTrailerHeightMm;
                     }
                     if (typeof state.tgShowGroupLabels === 'boolean') tgShowGroupLabels = state.tgShowGroupLabels;
+                    if (typeof state.tgShowAxleLoads === 'boolean') {
+                        tgShowAxleLoads = state.tgShowAxleLoads;
+                        const axLoadCb = document.getElementById('tgAxleLoadToggle');
+                        if (axLoadCb) axLoadCb.checked = tgShowAxleLoads;
+                    }
                     if (typeof state.tgShowDimensions === 'boolean') tgShowDimensions = state.tgShowDimensions;
                     if (typeof state.tgShowLashing === 'boolean') tgShowLashing = state.tgShowLashing;
                     tgPrimeMover.show = true; tgPrimeMover.gapMm = 0;   // toggle + gap field removed from the UI
