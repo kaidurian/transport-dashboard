@@ -1090,7 +1090,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.170.5)</h1>
+            <h1>🚂 Transport Dashboard (Rev.170.6)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -12747,7 +12747,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const cRect = { x1: cCx - cHalf, y1: cCy - cHalf, x2: cCx + cHalf, y2: cCy + cHalf };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
-                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 6.5, gap: tgDot(5), diagonals: true, cornersOnly: true }) +
                     `</g>`;
                 blockedRects.push(cRect);
             }
@@ -12973,6 +12972,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 `<text x="${ox0 - 3}" y="${oy0 + axisLen + 11}" font-size="9" fill="var(--accent-green, #10b981)" text-anchor="middle">Y</text>` +
                 `<text x="${ox0 + 4}" y="${oy0 - 5}" font-size="9" fill="var(--text-muted, #94a3b8)">0,0</text>` +
                 `</g>`;
+            groupAvoidRects.push({ x1: ox0 - 8, y1: oy0 - 16 * tgFontK, x2: ox0 + axisLen + 6 + 10 * tgFontK, y2: oy0 + axisLen + 14 * tgFontK });   // origin 0,0 + X/Y axis sign
 
             // ---- Horizontal Loads readout — no longer drawn in any of
             // the 2D SVGs at all (it used to overlap the plan view, then
