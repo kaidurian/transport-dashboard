@@ -1084,7 +1084,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.170)</h1>
+            <h1>🚂 Transport Dashboard (Rev.170.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -12464,13 +12464,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     }
                     const axAttr = `data-axvis="1" data-axgrp="${axKey}"`;
                     if (tgShowAxleLoads) {
-                        // Load per axle, number only (no unit). Goldhofer/tall axle: above it. SPMT
-                        // wheel pairs: upper wheel's label above, lower wheel's label below, so the two
-                        // numbers of one axle line never collide.
-                        const loadNum = +(parseFloat(r.load) || 0).toFixed(1);
-                        const isLowerWheel = r.paired && rows.some(o => o !== r && o.paired && o.trainName === r.trainName && o.x === r.x && o.y < r.y);
-                        const lblY = isLowerWheel ? y + tgDot(axHalfH) + tgDot(8) : y - tgDot(axHalfH) - tgDot(3);
-                        axleLoadSvg += `<text x="${cx.toFixed(1)}" y="${lblY.toFixed(1)}" font-size="7" font-weight="700" text-anchor="middle" fill="${c.color}" opacity="${r.noLoad ? 0.55 : 1}" pointer-events="none" style="user-select:none;">${loadNum}</text>`;
+                        // Load per axle, number only (no unit), drawn INSIDE the wheel on a small white
+                        // chip with dark text. Font 4.5 (x tgFontK at the end of the render, like every
+                        // other 2D label), so the chip is sized with tgFontK too.
+                        const loadNum = String(+(parseFloat(r.load) || 0).toFixed(1));
+                        const lfs = 4.5;
+                        const chipW = loadNum.length * lfs * 0.62 * tgFontK + 2;
+                        const chipH = lfs * tgFontK + 2;
+                        axleLoadSvg += `<g pointer-events="none" style="user-select:none;" opacity="${r.noLoad ? 0.6 : 1}">` +
+                            `<rect x="${(cx - chipW / 2).toFixed(1)}" y="${(y - chipH / 2).toFixed(1)}" width="${chipW.toFixed(1)}" height="${chipH.toFixed(1)}" rx="1.5" fill="#ffffff"/>` +
+                            `<text x="${cx.toFixed(1)}" y="${(y + lfs * 0.36 * tgFontK).toFixed(1)}" font-size="${lfs}" font-weight="700" text-anchor="middle" fill="#0f172a">${loadNum}</text></g>`;
                     }
                     if (r.paired) {
                         // Preset trailer: this row is ONE physical axle
@@ -13037,7 +13040,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const midX = sx((rowA.x + rowB.x) / 2);
                     splitMarkersSvg += `<g>` +
                         `<line x1="${midX}" y1="${y - 15}" x2="${midX}" y2="${y + 15}" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5" stroke-dasharray="1 3"/>` +
-                        `<circle cx="${midX}" cy="${y}" r="${tgDot(4.5)}" fill="var(--tank-box-bg, #0b1220)" stroke="var(--text-muted, #94a3b8)" stroke-width="1.5"/>` +
                         `<title>AutoCAD split — separate SPMT units here (${segments.join(' + ')})</title>` +
                         `</g>`;
                 });
