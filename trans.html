@@ -1090,7 +1090,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.170.4)</h1>
+            <h1>🚂 Transport Dashboard (Rev.170.5)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -12378,7 +12378,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // defaulting to the same "above" slot.
             const blockedRects = [];
             const placedLabelRects = [];
-            const wheelRects = [];   // every wheel (incl. its axle-load chip) — the one thing group labels must never cover
+            // Group labels (G1-xx Te) may sit ON the trailer deck and ON cargo, so deck / cargo / axle-band rects
+            // are registered as "soft" (ignored by the group-label search); wheels, axle-load chips, trailer-name
+            // text and lashing dots go into groupAvoidRects, which the group labels must never cover.
+            const softRects = new Set();
+            const groupAvoidRects = [];
+            const pushSoft = r => { blockedRects.push(r); softRects.add(r); };
             const overlapArea = (a, b) => Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1)) * Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
             const placeAttachedLabel = (rect, text, color, opts = {}) => {
                 const fontSize = opts.fontSize || 9;
@@ -12486,11 +12491,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             `stroke="var(--accent-blue, #38bdf8)" stroke-width="${affected ? 2 : 1}" ${affected ? '' : 'stroke-dasharray="2 2"'} pointer-events="none"/>`;
                     }
                     const axAttr = `data-axvis="1" data-axgrp="${axKey}"`;
-                    {
-                        const wl = String(+(parseFloat(r.load) || 0).toFixed(1)).length * 4.5 * 0.62 * tgFontK + 2;
-                        const wHalfW = Math.max(tgDot(5), (tgShowAxleLoads ? wl : 0) / 2) + 1, wHalfH = tgDot(r.paired ? 6 : 12) + 1;
-                        wheelRects.push({ x1: cx - wHalfW, y1: y - wHalfH, x2: cx + wHalfW, y2: y + wHalfH });
-                    }
+                    groupAvoidRects.push({ x1: cx - tgDot(5) - 1, y1: y - tgDot(axHalfH) - 1, x2: cx + tgDot(5) + 1, y2: y + tgDot(axHalfH) + 1 });   // wheel
                     if (tgShowAxleLoads) {
                         // Load per axle, number only (no unit), drawn INSIDE the wheel on a small white
                         // chip with dark text. Font 4.5 (x tgFontK at the end of the render, like every
@@ -12499,6 +12500,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const lfs = 4.5;
                         const chipW = loadNum.length * lfs * 0.62 * tgFontK + 2;
                         const chipH = lfs * tgFontK + 2;
+                        groupAvoidRects.push({ x1: cx - chipW / 2 - 1, y1: y - chipH / 2 - 1, x2: cx + chipW / 2 + 1, y2: y + chipH / 2 + 1 });   // axle-load label
                         axleLoadSvg += `<g pointer-events="none" style="user-select:none;" opacity="${r.noLoad ? 0.6 : 1}">` +
                             `<rect x="${(cx - chipW / 2).toFixed(1)}" y="${(y - chipH / 2).toFixed(1)}" width="${chipW.toFixed(1)}" height="${chipH.toFixed(1)}" rx="1.5" fill="#ffffff"/>` +
                             `<text x="${cx.toFixed(1)}" y="${(y + lfs * 0.36 * tgFontK).toFixed(1)}" font-size="${lfs}" font-weight="700" text-anchor="middle" fill="#0f172a">${loadNum}</text></g>`;
@@ -12516,7 +12518,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const centerX = pts.reduce((a, b) => a + b, 0) / pts.length;
                 if (!trainSpines[c.trainName]) trainSpines[c.trainName] = [];
                 trainSpines[c.trainName].push({ centerX, centerY: y });
-                blockedRects.push({ x1: x1 - 6, y1: y - 13, x2: x2 + 6, y2: y + 13, soft: true });   // axle-line band: soft for group labels (the wheels themselves are hard, see wheelRects)
+                pushSoft({ x1: x1 - 6, y1: y - 13, x2: x2 + 6, y2: y + 13 });
             });
 
             // Deck rectangles for any train using a fixed trailer preset —
@@ -12544,12 +12546,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const fs = 9;
                     const tx = Math.max(rx1, rx2) - 6, ty = (ry1 + ry2) / 2 + fs * 0.36 * tgFontK;   // right end of the deck, vertically centred
                     trainBoxSvg += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" font-size="${fs}" font-weight="700" text-anchor="end" fill="var(--text-main, #e2e8f0)">${escapeHtml(label)}</text>`;
+                    const tnW = label.length * fs * 0.62 * tgFontK, tnH = fs * tgFontK;
+                    groupAvoidRects.push({ x1: tx - tnW - 2, y1: ty - tnH, x2: tx + 2, y2: ty + 2 });   // trailer name text
                 }
                 const deckMidX = (rx1 + rx2) / 2;
                 deckSvg += `<g>` +
                     `<rect x="${rx1}" y="${ry1}" width="${rw}" height="${rh}" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"/>` +
                     `</g>`;
-                blockedRects.push({ x1: Math.min(rx1, rx2), y1: Math.min(ry1, ry2) - 14, x2: Math.max(rx1, rx2), y2: Math.max(ry1, ry2), soft: true });   // trailer deck: group labels may sit on it
+                pushSoft({ x1: Math.min(rx1, rx2), y1: Math.min(ry1, ry2) - 14, x2: Math.max(rx1, rx2), y2: Math.max(ry1, ry2) });
             });
 
             // ---- Lashing point ("L#") signs — small circles right on
@@ -12580,6 +12584,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const lw = labelText.length * 6.5 * 0.56 * tgFontK;
                         blockedRects.push({ x1: d.cx - lw / 2, y1: d.cy + labelDy * tgFontK - 7 * tgFontK, x2: d.cx + lw / 2, y2: d.cy + labelDy * tgFontK + 2 * tgFontK });
                     }
+                    if (tgShowLashing) groupAvoidRects.push({ x1: d.cx - tgDot(3.2) - 1, y1: d.cy - tgDot(3.2) - 1, x2: d.cx + tgDot(3.2) + 1, y2: d.cy + tgDot(3.2) + 1 });
                     const dotTokens = d.text.split('/');
                     const isActiveAssigned = dotTokens.some(t => activeSignTokens.has(t));
                     lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${d.text.replace(/'/g, "\\'")}')">` +
@@ -12664,7 +12669,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         `<rect x="${rect.x1}" y="${rect.y1}" width="${rect.x2 - rect.x1}" height="${rect.y2 - rect.y1}" fill="${TG_HEADER_DBAR_COLOR}" fill-opacity="0.12" stroke="${TG_HEADER_DBAR_COLOR}" stroke-opacity="0.5" stroke-width="0.8" stroke-dasharray="4 3"/>` +
                         hdArtTopSvg(b, sx, sy, scale, TG_HEADER_DBAR_COLOR) +
                         `</g>`;
-                    blockedRects.push(Object.assign({ soft: true }, rect));   // header/dbar blocks belong to the trailer: group labels may sit on them
+                    blockedRects.push(rect);
                 });
             });
 
@@ -12699,7 +12704,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `<rect x="${rect.x1}" y="${rect.y1}" width="${rect.x2 - rect.x1}" height="${rect.y2 - rect.y1}" fill="${cargoColor}" fill-opacity="0.15" stroke="${cargoColor}" stroke-width="1.5"/>` +
                     cogSymbolSvg(cogCx, cogCy, 6, cargoColor) +
                     `</g>`;
-                blockedRects.push(Object.assign({ soft: true }, rect));   // cargo box: group labels may sit on it
+                pushSoft(rect);
+                { const ch = cogSignR(6); blockedRects.push({ x1: cogCx - ch, y1: cogCy - ch, x2: cogCx + ch, y2: cogCy + ch }); }   // cargo CoG marker stays hard
                 // 🔗 Top view: CoG to Left (m) / CoG to Rear (m) are drawn
                 // further below, inside the tgShowDimensions block, as
                 // part of the same outside-the-assembly tiered dimension
@@ -12741,7 +12747,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const cRect = { x1: cCx - cHalf, y1: cCy - cHalf, x2: cCx + cHalf, y2: cCy + cHalf };
                 cargoSvg += `<g>` +
                     cogSymbolSvg(cCx, cCy, 9, TG_CARGO_TOTAL_COLOR) +
-                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 6.5, gap: tgDot(5), diagonals: true, cornersOnly: true })   // = lashing L# text height +
+                    placeAttachedLabel(cRect, `CCoG ${(parseFloat(cogCombinedSign.weight) || 0).toFixed(1)}t`, TG_CARGO_TOTAL_COLOR, { fontSize: 6.5, gap: tgDot(5), diagonals: true, cornersOnly: true }) +
                     `</g>`;
                 blockedRects.push(cRect);
             }
@@ -12999,62 +13005,39 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             let connectSvg = '';
             let labelsSvg = '';
-            // Group label ("G1-42.2Te"): same text height as the lashing L# text (6.5), placed OUTSIDE its
-            // trailer(s) — in the free band just above/below the deck (or beside it as a fallback) — and tied back
-            // next to the group's own dot (no leader line). Every candidate spot is scored against everything
-            // already on the drawing (deck/cargo/header blocks, lashing texts, dimensions, other labels) and the
-            // clearest one wins; candidates slide along the deck edge so labels of neighbouring groups separate.
+            // Group label ("G1-42.2Te"): same text height as the lashing L# text (6.5), NO leader line. It sits as
+            // close as possible to the group's own dot and may overlap the trailer deck and the cargo, but never
+            // the trailer wheels, the axle-load labels, the trailer name, lashing dots, dimensions, CoG markers or
+            // another label (groupAvoidRects + every non-soft rect in blockedRects).
             const TG_GROUP_LABEL_FONT = 6.5;
-            const groupTrainRect = allRows => {
-                let r = null;
-                const add = q => { r = r ? { x1: Math.min(r.x1, q.x1), y1: Math.min(r.y1, q.y1), x2: Math.max(r.x2, q.x2), y2: Math.max(r.y2, q.y2) } : q; };
-                [...new Set(allRows.map(x => x.trainName))].forEach(name => {
-                    const t = trailerGenTrains.find(tt => tt.name === name);
-                    if (t && t.deckLength && t.deckWidth) {
-                        const tx = parseFloat(t.x) || 0, ty = parseFloat(t.y) || 0;
-                        add({ x1: sx(tx), y1: sy(ty), x2: sx(tx + t.deckLength), y2: sy(ty + t.deckWidth) });
-                    } else {
-                        const trRows = rows.filter(x => x.trainName === name);
-                        if (trRows.length) add({ x1: Math.min(...trRows.map(x => sx(x.x))) - 8, y1: Math.min(...trRows.map(x => sy(x.y))) - 8, x2: Math.max(...trRows.map(x => sx(x.x))) + 8, y2: Math.max(...trRows.map(x => sy(x.y))) + 8 });
-                    }
-                });
-                return r;
-            };
-            const placeGroupLabel = (anchorX, anchorY, text, color, rect) => {
-                // No leader line any more: the label is a plain boxed tag dropped right next to (or on) its group dot.
-                // It MAY overlap the trailer deck, header/dbar blocks and cargo boxes (their rects are `soft`) but
-                // never a wheel / axle-load chip, a dimension, a lashing text, a CoG marker, another label or a dot.
+            const placeGroupLabel = (anchorX, anchorY, text, color) => {
                 const fs = TG_GROUP_LABEL_FONT;
                 const boxW = (text.length * fs * 0.62 + 9) * tgFontK, boxH = (fs + 5) * tgFontK;
-                const hard = blockedRects.filter(b => !b.soft).concat(wheelRects, groupDotRects);
-                const cands = [];
-                for (let dy = -60; dy <= 60; dy += 3) for (let dx = -120; dx <= 120; dx += 4) {
-                    const x1 = anchorX + dx - boxW / 2, y1 = anchorY + dy - boxH / 2;
-                    cands.push({ x1, y1, x2: x1 + boxW, y2: y1 + boxH, d: Math.hypot(dx, dy * 1.6) });
-                }
+                const hard = blockedRects.filter(b => !softRects.has(b)).concat(groupAvoidRects);
+                const dotR = tgDot(4.5) + 2;
+                hard.push({ x1: anchorX - dotR, y1: anchorY - dotR, x2: anchorX + dotR, y2: anchorY + dotR });   // the group's own dot
+                const R = 80 * tgFontK;
                 let chosen = null, bestScore = Infinity;
-                for (const cand of cands) {
-                    let score = hard.reduce((sum, b) => sum + 4 * overlapArea(cand, b), 0) +
-                        placedLabelRects.reduce((sum, q) => sum + 4 * overlapArea(cand, q), 0) + cand.d * 0.6;
-                    if (cand.x1 < 1 || cand.y1 < 1 || cand.x2 > layoutSvgW - 1 || cand.y2 > svgH - 1) score += 1e6;   // keep on the canvas
-                    if (score < bestScore) { chosen = cand; bestScore = score; }
+                for (let dy = -R; dy <= R; dy += 2) {
+                    for (let dx = -R; dx <= R; dx += 3) {
+                        const cx = anchorX + dx, cy = anchorY + dy;
+                        const cand = { x1: cx - boxW / 2, y1: cy - boxH / 2, x2: cx + boxW / 2, y2: cy + boxH / 2 };
+                        let score = Math.hypot(dx, dy);
+                        if (cand.x1 < 1 || cand.y1 < 1 || cand.x2 > layoutSvgW - 1 || cand.y2 > svgH - 1) score += 1e6;   // keep on the canvas
+                        if (score >= bestScore) continue;
+                        let ov = 0;
+                        for (const b of hard) ov += overlapArea(cand, b);
+                        for (const q of placedLabelRects) ov += overlapArea(cand, q);
+                        score += ov * 1000;
+                        if (score < bestScore) { chosen = cand; bestScore = score; }
+                    }
                 }
+                if (!chosen) chosen = { x1: anchorX + dotR, y1: anchorY - boxH / 2, x2: anchorX + dotR + boxW, y2: anchorY + boxH / 2 };
                 placedLabelRects.push(chosen);
                 const cxm = (chosen.x1 + chosen.x2) / 2, cym = (chosen.y1 + chosen.y2) / 2;
                 return `<rect x="${chosen.x1.toFixed(1)}" y="${chosen.y1.toFixed(1)}" width="${boxW.toFixed(1)}" height="${boxH.toFixed(1)}" rx="3" fill="var(--tank-box-bg, #0b1220)" stroke="${color}" stroke-width="1"/>` +
                     `<text x="${cxm.toFixed(1)}" y="${(cym + fs * 0.36 * tgFontK).toFixed(1)}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
             };
-
-            // Every group dot (overall + per-cluster) is a hard obstacle for all group labels.
-            const groupDotRects = [];
-            groupOrder.forEach(gNum => {
-                const g = groupAgg[gNum];
-                const ox = g.clusters.reduce((sum, c) => sum + c.centerX, 0) / g.clusters.length;
-                const oy = g.clusters.reduce((sum, c) => sum + c.centerY, 0) / g.clusters.length;
-                const r0 = tgDot(4.5) + 1.5;
-                groupDotRects.push({ x1: ox - r0, y1: oy - r0, x2: ox + r0, y2: oy + r0 });
-                if (g.clusters.length > 1) g.clusters.forEach(c => { const r1 = tgDot(2.5) + 1; groupDotRects.push({ x1: c.centerX - r1, y1: c.centerY - r1, x2: c.centerX + r1, y2: c.centerY + r1 }); });
-            });
 
             const groupDetailRows = [];
             groupOrder.forEach(gNum => {
@@ -13091,7 +13074,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // On-canvas label is "G1-42.2Te" (group name + total group load); the per-axle load is drawn on each
                     // axle (see axleLoadSvg, ⚖ Axle load toggle) and the legend below keeps the details.
                     const groupCanvasTag = allNoLoad ? shortTag : `${shortTag}-${totalLoad.toFixed(1)}Te`;   // e.g. "G1-42.2Te" = group name + total group load
-                    labelsSvg += `<g>` + placeGroupLabel(overallX, overallY, escapeHtml(groupCanvasTag), g.color, groupTrainRect(allRows)) + `</g>`;
+                    labelsSvg += `<g>` + placeGroupLabel(overallX, overallY, escapeHtml(groupCanvasTag), g.color) + `</g>`;
                 }
                 // Legend rows are collected unconditionally now — the
                 // detail legend is a PERMANENT fixture below the preview
@@ -13219,7 +13202,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     </marker>
                 </defs>
                 <rect x="${frameX1}" y="${frameY1}" width="${frameX2 - frameX1}" height="${frameY2 - frameY1}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
-                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${axleLoadSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${axleHitSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}${axlePopupSvg}
+                ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${axleLoadSvg}${groupChainSvg}${connectSvg}${cargoSvg}${labelsSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${axleHitSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}${axlePopupSvg}
                 <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
 
@@ -13494,8 +13477,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // edge and Right End View out to the right edge instead of
             // padding both sides equally, so the two stay visually
             // separated instead of reading as one crowded middle group.
-            const endOffsetX1 = padL + leftDimMargin;                                  // Front View panel — pinned to the LEFT edge
-            const endOffsetX2 = padL + leftDimMargin + contentW - endW;                // Rear View panel — pinned to the RIGHT edge
+            const endOffsetX1 = padL + leftDimMargin;                                   // Front View panel — pinned to the LEFT edge
+            const endOffsetX2 = padL + leftDimMargin + contentW - endW;                 // Rear View panel — pinned to the RIGHT edge
 
             const sideGroundY = padT + panelH;
             const endPadT = padT + panelH + padGap;
