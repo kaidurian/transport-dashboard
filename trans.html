@@ -1090,7 +1090,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.170.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.170.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -12234,10 +12234,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const dimColsY = tgShowDimensions ? dimNTrains + 2 * dimNCargo + dimNCogs : 0;
             const dimRowsAbove = Math.ceil(dimRowsX / 2), dimRowsBelow = Math.floor(dimRowsX / 2);
             const dimColsLeft = Math.ceil(dimColsY / 2), dimColsRight = Math.floor(dimColsY / 2);
-            const padT = Math.max(34, 24 + dimRowsAbove * 13);
+            // X rows: first line TG_TOPDIM_OUT (28) out from the drawing, 13 apart; Y columns: first line 28 out,
+            // 26 apart (same step as the end views' vertical dimension stacks, so the rotated text never touches
+            // the next line). The 0..14px band right outside the drawing is kept free for the group labels.
+            const TG_TOPDIM_OUT = 28, TG_TOPDIM_V_STEP = 26, TG_TOPDIM_V_TEXT_GAP = 10;
+            const padT = Math.max(34, 34 + dimRowsAbove * 13);
             const padB0 = Math.max(30, 24 + dimRowsBelow * 13);
             let svgH = 220 + Math.max(0, padT - 34) + Math.max(0, padB0 - 30) ;
-            const padL = Math.max(55, 28 + dimColsLeft * 12), padR = Math.max(50, 28 + dimColsRight * 12), padB = padB0;
+            const padL = Math.max(55, 34 + Math.max(0, dimColsLeft - 1) * TG_TOPDIM_V_STEP), padR = Math.max(50, 34 + Math.max(0, dimColsRight - 1) * TG_TOPDIM_V_STEP), padB = padB0;
             const plotW = layoutSvgW - padL - padR;
             let plotH = svgH - padT - padB;
 
@@ -12301,7 +12305,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             let offsetY = padT + (plotH - usedH) / 2;
             // Dimensions hidden -> shrink the plan panel to hug the drawing (scale above is
             // already final) so the Top view sits right above the Side view.
-            if (!tgShowDimensions) { plotH = usedH; svgH = padT + usedH + padB; offsetY = padT; }
+            // Always hug the drawing (scale above is already final): the dimension rows/columns have their own
+            // pads, so no extra blank band is left between the Top view and the Side view below it.
+            plotH = usedH; svgH = padT + usedH + padB; offsetY = padT;
             const sx = x => offsetX + (x - minX) * scale;
             // No vertical flip: +Y renders DOWNWARD on screen, matching
             // the origin sign (X-axis arrow points right, Y-axis arrow
@@ -12564,6 +12570,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // Non-SPMT keeps its own single full label per dot,
                     // same as before.
                     const labelText = isSpmtBracket ? '' : d.text;
+                    if (tgShowLashing && labelText) {
+                        const lw = labelText.length * 6.5 * 0.56 * tgFontK;
+                        blockedRects.push({ x1: d.cx - lw / 2, y1: d.cy + labelDy * tgFontK - 7 * tgFontK, x2: d.cx + lw / 2, y2: d.cy + labelDy * tgFontK + 2 * tgFontK });
+                    }
                     const dotTokens = d.text.split('/');
                     const isActiveAssigned = dotTokens.some(t => activeSignTokens.has(t));
                     lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${d.text.replace(/'/g, "\\'")}')">` +
@@ -12589,6 +12599,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const gx = sx(st.xWorld).toFixed(1);
                         const rightBaseY = sy(oy) - 16;
                         const leftBaseY = sy(oy + train.deckWidth) + 20;
+                        if (tgShowLashing) {
+                            const gxn = parseFloat(gx), k = tgFontK;
+                            blockedRects.push({ x1: gxn - 9 * k, y1: rightBaseY - 14 * k - 7 * k, x2: gxn + 9 * k, y2: rightBaseY + 2 * k });
+                            blockedRects.push({ x1: gxn - 9 * k, y1: leftBaseY - 7 * k, x2: gxn + 9 * k, y2: leftBaseY + 14 * k + 2 * k });
+                        }
                         const rightTarget = `${st.rightLabel}A/${st.rightLabel}B/${st.rightLabel}C/${st.rightLabel}D`;
                         const leftTarget = `${st.leftLabel}A/${st.leftLabel}B/${st.leftLabel}C/${st.leftLabel}D`;
                         lashingSignsSvg += `<g style="cursor:pointer;" onclick="toggleLashingSignForActiveType('${rightTarget}')">` +
@@ -12741,6 +12756,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // spacing between axle line 1 and axle line 2, and the +Y
             // offset between an axle line's right and left physical axle.
             let dimensionsSvg = '';
+            const dimExt = { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity };   // bounding box of every dimension drawn
             if (tgShowDimensions) {
                 const dimColorCorner = 'var(--accent-blue, #38bdf8)';
                 const dimColorPair = 'var(--accent-green, #10b981)';
@@ -12759,7 +12775,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // right on top of the deck/cargo — AutoCAD-style: front
                 // call-outs cluster above/left, back call-outs cluster
                 // below/right, both pulled clear of the drawing.
-                const dimOutMargin = 20;
+                const dimOutMargin = TG_TOPDIM_OUT;
                 const frontTopY = sy(rawMinY) - dimOutMargin;
                 const backBottomY = sy(rawMaxY) + dimOutMargin;
                 const frontLeftX = sx(rawMinX) - dimOutMargin;
@@ -12771,11 +12787,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const nextH = () => { const zone = dimCnt.hFront <= dimCnt.hBack ? 'front' : 'back'; return { zone, tier: zone === 'front' ? dimCnt.hFront++ : dimCnt.hBack++ }; };
                 const nextV = () => { const zone = dimCnt.vFront <= dimCnt.vBack ? 'front' : 'back'; return { zone, tier: zone === 'front' ? dimCnt.vFront++ : dimCnt.vBack++ }; };
 
+                // Footprint of every dimension (line + text) — kept so the frame can enclose them all and
+                // the group labels (placed afterwards) steer clear of them.
+                const addDimFootprint = r => {
+                    dimExt.x1 = Math.min(dimExt.x1, r.x1); dimExt.y1 = Math.min(dimExt.y1, r.y1);
+                    dimExt.x2 = Math.max(dimExt.x2, r.x2); dimExt.y2 = Math.max(dimExt.y2, r.y2);
+                    blockedRects.push(r);
+                };
                 const dimH = (xa, xb, zone, tier, label, color) => {
                     const x1 = sx(xa), x2 = sx(xb);
                     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
                     const y = zone === 'front' ? frontTopY - tier * 13 : backBottomY + tier * 13;
                     const boxW = Math.max(20, label.length * 5.4 * tgFontK);
+                    addDimFootprint({ x1: Math.min(lo, (lo + hi) / 2 - boxW / 2), y1: y - 3 - 10 * tgFontK, x2: Math.max(hi, (lo + hi) / 2 + boxW / 2), y2: y + 3 });
                     return `<g opacity="0.9">` +
                         `<line x1="${lo}" y1="${y}" x2="${hi}" y2="${y}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${lo}" y1="${y - 3}" x2="${lo}" y2="${y + 3}" stroke="${color}" stroke-width="1"/>` +
@@ -12787,14 +12811,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const dimV = (ya, yb, zone, tier, label, color) => {
                     const y1 = sy(ya), y2 = sy(yb);
                     const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
-                    const x = zone === 'front' ? frontLeftX - tier * 12 : backRightX + tier * 12;
-                    const dir = zone === 'front' ? -1 : 1;
-                    // Text runs vertically (reading bottom-to-top), centered
-                    // along the dimension line, so it stays readable
-                    // without widening the callout the way horizontal text
-                    // would for a tall/narrow Y-dimension.
-                    const textX = x + (dir === 1 ? 9 : -9);
+                    // Same style as the end views' vertical stacks (dimZStack): tiers 26 apart, and the
+                    // rotated text sits on the INNER side of its own line (between it and the previous
+                    // line / the drawing), so a text never lands on its own line or on the next tier's.
+                    const x = zone === 'front' ? frontLeftX - tier * TG_TOPDIM_V_STEP : backRightX + tier * TG_TOPDIM_V_STEP;
+                    const dir = zone === 'front' ? -1 : 1;   // direction the stack grows
+                    const textX = x - dir * TG_TOPDIM_V_TEXT_GAP;
                     const textY = (lo + hi) / 2;
+                    const vTextLen = String(label).length * 4.6 * tgFontK, vTextHalfW = 5 * tgFontK;
+                    addDimFootprint({ x1: Math.min(x - 4, textX - vTextHalfW), y1: Math.min(lo, textY - vTextLen / 2), x2: Math.max(x + 4, textX + vTextHalfW), y2: Math.max(hi, textY + vTextLen / 2) });
                     return `<g opacity="0.9">` +
                         `<line x1="${x}" y1="${lo}" x2="${x}" y2="${hi}" stroke="${color}" stroke-width="1" stroke-dasharray="2 2"/>` +
                         `<line x1="${x - 3}" y1="${lo}" x2="${x + 3}" y2="${lo}" stroke="${color}" stroke-width="1"/>` +
@@ -12968,6 +12993,64 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             let connectSvg = '';
             let labelsSvg = '';
+            // Group label ("G1-42.2Te"): same text height as the lashing L# text (6.5), placed OUTSIDE its
+            // trailer(s) — in the free band just above/below the deck (or beside it as a fallback) — and tied back
+            // to the group's own dot by a thin leader line. Every candidate spot is scored against everything
+            // already on the drawing (deck/cargo/header blocks, lashing texts, dimensions, other labels) and the
+            // clearest one wins; candidates slide along the deck edge so labels of neighbouring groups separate.
+            const TG_GROUP_LABEL_FONT = 6.5;
+            const groupTrainRect = allRows => {
+                let r = null;
+                const add = q => { r = r ? { x1: Math.min(r.x1, q.x1), y1: Math.min(r.y1, q.y1), x2: Math.max(r.x2, q.x2), y2: Math.max(r.y2, q.y2) } : q; };
+                [...new Set(allRows.map(x => x.trainName))].forEach(name => {
+                    const t = trailerGenTrains.find(tt => tt.name === name);
+                    if (t && t.deckLength && t.deckWidth) {
+                        const tx = parseFloat(t.x) || 0, ty = parseFloat(t.y) || 0;
+                        add({ x1: sx(tx), y1: sy(ty), x2: sx(tx + t.deckLength), y2: sy(ty + t.deckWidth) });
+                    } else {
+                        const trRows = rows.filter(x => x.trainName === name);
+                        if (trRows.length) add({ x1: Math.min(...trRows.map(x => sx(x.x))) - 8, y1: Math.min(...trRows.map(x => sy(x.y))) - 8, x2: Math.max(...trRows.map(x => sx(x.x))) + 8, y2: Math.max(...trRows.map(x => sy(x.y))) + 8 });
+                    }
+                });
+                return r;
+            };
+            const placeGroupLabel = (anchorX, anchorY, text, color, rect) => {
+                const fs = TG_GROUP_LABEL_FONT;
+                const boxW = (text.length * fs * 0.62 + 9) * tgFontK, boxH = (fs + 5) * tgFontK;
+                if (!rect) rect = { x1: anchorX - 4, y1: anchorY - 4, x2: anchorX + 4, y2: anchorY + 4 };
+                const clampC = (c, lo, hi, size) => (hi - lo > size) ? Math.max(lo + size / 2, Math.min(hi - size / 2, c)) : (lo + hi) / 2;
+                const cands = [];
+                const dists = [2, 14, 26, 38].map(d => d * tgFontK);
+                const upFirst = anchorY <= (rect.y1 + rect.y2) / 2;
+                const vSides = upFirst ? ['up', 'down'] : ['down', 'up'];
+                const hSides = anchorX <= (rect.x1 + rect.x2) / 2 ? ['left', 'right'] : ['right', 'left'];
+                dists.forEach(d => vSides.forEach(side => [0, -1, 1, -2, 2, -3, 3].forEach(k => {
+                    const cx = clampC(anchorX + k * (boxW + 3), rect.x1, rect.x2, boxW);
+                    const y1 = side === 'up' ? rect.y1 - d - boxH : rect.y2 + d;
+                    cands.push({ x1: cx - boxW / 2, y1, x2: cx + boxW / 2, y2: y1 + boxH, side });
+                })));
+                dists.forEach(d => hSides.forEach(side => [0, -1, 1].forEach(k => {
+                    const cy = clampC(anchorY + k * (boxH + 3), rect.y1, rect.y2, boxH);
+                    const x1 = side === 'right' ? rect.x2 + d : rect.x1 - d - boxW;
+                    cands.push({ x1, y1: cy - boxH / 2, x2: x1 + boxW, y2: cy + boxH / 2, side });
+                })));
+                let chosen = cands[0], bestScore = Infinity;
+                for (const cand of cands) {
+                    let score = blockedRects.reduce((sum, b) => sum + overlapArea(cand, b), 0) +
+                        placedLabelRects.reduce((sum, q) => sum + overlapArea(cand, q), 0);
+                    if (cand.x1 < 1 || cand.y1 < 1 || cand.x2 > layoutSvgW - 1 || cand.y2 > svgH - 1) score += 1e6;   // keep on the canvas
+                    if (score < bestScore) { chosen = cand; bestScore = score; }
+                    if (bestScore === 0) break;
+                }
+                placedLabelRects.push(chosen);
+                const cxm = (chosen.x1 + chosen.x2) / 2, cym = (chosen.y1 + chosen.y2) / 2;
+                const ex = chosen.side === 'left' ? chosen.x2 : chosen.side === 'right' ? chosen.x1 : cxm;
+                const ey = chosen.side === 'up' ? chosen.y2 : chosen.side === 'down' ? chosen.y1 : cym;
+                return `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="${color}" stroke-width="0.9" opacity="0.6"/>` +
+                    `<rect x="${chosen.x1.toFixed(1)}" y="${chosen.y1.toFixed(1)}" width="${boxW.toFixed(1)}" height="${boxH.toFixed(1)}" rx="3" fill="var(--tank-box-bg, #0b1220)" stroke="${color}" stroke-width="1"/>` +
+                    `<text x="${cxm.toFixed(1)}" y="${(cym + fs * 0.36 * tgFontK).toFixed(1)}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="var(--text-main, #e2e8f0)">${text}</text>`;
+            };
+
             const groupDetailRows = [];
             groupOrder.forEach(gNum => {
                 const g = groupAgg[gNum];
@@ -13003,7 +13086,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // On-canvas label is "G1-42.2Te" (group name + total group load); the per-axle load is drawn on each
                     // axle (see axleLoadSvg, ⚖ Axle load toggle) and the legend below keeps the details.
                     const groupCanvasTag = allNoLoad ? shortTag : `${shortTag}-${totalLoad.toFixed(1)}Te`;   // e.g. "G1-42.2Te" = group name + total group load
-                    labelsSvg += `<g>` + planLeaderBoxLabel(overallX, overallY, escapeHtml(groupCanvasTag), g.color) + `</g>`;
+                    labelsSvg += `<g>` + placeGroupLabel(overallX, overallY, escapeHtml(groupCanvasTag), g.color, groupTrainRect(allRows)) + `</g>`;
                 }
                 // Legend rows are collected unconditionally now — the
                 // detail legend is a PERMANENT fixture below the preview
@@ -13119,6 +13202,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 }
             }
 
+            const frameX1 = Math.max(1, Math.min(padL - 10, dimExt.x1 - 6)), frameX2 = Math.max(padL + plotW + 10, dimExt.x2 + 6);
+            const frameY1 = Math.max(1, Math.min(padT - 10, dimExt.y1 - 6)), frameY2 = Math.max(padT + plotH + 10, dimExt.y2 + 6);
             const svgMarkup = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH + 12 + 8 * Math.max(1, tgFontK)}" style="display:block;">
                 <defs>
                     <marker id="tgArrowX" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -13128,7 +13213,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-green, #10b981)"/>
                     </marker>
                 </defs>
-                <rect x="${padL - 10}" y="${padT - 10}" width="${plotW + 20}" height="${plotH + 20}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
+                <rect x="${frameX1}" y="${frameY1}" width="${frameX2 - frameX1}" height="${frameY2 - frameY1}" rx="10" fill="none" stroke="var(--panel-border, #242f41)" stroke-width="1"/>
                 ${primeMoverTopSvg}${deckSvg}${headerDbarSvg}${spineSvg}${linesSvg}${pairBeamSvg}${axlesSvg}${axleLoadSvg}${groupChainSvg}${connectSvg}${labelsSvg}${cargoSvg}${trainBoxSvg}${stabArmSvg}${dimensionsSvg}${splitMarkersSvg}${originSvg}${axleHitSvg}${tgShowLashing ? lashingSignsSvg : ''}${tgShowLashing ? lashingChainSvg : ''}${axlePopupSvg}
                 <text x="${svgW / 2}" y="${svgH + 6 + 8 * Math.max(1, tgFontK)}" font-size="11" text-anchor="middle" fill="var(--text-muted, #94a3b8)">Top View</text>
             </svg>`;
@@ -13350,7 +13435,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // breathing room so the Left/Right End View panels (and their
             // now below-ground labels) read as clearly separate groups
             // rather than crowding together.
-            const endGap = tgShowDimensions ? Math.max(90, cargoZInwardMargin * 2 + 40) : 40;   // hidden: panels' own 15px borders leave a ~10px gap
+            // Front/Rear panels sit close together (pair centred under the side view instead of pinned to the far
+            // edges). The gap only has to hold the two mirrored inward Z stacks — 2 tiers per cargo (CoG height +
+            // CoG-to-Bottom), first line 15 + TG_COGZ_LINE_GAP off each panel, TG_COGZ_TIER_STEP apart — side by
+            // side without touching: outermost line of each stack + 6px clearance between them.
+            const endGap = tgShowDimensions && cargoItems.length
+                ? 2 * (15 + TG_COGZ_LINE_GAP + TG_COGZ_TIER_STEP * (2 * cargoItems.length - 1)) + 6 : 40;
             const endsTotalW = endW * 2 + endGap;
 
             // Outward margin reserved to the right of the FRONT (side)
@@ -13399,8 +13489,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // edge and Right End View out to the right edge instead of
             // padding both sides equally, so the two stay visually
             // separated instead of reading as one crowded middle group.
-            const endOffsetX1 = padL + leftDimMargin + (tgShowDimensions ? 0 : (contentW - endsTotalW) / 2);                           // left end-view panel — pinned left
-            const endOffsetX2 = tgShowDimensions ? padL + leftDimMargin + contentW - endW : endOffsetX1 + endW + endGap;         // right end-view panel — pinned right
+            const endOffsetX1 = padL + leftDimMargin + (contentW - endsTotalW) / 2;     // Front View panel — pair centred under the side view
+            const endOffsetX2 = endOffsetX1 + endW + endGap;                            // Rear View panel — right next to it
 
             const sideGroundY = padT + panelH;
             const endPadT = padT + panelH + padGap;
