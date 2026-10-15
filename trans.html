@@ -584,6 +584,12 @@
             display: block; font-weight: 400; color: var(--text-muted); font-size: 8.5px;
         }
         .tg-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 0 6px 6px; }
+        .tg-load-sync-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; border: 1px solid transparent; user-select: none; }
+        .tg-load-sync-badge.tg-ls-ok { color: #047857; background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.45); }
+        .tg-load-sync-badge.tg-ls-pending { color: #92400e; background: rgba(234,179,8,0.22); border-color: rgba(234,179,8,0.7); }
+        .tg-load-sync-badge.tg-ls-calc { color: #92400e; background: rgba(234,179,8,0.22); border-color: rgba(234,179,8,0.7); animation: tgLoadSyncPulse 1s ease-in-out infinite; }
+        .tg-load-sync-badge.tg-ls-err { color: #b91c1c; background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.6); }
+        @keyframes tgLoadSyncPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
         .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
         .tg-preview-toggle input { cursor: pointer; }
         .tg-preview-toggles-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -1090,7 +1096,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.172)</h1>
+            <h1>🚂 Transport Dashboard (Rev.173)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1458,6 +1464,7 @@
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
                             <div class="tg-preview-toggles-right tg-header-toggles" id="tgPreviewHeaderToggles" onclick="event.stopPropagation()">
+                                <span class="tg-load-sync-badge tg-ls-ok" id="tgLoadSyncBadge" title="Axle load status: shows whether the axle loads in the drawing are final (Excel has finished recalculating) or still updating.">✓ Axle load up to date</span>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
                                     ⧉ Separate window
@@ -2316,6 +2323,76 @@ class XLBridge {
             if (Object.values(PUSH_PENDING_BTN_BY_KEY).includes(btnId)) setPushPendingForBtn(btnId, false);
         }
 
+        // ---- Axle load update indicator ----
+        // Axle loads in the 2D drawing are CALCULATED BY EXCEL, so after an
+        // edit they go through: edit -> debounced push -> Excel recalculates
+        // -> poll pulls the new Load per axle. This tracks that chain:
+        //   pending     = an edit is waiting for / in the middle of its push to Excel
+        //   calculating = push finished; waiting for Excel's result to stop changing
+        //                 (needs TG_LS_STABLE_READS identical reads in a row)
+        //   ok          = values are final
+        //   error       = the Load per axle read from Excel failed
+        // While not ok, the axle-load chips in the drawing turn amber and the
+        // badge in the 2D Drawing header shows the state.
+        const TG_LS_STABLE_READS = 2;       // identical consecutive reads (after the push) = finished
+        const TG_LS_SETTLE_MS = 1200;       // gap between those confirming reads
+        const TG_LS_MAX_MS = 20000;         // safety cap: never stay "calculating" longer than this
+        const TG_LS_KEYS = { pushDataToExcel: 1, pushCargoToExcel: 1, pushConceptToExcel: 1, pushHorizontalLoadsToExcel: 1 };
+        const tgLoadSync = { state: 'ok', stable: 0, since: 0, okAt: 0, timer: null };
+        function tgLoadSyncBadgeUpdate() {
+            const map = {
+                ok:   ['tg-ls-ok',      () => '✓ Axle load up to date' + (tgLoadSync.okAt ? ' · ' + new Date(tgLoadSync.okAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '')],
+                pending: ['tg-ls-pending', () => '✏ Axle load: waiting to sync…'],
+                calculating: ['tg-ls-calc', () => '⏳ Axle load: Excel calculating…'],
+                error: ['tg-ls-err',    () => '⚠ Axle load: read from Excel failed']
+            };
+            const m = map[tgLoadSync.state] || map.ok;
+            document.querySelectorAll('.tg-load-sync-badge').forEach(el => {
+                el.className = 'tg-load-sync-badge ' + m[0];
+                el.textContent = m[1]();
+            });
+        }
+        function tgLoadSyncSet(state) {
+            const changed = tgLoadSync.state !== state;
+            tgLoadSync.state = state;
+            if (state === 'pending' || state === 'calculating') { if (!tgLoadSync.since) tgLoadSync.since = Date.now(); }
+            else tgLoadSync.since = 0;
+            if (state === 'ok') tgLoadSync.okAt = Date.now();
+            if (state !== 'calculating') { tgLoadSync.stable = 0; if (tgLoadSync.timer) { clearTimeout(tgLoadSync.timer); tgLoadSync.timer = null; } }
+            tgLoadSyncBadgeUpdate();
+            // redraw only on a state change so the axle-load chips pick up their colour
+            if (changed && typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview();
+        }
+        // Re-read Load per axle outside the 5 s poll (right after a push / while settling). Same guards as the poll:
+        // never while a field has focus, and flagged isAutoPulling so the pull's own re-render can't trigger a push.
+        async function tgLoadSyncPull() {
+            if (!isOfficeInitialized) return;
+            if (isAutoPulling || isAutoPushing || isEditingDashboard()) { tgLoadSync.timer = setTimeout(() => { tgLoadSync.timer = null; tgLoadSyncPull(); }, TG_LS_SETTLE_MS); return; }
+            isAutoPulling = true;
+            try { await pullLoadPerAxleFromExcel(); } finally { isAutoPulling = false; }
+        }
+        function tgLoadSyncIsStale() { return tgLoadSync.state === 'pending' || tgLoadSync.state === 'calculating'; }
+        function tgLoadSyncMarkEdit(key) {
+            if (!TG_LS_KEYS[key]) return;
+            if (!autoSyncEnabled || !isOfficeInitialized) return;   // loads aren't Excel-driven right now
+            tgLoadSync.stable = 0;
+            tgLoadSyncSet('pending');
+        }
+        // Called after every Load-per-axle read. `changed` = any value differed from what was shown.
+        function tgLoadSyncAfterRead(changed) {
+            if (tgLoadSync.state === 'ok' && !changed) return;
+            const pushBusy = isAutoPushing || Object.keys(autoPushTimers).length > 0;
+            if (pushBusy) { tgLoadSyncSet('pending'); return; }
+            if (changed) tgLoadSync.stable = 0; else tgLoadSync.stable++;
+            const timedOut = tgLoadSync.since && (Date.now() - tgLoadSync.since > TG_LS_MAX_MS);
+            if (tgLoadSync.stable >= TG_LS_STABLE_READS || timedOut) { tgLoadSyncSet('ok'); return; }
+            const keepStable = tgLoadSync.stable;
+            if (tgLoadSync.state !== 'calculating') tgLoadSyncSet('calculating');
+            tgLoadSync.stable = keepStable;
+            if (tgLoadSync.timer) clearTimeout(tgLoadSync.timer);
+            tgLoadSync.timer = setTimeout(() => { tgLoadSync.timer = null; tgLoadSyncPull(); }, TG_LS_SETTLE_MS);
+        }
+
         // Debounced dispatcher shared by every auto-push call site below:
         // coalesces several field edits committed in quick succession
         // (or a batch state change like adding a train) into a single
@@ -2327,7 +2404,7 @@ class XLBridge {
             // flag the matching Push button/card as having unpushed edits
             // — even with auto-sync off or Excel not connected. Edits made
             // by an auto-pull (isAutoPulling) match Excel already: skip.
-            if (!isAutoPulling) markPushPending(key);
+            if (!isAutoPulling) { markPushPending(key); tgLoadSyncMarkEdit(key); }
             if (!autoSyncEnabled || !isOfficeInitialized || isAutoPulling) return;
             if (autoPushTimers[key]) clearTimeout(autoPushTimers[key]);
             autoPushTimers[key] = setTimeout(async () => {
@@ -2343,6 +2420,7 @@ class XLBridge {
                     setSyncStatus('⚠ Auto-sync error — see log', '#ef4444');
                 } finally {
                     isAutoPushing = false;
+                    if (TG_LS_KEYS[key] && tgLoadSync.state === 'pending' && !Object.keys(autoPushTimers).length) setTimeout(tgLoadSyncPull, 700);   // push done -> read Excel's recalculated axle loads soon instead of waiting for the next 5 s poll
                 }
             }, AUTO_PUSH_DEBOUNCE_MS);
         }
@@ -6338,7 +6416,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!isOfficeInitialized) return;
             const numGroups = trailerGenTrains[0] ? trailerGenTrains[0].groups.length : 0;
             const rangeInfo = loadPerAxleRangeForGroupCount(numGroups);
-            if (!rangeInfo) return; // no cell mapping for this group count yet
+            if (!rangeInfo) { if (tgLoadSyncIsStale()) tgLoadSyncSet('ok'); return; } // no cell mapping for this group count yet — loads aren't Excel-calculated
             try {
                 let row = null;
                 await Excel.run(async (context) => {
@@ -6362,8 +6440,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     });
                 });
                 if (changed && !isEditingDashboard()) renderTrailerDashboard();
+                tgLoadSyncAfterRead(changed);
             } catch (e) {
                 console.warn(`Could not pull Load per axle from '${DISPLAY_SHEET_NAME}'!${rangeInfo.range}`, e);
+                tgLoadSyncSet('error');
             }
         }
 
@@ -11005,6 +11085,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     summary: xlTxt(xlKids(card, '.tg-train-summary')[0])
                 };
             });
+            // "Line spacing (mm)" column is hidden in the table layout (value is still stored / pushed; still editable in the left|right card layout)
+            data.forEach(d => { d.fields = d.fields.filter(f => !/^\s*Line spacing/i.test(xlLabelInfo(f).text)); });
             const G = Math.max(1, ...data.map(d => d.groups.length));
             const hasRow = data.some(d => d.groups.some(g => g.fields.length >= 5));
             const gCols = ['Grp', 'From axle line', 'To axle line'].concat(hasRow ? ['Axle row'] : [], ['Load type', '📥 Load per axle (t)']);
@@ -11992,15 +12074,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // Gr_long show the Excel-computed degree value (H23/H24); every
         // other row is the raw editable value.
         function renderTrailerGenHLoadsPanel() {
+            // Slope % shown in brackets = tan(angle) x 100 (e.g. 1.95° -> 3.4%), 1 decimal, trailing zero dropped
+            const hlSlopePct = deg => Number((Math.tan((parseFloat(deg) || 0) * Math.PI / 180) * 100).toFixed(1));
             const hlRows = [
-                ['💨', `Wind v ${tgHLoads.vWind.toFixed(1)} m/s`],
                 ['↕', `H_CoW ${tgHLoads.hCow.toFixed(2)} m`],
+                ['💨', `Wind v ${tgHLoads.vWind.toFixed(1)} m/s`],
                 ['◐', `cd ${tgHLoads.cd.toFixed(2)}`],
                 ['➡', `Trailer v ${tgHLoads.vTrailer.toFixed(1)} km/h`],
                 ['⏩', `a_acc ${tgHLoads.aAcc.toFixed(2)} m/s²`],
                 ['⏪', `a_dec ${tgHLoads.aDec.toFixed(2)} m/s²`],
-                ['⤢', `Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}°`],
-                ['⤡', `Gr_long ${tgHLoads.longGrDeg.toFixed(2)}°`],
+                ['⤢', `Gr_trans ${tgHLoads.transGrDeg.toFixed(2)}° (${hlSlopePct(tgHLoads.transGrDeg)}%)`],
+                ['⤡', `Gr_long ${tgHLoads.longGrDeg.toFixed(2)}° (${hlSlopePct(tgHLoads.longGrDeg)}%)`],
                 ['↻', `C_j ${tgHLoads.curveImpact.toFixed(1)}%`],
                 ['⛓', `M_u ${tgHLoads.muFriction.toFixed(2)}`],
             ];
@@ -12590,7 +12674,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const chipH = lfs * tgFontK + 2;
                         groupAvoidRects.push({ x1: cx - chipW / 2 - 1, y1: y - chipH / 2 - 1, x2: cx + chipW / 2 + 1, y2: y + chipH / 2 + 1 });   // axle-load label
                         axleLoadSvg += `<g pointer-events="none" style="user-select:none;" opacity="${r.noLoad ? 0.6 : 1}">` +
-                            `<rect x="${(cx - chipW / 2).toFixed(1)}" y="${(y - chipH / 2).toFixed(1)}" width="${chipW.toFixed(1)}" height="${chipH.toFixed(1)}" rx="1.5" fill="#ffffff"/>` +
+                            `<rect x="${(cx - chipW / 2).toFixed(1)}" y="${(y - chipH / 2).toFixed(1)}" width="${chipW.toFixed(1)}" height="${chipH.toFixed(1)}" rx="1.5" fill="${tgLoadSyncIsStale() ? '#fcd34d' : '#ffffff'}"/>` +
                             `<text x="${cx.toFixed(1)}" y="${(y + lfs * 0.36 * tgFontK).toFixed(1)}" font-size="${lfs}" font-weight="700" text-anchor="middle" fill="#0f172a">${loadNum}</text></g>`;
                     }
                     if (r.paired) {
