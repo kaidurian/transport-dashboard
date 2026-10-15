@@ -588,6 +588,8 @@
         .tg-load-sync-badge.tg-ls-ok { color: #047857; background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.45); }
         .tg-load-sync-badge.tg-ls-pending { color: #92400e; background: rgba(234,179,8,0.22); border-color: rgba(234,179,8,0.7); }
         .tg-load-sync-badge.tg-ls-calc { color: #92400e; background: rgba(234,179,8,0.22); border-color: rgba(234,179,8,0.7); animation: tgLoadSyncPulse 1s ease-in-out infinite; }
+        .tg-load-sync-badge.tg-ls-mini { padding: 0 6px; margin-left: 6px; font-size: 11px; vertical-align: middle; }
+        .tg-card-calc > :not(.tg-train-card-header) { opacity: 0.6; transition: opacity 0.15s; }
         .tg-load-sync-badge.tg-ls-err { color: #b91c1c; background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.6); }
         @keyframes tgLoadSyncPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
         .tg-preview-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
@@ -1096,7 +1098,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.173)</h1>
+            <h1>🚂 Transport Dashboard (Rev.174)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1105,6 +1107,7 @@
                 <input type="checkbox" id="autoSyncToggle" checked onchange="toggleAutoSync(this.checked)"> Auto-sync
             </label>
             <span id="autoSyncStatus"><span style="color:var(--accent-green);">✓ Synced</span></span>
+            <span class="tg-load-sync-badge tg-ls-ok" id="tgLoadSyncBadgeGlobal">✓ Results up to date</span>
             <button type="button" id="themeModeToggle" title="Toggle day/night mode" onclick="toggleThemeMode()">🌙 Night</button>
             <button type="button" id="appToggleInputsBtn" title="Hide the left-side input cards (Generate Trailer → CoG Envelope) so the preview gets the full width" onclick="toggleTgInputsPanel(this)">◧</button>
             <button type="button" id="appTogglePreviewBtn" title="Hide the preview / output cards (2D Drawing → Transport Data w/ CoG Env Summary) and show only the input fields" onclick="toggleTgPreviewPanel(this)">◨</button>
@@ -1464,7 +1467,7 @@
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
                             <h2 class="tg-cargo-title">🖼 2D Drawing</h2>
                             <div class="tg-preview-toggles-right tg-header-toggles" id="tgPreviewHeaderToggles" onclick="event.stopPropagation()">
-                                <span class="tg-load-sync-badge tg-ls-ok" id="tgLoadSyncBadge" title="Axle load status: shows whether the axle loads in the drawing are final (Excel has finished recalculating) or still updating.">✓ Axle load up to date</span>
+                                <span class="tg-load-sync-badge tg-ls-ok" id="tgLoadSyncBadge" title="Whether the results in the drawing (axle loads, CoG, stability…) are final or Excel is still recalculating.">✓ Results up to date</span>
                                 <label class="tg-preview-toggle">
                                     <input type="checkbox" id="tgPreviewExternalToggle" onchange="toggleTgPreviewWindow(this.checked)">
                                     ⧉ Separate window
@@ -1524,7 +1527,7 @@
 
                     <div class="tg-3d-wrap">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgPreviewHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🧊 3D Drawing</h2>
+                            <h2 class="tg-cargo-title">🧊 3D Drawing</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-minimize-btn tg-preview-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <div class="tg-3d-toolbar">
@@ -1564,7 +1567,7 @@
 
                     <div class="tg-cargo-card tg-card-concept-bg" id="tgConceptDisplayCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2>
+                            <h2 class="tg-cargo-title">🚚 Trailer Concept</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgConceptDisplayHelpToggleBtn" onclick="toggleTgConceptDisplayHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -1584,7 +1587,7 @@
 
                     <div class="tg-cargo-card tg-card-traction-bg" id="tgTractionDataCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚛 Traction Cap. Data</h2>
+                            <h2 class="tg-cargo-title">🚛 Traction Cap. Data</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgTractionDataHelpToggleBtn" onclick="toggleTgTractionDataHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -1603,7 +1606,7 @@
 
                     <div class="tg-cargo-card tg-card-lashing-bg" id="tgLashingCalcCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">⚓ Lashing calculation table</h2>
+                            <h2 class="tg-cargo-title">⚓ Lashing calculation table</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgLashingCalcHelpToggleBtn" onclick="toggleTgLashingCalcHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -1648,7 +1651,7 @@
 
                     <div class="tg-cargo-card" id="tgDrawingTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📋 Transport Data</h2>
+                            <h2 class="tg-cargo-title">📋 Transport Data</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgDrawingTableHelpToggleBtn" onclick="toggleTgDrawingTableHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -1672,7 +1675,7 @@
 
                     <div class="tg-cargo-card tg-card-cogenv-bg" id="tgCogEnvTableCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2>
+                            <h2 class="tg-cargo-title">📊 CoG Envelope Table</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvTableHelpToggleBtn" onclick="toggleTgCogEnvTableHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -1715,7 +1718,7 @@
 
                     <div class="tg-cargo-card tg-card-cogenv-bg" id="tgTransportLcCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">🚚 Transport Data w/ CoG Env</h2>
+                            <h2 class="tg-cargo-title">🚚 Transport Data w/ CoG Env</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgTransportLcHelpToggleBtn" onclick="toggleTgTransportLcHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
@@ -1746,7 +1749,7 @@
 
                     <div class="tg-cargo-card tg-card-cogenv-bg tg-card-minimized" id="tgCogEnvSummaryCard">
                         <div class="tg-train-card-header tg-card-header-clickable" onclick="handleTgCardHeaderClick(event, this)">
-                            <h2 class="tg-cargo-title">📈 Transport Data w/ CoG Env Summary</h2>
+                            <h2 class="tg-cargo-title">📈 Transport Data w/ CoG Env Summary</h2><span class="tg-load-sync-badge tg-ls-ok tg-ls-mini">✓</span>
                             <button type="button" class="tg-help-btn" title="Help" id="tgCogEnvSummaryHelpToggleBtn" onclick="toggleTgCogEnvSummaryHelp()">❓</button>
                             <button type="button" class="tg-minimize-btn" title="Expand this card">▢</button>
                         </div>
@@ -2323,39 +2326,79 @@ class XLBridge {
             if (Object.values(PUSH_PENDING_BTN_BY_KEY).includes(btnId)) setPushPendingForBtn(btnId, false);
         }
 
-        // ---- Axle load update indicator ----
-        // Axle loads in the 2D drawing are CALCULATED BY EXCEL, so after an
-        // edit they go through: edit -> debounced push -> Excel recalculates
-        // -> poll pulls the new Load per axle. This tracks that chain:
+        // ---- Calculation status indicator (all Excel-calculated results) ----
+        // Every result card (2D/3D drawing, Transport Data, CoG Envelope tables, Lashing calc, Traction data, Drawing
+        // table, Trailer Concept display) shows values CALCULATED BY EXCEL, so after any edit they go through:
+        // edit -> debounced push -> Excel recalculates -> poll pulls the new values. One shared state tracks that chain:
         //   pending     = an edit is waiting for / in the middle of its push to Excel
-        //   calculating = push finished; waiting for Excel's result to stop changing
-        //                 (needs TG_LS_STABLE_READS identical reads in a row)
+        //   calculating = push finished (or Excel changed by itself); waiting for the pulled results to stop changing
+        //   manual      = something is stale but Excel is in Manual calculation mode (needs F9)
+        //   error       = a pull failed
         //   ok          = values are final
-        //   error       = the Load per axle read from Excel failed
-        // While not ok, the axle-load chips in the drawing turn amber and the
-        // badge in the 2D Drawing header shows the state.
-        const TG_LS_STABLE_READS = 2;       // identical consecutive reads (after the push) = finished
-        const TG_LS_SETTLE_MS = 1200;       // gap between those confirming reads
+        // "Final" = TG_LS_STABLE_READS full pull cycles in a row with an identical snapshot of every pulled result
+        // (tgCalcSig) AND, when Excel reports it (ExcelApi 1.9), calculationState === 'Done'.
+        // While not ok: badges (.tg-load-sync-badge: header, 2D Drawing, each result card) show the state, result cards
+        // dim slightly (.tg-card-calc) and the axle-load chips in the 2D drawing turn amber.
+        const TG_LS_STABLE_READS = 2;       // identical consecutive pull cycles (after the push) = finished
+        const TG_LS_SETTLE_MS = 1200;       // gap between those confirming cycles
         const TG_LS_MAX_MS = 20000;         // safety cap: never stay "calculating" longer than this
-        const TG_LS_KEYS = { pushDataToExcel: 1, pushCargoToExcel: 1, pushConceptToExcel: 1, pushHorizontalLoadsToExcel: 1 };
+        const TG_LS_KEYS = { pushDataToExcel: 1, pushCargoToExcel: 1, pushConceptToExcel: 1, pushHorizontalLoadsToExcel: 1, pushTractionToExcel: 1 };
         const tgLoadSync = { state: 'ok', stable: 0, since: 0, okAt: 0, timer: null };
-        function tgLoadSyncBadgeUpdate() {
-            const map = {
-                ok:   ['tg-ls-ok',      () => '✓ Axle load up to date' + (tgLoadSync.okAt ? ' · ' + new Date(tgLoadSync.okAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '')],
-                pending: ['tg-ls-pending', () => '✏ Axle load: waiting to sync…'],
-                calculating: ['tg-ls-calc', () => '⏳ Axle load: Excel calculating…'],
-                error: ['tg-ls-err',    () => '⚠ Axle load: read from Excel failed']
+        let tgCalcLastSig = null;
+        // Snapshot of everything Excel calculates and the dashboard pulls (compared between pull cycles)
+        function tgCalcSig() {
+            try {
+                return JSON.stringify([
+                    tgHLoads, cargoTotal, tgCogEnvGroups, tgCogEnvSummary, tgDrawingTableRows, tgTransportLcRows,
+                    tgLashingCalcRows, tgLashingCalcInfo, tgTractionDataRows,
+                    stabilityArmSingleMm, stabilityArmCombinedMm, stabilityAngleSingleDeg, stabilityAngleCombinedDeg, stabilityArmHeightMm,
+                    trailerGenTrains.map(t => t.groups.map(g => g.load))
+                ]);
+            } catch (e) { return 'sig-err-' + Date.now(); }
+        }
+        // Excel's own calc status (calculationState needs ExcelApi 1.9 — falls back to mode only, then to null)
+        async function tgCalcExcelState() {
+            if (!isOfficeInitialized || typeof Excel === 'undefined') return null;
+            const read = async (props) => {
+                let r = null;
+                await Excel.run(async (context) => {
+                    const app = context.workbook.application;
+                    app.load(props);
+                    await context.sync();
+                    r = { mode: app.calculationMode, state: props.indexOf('calculationState') >= 0 ? app.calculationState : null };
+                });
+                return r;
             };
-            const m = map[tgLoadSync.state] || map.ok;
+            try { return await read('calculationMode,calculationState'); }
+            catch (e) { try { return await read('calculationMode'); } catch (e2) { return null; } }
+        }
+        function tgLoadSyncBadgeUpdate() {
+            const st = tgLoadSync.state;
+            const t = tgLoadSync.okAt ? new Date(tgLoadSync.okAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+            const map = {
+                ok:          ['tg-ls-ok',      '✓ Results up to date' + (t ? ' · ' + t : ''), '✓',  'Up to date' + (t ? ' (' + t + ')' : '')],
+                pending:     ['tg-ls-pending', '✏ Waiting to sync…',                          '✏',  'An edit is waiting to be sent to Excel — results below are not final yet'],
+                calculating: ['tg-ls-calc',    '⏳ Excel calculating…',                         '⏳',  'Excel is recalculating — results are still changing'],
+                manual:      ['tg-ls-err',     '⏸ Excel calc = Manual — press F9',            '⏸',  'Excel is in Manual calculation mode — press F9 (or set Automatic) to refresh results'],
+                error:       ['tg-ls-err',     '⚠ Read from Excel failed',                    '⚠',  'Could not read results from Excel — see log']
+            };
+            const m = map[st] || map.ok;
             document.querySelectorAll('.tg-load-sync-badge').forEach(el => {
-                el.className = 'tg-load-sync-badge ' + m[0];
-                el.textContent = m[1]();
+                const mini = el.classList.contains('tg-ls-mini');
+                el.className = 'tg-load-sync-badge ' + m[0] + (mini ? ' tg-ls-mini' : '');
+                el.textContent = mini ? m[2] : m[1];
+                el.title = mini ? m[3] : (m[3] + '. Result cards dim and axle-load numbers turn amber while results are not final.');
+                if (mini) {
+                    const card = el.closest('.tg-trailer-card, .tg-cargo-card, .tg-3d-wrap');
+                    if (card) card.classList.toggle('tg-card-calc', st !== 'ok');
+                }
             });
+            if (document.body) document.body.classList.toggle('tg-calc-stale', st !== 'ok');
         }
         function tgLoadSyncSet(state) {
             const changed = tgLoadSync.state !== state;
             tgLoadSync.state = state;
-            if (state === 'pending' || state === 'calculating') { if (!tgLoadSync.since) tgLoadSync.since = Date.now(); }
+            if (state !== 'ok') { if (!tgLoadSync.since) tgLoadSync.since = Date.now(); }
             else tgLoadSync.since = 0;
             if (state === 'ok') tgLoadSync.okAt = Date.now();
             if (state !== 'calculating') { tgLoadSync.stable = 0; if (tgLoadSync.timer) { clearTimeout(tgLoadSync.timer); tgLoadSync.timer = null; } }
@@ -2363,34 +2406,46 @@ class XLBridge {
             // redraw only on a state change so the axle-load chips pick up their colour
             if (changed && typeof renderTrailerGenPreview === 'function') renderTrailerGenPreview();
         }
-        // Re-read Load per axle outside the 5 s poll (right after a push / while settling). Same guards as the poll:
-        // never while a field has focus, and flagged isAutoPulling so the pull's own re-render can't trigger a push.
-        async function tgLoadSyncPull() {
-            if (!isOfficeInitialized) return;
-            if (isAutoPulling || isAutoPushing || isEditingDashboard()) { tgLoadSync.timer = setTimeout(() => { tgLoadSync.timer = null; tgLoadSyncPull(); }, TG_LS_SETTLE_MS); return; }
-            isAutoPulling = true;
-            try { await pullLoadPerAxleFromExcel(); } finally { isAutoPulling = false; }
-        }
-        function tgLoadSyncIsStale() { return tgLoadSync.state === 'pending' || tgLoadSync.state === 'calculating'; }
+        function tgLoadSyncIsStale() { return tgLoadSync.state !== 'ok'; }
         function tgLoadSyncMarkEdit(key) {
             if (!TG_LS_KEYS[key]) return;
-            if (!autoSyncEnabled || !isOfficeInitialized) return;   // loads aren't Excel-driven right now
+            if (!autoSyncEnabled || !isOfficeInitialized) return;   // results aren't Excel-driven right now
             tgLoadSync.stable = 0;
             tgLoadSyncSet('pending');
         }
-        // Called after every Load-per-axle read. `changed` = any value differed from what was shown.
-        function tgLoadSyncAfterRead(changed) {
+        // One extra full pull cycle outside the 5 s poll (right after a push / while settling). runAutoPull has the same
+        // guards as the poll (never while a field has focus for the editable cards, flags isAutoPulling).
+        function tgLoadSyncSchedule(ms) {
+            if (tgLoadSync.timer) clearTimeout(tgLoadSync.timer);
+            tgLoadSync.timer = setTimeout(() => { tgLoadSync.timer = null; tgLoadSyncPull(); }, ms);
+        }
+        async function tgLoadSyncPull() {
+            if (!isOfficeInitialized || !autoSyncEnabled) return;
+            if (isAutoPulling || isAutoPushing) { tgLoadSyncSchedule(TG_LS_SETTLE_MS); return; }
+            await runAutoPull();   // ends with tgLoadSyncAfterCycle()
+        }
+        // Called at the end of every full pull cycle (poll or extra). `editing` = a field had focus, so most pulls were skipped.
+        async function tgLoadSyncAfterCycle(editing) {
+            const sig = tgCalcSig();
+            const changed = tgCalcLastSig !== null && sig !== tgCalcLastSig;
+            tgCalcLastSig = sig;
             if (tgLoadSync.state === 'ok' && !changed) return;
-            const pushBusy = isAutoPushing || Object.keys(autoPushTimers).length > 0;
-            if (pushBusy) { tgLoadSyncSet('pending'); return; }
-            if (changed) tgLoadSync.stable = 0; else tgLoadSync.stable++;
+            if (Object.keys(autoPushTimers).length > 0 || isAutoPushing) { tgLoadSyncSet('pending'); return; }
+            if (editing) {                                  // pulls skipped -> can't judge yet, look again shortly
+                if (tgLoadSync.state === 'ok') tgLoadSyncSet('calculating');
+                tgLoadSyncSchedule(TG_LS_SETTLE_MS);
+                return;
+            }
+            const xs = await tgCalcExcelState();
+            if (xs && xs.mode === 'Manual') { tgLoadSyncSet('manual'); return; }   // the 5 s poll keeps checking; F9 -> values change -> settles
+            const calcBusy = !!(xs && xs.state && xs.state !== 'Done');
             const timedOut = tgLoadSync.since && (Date.now() - tgLoadSync.since > TG_LS_MAX_MS);
-            if (tgLoadSync.stable >= TG_LS_STABLE_READS || timedOut) { tgLoadSyncSet('ok'); return; }
+            if (changed || calcBusy) tgLoadSync.stable = 0; else tgLoadSync.stable++;
+            if ((tgLoadSync.stable >= TG_LS_STABLE_READS && !calcBusy) || timedOut) { tgLoadSyncSet('ok'); return; }
             const keepStable = tgLoadSync.stable;
             if (tgLoadSync.state !== 'calculating') tgLoadSyncSet('calculating');
             tgLoadSync.stable = keepStable;
-            if (tgLoadSync.timer) clearTimeout(tgLoadSync.timer);
-            tgLoadSync.timer = setTimeout(() => { tgLoadSync.timer = null; tgLoadSyncPull(); }, TG_LS_SETTLE_MS);
+            tgLoadSyncSchedule(TG_LS_SETTLE_MS);
         }
 
         // Debounced dispatcher shared by every auto-push call site below:
@@ -2420,7 +2475,7 @@ class XLBridge {
                     setSyncStatus('⚠ Auto-sync error — see log', '#ef4444');
                 } finally {
                     isAutoPushing = false;
-                    if (TG_LS_KEYS[key] && tgLoadSync.state === 'pending' && !Object.keys(autoPushTimers).length) setTimeout(tgLoadSyncPull, 700);   // push done -> read Excel's recalculated axle loads soon instead of waiting for the next 5 s poll
+                    if (TG_LS_KEYS[key] && tgLoadSync.state === 'pending' && !Object.keys(autoPushTimers).length) tgLoadSyncSchedule(700);   // push done -> read Excel's recalculated axle loads soon instead of waiting for the next 5 s poll
                 }
             }, AUTO_PUSH_DEBOUNCE_MS);
         }
@@ -2565,6 +2620,7 @@ class XLBridge {
         async function runAutoPull() {
             if (!autoSyncEnabled || !isOfficeInitialized || isAutoPushing) return;
             isAutoPulling = true;
+            const tgWasEditing = isEditingDashboard();
             try {
                 // 📐 CoG Envelope — dimX/Y/Z, cogX/Y/Z, and G1/G2/G3 are
                 // ALL pull-only (never locally typed into), so unlike
@@ -2617,8 +2673,11 @@ class XLBridge {
                     await pullConceptDisplayFromExcelImpl({ silent: true, images: false });   // tables only; pictures are pulled on open / Refresh
                 }
                 renderTrailerGenPreview();
+                isAutoPulling = false;   // pull cycle done (the finally below stays as a safety net)
+                await tgLoadSyncAfterCycle(tgWasEditing);
             } catch (e) {
                 console.warn('Auto-pull error', e);
+                if (tgLoadSyncIsStale()) tgLoadSyncSet('error');
             } finally {
                 isAutoPulling = false;
             }
@@ -2817,6 +2876,7 @@ class XLBridge {
 
         function toggleAutoSync(checked) {
             autoSyncEnabled = !!checked;
+            if (!autoSyncEnabled) tgLoadSyncSet('ok');
             if (autoSyncEnabled) {
                 setSyncStatus('✓ Synced', 'var(--accent-green)');
                 startAutoPullPolling();
@@ -6416,7 +6476,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!isOfficeInitialized) return;
             const numGroups = trailerGenTrains[0] ? trailerGenTrains[0].groups.length : 0;
             const rangeInfo = loadPerAxleRangeForGroupCount(numGroups);
-            if (!rangeInfo) { if (tgLoadSyncIsStale()) tgLoadSyncSet('ok'); return; } // no cell mapping for this group count yet — loads aren't Excel-calculated
+            if (!rangeInfo) return; // no cell mapping for this group count yet
             try {
                 let row = null;
                 await Excel.run(async (context) => {
@@ -6440,10 +6500,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     });
                 });
                 if (changed && !isEditingDashboard()) renderTrailerDashboard();
-                tgLoadSyncAfterRead(changed);
             } catch (e) {
                 console.warn(`Could not pull Load per axle from '${DISPLAY_SHEET_NAME}'!${rangeInfo.range}`, e);
-                tgLoadSyncSet('error');
             }
         }
 
