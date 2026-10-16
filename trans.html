@@ -1106,7 +1106,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.175)</h1>
+            <h1>🚂 Transport Dashboard (Rev.175.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -7935,14 +7935,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (!filled.some(Boolean)) { html += '<tr class="tg-dt-spacer"><td colspan="' + NCOL + '">&nbsp;</td></tr>'; return; }
                 const li = filled.lastIndexOf(true);
                 // a row holding only a text in its first cell is a section header / note -> bold when short
-                const isHeader = filled.filter(Boolean).length === 1 && filled[0] && typeof cells[0] === 'string' && cells[0].length <= LONG_LEN;
+                const isHeader = filled.filter(Boolean).length === 1 && filled[0] && typeof cells[0] === 'string' && cells[0].length <= 100;
                 const cls = isHeader ? ' class="tg-dt-bold"' : '';
+                // A text cell spans over the empty cells that follow it up to the next filled cell (labels sit in A,
+                // values / units in H:K), so long labels get the width instead of the narrow first column.
                 let tds = '';
-                if (typeof cells[li] === 'string' && cells[li].length > LONG_LEN) {
-                    for (let k = 0; k < li; k++) tds += `<td class="${cellStatusClass(cells[k])}">${fmt(cells[k])}</td>`;
-                    tds += `<td class="${li === 0 ? 'tg-tcd-note' : 'tg-tcd-span'}" colspan="${NCOL - li}">${fmt(cells[li])}</td>`;
-                } else {
-                    tds = cells.map(v => `<td class="${cellStatusClass(v)}">${fmt(v)}</td>`).join('');
+                for (let k = 0; k < NCOL; k++) {
+                    const v = cells[k];
+                    if (!filled[k]) { tds += '<td></td>'; continue; }
+                    if (typeof v === 'string' && !cellStatusClass(v)) {
+                        let j = k + 1;
+                        while (j < NCOL && !filled[j]) j++;
+                        const span = j - k;
+                        const isNote = k === 0 && (String(v).length > 120 || span > 1);
+                        tds += `<td class="${isNote ? (String(v).length > 120 ? 'tg-tcd-note' : 'tg-tcd-span') : ''}"${span > 1 ? ` colspan="${span}"` : ''}>${fmt(v)}</td>`;
+                        k = j - 1;
+                    } else {
+                        tds += `<td class="${cellStatusClass(v)}">${fmt(v)}</td>`;
+                    }
                 }
                 html += `<tr${cls}>${tds}</tr>`;
             });
@@ -7966,7 +7976,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             try {
                 let values = null;
                 await Excel.run(async (context) => {
-                    const range = context.workbook.worksheets.getItem(CASEAB_SHEET_NAME).getRange(CASEAB_RANGE);
+                    // The workbook's sheet is named 'Check CASE A & CASE B ' (trailing space), so match the name
+                    // ignoring surrounding spaces / case / spacing around '&' instead of an exact getItem().
+                    const norm = n => String(n).replace(/\s+/g, ' ').replace(/\s*&\s*/g, ' & ').trim().toLowerCase();
+                    const sheets = context.workbook.worksheets;
+                    sheets.load('items/name');
+                    await context.sync();
+                    const hit = sheets.items.find(w => norm(w.name) === norm(CASEAB_SHEET_NAME));
+                    if (!hit) throw new Error('Sheet not found: ' + CASEAB_SHEET_NAME);
+                    const range = hit.getRange(CASEAB_RANGE);
                     range.load('values');
                     await context.sync();
                     values = range.values;
