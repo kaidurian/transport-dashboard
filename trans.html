@@ -1106,7 +1106,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.175.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.175.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1322,6 +1322,8 @@
                         <div id="tgGlobalSettings"><!-- Number of trains / Number of Hydraulic Groups rendered by JS --></div>
 
                         <div id="tgTrainList"><!-- train cards rendered by JS --></div>
+
+                        <div id="tgTrainMoveAllSection"><!-- "move all trailers together" master card rendered by JS --></div>
 
                         <div id="tgAccessoryCard"><!-- shared Header/Dbar block + prime mover fields (all trains), rendered by JS --></div>
 
@@ -1666,11 +1668,11 @@
                         <p class="tg-modal-sub" id="tgCaseABHelpPanel">
                             Read-only mirror of Excel <strong>"Check CASE A &amp; CASE B"</strong>!<strong>A7:K49</strong>
                             (OK / NOT OK results are shown green / red, like the other result cards).
-                            The drawing above the table is the hydraulic-group triangle (G1 / G2 / G3) with the Cargo CoG — the same drawing as under
+                            The drawing above the table is the hydraulic-group triangle (G1 / G2 / G3) with the Cargo CoG (green) and the Combined CoG (CCoG, same red as in the 2D drawing) — the same drawing as under
                             📊 CoG Envelope Table, without the LC1–LC4 points. Pull-only, never pushed;
                             it refreshes with the other result cards (auto-sync) or with the button below.
                         </p>
-                        <div id="tgCaseABPreview" class="tg-cogenv-preview" style="margin:0 0 10px 0;"><!-- G1-G3 triangle + CoG (same drawing as the CoG Envelope Table, without LC1-4) rendered by JS --></div>
+                        <div id="tgCaseABPreview" class="tg-cogenv-preview" style="margin:0 0 4px 0;"><!-- G1-G3 triangle + CoG + CCoG (same drawing as the CoG Envelope Table, without LC1-4) rendered by JS --></div>
                         <div id="tgCaseABTable" class="tg-drawing-table-wrap"></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Check CASE A &amp; CASE B'!A7:K49"
@@ -1741,8 +1743,8 @@
                             rows mirror instead to a separate sheet <strong>"Drawing_table_LC_Slope"</strong>,
                             in its own LC1-Slope/LC2-Slope/LC3-Slope/LC4-Slope column block — never both.
                         </p>
+                        <div id="tgCogEnvPreview" class="tg-cogenv-preview" style="margin:0 0 4px 0;"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, CoG, CCoG, LC1-4) rendered by JS — sits ABOVE the table --></div>
                         <div id="tgCogEnvTable" class="tg-drawing-table-wrap"><!-- CoG Envelope table rendered by JS --></div>
-                        <div id="tgCogEnvPreview" class="tg-cogenv-preview"><!-- CoG Envelope 2D preview (origin, dimension stacks, G1-G3, LC1-4) rendered by JS --></div>
                     </div>
 
                     <div class="tg-cargo-card tg-card-cogenv-bg" id="tgTransportLcCard">
@@ -3863,6 +3865,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // point (they reset to 0/0/0 whenever the toggle is switched
         // on), not any particular item's coordinate.
         let cargoGroupAll = { enabled: false, x: 0, y: 0, z: 0 };
+
+        // "Move All Trailers Together" master control (Generate Trailer) — same idea as the cargo one above: local-only,
+        // not part of any Excel range. When enabled, editing the master X/Y offset fields applies the SAME delta to every
+        // train's own X offset / Y offset (mm), so the whole trailer assembly slides while every train keeps its position
+        // relative to the others. The two master fields are a running reference (reset to 0/0 on every toggle).
+        let trainGroupAll = { enabled: false, x: 0, y: 0 };
 
         // Cargo position can be driven from either end: CoG X/Y (the
         // values actually synced with Excel Input!BB/BC) or top-left X/Y
@@ -6399,6 +6407,64 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         <input type="number" step="any" value="${cargoGroupAll.z}" ${enabled ? '' : 'disabled'}
                                title="${fieldTitle('CoGz')}"
                                onchange="updateCargoGroupAllField('z', this.value)">
+                    </div>
+                </div>
+            </div>`;
+        }
+
+
+        function toggleTrainGroupAll(checked) {
+            trainGroupAll.enabled = !!checked;
+            trainGroupAll.x = 0;   // running delta tracker, nothing meaningful to keep across on/off
+            trainGroupAll.y = 0;
+            renderTrainMoveAllSection();
+        }
+
+        function updateTrainGroupAllField(axis, rawValue) {
+            if (!trainGroupAll.enabled) return;
+            let v = parseFloat(rawValue);
+            if (isNaN(v)) v = 0;
+            const delta = round3(v - (parseFloat(trainGroupAll[axis]) || 0));
+            trainGroupAll[axis] = v;
+            if (delta !== 0) {
+                trailerGenTrains.forEach(t => { t[axis] = round3((parseFloat(t[axis]) || 0) + delta); });
+                renderTrailerDashboard();      // train cards show the new X/Y offsets
+                renderTrailerGenPreview();
+                scheduleAutoPush('pushDataToExcel', pushDataToExcel);
+            }
+        }
+
+        function renderTrainMoveAllSection() {
+            const el = document.getElementById('tgTrainMoveAllSection');
+            if (!el) return;
+            const enabled = trainGroupAll.enabled;
+            const fieldTitle = (label) => enabled
+                ? `Moves EVERY train by this ${label} change, in mm — the trains keep their positions relative to each other. Resets to 0 whenever Group All is (re)enabled — local-only, not synced with Excel by itself (the trains' X/Y offsets are pushed as usual).`
+                : `Tick 🧲 Group All above to enable — editing this then shifts every train's ${label} together.`;
+            el.innerHTML = `
+            <div class="tg-cargo-item-card tg-cargo-groupall-card">
+                <div class="tg-train-card-header">
+                    <span class="tg-cargo-groupall-title">🧲 Move All Trailers Together</span>
+                    <label class="tg-cargo-group-toggle ${enabled ? 'tg-cargo-group-active' : ''}"
+                           title="${enabled
+                               ? 'Editing X offset / Y offset below moves EVERY train by the same delta, keeping the trains\u2019 positions relative to each other. Untick to stop.'
+                               : 'Tick to move every train as one group: editing X offset / Y offset below will then shift all trains by the same delta.'}">
+                        <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleTrainGroupAll(this.checked)">
+                        🧲 Group All
+                    </label>
+                </div>
+                <div class="tg-field-grid">
+                    <div class="tg-field ${enabled ? '' : 'tg-field-readonly'}">
+                        <label>X offset (mm)</label>
+                        <input type="number" step="any" value="${trainGroupAll.x}" ${enabled ? '' : 'disabled'}
+                               title="${fieldTitle('X offset')}"
+                               onchange="updateTrainGroupAllField('x', this.value)">
+                    </div>
+                    <div class="tg-field ${enabled ? '' : 'tg-field-readonly'}">
+                        <label>Y offset (mm)</label>
+                        <input type="number" step="any" value="${trainGroupAll.y}" ${enabled ? '' : 'disabled'}
+                               title="${fieldTitle('Y offset')}"
+                               onchange="updateTrainGroupAllField('y', this.value)">
                     </div>
                 </div>
             </div>`;
@@ -9359,11 +9425,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // wedge triangle's own nose vertex always coincide and move
             // together whenever G1's Excel-pulled position changes.
             const apex = g1;
+            // CCoG (Combined CoG, Display!B16:C16 — same mm frame as G1-G3) — same red as the 2D drawing's CCoG sign
+            const showCC = !!cogCombinedSignLoaded;
+            const ccXmm = showCC ? (parseFloat(cogCombinedSign.x) || 0) : 0;
+            const ccYmm = showCC ? (parseFloat(cogCombinedSign.y) || 0) : 0;
 
             const padL = 90, padT = 78, padR = 90, padB = 55;
             const plotW = 560, plotH = 260;
-            const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, 1);
-            const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, 1);
+            const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, showCC ? ccXmm : 0, 1);
+            const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, showCC ? ccYmm : 0, 1);
             const scale = Math.min(plotW / spanX, plotH / maxY);
             const svgW = padL + plotW + padR, svgH = padT + plotH + padB;
             const ox = padL, oy = padT; // world origin (0,0) on screen — top-left, Y positive downward
@@ -9393,6 +9463,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             const dimGreen = 'var(--accent-green, #10b981)'; // CoG's own color
             const dimBlue = 'var(--accent-blue, #38bdf8)';   // G1/G2/G3's own color
+            const ccColor = TG_CARGO_TOTAL_COLOR;            // CCoG — same color as the Combined CoG sign in the 2D drawing (differs from the green CoG)
             // Per-vertex colors for the CoG envelope triangle (CoG,
             // LC1-4) — every dimension line, leader, marker, and label
             // tied to one of these points now uses ITS color instead of
@@ -9415,6 +9486,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 { v: cogXmm, label: `${fmtMm(cogXmm)} (CoG)`, color: dimGreen },
                 ...(noLC ? [] : [{ v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)`, color: lcColors.LC1 }]),
                 { v: Math.max(g2.x, g3.x), label: `${fmtMm(Math.max(g2.x, g3.x))} (G2, G3)`, color: dimBlue },
+                ...(showCC ? [{ v: ccXmm, label: `${fmtMm(ccXmm)} (CCoG)`, color: ccColor }] : []),
             ].sort((a, b) => a.v - b.v);
             let hDimSvg = '';
             hStack.forEach((d, i) => {
@@ -9437,6 +9509,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 { v: g1.y, label: `${fmtMm(g1.y)} (G1)`, color: dimBlue },
                 { v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)`, color: dimGreen },
                 ...(noLC ? [] : [{ v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)`, color: lcColors.LC3 }]),
+                ...(showCC ? [{ v: ccYmm, label: `${fmtMm(ccYmm)} (CCoG)`, color: ccColor }] : []),
             ].sort((a, b) => a.v - b.v);
             let vDimSvg = '';
             vStack.forEach((d, i) => {
@@ -9501,6 +9574,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="3" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
                 `<line x1="${px(cogXmm) - 6}" y1="${py(cogYmm)}" x2="${px(cogXmm) + 6}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
                 `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - 6}" x2="${px(cogXmm)}" y2="${py(cogYmm) + 6}" stroke="${dimGreen}" stroke-width="1"/>`;
+            // CoG / CCoG name tags beside the markers (CoG green, CCoG red) so the two points are told apart at a glance
+            let ccSvg = `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
+            if (showCC) {
+                const r = 7, cx = px(ccXmm), cy = py(ccYmm);
+                ccSvg += `<g>` +
+                    `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
+                    `<path d="M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
+                    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ccColor}" stroke-width="1.3"/>` +
+                    `<line x1="${cx - r}" y1="${cy}" x2="${cx + r}" y2="${cy}" stroke="${ccColor}" stroke-width="1"/>` +
+                    `<line x1="${cx}" y1="${cy - r}" x2="${cx}" y2="${cy + r}" stroke="${ccColor}" stroke-width="1"/>` +
+                    `<text x="${cx + 10}" y="${cy + 14}" font-size="9" font-weight="700" fill="${ccColor}">CCoG</text>` +
+                    `</g>`;
+            }
             const leaderDir = { LC1: [1, -1], LC2: [-1, -1], LC3: [-1, 1], LC4: [1, 1] };
             let lcSvg = '';
             lcBaseMm.forEach(lc => {
@@ -9543,13 +9629,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `</g>`;
             });
 
-            el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block; min-width:520px;">
+            // Height fits the content (the plot box is only as tall as maxY*scale; the old fixed 260px box left an empty band under wide trailers)
+            const contentBottom = Math.max(
+                py(maxY) + 24,
+                noLC ? 0 : envCallY + 18,
+                noLC ? 0 : Math.max(...lcBaseMm.map(lc => py(lc.y) + 26)),
+                showCC ? py(ccYmm) + 22 : 0,
+                py(cogYmm) + 14
+            );
+            const svgHFit = Math.ceil(contentBottom + 4);
+            el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgHFit}" style="display:block; min-width:520px;">
                 <defs>
                     <marker id="${arrowId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M0,0 L10,5 L0,10 z" fill="#ef4444"/>
                     </marker>
                 </defs>
-                ${railSvg}${wedgeSvg}${hDimSvg}${vDimSvg}${rDimSvg}${envCalloutSvg}${cogMarkerSvg}${lcSvg}${groupSvg}${originSvg}
+                ${railSvg}${wedgeSvg}${hDimSvg}${vDimSvg}${rDimSvg}${envCalloutSvg}${cogMarkerSvg}${lcSvg}${groupSvg}${ccSvg}${originSvg}
             </svg>`;
         }
 
@@ -10651,6 +10746,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
 
         function renderTrailerDashboard() {
+            renderTrainMoveAllSection();
             renderTgHLoadsFields();
             renderTgDrawingTable();
             renderTgCogEnvFields();
@@ -11432,7 +11528,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const cl = document.getElementById('tgCargoList'); if (cl) xlCargo(cl);
                 const ll = document.getElementById('tgLashingList'); if (ll) xlLashing(ll);
                 const GRIDS = '.tg-field-grid, .tg-cargo-field-grid, .tg-group-field-grid';
-                [['tgGlobalSettings', 'global'], ['tgCargoGroupAllSection', 'cargo-all']].forEach(([id, key]) => {
+                [['tgGlobalSettings', 'global'], ['tgCargoGroupAllSection', 'cargo-all'], ['tgTrainMoveAllSection', 'train-all']].forEach(([id, key]) => {
                     const c = document.getElementById(id);
                     if (c) c.querySelectorAll(GRIDS).forEach((g, i) => { if (!g.closest('.tg-xl-wrap')) xlGridToTable(g, key + i); });
                 });
@@ -18106,6 +18202,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 cargoItems: cargoItems,
                 cargoIdCounter: cargoIdCounter,
                 cargoGroupAll: cargoGroupAll,
+                trainGroupAll: trainGroupAll,
                 // ⚓ Lashing — lashing point list, saved locally same as
                 // every other card's state (see its own section comment
                 // above pushHLoads for Excel sync scope/status).
@@ -18219,6 +18316,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         ['x', 'y', 'z'].forEach(k => {
                             const v = parseFloat(state.cargoGroupAll[k]);
                             cargoGroupAll[k] = Number.isFinite(v) ? v : 0;
+                        });
+                    }
+                    if (state.trainGroupAll && typeof state.trainGroupAll === 'object') {
+                        trainGroupAll.enabled = !!state.trainGroupAll.enabled;
+                        ['x', 'y'].forEach(k => {
+                            const v = parseFloat(state.trainGroupAll[k]);
+                            trainGroupAll[k] = Number.isFinite(v) ? v : 0;
                         });
                     }
                     if (Array.isArray(state.lashingPoints)) lashingPoints = state.lashingPoints;
