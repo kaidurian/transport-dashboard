@@ -1106,7 +1106,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.175.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.175.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1665,9 +1665,12 @@
                         </div>
                         <p class="tg-modal-sub" id="tgCaseABHelpPanel">
                             Read-only mirror of Excel <strong>"Check CASE A &amp; CASE B"</strong>!<strong>A7:K49</strong>
-                            (OK / NOT OK results are shown green / red, like the other result cards). Pull-only, never pushed;
+                            (OK / NOT OK results are shown green / red, like the other result cards).
+                            The drawing above the table is the hydraulic-group triangle (G1 / G2 / G3) with the Cargo CoG — the same drawing as under
+                            📊 CoG Envelope Table, without the LC1–LC4 points. Pull-only, never pushed;
                             it refreshes with the other result cards (auto-sync) or with the button below.
                         </p>
+                        <div id="tgCaseABPreview" class="tg-cogenv-preview" style="margin:0 0 10px 0;"><!-- G1-G3 triangle + CoG (same drawing as the CoG Envelope Table, without LC1-4) rendered by JS --></div>
                         <div id="tgCaseABTable" class="tg-drawing-table-wrap"></div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Check CASE A &amp; CASE B'!A7:K49"
@@ -7958,7 +7961,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             return html + '</table>';
         }
+        // G1/G2/G3 triangle + CoG drawing above the CASE A & CASE B table (CoG Envelope drawing without LC1-4)
+        function renderTgCaseABPreview() {
+            renderTgCogEnvPreview(tgCogEnvCalculated ? (tgCogEnvComputed || undefined) : undefined, { targetId: 'tgCaseABPreview', noLC: true });
+        }
         function renderTgCaseABTable() {
+            renderTgCaseABPreview();
             const el = document.getElementById('tgCaseABTable');
             if (!el) return;
             if (!tgCaseABRows.length) {
@@ -9295,6 +9303,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // frozen snapshot when calculated, otherwise let it compute
             // its own live preview from the not-yet-calculated fields.
             renderTgCogEnvPreview(calculated ? c : undefined);
+            renderTgCaseABPreview();   // same drawing (no LC1-4) above the CASE A & CASE B table
         }
 
         // ---- CoG Envelope 2D preview — an AutoCAD-style callout
@@ -9315,8 +9324,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // dashboard, so this follows day/night mode automatically; the
         // trailer wedge keeps the same fixed amber (#f59e0b) already
         // used for the trailer elsewhere, regardless of theme.
-        function renderTgCogEnvPreview(c) {
-            const el = document.getElementById('tgCogEnvPreview');
+        // opts (optional): { targetId, noLC } — the 🅰🅱 CASE A & CASE B card reuses this drawing above its table
+        // (targetId 'tgCaseABPreview') with the LC1-LC4 points, their dimensions and the envelope call-outs left out.
+        function renderTgCogEnvPreview(c, opts) {
+            const noLC = !!(opts && opts.noLC);
+            const el = document.getElementById((opts && opts.targetId) || 'tgCogEnvPreview');
+            const arrowId = noLC ? 'tgCeArrowB' : 'tgCeArrow';   // unique marker id per SVG on the page
             if (!el) return;
             c = c || calcCogEnvelope();
             const { dimX, dimY, cogX, cogY, envX, envY, lcBase } = c;
@@ -9349,8 +9362,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             const padL = 90, padT = 78, padR = 90, padB = 55;
             const plotW = 560, plotH = 260;
-            const spanX = Math.max(g2.x, g3.x, cogXmm + halfEnvXmm, apex.x, 1);
-            const maxY = Math.max(g2.y, g3.y, cogYmm + halfEnvYmm, apex.y, 1);
+            const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, 1);
+            const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, 1);
             const scale = Math.min(plotW / spanX, plotH / maxY);
             const svgW = padL + plotW + padR, svgH = padT + plotH + padB;
             const ox = padL, oy = padT; // world origin (0,0) on screen — top-left, Y positive downward
@@ -9371,8 +9384,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // right, Y arrow down), in red per the reference image.
             const axisLen = 34;
             const originSvg = `<g>` +
-                `<line x1="${ox}" y1="${oy}" x2="${ox + axisLen}" y2="${oy}" stroke="#ef4444" stroke-width="2" marker-end="url(#tgCeArrow)"/>` +
-                `<line x1="${ox}" y1="${oy}" x2="${ox}" y2="${oy + axisLen}" stroke="#ef4444" stroke-width="2" marker-end="url(#tgCeArrow)"/>` +
+                `<line x1="${ox}" y1="${oy}" x2="${ox + axisLen}" y2="${oy}" stroke="#ef4444" stroke-width="2" marker-end="url(#${arrowId})"/>` +
+                `<line x1="${ox}" y1="${oy}" x2="${ox}" y2="${oy + axisLen}" stroke="#ef4444" stroke-width="2" marker-end="url(#${arrowId})"/>` +
                 `<circle cx="${ox}" cy="${oy}" r="2.5" fill="var(--text-main, #e2e8f0)"/>` +
                 `<text x="${ox + axisLen + 4}" y="${oy + 4}" font-size="13" font-weight="700" fill="#ef4444">X</text>` +
                 `<text x="${ox - 4}" y="${oy + axisLen + 14}" font-size="13" font-weight="700" fill="#ef4444" text-anchor="middle">Y</text>` +
@@ -9398,9 +9411,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // LC color — the first-named LC in a shared-X pair).
             const hStack = [
                 { v: g1.x, label: `${fmtMm(g1.x)} (G1)`, color: dimBlue },
-                { v: cogXmm - halfEnvXmm, label: `${fmtMm(cogXmm - halfEnvXmm)} (LC2, LC3)`, color: lcColors.LC2 },
+                ...(noLC ? [] : [{ v: cogXmm - halfEnvXmm, label: `${fmtMm(cogXmm - halfEnvXmm)} (LC2, LC3)`, color: lcColors.LC2 }]),
                 { v: cogXmm, label: `${fmtMm(cogXmm)} (CoG)`, color: dimGreen },
-                { v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)`, color: lcColors.LC1 },
+                ...(noLC ? [] : [{ v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)`, color: lcColors.LC1 }]),
                 { v: Math.max(g2.x, g3.x), label: `${fmtMm(Math.max(g2.x, g3.x))} (G2, G3)`, color: dimBlue },
             ].sort((a, b) => a.v - b.v);
             let hDimSvg = '';
@@ -9420,10 +9433,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // 90° — LC1/LC2, G1, CoG, LC3/LC4, ascending/innermost-out.
             // Colors follow the same per-vertex rule as hStack above.
             const vStack = [
-                { v: cogYmm - halfEnvYmm, label: `${fmtMm(cogYmm - halfEnvYmm)} (LC1, LC2)`, color: lcColors.LC1 },
+                ...(noLC ? [] : [{ v: cogYmm - halfEnvYmm, label: `${fmtMm(cogYmm - halfEnvYmm)} (LC1, LC2)`, color: lcColors.LC1 }]),
                 { v: g1.y, label: `${fmtMm(g1.y)} (G1)`, color: dimBlue },
                 { v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)`, color: dimGreen },
-                { v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)`, color: lcColors.LC3 },
+                ...(noLC ? [] : [{ v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)`, color: lcColors.LC3 }]),
             ].sort((a, b) => a.v - b.v);
             let vDimSvg = '';
             vStack.forEach((d, i) => {
@@ -9466,7 +9479,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // these describe the CoG envelope's own size, so they stay
             // CoG-green.
             const envCallY = py(cogYmm + halfEnvYmm) + 20;
-            const envCalloutSvg = `<g opacity="0.9">` +
+            let envCalloutSvg = `<g opacity="0.9">` +
                 `<line x1="${px(cogXmm - halfEnvXmm)}" y1="${envCallY}" x2="${px(cogXmm + halfEnvXmm)}" y2="${envCallY}" stroke="${dimGreen}" stroke-width="1"/>` +
                 `<line x1="${px(cogXmm - halfEnvXmm)}" y1="${envCallY - 3}" x2="${px(cogXmm - halfEnvXmm)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
                 `<line x1="${px(cogXmm + halfEnvXmm)}" y1="${envCallY - 3}" x2="${px(cogXmm + halfEnvXmm)}" y2="${envCallY + 3}" stroke="${dimGreen}" stroke-width="1"/>` +
@@ -9484,6 +9497,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // (CoG green, LC1-4 their own colors from lcColors above)
             // instead of one uniform color, matching the dimension
             // stacks above.
+            if (noLC) envCalloutSvg = '';   // the 806 / 201 envelope-size call-outs belong to the LC1-4 box
             const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="3" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
                 `<line x1="${px(cogXmm) - 6}" y1="${py(cogYmm)}" x2="${px(cogXmm) + 6}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
                 `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - 6}" x2="${px(cogXmm)}" y2="${py(cogYmm) + 6}" stroke="${dimGreen}" stroke-width="1"/>`;
@@ -9512,6 +9526,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // Y-axis (flips their horizontal direction) — both now
             // point back toward the origin/X-axis instead of away from
             // the drawing, keeping them clear of the dimension stacks.
+            if (noLC) lcSvg = '';
             const groupDir = { G1: [-1, 1], G2: [-1, -1], G3: [-1, 1] };
             const groupPts = { G1: g1, G2: g2, G3: g3 };
             let groupSvg = '';
@@ -9530,7 +9545,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="display:block; min-width:520px;">
                 <defs>
-                    <marker id="tgCeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <marker id="${arrowId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M0,0 L10,5 L0,10 z" fill="#ef4444"/>
                     </marker>
                 </defs>
