@@ -1120,7 +1120,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.178)</h1>
+            <h1>🚂 Transport Dashboard (Rev.179)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9757,20 +9757,97 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // instead of one uniform color, matching the dimension
             // stacks above.
             if (noLC) envCalloutSvg = '';   // the 806 / 201 envelope-size call-outs belong to the LC1-4 box
-            const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="3" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
-                `<line x1="${px(cogXmm) - 6}" y1="${py(cogYmm)}" x2="${px(cogXmm) + 6}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - 6}" x2="${px(cogXmm)}" y2="${py(cogYmm) + 6}" stroke="${dimGreen}" stroke-width="1"/>`;
+            // ---- CASE A / B card only: CoG + CCoG signs are drawn small and the SAME size, and every text of the triangle
+            // drawing (CoG, CCoG, CASE A1-A4 line, perpendicular mm, X/Y of its end, CCoG->end dimension, Side names, G1-G3)
+            // is placed by a small collision-avoiding placer so no text sits on another text, a sign or a line.
+            const useLP = !!(opts && opts.caseAB && showCC);
+            const MK_R = 3.5, MK_X = 5;   // shared radius / crosshair half-length of the CoG and CCoG signs (CASE A & B card)
+            const lpBoxes = [];
+            let lpMaxY = 0;
+            const lpAdd = (x0, y0, x1, y1) => { lpBoxes.push([x0, y0, x1, y1]); if (y1 > lpMaxY) lpMaxY = y1; };
+            const lpSeg = (x1, y1, x2, y2, pad) => { const n = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 4)); for (let i = 0; i <= n; i++) { const x = x1 + (x2 - x1) * i / n, y = y1 + (y2 - y1) * i / n; lpBoxes.push([x - pad, y - pad, x + pad, y + pad]); } };
+            const lpBox = (txt, x, y, anchor, fs) => { const w = String(txt).length * fs * 0.6; const x0 = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x; return [x0, y - fs * 0.85, x0 + w, y + fs * 0.25]; };
+            const lpHit = b => lpBoxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+            const lpPlace = (txt, ax, ay, fs) => {
+                const dirs = [[1, -1], [1, 1], [-1, -1], [-1, 1], [1, 0], [-1, 0], [0, -1], [0, 1]];
+                let first = null;
+                for (const r of [7, 14, 24, 36, 50, 68]) {
+                    for (const [dx, dy] of dirs) {
+                        const k = (dx && dy) ? 0.71 : 1;
+                        const x = ax + dx * r * k;
+                        const y = dy < 0 ? ay + dy * r * k : dy > 0 ? ay + dy * r * k + fs * 0.85 : ay + fs * 0.35;
+                        const anchor = dx > 0 ? 'start' : dx < 0 ? 'end' : 'middle';
+                        const b = lpBox(txt, x, y, anchor, fs);
+                        const cand = { x, y, anchor, r, box: b };
+                        if (!first) first = cand;
+                        if (b[0] < ox - 2 || b[2] > px(spanX) + 8 || b[1] < oy - 3) continue;   // stay inside the plot: the dimension stacks live left / above / right of it
+                        if (!lpHit(b)) { lpAdd(b[0], b[1], b[2], b[3]); return cand; }
+                    }
+                }
+                lpAdd(first.box[0], first.box[1], first.box[2], first.box[3]);
+                return first;
+            };
+            const lpDraw = (txt, ax, ay, fill, fs, tip) => {
+                const c = lpPlace(txt, ax, ay, fs);
+                const lx = Math.min(Math.max(ax, c.box[0]), c.box[2]), ly = Math.min(Math.max(ay, c.box[1]), c.box[3]);
+                const lead = c.r >= 24 ? `<line x1="${ax}" y1="${ay}" x2="${lx}" y2="${ly}" stroke="${fill}" stroke-width="0.8" opacity="0.85"/>` : '';
+                return lead + `<text x="${c.x}" y="${c.y}" font-size="${fs}" font-weight="700" fill="${fill}" text-anchor="${c.anchor}" paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="3" stroke-linejoin="round">${tip ? `<title>${tip}</title>` : ''}${txt}</text>`;
+            };
+            let cabDim = null;   // aligned dimension CCoG (0,0) -> end of the perpendicular (foot on the Side line)
+            if (useLP) {
+                const gd = { G1: [-1, 1], G2: [-1, -1], G3: [-1, 1] };
+                // obstacles: rail, wedge, Side lines + their names, G markers + their leader labels, CoG / CCoG signs
+                lpSeg(px(0), py(0), px(spanX * 1.03), py(0), 2);
+                [[apex, g2], [g2, g3], [g3, apex]].forEach(([a, b]) => lpSeg(px(a.x), py(a.y), px(b.x), py(b.y), 2));
+                [[1, 2], [2, 3], [1, 3]].forEach(([a, b]) => {
+                    const A = groupPtsAll['G' + a], B = groupPtsAll['G' + b];
+                    if (!A || !B) return;
+                    lpSeg(px(A.x), py(A.y), px(B.x), py(B.y), 2);
+                    const bx = lpBox('Side ' + a + '-' + b, (px(A.x) + px(B.x)) / 2, (py(A.y) + py(B.y)) / 2 - 5, 'middle', 9);
+                    lpAdd(bx[0], bx[1], bx[2], bx[3]);
+                });
+                Object.entries(groupPtsAll).forEach(([name, pt]) => {
+                    const cx = px(pt.x), cy = py(pt.y), [dx, dy] = gd[name];
+                    const kx = cx + dx * 22, ky = cy + dy * 16, tx = kx + dx * 16;
+                    lpAdd(cx - 4, cy - 4, cx + 4, cy + 4);
+                    lpSeg(cx, cy, kx, ky, 1.5); lpSeg(kx, ky, tx, ky, 1.5);
+                    const bx = lpBox(name, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10);
+                    lpAdd(bx[0], bx[1], bx[2], bx[3]);
+                });
+                lpAdd(ox - 6, oy - 8, ox + axisLen + 16, oy + axisLen + 20);   // origin sign (X / Y arrows)
+                lpAdd(px(cogXmm) - 7, py(cogYmm) - 7, px(cogXmm) + 7, py(cogYmm) + 7);
+                lpAdd(px(ccXmm) - 7, py(ccYmm) - 7, px(ccXmm) + 7, py(ccYmm) + 7);
+                if (cab) {
+                    const C0 = { x: px(ccXmm), y: py(ccYmm) }, P0 = { x: px(cab.P.x), y: py(cab.P.y) }, F0 = { x: px(cab.F.x), y: py(cab.F.y) };
+                    lpSeg(C0.x, C0.y, P0.x, P0.y, 2); lpSeg(P0.x, P0.y, F0.x, F0.y, 2);
+                    lpAdd(P0.x - 4, P0.y - 4, P0.x + 4, P0.y + 4); lpAdd(F0.x - 4, F0.y - 4, F0.x + 4, F0.y + 4);
+                    const Ld = Math.hypot(F0.x - C0.x, F0.y - C0.y);
+                    if (Ld > 16) {
+                        const ux = (F0.x - C0.x) / Ld, uy = (F0.y - C0.y) / Ld;
+                        let nx = -uy, ny = ux;
+                        if ((P0.x - C0.x) * nx + (P0.y - C0.y) * ny > 0) { nx = -nx; ny = -ny; }   // dimension line on the side away from P
+                        const off = 14;
+                        cabDim = { C0, F0, ux, uy, nx, ny, a: { x: C0.x + nx * off, y: C0.y + ny * off }, b: { x: F0.x + nx * off, y: F0.y + ny * off }, dist: Math.hypot(cab.F.x - ccXmm, cab.F.y - ccYmm) };
+                        lpSeg(cabDim.a.x, cabDim.a.y, cabDim.b.x, cabDim.b.y, 2);
+                    }
+                }
+            }
+            const mkR = useLP ? MK_R : 3, mkX = useLP ? MK_X : 6;
+            const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
+                `<line x1="${px(cogXmm) - mkX}" y1="${py(cogYmm)}" x2="${px(cogXmm) + mkX}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - mkX}" x2="${px(cogXmm)}" y2="${py(cogYmm) + mkX}" stroke="${dimGreen}" stroke-width="1"/>`;
             // CoG / CCoG name tags beside the markers (CoG green, CCoG red) so the two points are told apart at a glance
-            let ccSvg = `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
+            let ccSvg = useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
+                : `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
             if (showCC) {
-                const r = 7, cx = px(ccXmm), cy = py(ccYmm);
+                const r = useLP ? MK_R : 7, cx = px(ccXmm), cy = py(ccYmm);
                 ccSvg += `<g>` +
                     `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
                     `<path d="M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
                     `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ccColor}" stroke-width="1.3"/>` +
                     `<line x1="${cx - r}" y1="${cy}" x2="${cx + r}" y2="${cy}" stroke="${ccColor}" stroke-width="1"/>` +
                     `<line x1="${cx}" y1="${cy - r}" x2="${cx}" y2="${cy + r}" stroke="${ccColor}" stroke-width="1"/>` +
-                    `<text x="${cx + 10}" y="${cy + 14}" font-size="9" font-weight="700" fill="${ccColor}">CCoG</text>` +
+                    (useLP ? lpDraw('CCoG', cx, cy, ccColor, 9) : `<text x="${cx + 10}" y="${cy + 14}" font-size="9" font-weight="700" fill="${ccColor}">CCoG</text>`) +
                     `</g>`;
             }
             const leaderDir = { LC1: [1, -1], LC2: [-1, -1], LC3: [-1, 1], LC4: [1, 1] };
@@ -9836,7 +9913,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const minShow = k.minTxt || caseABFmtNum(Math.round(k.min * 10) / 10);
                     // CASE line (CCoG -> P)
                     cabSvg += `<line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${lc}" stroke-width="2.2" marker-end="url(#${arrowId})"><title>CASE ${k.L}${k.idx} = ${dimShow}</title></line>` +
-                        `<text x="${(cx + qx) / 2 + (k.dir[1] ? 5 : 0)}" y="${(cy + qy) / 2 + (k.dir[1] ? 3 : -5)}" font-size="10" font-weight="700" fill="${lc}" text-anchor="${k.dir[1] ? 'start' : 'middle'}" ${halo}>CASE ${k.L}${k.idx} = ${dimShow}</text>`;
+                        lpDraw(`CASE ${k.L}${k.idx} = ${dimShow}`, (cx + qx) / 2, (cy + qy) / 2, lc, 10);
                     // perpendicular (P -> foot on Side line) + right-angle mark
                     const pl = Math.hypot(fx - qx, fy - qy);
                     if (pl > 0.5) {
@@ -9848,10 +9925,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         cabSvg += `<line x1="${qx}" y1="${qy}" x2="${fx}" y2="${fy}" stroke="${hiCol}" stroke-width="2.2"><title>Perpendicular to Side ${k.sideA}-${k.sideB}: ${minShow} mm (geometry ${caseABFmtNum(Math.round(cab.geo * 10) / 10)} mm)</title></line>` +
                             `<polyline points="${ax},${ay} ${ax - sgn * tx * m},${ay - sgn * ty * m} ${fx - sgn * tx * m},${fy - sgn * ty * m}" fill="none" stroke="${hiCol}" stroke-width="1"/>` +
                             `<circle cx="${fx}" cy="${fy}" r="2.5" fill="${hiCol}"/>` +
-                            `<text x="${fx}" y="${fy + 15}" font-size="9" font-weight="700" fill="${hiCol}" text-anchor="middle" ${halo}><title>End of perpendicular on Side ${k.sideA}-${k.sideB} — relative to CCoG (0,0): X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)} mm | world: X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)} mm</title>X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)}</text>` +
-                            `<text x="${(qx + fx) / 2 + 6}" y="${(qy + fy) / 2 + 3}" font-size="10" font-weight="700" fill="${hiCol}" ${halo}>${escapeHtml(minShow)} mm</text>`;
+                            lpDraw(`X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)}`, fx, fy, hiCol, 9, `End of perpendicular on Side ${k.sideA}-${k.sideB} — relative to CCoG (0,0): X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)} mm | world: X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)} mm`) +
+                            lpDraw(escapeHtml(minShow) + ' mm', (qx + fx) / 2, (qy + fy) / 2, hiCol, 10);
                     }
                     cabSvg += `<circle cx="${qx}" cy="${qy}" r="3" fill="${lc}"/>`;
+                    // dimension from CCoG (0,0) to the end of the perpendicular (aligned, offset, with extension lines + arrow heads)
+                    if (cabDim) {
+                        const { C0, F0, ux, uy, nx, ny, a, b } = cabDim, dc = 'var(--text-main, #e2e8f0)';
+                        const ah = (t, sg) => `<polygon points="${t.x},${t.y} ${t.x - sg * ux * 6 + nx * 2.2},${t.y - sg * uy * 6 + ny * 2.2} ${t.x - sg * ux * 6 - nx * 2.2},${t.y - sg * uy * 6 - ny * 2.2}" fill="${dc}"/>`;
+                        const dTxt = caseABFmtNum(Math.round(cabDim.dist * 10) / 10) + ' mm';
+                        cabSvg += `<g opacity="0.9"><line x1="${C0.x + nx * 3}" y1="${C0.y + ny * 3}" x2="${a.x + nx * 3}" y2="${a.y + ny * 3}" stroke="${dc}" stroke-width="0.7"/>` +
+                            `<line x1="${F0.x + nx * 3}" y1="${F0.y + ny * 3}" x2="${b.x + nx * 3}" y2="${b.y + ny * 3}" stroke="${dc}" stroke-width="0.7"/>` +
+                            `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${dc}" stroke-width="1"/>` + ah(a, -1) + ah(b, 1) + `</g>` +
+                            lpDraw(dTxt, (a.x + b.x) / 2, (a.y + b.y) / 2, dc, 10, `Dimension CCoG (0,0) → end of the perpendicular (X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)})`);
+                    }
                 }
             }
 
@@ -9862,6 +9949,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 noLC ? 0 : Math.max(...lcBaseMm.map(lc => py(lc.y) + 26)),
                 showCC ? py(ccYmm) + 22 : 0,
                 cab ? Math.max(py(cab.P.y), py(cab.F.y)) + 22 : 0,
+                useLP ? lpMaxY + 6 : 0,
                 py(cogYmm) + 14
             );
             const svgHFit = Math.ceil(contentBottom + 4);
