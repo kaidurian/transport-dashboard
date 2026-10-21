@@ -1127,7 +1127,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.182.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.182.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8191,7 +8191,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const hTxt = H !== null ? fmt1(H) : '–';
             const bTxt = base !== null ? (caseABTxt(rows.base, 'I').replace(/\s*mm\s*$/i, '') || fmt1(base)) : '–';
             const aTxt = ang !== null ? L + '=' + (caseABTxt(rows.angle, 'I').replace(/\s*°\s*$/, '') || fmt1(ang)) + '°' : '–';   // format A=12.3° (B=… for CASE B)
-            const stCls = caseABStatus(L);   // OK / NOT OK of the CASE section table -> same colour as in the table
+            const stCls = caseABStatus(L);
+            const stWord = stCls === 'tg-dt-ok' ? ' OK' : (stCls === 'tg-dt-notok' ? ' NOT OK' : '');   // OK / NOT OK of the CASE section table -> same colour as in the table
             const angCol = stCls === 'tg-dt-ok' ? 'var(--accent-green, #22c55e)' : (stCls === 'tg-dt-notok' ? '#ef4444' : null);
             if (H === null && base === null && ang === null) {
                 return `<div class="tg-modal-sub" style="margin:0 0 4px 0;">No data yet — pull from Excel (Display!D16, '${escapeHtml(CASEAB_SHEET_NAME)}'!I${rows.base}:I${rows.angle}).</div>`;
@@ -8235,7 +8236,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const aR = P(-ext), aL = P(th + ext), aV = P(0), aI = P(th), aT = P(th + ext + 0.2);
             g += `<path d="M ${aR.x} ${aR.y} A ${R} ${R} 0 0 1 ${aT.x} ${aT.y}" fill="none" stroke="${ac}" stroke-width="1.2"/>`;
             g += head(aV.x, aV.y, -1, 0, ac) + head(aI.x, aI.y, Math.cos(th), Math.sin(th), ac);
-            g += `<text x="${aT.x - 8}" y="${aT.y - 4}" font-size="26" font-weight="700" text-anchor="end" fill="${angCol || ac}" ${halo}><title>${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : 'Stability angle')} — CASE ${L}</title>${escapeHtml(aTxt)}</text>`;
+            g += `<text x="${aT.x - 8}" y="${aT.y - 4}" font-size="26" font-weight="700" text-anchor="end" fill="${angCol || ac}" ${halo}><title>${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : 'Stability angle')} — CASE ${L}</title>${escapeHtml(aTxt + (ang !== null ? stWord : ''))}</text>`;
             // base dimension (below the ground line): arrows from the outside onto two extension lines
             const by = gy + 62;
             g += `<line x1="${fx}" y1="${gy + 4}" x2="${fx}" y2="${by + 12}" stroke="${ac}" stroke-width="0.9"/>` +
@@ -8316,7 +8317,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function tgCabApplyViews() {
             const root = document.getElementById('tgCaseABCases');
             if (!root) return;
-            const targets = [['svg.tg-caseab-tri', null], ['#tgCaseABPreviewA svg', 'grpA'], ['#tgCaseABPreviewB svg', 'grpB'], ['svg.tg-caseab-stab', null]];
+            const targets = [['#tgCaseABPreviewA svg'], ['#tgCaseABPreviewB svg']];   // only the group triangle drawings zoom / pan (4-direction arrows + stability angle stay fixed)
             targets.forEach(([sel]) => root.querySelectorAll(sel).forEach(svg => {
                 const host = svg.closest('.tg-caseab-case');
                 const L = host ? (host.dataset.cabCase || '') : '';
