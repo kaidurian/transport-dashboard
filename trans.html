@@ -415,6 +415,11 @@
         .tg-caseab-tri .cab-head { fill: var(--accent-blue); }
         .tg-caseab-tri .cab-dot { fill: var(--accent-blue); stroke: var(--text-main); stroke-width: 2; }
         .tg-caseab-stab-title { font-size: 12px; font-weight: 700; color: var(--text-main); margin: 8px 0 2px 0; padding-top: 4px; border-top: 1px dashed var(--panel-border); }
+        /* 4-direction arrows picture and stability angle sketch side by side (stack on a narrow card) */
+        .tg-caseab-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin: 0 0 4px 0; }
+        .tg-caseab-row-tri { flex: 2 1 300px; min-width: 0; }
+        .tg-caseab-row-stab { flex: 1 1 200px; min-width: 0; }
+        .tg-caseab-row-stab .tg-caseab-stab-title { margin-top: 0; padding-top: 0; border-top: none; }
         .tg-caseab-stab { display: block; width: 100%; height: auto; max-width: 420px; max-height: 300px; margin: 0 auto 4px auto; }
         table.tg-caseab-mini td.tg-caseab-min { background: rgba(250, 204, 21, 0.38); color: var(--text-main); font-weight: 700; box-shadow: inset 0 0 0 1.5px #eab308; }
         table.tg-caseab-table td.tg-tcd-note { white-space: normal; text-align: left; width: auto; color: var(--text-muted); font-style: italic; }
@@ -1122,7 +1127,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.182)</h1>
+            <h1>🚂 Transport Dashboard (Rev.182.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8422,10 +8427,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const block = (L, rl, rt, tbl, minFrom) => {
                 const secRows = secHave ? caseABSectionRows(L) : null;
                 return `<div class="tg-caseab-case" data-cab-case="${L}"><div class="tg-caseab-case-title">CASE ${L}</div>` +
+                `<div class="tg-caseab-row"><div class="tg-caseab-row-tri">` +
                 buildCaseABTriangleSvg(L, caseABCell(rl, 'I'), caseABCell(rt, 'I'), caseABTxt(rl, 'I'), caseABTxt(rt, 'I')) +
-                `<div id="tgCaseABPreview${L}" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
+                `</div><div class="tg-caseab-row-stab">` +
                 `<div class="tg-caseab-stab-title" title="Height = Excel Display!D16; base = '${CASEAB_SHEET_NAME}'!I${CASEAB_STAB_ROWS[L].base}; angle = '${CASEAB_SHEET_NAME}'!I${CASEAB_STAB_ROWS[L].angle}">Stability angle — CASE ${L}</div>` +
-                `<div id="tgCaseABStab${L}" class="tg-caseab-stab-wrap"></div>` +
+                `<div id="tgCaseABStab${L}" class="tg-caseab-stab-wrap"></div></div></div>` +
+                `<div id="tgCaseABPreview${L}" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
                 `<div class="tg-caseab-stab-title">CASE ${L} — Side / Combined</div>` +
                 (have ? buildCaseABMiniTable(tbl, minFrom) : noTbl) +
                 (secRows && secRows.length ? `<div class="tg-caseab-stab-title">CASE ${L} (Section ${L === 'A' ? '10.5.3.16' : '10.5.3.17'})</div><div class="tg-drawing-table-wrap" id="tgCaseABSec${L}">${buildCaseABTableHtml(secRows)}</div>` : '') +
