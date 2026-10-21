@@ -1122,7 +1122,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.181)</h1>
+            <h1>🚂 Transport Dashboard (Rev.182)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1684,10 +1684,10 @@
                         <p class="tg-modal-sub" id="tgCaseABHelpPanel">
                             Read-only mirror of Excel <strong>"Check CASE A &amp; CASE B"</strong>!<strong>A7:K49</strong>.
                             <strong>CASE A</strong> / <strong>CASE B</strong> blocks on top: the load-case picture (A1 = +I17, A2 = −I17, A3 = −I25, A4 = +I25;
-                            B1 = +I39, B2 = −I39, B3 = −I46, B4 = +I46) and a small table under each triangle drawing, synced with Excel <strong>"Calculation Sheet Case A&amp;B"</strong>
+                            B1 = +I39, B2 = −I39, B3 = −I46, B4 = +I46) , the group triangle, the <strong>stability angle</strong> sketch and, under it, a small table synced with Excel <strong>"Calculation Sheet Case A&amp;B"</strong>
                             (A15:A18 + F15:I18 / A21:A24 + F21:I24), with the smallest value of F16:I18 / F22:I24 highlighted.
-                            (OK / NOT OK results are shown green / red, like the other result cards).
-                            The CASE label (and its arrow) whose value feeds the group triangle is highlighted. Under each table a <strong>stability angle</strong> sketch shows the height (Display!D16), the base and the angle
+                            (OK / NOT OK results are shown green / red, like the other result cards). Under it come the <strong>CASE A (Section 10.5.3.16)</strong> / <strong>CASE B (Section 10.5.3.17)</strong> tables of 'Check CASE A &amp; CASE B'. Zoom / pan on the drawings: mouse wheel = zoom, middle or left button drag = move, double-click = reset (same as the 2D drawing).
+                            The CASE label (and its arrow) whose value feeds the group triangle is highlighted in the same colour as its CASE line in the triangle. The <strong>stability angle</strong> sketch shows the height (Display!D16), the base and the angle (A=12.3°, green when OK / red when NOT OK, like the section table)
                             ('Check CASE A &amp; CASE B'!I27 / I28 for CASE A, I48 / I49 for CASE B).
                             Under each cross-arrow picture sits the hydraulic-group triangle (G1 / G2 / G3) with the Cargo CoG (green) and the Combined CoG (CCoG, same red as in the 2D drawing) — the same drawing as under
                             📊 CoG Envelope Table, without the LC1–LC4 points. Pull-only, never pushed;
@@ -8064,6 +8064,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTgCogEnvPreview(snap, { targetId: 'tgCaseABPreviewA', noLC: true, idSuffix: 'A', caseAB: 'A' });
             renderTgCogEnvPreview(snap, { targetId: 'tgCaseABPreviewB', noLC: true, idSuffix: 'B', caseAB: 'B' });
             renderTgCaseABStab();   // stability-angle sketches (height = Display!D16) follow the same refresh
+            try { tgCabApplyViews(); } catch (e) { /* card not built yet */ }
         }
 
         // ---- CASE A / CASE B blocks (picture + small table) built from the pulled A7:K49 grid (row r -> index r-7).
@@ -8113,11 +8114,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // the CASE label whose data feeds the group triangle (smallest value of the table) is highlighted: label box + its arrow
             const used = caseABConstruction(L);
             const hiIdx = used ? used.idx : 0;
-            const HI = '#eab308';
+            const HI = TG_CARGO_TOTAL_COLOR;   // same colour as the CASE line + its label in the group triangle drawing
             const lab = (id, cx, ys, kind, dir, val) => {
                 const hi = id === hiIdx;
                 const w = (('CASE ' + L + id + ' = ' + val).length) * 20.5 + 22;
-                return (hi ? `<rect x="${cx - w / 2}" y="${ys[0] - 34}" width="${w}" height="46" rx="7" fill="rgba(250,204,21,0.38)" stroke="${HI}" stroke-width="3"><title>Used in the group triangle: CASE ${L}${id} = ${escapeHtml(val)}</title></rect>` : '') +
+                return (hi ? `<rect x="${cx - w / 2}" y="${ys[0] - 34}" width="${w}" height="46" rx="7" fill="${HI}" fill-opacity="0.2" stroke="${HI}" stroke-width="3"><title>Used in the group triangle: CASE ${L}${id} = ${escapeHtml(val)}</title></rect>` : '') +
                     `<text x="${cx}" y="${ys[0]}" text-anchor="middle"${hi ? ' style="font-weight:700"' : ''}>CASE ${L}${id} = <tspan font-weight="700">${escapeHtml(val)}</tspan></text>` +
                     `<text x="${cx}" y="${ys[1]}" text-anchor="middle">(Load case ${L}:${kind})</text>` +
                     `<text x="${cx}" y="${ys[2]}" text-anchor="middle">${dir}</text>`;
@@ -8184,7 +8185,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const fmt1 = v => caseABFmtNum(Math.round(v * 10) / 10);
             const hTxt = H !== null ? fmt1(H) : '–';
             const bTxt = base !== null ? (caseABTxt(rows.base, 'I').replace(/\s*mm\s*$/i, '') || fmt1(base)) : '–';
-            const aTxt = ang !== null ? (caseABTxt(rows.angle, 'I').replace(/\s*°\s*$/, '') || fmt1(ang)) + '°' : '–';
+            const aTxt = ang !== null ? L + '=' + (caseABTxt(rows.angle, 'I').replace(/\s*°\s*$/, '') || fmt1(ang)) + '°' : '–';   // format A=12.3° (B=… for CASE B)
+            const stCls = caseABStatus(L);   // OK / NOT OK of the CASE section table -> same colour as in the table
+            const angCol = stCls === 'tg-dt-ok' ? 'var(--accent-green, #22c55e)' : (stCls === 'tg-dt-notok' ? '#ef4444' : null);
             if (H === null && base === null && ang === null) {
                 return `<div class="tg-modal-sub" style="margin:0 0 4px 0;">No data yet — pull from Excel (Display!D16, '${escapeHtml(CASEAB_SHEET_NAME)}'!I${rows.base}:I${rows.angle}).</div>`;
             }
@@ -8227,7 +8230,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const aR = P(-ext), aL = P(th + ext), aV = P(0), aI = P(th), aT = P(th + ext + 0.2);
             g += `<path d="M ${aR.x} ${aR.y} A ${R} ${R} 0 0 1 ${aT.x} ${aT.y}" fill="none" stroke="${ac}" stroke-width="1.2"/>`;
             g += head(aV.x, aV.y, -1, 0, ac) + head(aI.x, aI.y, Math.cos(th), Math.sin(th), ac);
-            g += `<text x="${aT.x - 8}" y="${aT.y - 4}" font-size="26" text-anchor="end" fill="${ac}" ${halo}>${escapeHtml(aTxt)}</text>`;
+            g += `<text x="${aT.x - 8}" y="${aT.y - 4}" font-size="26" font-weight="700" text-anchor="end" fill="${angCol || ac}" ${halo}><title>${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : 'Stability angle')} — CASE ${L}</title>${escapeHtml(aTxt)}</text>`;
             // base dimension (below the ground line): arrows from the outside onto two extension lines
             const by = gy + 62;
             g += `<line x1="${fx}" y1="${gy + 4}" x2="${fx}" y2="${by + 12}" stroke="${ac}" stroke-width="0.9"/>` +
@@ -8242,6 +8245,150 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const el = document.getElementById('tgCaseABStab' + L);
                 if (el) el.innerHTML = buildCaseABStabilitySvg(L);
             });
+            try { tgCabApplyViews(); } catch (e) { /* card not built yet */ }
+        }
+        // ---- The big 'Check CASE A & CASE B' grid is split into its two sections: "CASE A (Section 10.5.3.16)" and
+        // "CASE B (Section 10.5.3.17)" (found by their heading text). Each section is shown under its own CASE block.
+        function caseABSections() {
+            const n = tgCaseABRows.length;
+            if (!n) return null;
+            const rowTxt = i => {
+                const r = tgCaseABRows[i] || [], t = tgCaseABText[i] || [];
+                return r.map((v, k) => String(v === null || v === undefined ? '' : v) + ' ' + String(t[k] === null || t[k] === undefined ? '' : t[k])).join(' ');
+            };
+            const find = re => { for (let i = 0; i < n; i++) if (re.test(rowTxt(i))) return i; return -1; };
+            const iB = find(/10\s*\.\s*5\s*\.\s*3\s*\.\s*17/);
+            if (iB < 0) return null;
+            let iA = find(/10\s*\.\s*5\s*\.\s*3\s*\.\s*16/);
+            if (iA < 0 || iA >= iB) iA = 0;
+            return { A: { from: iA, to: iB - 1 }, B: { from: iB, to: n - 1 }, head: { from: 0, to: iA - 1 } };
+        }
+        function caseABSectionRows(L) {
+            const sec = caseABSections();
+            if (!sec || !sec[L]) return null;
+            return tgCaseABRows.slice(sec[L].from, sec[L].to + 1).map((row, k) => row);
+        }
+        // OK / NOT OK of a CASE section: the status on the stability-angle row (else base row, else the nearest status cell
+        // in the section) — returns 'tg-dt-ok' | 'tg-dt-notok' | ''.
+        function caseABStatus(L) {
+            const rowsCfg = CASEAB_STAB_ROWS[L], sec = caseABSections();
+            if (!rowsCfg || !tgCaseABRows.length) return '';
+            const rowStatus = r => {
+                let ok = false, bad = false;
+                for (let k = 0; k < CASEAB_NCOL; k++) {
+                    const col = String.fromCharCode(65 + k);
+                    const c = cellStatusClass(caseABCell(r, col)) || cellStatusClass(caseABTxt(r, col));
+                    if (c === 'tg-dt-notok') bad = true; else if (c === 'tg-dt-ok') ok = true;
+                }
+                return bad ? 'tg-dt-notok' : (ok ? 'tg-dt-ok' : '');
+            };
+            let st = rowStatus(rowsCfg.angle) || rowStatus(rowsCfg.base);
+            if (st) return st;
+            const lo = sec ? sec[L].from + 7 : 7, hi = sec ? sec[L].to + 7 : 6 + tgCaseABRows.length;
+            let bestR = null;
+            for (let r = lo; r <= hi; r++) {
+                if (!rowStatus(r)) continue;
+                if (bestR === null || Math.abs(r - rowsCfg.angle) < Math.abs(bestR - rowsCfg.angle) ||
+                    (Math.abs(r - rowsCfg.angle) === Math.abs(bestR - rowsCfg.angle) && r > bestR)) bestR = r;
+            }
+            return bestR === null ? '' : rowStatus(bestR);
+        }
+        // ---- Zoom / pan on the CASE A & B drawings, same mouse controls as the 2D drawing: wheel = zoom (centred on the
+        // cursor), middle-button drag = pan, left-button drag = pan (after a few px, so plain clicks still work),
+        // double-click (or double middle-click) = reset. Done on the SVG viewBox; the view survives re-renders.
+        const tgCabViews = {};   // key -> { z, ox, oy }  (viewBox = base shifted by ox/oy, base size / z)
+        function tgCabViewBox(svg) {
+            const b = (svg.dataset.cabBase || '').split(/[\s,]+/).map(Number);
+            if (b.length !== 4 || b.some(v => !isFinite(v))) return null;
+            const v = tgCabViews[svg.dataset.cabKey] || { z: 1, ox: 0, oy: 0 };
+            return { v, b, vb: [b[0] + v.ox, b[1] + v.oy, b[2] / v.z, b[3] / v.z] };
+        }
+        function tgCabApply(svg) {
+            const r = tgCabViewBox(svg);
+            if (!r) return;
+            svg.setAttribute('viewBox', r.vb.map(n => +n.toFixed(3)).join(' '));
+        }
+        function tgCabApplyViews() {
+            const root = document.getElementById('tgCaseABCases');
+            if (!root) return;
+            const targets = [['svg.tg-caseab-tri', null], ['#tgCaseABPreviewA svg', 'grpA'], ['#tgCaseABPreviewB svg', 'grpB'], ['svg.tg-caseab-stab', null]];
+            targets.forEach(([sel]) => root.querySelectorAll(sel).forEach(svg => {
+                const host = svg.closest('.tg-caseab-case');
+                const L = host ? (host.dataset.cabCase || '') : '';
+                const kind = svg.classList.contains('tg-caseab-tri') ? 'tri' : (svg.classList.contains('tg-caseab-stab') ? 'stab' : 'grp');
+                const key = kind + L;
+                if (svg.dataset.cabKey !== key || !svg.dataset.cabBase) {
+                    svg.dataset.cabKey = key;
+                    svg.dataset.cabBase = svg.getAttribute('viewBox') || '';
+                }
+                svg.style.cursor = 'grab';
+                svg.style.touchAction = 'none';
+                tgCabApply(svg);
+            }));
+        }
+        function tgCabBindControls() {
+            const root = document.getElementById('tgCaseABCases');
+            if (!root || root.dataset.cabCtl === '1') return;
+            root.dataset.cabCtl = '1';
+            const svgOf = e => (e.target && e.target.closest) ? e.target.closest('svg[data-cab-key]') : null;
+            root.addEventListener('wheel', (e) => {
+                const svg = svgOf(e); if (!svg) return;
+                const r = tgCabViewBox(svg), m = svg.getScreenCTM(); if (!r || !m) return;
+                e.preventDefault();
+                const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+                const p = pt.matrixTransform(m.inverse());                       // point under the cursor (user units)
+                const oldZ = r.v.z;
+                const newZ = Math.min(8, Math.max(0.25, oldZ * Math.pow(1.0015, -e.deltaY)));
+                if (newZ === oldZ) return;
+                const [x, y, w, h] = r.vb, nw = r.b[2] / newZ, nh = r.b[3] / newZ;
+                const nx = p.x - (p.x - x) * (nw / w), ny = p.y - (p.y - y) * (nh / h);
+                tgCabViews[svg.dataset.cabKey] = { z: newZ, ox: nx - r.b[0], oy: ny - r.b[1] };
+                tgCabApply(svg);
+            }, { passive: false });
+            root.addEventListener('mousedown', (e) => {
+                const svg = svgOf(e); if (!svg) return;
+                if (e.button !== 0 && e.button !== 1) return;
+                const isLeft = e.button === 0;
+                if (!isLeft) e.preventDefault();   // stops the browser's middle-click auto-scroll circle
+                if (e.button === 1) {              // double middle-click = reset
+                    const now = Date.now();
+                    if (svg._cabLastMid && now - svg._cabLastMid < 350) { delete tgCabViews[svg.dataset.cabKey]; tgCabApply(svg); svg._cabLastMid = 0; return; }
+                    svg._cabLastMid = now;
+                }
+                const r0 = tgCabViewBox(svg), m0 = svg.getScreenCTM(); if (!r0 || !m0) return;
+                const start = { x: e.clientX, y: e.clientY, ox: r0.v.ox, oy: r0.v.oy, k: m0.a || 1 };
+                const mask = isLeft ? 1 : 4;
+                let moved = !isLeft;
+                if (!isLeft) svg.style.cursor = 'grabbing';
+                const doc = svg.ownerDocument;
+                const onMove = (ev) => {
+                    if (!(ev.buttons & mask)) { onUp(); return; }
+                    if (!moved) {
+                        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+                        moved = true; svg.style.cursor = 'grabbing';
+                    }
+                    const cur = tgCabViews[svg.dataset.cabKey] || { z: 1, ox: 0, oy: 0 };
+                    tgCabViews[svg.dataset.cabKey] = { z: cur.z, ox: start.ox - (ev.clientX - start.x) / start.k, oy: start.oy - (ev.clientY - start.y) / start.k };
+                    tgCabApply(svg);
+                };
+                const onUp = () => {
+                    doc.removeEventListener('mousemove', onMove, true);
+                    doc.removeEventListener('mouseup', onUp, true);
+                    svg.style.cursor = 'grab';
+                    if (isLeft && moved) {
+                        const swallow = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
+                        doc.addEventListener('click', swallow, true);
+                        setTimeout(() => doc.removeEventListener('click', swallow, true), 0);
+                    }
+                };
+                doc.addEventListener('mousemove', onMove, true);
+                doc.addEventListener('mouseup', onUp, true);
+            });
+            root.addEventListener('dblclick', (e) => {
+                const svg = svgOf(e); if (!svg) return;
+                delete tgCabViews[svg.dataset.cabKey]; tgCabApply(svg);
+            });
+            root.addEventListener('auxclick', (e) => { if (e.button === 1 && svgOf(e)) e.preventDefault(); });
         }
         // rows = Excel row numbers shown (first = header row); minFrom = first row of the min search (cols F:I)
         function buildCaseABMiniTable(rows, minFrom) {
@@ -8271,14 +8418,21 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!el) return;
             const have = tgCalcABRows.length > 0;
             const noTbl = `<div class="tg-modal-sub" style="margin:0 0 4px 0;">${tgCalcABMissing ? `Sheet '${escapeHtml(CALCAB_SHEET_NAME)}' not found in this workbook.` : `No data pulled yet — click "⇩ Refresh from Excel" below.`}</div>`;
-            const block = (L, rl, rt, tbl, minFrom) =>
-                `<div class="tg-caseab-case"><div class="tg-caseab-case-title">CASE ${L}</div>` +
+            const secHave = !!caseABSections();
+            const block = (L, rl, rt, tbl, minFrom) => {
+                const secRows = secHave ? caseABSectionRows(L) : null;
+                return `<div class="tg-caseab-case" data-cab-case="${L}"><div class="tg-caseab-case-title">CASE ${L}</div>` +
                 buildCaseABTriangleSvg(L, caseABCell(rl, 'I'), caseABCell(rt, 'I'), caseABTxt(rl, 'I'), caseABTxt(rt, 'I')) +
                 `<div id="tgCaseABPreview${L}" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
-                (have ? buildCaseABMiniTable(tbl, minFrom) : noTbl) +
                 `<div class="tg-caseab-stab-title" title="Height = Excel Display!D16; base = '${CASEAB_SHEET_NAME}'!I${CASEAB_STAB_ROWS[L].base}; angle = '${CASEAB_SHEET_NAME}'!I${CASEAB_STAB_ROWS[L].angle}">Stability angle — CASE ${L}</div>` +
-                `<div id="tgCaseABStab${L}" class="tg-caseab-stab-wrap"></div></div>`;
+                `<div id="tgCaseABStab${L}" class="tg-caseab-stab-wrap"></div>` +
+                `<div class="tg-caseab-stab-title">CASE ${L} — Side / Combined</div>` +
+                (have ? buildCaseABMiniTable(tbl, minFrom) : noTbl) +
+                (secRows && secRows.length ? `<div class="tg-caseab-stab-title">CASE ${L} (Section ${L === 'A' ? '10.5.3.16' : '10.5.3.17'})</div><div class="tg-drawing-table-wrap" id="tgCaseABSec${L}">${buildCaseABTableHtml(secRows)}</div>` : '') +
+                `</div>`;
+            };
             el.innerHTML = block('A', 17, 25, [15, 16, 17, 18], 16) + block('B', 39, 46, [21, 22, 23, 24], 22);
+            tgCabBindControls();
         }
         function renderTgCaseABTable() {
             renderTgCaseABCases();     // rebuilds the CASE A / CASE B blocks (picture, drawing slot, table) ...
@@ -8289,6 +8443,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${escapeHtml(CASEAB_SHEET_NAME)}'!${CASEAB_RANGE}.</div>`;
                 return;
             }
+            const sec = caseABSections();
+            if (sec) {
+                // CASE A / CASE B sections are shown under their CASE blocks; only rows above the CASE A heading stay here
+                const head = sec.head.to >= sec.head.from ? tgCaseABRows.slice(sec.head.from, sec.head.to + 1) : [];
+                const any = head.some(r => r.some(v => v !== null && v !== undefined && String(v).trim() !== ''));
+                el.innerHTML = any ? buildCaseABTableHtml(head) : '';
+                el.style.display = any ? '' : 'none';
+                return;
+            }
+            el.style.display = '';
             el.innerHTML = buildCaseABTableHtml(tgCaseABRows);
         }
         async function pullCaseABFromExcel(opts = {}) {
