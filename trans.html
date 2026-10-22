@@ -1127,7 +1127,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.183)</h1>
+            <h1>🚂 Transport Dashboard (Rev.183.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8555,6 +8555,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to pull CASE A & CASE B.');
                 return;
             }
+            try { await pullCogSignsFromExcel(); } catch (e0) { /* own try/catch inside; Display!B14:C14 = CoG of the CASE drawings */ }
             try {
                 let values = null, texts = null, cValues = null, cTexts = null, cMissing = false;
                 await Excel.run(async (context) => {
@@ -9965,11 +9966,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // feet of the perpendiculars from CoG and from CCoG on the same Side line (tipping arms)
                     const foot = pt => { const d = (pt.x - sa.x) * nx + (pt.y - sa.y) * ny; return { x: pt.x - d * nx, y: pt.y - d * ny, d: Math.abs(d) }; };
                     cab = { k, sa, sb, P, F: { x: P.x - sd * nx, y: P.y - sd * ny }, geo: Math.abs(sd), nx, ny,
-                            FC: foot({ x: cogXmm, y: cogYmm }), FK: foot({ x: ccXmm, y: ccYmm }) };
+                            FC: foot({ x: cogXmm, y: cogYmm }), FK: foot({ x: ccXmm, y: ccYmm }), cogFallback: !useCaseCog };
                 }
             }
             if (opts && opts.caseAB) {
-                tgCaseABGraph[opts.caseAB] = cab ? { cog: caseABGraphPt(cab.FC, ccXmm, ccYmm), cc: caseABGraphPt(cab.FK, ccXmm, ccYmm) } : null;
+                tgCaseABGraph[opts.caseAB] = (cab && !cab.cogFallback) ? { cog: caseABGraphPt(cab.FC, ccXmm, ccYmm), cc: caseABGraphPt(cab.FK, ccXmm, ccYmm) } : null;
             }
             const padL = 90, padT = 78, padR = 90, padB = 55;
             const plotW = 560, plotH = 260;
@@ -10309,7 +10310,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const arms = [
                             { name: 'CoG', col: g1c, A: { x: px(cogXmm), y: py(cogYmm) }, Fp: cab.FC, geo: cab.FC.d, dash: '5 3' },
                             { name: 'CCoG', col: g2c, A: { x: cx, y: cy }, Fp: cab.FK, geo: cab.FK.d, dash: '' }
-                        ];
+                        ].filter(a => !(a.name === 'CoG' && cab.cogFallback));
+                        if (cab.cogFallback) {
+                            // never draw / push a perpendicular from a CoG that is not Display!B14:C14
+                            cabSvg += lpDraw('CoG ⚠ Display!B14:C14 not read yet', px(cogXmm), py(cogYmm), g1c, 9, `The CoG of the CASE A & CASE B drawings is Excel Display!B14:C14 — it has not been read yet (press ⇩ Refresh). Until then no CoG perpendicular is drawn or pushed.`);
+                        }
                         arms.forEach(a => {
                             const F2 = { x: px(a.Fp.x), y: py(a.Fp.y) };
                             const L2 = Math.hypot(F2.x - a.A.x, F2.y - a.A.y);
@@ -10322,6 +10327,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                     `<polyline points="${ax},${ay} ${ax - sg * tx * m},${ay - sg * ty * m} ${F2.x - sg * tx * m},${F2.y - sg * ty * m}" fill="none" stroke="${a.col}" stroke-width="1"/>`;
                             }
                             cabSvg += `<circle cx="${F2.x}" cy="${F2.y}" r="2.5" fill="${a.col}"/>`;
+                            // the point the perpendicular starts from, in the same frame, so the two can be compared at a glance
+                            const srcXY = a.name === 'CoG' ? { x: cogXmm, y: cogYmm } : { x: ccXmm, y: ccYmm };
+                            const srcP = caseABGraphPt(srcXY, ccXmm, ccYmm);
+                            cabSvg += lpDraw(`${a.name} X ${f1(srcP.x)}, Y ${f1(srcP.y)}`, a.A.x, a.A.y, a.col, 9, `${a.name} used for the perpendicular: X ${f1(srcP.x)}, Y ${f1(srcP.y)} mm${a.name === 'CoG' ? " (Excel Display!B14:C14)" : " (Excel Display!B16:C16)"} — distance to Side ${k.sideA}-${k.sideB}: ${f1(a.geo)} mm`);
                             const xy = `X ${f1(gp.x)}, Y ${f1(gp.y)}`;
                             cabSvg += lpDraw(`${a.name}⊥ ${xy}`, F2.x, F2.y, a.col, 9, `${a.name} perpendicular on Side ${k.sideA}-${k.sideB}: ${xy} mm${CASEAB_GRAPH_REL_CCOG ? ' (relative to CCoG)' : ''} — pushed to '${escapeHtml(CASEAB_GRAPH_SHEET_NAME)}'`);
                             if (a.name === 'CoG' && L2 > 0.5) {
@@ -10330,6 +10339,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                 const diff = have ? Math.abs(arm.v - a.geo) : 0;
                                 const armTxt = have ? (arm.txt || f1(arm.v)) : f1(a.geo);
                                 const warn = have && diff > 1;
+                                if (warn) console.warn(`CASE ${k.L}: tipping arm Excel ${arm.cell} = ${arm.v} mm vs drawn CoG distance ${a.geo.toFixed(1)} mm`, { cog: { x: cogXmm, y: cogYmm }, foot: a.Fp, sideA: sa, sideB: sb });
                                 const tip = have ? `Tipping arm = '${escapeHtml(CALCAB_SHEET_NAME)}'!${arm.cell} = ${armTxt} mm; drawn perpendicular distance ${f1(a.geo)} mm${warn ? ' — differs from Excel by ' + f1(diff) + ' mm' : ''}` : `Tipping arm ('${escapeHtml(CALCAB_SHEET_NAME)}'!${arm.cell} not available) — drawn perpendicular distance ${f1(a.geo)} mm`;
                                 cabSvg += lpDraw(`Tipping arm ${armTxt} mm${warn ? ' ⚠' : ''}`, (a.A.x + F2.x) / 2, (a.A.y + F2.y) / 2, a.col, 9, tip);
                             }
