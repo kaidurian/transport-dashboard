@@ -414,14 +414,6 @@
         .tg-caseab-tri .cab-line { stroke: var(--accent-blue); stroke-width: 7; fill: none; }
         .tg-caseab-tri .cab-head { fill: var(--accent-blue); }
         .tg-caseab-tri .cab-dot { fill: var(--accent-blue); stroke: var(--text-main); stroke-width: 2; }
-        .tg-caseab-stab-title { font-size: 12px; font-weight: 700; color: var(--text-main); margin: 8px 0 2px 0; padding-top: 4px; border-top: 1px dashed var(--panel-border); }
-        /* 4-direction arrows picture and stability angle sketch side by side (stack on a narrow card) */
-        .tg-caseab-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin: 0 0 4px 0; }
-        .tg-caseab-row-tri { flex: 2 1 300px; min-width: 0; }
-        .tg-caseab-row-stab { flex: 1 1 200px; min-width: 0; }
-        .tg-caseab-row-stab .tg-caseab-stab-title { margin-top: 0; padding-top: 0; border-top: none; }
-        .tg-caseab-stab { display: block; width: 100%; height: auto; max-width: 420px; max-height: 300px; margin: 0 auto 4px auto; }
-        table.tg-caseab-mini td.tg-caseab-sep { border-left: 2px solid var(--panel-border); }
         table.tg-caseab-mini td.tg-caseab-min { background: rgba(250, 204, 21, 0.38); color: var(--text-main); font-weight: 700; box-shadow: inset 0 0 0 1.5px #eab308; }
         table.tg-caseab-table td.tg-tcd-note { white-space: normal; text-align: left; width: auto; color: var(--text-muted); font-style: italic; }
         table.tg-caseab-table td.tg-tcd-span { white-space: normal; text-align: left; }
@@ -1128,7 +1120,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.183.5)</h1>
+            <h1>🚂 Transport Dashboard (Rev.183.6)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1690,14 +1682,11 @@
                         <p class="tg-modal-sub" id="tgCaseABHelpPanel">
                             Read-only mirror of Excel <strong>"Check CASE A &amp; CASE B"</strong>!<strong>A7:K49</strong>.
                             <strong>CASE A</strong> / <strong>CASE B</strong> blocks on top: the load-case picture (A1 = +I17, A2 = −I17, A3 = −I25, A4 = +I25;
-                            B1 = +I39, B2 = −I39, B3 = −I46, B4 = +I46) , the group triangle, the <strong>stability angle</strong> sketch and, under it, a small table synced with Excel <strong>"Calculation Sheet Case A&amp;B"</strong>
-                            (A15:I18 / A21:I24): <strong>Single A1–A4</strong> (B16:E18 / B22:E24) and <strong>Combined A1–A4</strong> (F16:I18 / F22:I24), the smallest value of each block highlighted.
-                            The Combined minimum drives the line from the <strong>CCoG</strong> and the Single minimum the line from the <strong>CoG</strong>, each down to its perpendicular on the triangle side; the X, Y of both perpendicular ends (relative to CCoG = 0,0) are pushed to 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B).
-                            (OK / NOT OK results are shown green / red, like the other result cards). Under it come the <strong>CASE A (Section 10.5.3.16)</strong> / <strong>CASE B (Section 10.5.3.17)</strong> tables of 'Check CASE A &amp; CASE B'. Zoom / pan on the drawings: mouse wheel = zoom, middle or left button drag = move, double-click = reset (same as the 2D drawing).
-                            The CASE label (and its arrow) whose value feeds the group triangle is highlighted in the same colour as its CASE line in the triangle. The <strong>stability angle</strong> sketch shows the height (Display!D16), the base and the angle (A=12.3°, green when OK / red when NOT OK, like the section table)
-                            ('Check CASE A &amp; CASE B'!I27 / I28 for CASE A, I48 / I49 for CASE B).
+                            B1 = +I39, B2 = −I39, B3 = −I46, B4 = +I46) and a small table under each triangle drawing, synced with Excel <strong>"Calculation Sheet Case A&amp;B"</strong>
+                            (A15:A18 + F15:I18 / A21:A24 + F21:I24), with the smallest value of F16:I18 / F22:I24 highlighted.
+                            (OK / NOT OK results are shown green / red, like the other result cards).
                             Under each cross-arrow picture sits the hydraulic-group triangle (G1 / G2 / G3) with the Cargo CoG (green) and the Combined CoG (CCoG, same red as in the 2D drawing) — the same drawing as under
-                            📊 CoG Envelope Table, without the LC1–LC4 points. Pulled from Excel, except the X, Y above which are pushed;
+                            📊 CoG Envelope Table, without the LC1–LC4 points. Pull-only, never pushed;
                             it refreshes with the other result cards (auto-sync) or with the button below.
                         </p>
                         <div id="tgCaseABCases"><!-- CASE A / CASE B triangle pictures + small tables rendered by JS --></div>
@@ -1705,8 +1694,6 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Check CASE A &amp; CASE B'!A7:K49 and the CASE A / CASE B tables from 'Calculation Sheet Case A&amp;B'!A15:I24"
                                     onclick="pullCaseABFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgPushCaseABXYBtn" title="Push the X, Y of the CoG / CCoG perpendicular ends (relative to CCoG 0,0) to Excel 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B; row 3 = X, row 4 = Y)"
-                                    onclick="pushCaseABXYToExcel()">📤 Push X, Y to Excel</button>
                         </div>
                     </div>
 
@@ -2374,7 +2361,6 @@ class XLBridge {
             pushHorizontalLoadsToExcel: 'tgPushHLoadsBtn',
             pushTractionToExcel: 'tgPushTractionBtn',
             pushConceptToExcel: 'tgPushConceptBtn',
-            pushCaseABXYToExcel: 'tgPushCaseABXYBtn',
         };
         function setPushPendingForBtn(btnId, on) {
             const btn = document.getElementById(btnId);
@@ -6534,7 +6520,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         weight: Number.isFinite(cw) ? cw : 0
                     };
                     cogCombinedSignLoaded = true;
-                    try { renderTgCaseABStab(); } catch (e2) { /* CASE A & B card not built yet */ }
                 }
             } catch (e) {
                 console.warn(`Could not pull CoG signs from '${DISPLAY_SHEET_NAME}'!${COG_SIGNS_RANGE}`, e);
@@ -8029,20 +8014,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         let tgCalcABRows = [];
         let tgCalcABText = [];
         let tgCalcABMissing = false;   // true when the sheet could not be found in the workbook
-        // X, Y of the end of each perpendicular (relative to CCoG = 0,0) per case -> 'Calculation Sheet Case A&B'!H3:K4
-        //   H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B (row 3 = X, row 4 = Y)
-        const CASEAB_XY_RANGE = 'H3:K4';
-        let tgCabXY = {};
-        let tgCabXYPushedSig = '';
-        function caseABXYCells() {
-            const r1 = v => (v === null || v === undefined || !isFinite(v)) ? null : Math.round(v * 10) / 10;
-            const col = (L, key) => { const o = tgCabXY[L] && tgCabXY[L][key]; return o ? [r1(o.x), r1(o.y)] : null; };
-            return { H: col('A', 'cog'), I: col('A', 'ccog'), J: col('B', 'cog'), K: col('B', 'ccog') };
-        }
-        function schedulePushCaseABXY() {
-            if (JSON.stringify(caseABXYCells()) === tgCabXYPushedSig) return;
-            scheduleAutoPush('pushCaseABXYToExcel', pushCaseABXYToExcel);
-        }
         function buildCaseABTableHtml(rows) {
             const fmt = v => {
                 if (v === null || v === undefined || v === '') return '';
@@ -8087,9 +8058,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const snap = tgCogEnvCalculated ? (tgCogEnvComputed || undefined) : undefined;
             renderTgCogEnvPreview(snap, { targetId: 'tgCaseABPreviewA', noLC: true, idSuffix: 'A', caseAB: 'A' });
             renderTgCogEnvPreview(snap, { targetId: 'tgCaseABPreviewB', noLC: true, idSuffix: 'B', caseAB: 'B' });
-            try { schedulePushCaseABXY(); } catch (e) { /* push helpers not ready */ }
-            renderTgCaseABStab();   // stability-angle sketches (height = Display!D16) follow the same refresh
-            try { tgCabApplyViews(); } catch (e) { /* card not built yet */ }
         }
 
         // ---- CASE A / CASE B blocks (picture + small table) built from the pulled A7:K49 grid (row r -> index r-7).
@@ -8136,31 +8104,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         }
         // Same picture as LoadcaseA.png / LoadcaseB.png; the value of each CASE label comes from Excel.
         function buildCaseABTriangleSvg(L, longV, transV, longT, transT) {
-            // the CASE label whose data feeds the group triangle (smallest value of the table) is highlighted: label box + its arrow
-            const used = caseABConstruction(L);
-            const hiIdx = used ? used.idx : 0;
-            const HI = TG_CARGO_TOTAL_COLOR;   // same colour as the CASE line + its label in the group triangle drawing
-            const lab = (id, cx, ys, kind, dir, val) => {
-                const hi = id === hiIdx;
-                const w = (('CASE ' + L + id + ' = ' + val).length) * 20.5 + 22;
-                return (hi ? `<rect x="${cx - w / 2}" y="${ys[0] - 34}" width="${w}" height="46" rx="7" fill="${HI}" fill-opacity="0.2" stroke="${HI}" stroke-width="3"><title>Used in the group triangle: CASE ${L}${id} = ${escapeHtml(val)}</title></rect>` : '') +
-                    `<text x="${cx}" y="${ys[0]}" text-anchor="middle"${hi ? ' style="font-weight:700"' : ''}>CASE ${L}${id} = <tspan font-weight="700">${escapeHtml(val)}</tspan></text>` +
-                    `<text x="${cx}" y="${ys[1]}" text-anchor="middle">(Load case ${L}:${kind})</text>` +
-                    `<text x="${cx}" y="${ys[2]}" text-anchor="middle">${dir}</text>`;
-            };
-            const mk = 'cabArr' + L, mkHi = 'cabArrHi' + L;
-            const arrow = (id, x2, y2) => {
-                const hi = id === hiIdx;
-                return `<line x1="595" y1="300" x2="${x2}" y2="${y2}" marker-end="url(#${hi ? mkHi : mk})"${hi ? ` style="stroke:${HI};stroke-width:10"` : ''}/>`;
-            };
+            const lab = (id, cx, ys, kind, dir, val) =>
+                `<text x="${cx}" y="${ys[0]}" text-anchor="middle">CASE ${L}${id} = <tspan font-weight="700">${escapeHtml(val)}</tspan></text>` +
+                `<text x="${cx}" y="${ys[1]}" text-anchor="middle">(Load case ${L}:${kind})</text>` +
+                `<text x="${cx}" y="${ys[2]}" text-anchor="middle">${dir}</text>`;
+            const mk = 'cabArr' + L;
             return `<svg class="tg-caseab-tri" viewBox="0 0 1200 580" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Load case ${L}">` +
-                `<defs><marker id="${mk}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse" markerUnits="strokeWidth"><path class="cab-head" d="M0,0 L10,5 L0,10 z"/></marker>` +
-                `<marker id="${mkHi}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 z" fill="${HI}"/></marker></defs>` +
+                `<defs><marker id="${mk}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse" markerUnits="strokeWidth"><path class="cab-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>` +
                 lab(4, 590, [65, 110, 160], 'Transverse', '(x0,y-ve)', caseABSigned(transV, +1, transT)) +
                 lab(2, 258, [253, 300, 350], 'Longitudinal', '(x-ve,y0)', caseABSigned(longV, -1, longT)) +
                 lab(1, 938, [253, 300, 350], 'Longitudinal', '(x+ve,y0)', caseABSigned(longV, +1, longT)) +
                 lab(3, 598, [438, 490, 540], 'Transverse', '(x0,y+ve)', caseABSigned(transV, -1, transT)) +
-                `<g class="cab-line">` + arrow(4, 595, 212) + arrow(3, 595, 390) + arrow(2, 502, 300) + arrow(1, 688, 300) + `</g>` +
+                `<g class="cab-line">` +
+                `<line x1="595" y1="300" x2="595" y2="212" marker-end="url(#${mk})"/>` +
+                `<line x1="595" y1="300" x2="595" y2="390" marker-end="url(#${mk})"/>` +
+                `<line x1="595" y1="300" x2="502" y2="300" marker-end="url(#${mk})"/>` +
+                `<line x1="595" y1="300" x2="688" y2="300" marker-end="url(#${mk})"/></g>` +
                 `<circle class="cab-dot" cx="595" cy="298" r="12"/>` +
                 `<text x="610" y="268" text-anchor="start">CCoG</text></svg>`;
         }
@@ -8172,12 +8131,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             A: { hdr: 15, rows: [16, 17, 18], longRow: 17, transRow: 25 },
             B: { hdr: 21, rows: [22, 23, 24], longRow: 39, transRow: 46 }
         };
-        // kind 'combined' (default) = columns F:I (Combined A1-A4 -> CCoG line); 'single' = columns B:E (Single A1-A4 -> CoG line)
-        function caseABConstruction(L, kind) {
+        function caseABConstruction(L) {
             const cfg = CASEAB_CFG[L];
             if (!cfg || !tgCalcABRows.length) return null;
-            const single = kind === 'single';
-            const cols = single ? ['B', 'C', 'D', 'E'] : ['F', 'G', 'H', 'I'];
+            const cols = ['F', 'G', 'H', 'I'];
             let best = null;
             cfg.rows.forEach((r, ri) => cols.forEach((c, ci) => {
                 const v = calcABCell(r, c);
@@ -8197,252 +8154,26 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const dimRaw = caseABCell(longIdx ? cfg.longRow : cfg.transRow, 'I');
             if (typeof dimRaw !== 'number' || !isFinite(dimRaw)) return null;
             const dir = { 1: [1, 0], 2: [-1, 0], 3: [0, 1], 4: [0, -1] }[idx];   // plan frame: +X = rear, +Y = down on screen
-            const sgnTxt = caseABSigned(dimRaw, { 1: 1, 2: -1, 3: -1, 4: 1 }[idx], caseABTxt(longIdx ? cfg.longRow : cfg.transRow, 'I')).replace(/\s*mm\s*$/i, '');   // same signed text as the CASE label in the picture (e.g. -103)
-            return { L, idx, kind: single ? 'single' : 'combined', dir, dim: Math.abs(dimRaw), signedTxt: sgnTxt, min: best.v, minTxt: calcABTxt(best.r, best.c), sideA, sideB, sideLabel: lab };
-        }
-        // ---- CASE A / CASE B stability angle (same sketch as the FYI picture): CCoG on top, vertical line to the ground,
-        // inclined line to the tipping point, angle between them, height (right) and base (below the ground line).
-        //  height = Display!D16 (CCoG Z)   base / angle = 'Check CASE A & CASE B'!I27 / I28 (CASE A), I48 / I49 (CASE B)
-        const CASEAB_STAB_ROWS = { A: { base: 27, angle: 28 }, B: { base: 48, angle: 49 } };
-        function buildCaseABStabilitySvg(L) {
-            const rows = CASEAB_STAB_ROWS[L];
-            const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
-            const H = cogCombinedSignLoaded ? num(parseFloat(cogCombinedSign.z)) : null;
-            const base = num(caseABCell(rows.base, 'I')), ang = num(caseABCell(rows.angle, 'I'));
-            const fmt1 = v => caseABFmtNum(Math.round(v * 10) / 10);
-            const hTxt = H !== null ? fmt1(H) : '–';
-            const bTxt = base !== null ? (caseABTxt(rows.base, 'I').replace(/\s*mm\s*$/i, '') || fmt1(base)) : '–';
-            const aTxt = ang !== null ? L + '=' + (caseABTxt(rows.angle, 'I').replace(/\s*°\s*$/, '') || fmt1(ang)) + '°' : '–';   // format A=12.3° (B=… for CASE B)
-            const stCls = caseABStatus(L);
-            const stWord = stCls === 'tg-dt-ok' ? ' OK' : (stCls === 'tg-dt-notok' ? ' NOT OK' : '');   // OK / NOT OK of the CASE section table -> same colour as in the table
-            const angCol = stCls === 'tg-dt-ok' ? 'var(--accent-green, #22c55e)' : (stCls === 'tg-dt-notok' ? '#ef4444' : null);
-            if (H === null && base === null && ang === null) {
-                return `<div class="tg-modal-sub" style="margin:0 0 4px 0;">No data yet — pull from Excel (Display!D16, '${escapeHtml(CASEAB_SHEET_NAME)}'!I${rows.base}:I${rows.angle}).</div>`;
-            }
-            // geometry: true to scale when height + base are known, else rebuilt from the angle
-            const hPx = 330;
-            let bPx;
-            if (H && base !== null) bPx = Math.abs(base) * hPx / H;
-            else if (ang !== null) bPx = Math.tan(Math.abs(ang) * Math.PI / 180) * hPx;
-            else bPx = 70;
-            bPx = Math.max(bPx, 22);
-            const th = Math.atan2(bPx, hPx);   // drawn angle
-            const cx = 340, top = 52, gy = top + hPx, fx = cx - bPx;
-            const ln = 'var(--text-main, #e2e8f0)', mut = 'var(--text-muted, #94a3b8)', cc = TG_CARGO_TOTAL_COLOR, ac = 'var(--accent-blue, #38bdf8)';
-            const halo = 'paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="4" stroke-linejoin="round"';
-            const head = (x, y, ux, uy, col) => `<polygon points="${x},${y} ${x - ux * 14 + uy * 4.5},${y - uy * 14 - ux * 4.5} ${x - ux * 14 - uy * 4.5},${y - uy * 14 + ux * 4.5}" fill="${col}"/>`;
-            let g = '';
-            // ground line + hatching
-            g += `<line x1="70" y1="${gy}" x2="500" y2="${gy}" stroke="${ln}" stroke-width="2"/>`;
-            for (let x = 84; x < 500; x += 22) g += `<line x1="${x}" y1="${gy}" x2="${x - 14}" y2="${gy + 14}" stroke="${mut}" stroke-width="1.2"/>`;
-            // vertical + inclined lines
-            g += `<line x1="${cx}" y1="${top}" x2="${cx}" y2="${gy}" stroke="${ln}" stroke-width="1.6"/>`;
-            g += `<line x1="${cx}" y1="${top}" x2="${fx}" y2="${gy}" stroke="${ln}" stroke-width="1.6"/>`;
-            // CCoG sign on top (quartered circle + crosshair)
-            const r = 13;
-            g += `<path d="M ${cx} ${top} L ${cx} ${top - r} A ${r} ${r} 0 0 0 ${cx - r} ${top} Z" fill="${ln}"/>` +
-                 `<path d="M ${cx} ${top} L ${cx} ${top + r} A ${r} ${r} 0 0 0 ${cx + r} ${top} Z" fill="${ln}"/>` +
-                 `<circle cx="${cx}" cy="${top}" r="${r}" fill="none" stroke="${ln}" stroke-width="1.5"/>` +
-                 `<line x1="${cx - r - 14}" y1="${top}" x2="${cx + r + 14}" y2="${top}" stroke="${cc}" stroke-width="1.3"/>` +
-                 `<line x1="${cx}" y1="${top - r - 14}" x2="${cx}" y2="${top + r + 14}" stroke="${cc}" stroke-width="1.3"/>`;
-            // height dimension (right): extension line from the CCoG + vertical dimension with arrows, rotated value
-            const hx = 450;
-            g += `<line x1="${cx + r + 4}" y1="${top}" x2="${hx + 12}" y2="${top}" stroke="${ac}" stroke-width="0.9"/>` +
-                 `<line x1="${cx + 6}" y1="${gy}" x2="${hx + 12}" y2="${gy}" stroke="${ac}" stroke-width="0.9"/>` +
-                 `<line x1="${hx}" y1="${top}" x2="${hx}" y2="${gy}" stroke="${ac}" stroke-width="1.2"/>` +
-                 head(hx, top, 0, -1, ac) + head(hx, gy, 0, 1, ac) +
-                 `<text x="${hx - 12}" y="${(top + gy) / 2}" font-size="26" text-anchor="middle" fill="${ac}" transform="rotate(-90 ${hx - 12} ${(top + gy) / 2})" ${halo}>${escapeHtml(hTxt)}</text>`;
-            // angle between the vertical and the inclined line (arc around the CCoG, arrows from the outside, value beside it)
-            const R = 205, ext = 0.13;
-            const P = a => ({ x: cx - R * Math.sin(a), y: top + R * Math.cos(a) });   // a = angle from the vertical, + toward the inclined side
-            const aR = P(-ext), aL = P(th + ext), aV = P(0), aI = P(th), aT = P(th + ext + 0.2);
-            g += `<path d="M ${aR.x} ${aR.y} A ${R} ${R} 0 0 1 ${aT.x} ${aT.y}" fill="none" stroke="${ac}" stroke-width="1.2"/>`;
-            g += head(aV.x, aV.y, -1, 0, ac) + head(aI.x, aI.y, Math.cos(th), Math.sin(th), ac);
-            g += `<text x="${aT.x - 8}" y="${aT.y - 4}" font-size="26" font-weight="700" text-anchor="end" fill="${angCol || ac}" ${halo}><title>${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : 'Stability angle')} — CASE ${L}</title>${escapeHtml(aTxt + (ang !== null ? stWord : ''))}</text>`;
-            // base dimension (below the ground line): arrows from the outside onto two extension lines
-            const by = gy + 62;
-            g += `<line x1="${fx}" y1="${gy + 4}" x2="${fx}" y2="${by + 12}" stroke="${ac}" stroke-width="0.9"/>` +
-                 `<line x1="${cx}" y1="${gy + 4}" x2="${cx}" y2="${by + 12}" stroke="${ac}" stroke-width="0.9"/>` +
-                 `<line x1="${fx - 50}" y1="${by}" x2="${cx + 50}" y2="${by}" stroke="${ac}" stroke-width="1.2"/>` +
-                 head(fx, by, 1, 0, ac) + head(cx, by, -1, 0, ac) +
-                 `<text x="${fx - 56}" y="${by + 9}" font-size="26" text-anchor="end" fill="${ac}" ${halo}>${escapeHtml(bTxt)}</text>`;
-            return `<svg class="tg-caseab-stab" viewBox="0 0 560 ${by + 28}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Stability angle CASE ${L}">${g}</svg>`;
-        }
-        function renderTgCaseABStab() {
-            ['A', 'B'].forEach(L => {
-                const el = document.getElementById('tgCaseABStab' + L);
-                if (el) el.innerHTML = buildCaseABStabilitySvg(L);
-            });
-            try { tgCabApplyViews(); } catch (e) { /* card not built yet */ }
-        }
-        // ---- The big 'Check CASE A & CASE B' grid is split into its two sections: "CASE A (Section 10.5.3.16)" and
-        // "CASE B (Section 10.5.3.17)" (found by their heading text). Each section is shown under its own CASE block.
-        function caseABSections() {
-            const n = tgCaseABRows.length;
-            if (!n) return null;
-            const rowTxt = i => {
-                const r = tgCaseABRows[i] || [], t = tgCaseABText[i] || [];
-                return r.map((v, k) => String(v === null || v === undefined ? '' : v) + ' ' + String(t[k] === null || t[k] === undefined ? '' : t[k])).join(' ');
-            };
-            const find = re => { for (let i = 0; i < n; i++) if (re.test(rowTxt(i))) return i; return -1; };
-            const iB = find(/10\s*\.\s*5\s*\.\s*3\s*\.\s*17/);
-            if (iB < 0) return null;
-            let iA = find(/10\s*\.\s*5\s*\.\s*3\s*\.\s*16/);
-            if (iA < 0 || iA >= iB) iA = 0;
-            return { A: { from: iA, to: iB - 1 }, B: { from: iB, to: n - 1 }, head: { from: 0, to: iA - 1 } };
-        }
-        function caseABSectionRows(L) {
-            const sec = caseABSections();
-            if (!sec || !sec[L]) return null;
-            return tgCaseABRows.slice(sec[L].from, sec[L].to + 1).map((row, k) => row);
-        }
-        // OK / NOT OK of a CASE section: the status on the stability-angle row (else base row, else the nearest status cell
-        // in the section) — returns 'tg-dt-ok' | 'tg-dt-notok' | ''.
-        function caseABStatus(L) {
-            const rowsCfg = CASEAB_STAB_ROWS[L], sec = caseABSections();
-            if (!rowsCfg || !tgCaseABRows.length) return '';
-            const rowStatus = r => {
-                let ok = false, bad = false;
-                for (let k = 0; k < CASEAB_NCOL; k++) {
-                    const col = String.fromCharCode(65 + k);
-                    const c = cellStatusClass(caseABCell(r, col)) || cellStatusClass(caseABTxt(r, col));
-                    if (c === 'tg-dt-notok') bad = true; else if (c === 'tg-dt-ok') ok = true;
-                }
-                return bad ? 'tg-dt-notok' : (ok ? 'tg-dt-ok' : '');
-            };
-            let st = rowStatus(rowsCfg.angle) || rowStatus(rowsCfg.base);
-            if (st) return st;
-            const lo = sec ? sec[L].from + 7 : 7, hi = sec ? sec[L].to + 7 : 6 + tgCaseABRows.length;
-            let bestR = null;
-            for (let r = lo; r <= hi; r++) {
-                if (!rowStatus(r)) continue;
-                if (bestR === null || Math.abs(r - rowsCfg.angle) < Math.abs(bestR - rowsCfg.angle) ||
-                    (Math.abs(r - rowsCfg.angle) === Math.abs(bestR - rowsCfg.angle) && r > bestR)) bestR = r;
-            }
-            return bestR === null ? '' : rowStatus(bestR);
-        }
-        // ---- Zoom / pan on the CASE A & B drawings, same mouse controls as the 2D drawing: wheel = zoom (centred on the
-        // cursor), middle-button drag = pan, left-button drag = pan (after a few px, so plain clicks still work),
-        // double-click (or double middle-click) = reset. Done on the SVG viewBox; the view survives re-renders.
-        const tgCabViews = {};   // key -> { z, ox, oy }  (viewBox = base shifted by ox/oy, base size / z)
-        function tgCabViewBox(svg) {
-            const b = (svg.dataset.cabBase || '').split(/[\s,]+/).map(Number);
-            if (b.length !== 4 || b.some(v => !isFinite(v))) return null;
-            const v = tgCabViews[svg.dataset.cabKey] || { z: 1, ox: 0, oy: 0 };
-            return { v, b, vb: [b[0] + v.ox, b[1] + v.oy, b[2] / v.z, b[3] / v.z] };
-        }
-        function tgCabApply(svg) {
-            const r = tgCabViewBox(svg);
-            if (!r) return;
-            svg.setAttribute('viewBox', r.vb.map(n => +n.toFixed(3)).join(' '));
-        }
-        function tgCabApplyViews() {
-            const root = document.getElementById('tgCaseABCases');
-            if (!root) return;
-            const targets = [['#tgCaseABPreviewA svg'], ['#tgCaseABPreviewB svg']];   // only the group triangle drawings zoom / pan (4-direction arrows + stability angle stay fixed)
-            targets.forEach(([sel]) => root.querySelectorAll(sel).forEach(svg => {
-                const host = svg.closest('.tg-caseab-case');
-                const L = host ? (host.dataset.cabCase || '') : '';
-                const kind = svg.classList.contains('tg-caseab-tri') ? 'tri' : (svg.classList.contains('tg-caseab-stab') ? 'stab' : 'grp');
-                const key = kind + L;
-                if (svg.dataset.cabKey !== key || !svg.dataset.cabBase) {
-                    svg.dataset.cabKey = key;
-                    svg.dataset.cabBase = svg.getAttribute('viewBox') || '';
-                }
-                svg.style.cursor = 'grab';
-                svg.style.touchAction = 'none';
-                tgCabApply(svg);
-            }));
-        }
-        function tgCabBindControls() {
-            const root = document.getElementById('tgCaseABCases');
-            if (!root || root.dataset.cabCtl === '1') return;
-            root.dataset.cabCtl = '1';
-            const svgOf = e => (e.target && e.target.closest) ? e.target.closest('svg[data-cab-key]') : null;
-            root.addEventListener('wheel', (e) => {
-                const svg = svgOf(e); if (!svg) return;
-                const r = tgCabViewBox(svg), m = svg.getScreenCTM(); if (!r || !m) return;
-                e.preventDefault();
-                const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
-                const p = pt.matrixTransform(m.inverse());                       // point under the cursor (user units)
-                const oldZ = r.v.z;
-                const newZ = Math.min(8, Math.max(0.25, oldZ * Math.pow(1.0015, -e.deltaY)));
-                if (newZ === oldZ) return;
-                const [x, y, w, h] = r.vb, nw = r.b[2] / newZ, nh = r.b[3] / newZ;
-                const nx = p.x - (p.x - x) * (nw / w), ny = p.y - (p.y - y) * (nh / h);
-                tgCabViews[svg.dataset.cabKey] = { z: newZ, ox: nx - r.b[0], oy: ny - r.b[1] };
-                tgCabApply(svg);
-            }, { passive: false });
-            root.addEventListener('mousedown', (e) => {
-                const svg = svgOf(e); if (!svg) return;
-                if (e.button !== 0 && e.button !== 1) return;
-                const isLeft = e.button === 0;
-                if (!isLeft) e.preventDefault();   // stops the browser's middle-click auto-scroll circle
-                if (e.button === 1) {              // double middle-click = reset
-                    const now = Date.now();
-                    if (svg._cabLastMid && now - svg._cabLastMid < 350) { delete tgCabViews[svg.dataset.cabKey]; tgCabApply(svg); svg._cabLastMid = 0; return; }
-                    svg._cabLastMid = now;
-                }
-                const r0 = tgCabViewBox(svg), m0 = svg.getScreenCTM(); if (!r0 || !m0) return;
-                const start = { x: e.clientX, y: e.clientY, ox: r0.v.ox, oy: r0.v.oy, k: m0.a || 1 };
-                const mask = isLeft ? 1 : 4;
-                let moved = !isLeft;
-                if (!isLeft) svg.style.cursor = 'grabbing';
-                const doc = svg.ownerDocument;
-                const onMove = (ev) => {
-                    if (!(ev.buttons & mask)) { onUp(); return; }
-                    if (!moved) {
-                        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
-                        moved = true; svg.style.cursor = 'grabbing';
-                    }
-                    const cur = tgCabViews[svg.dataset.cabKey] || { z: 1, ox: 0, oy: 0 };
-                    tgCabViews[svg.dataset.cabKey] = { z: cur.z, ox: start.ox - (ev.clientX - start.x) / start.k, oy: start.oy - (ev.clientY - start.y) / start.k };
-                    tgCabApply(svg);
-                };
-                const onUp = () => {
-                    doc.removeEventListener('mousemove', onMove, true);
-                    doc.removeEventListener('mouseup', onUp, true);
-                    svg.style.cursor = 'grab';
-                    if (isLeft && moved) {
-                        const swallow = (ce) => { ce.stopPropagation(); ce.preventDefault(); };
-                        doc.addEventListener('click', swallow, true);
-                        setTimeout(() => doc.removeEventListener('click', swallow, true), 0);
-                    }
-                };
-                doc.addEventListener('mousemove', onMove, true);
-                doc.addEventListener('mouseup', onUp, true);
-            });
-            root.addEventListener('dblclick', (e) => {
-                const svg = svgOf(e); if (!svg) return;
-                delete tgCabViews[svg.dataset.cabKey]; tgCabApply(svg);
-            });
-            root.addEventListener('auxclick', (e) => { if (e.button === 1 && svgOf(e)) e.preventDefault(); });
+            return { L, idx, dir, dim: Math.abs(dimRaw), min: best.v, minTxt: calcABTxt(best.r, best.c), sideA, sideB, sideLabel: lab };
         }
         // rows = Excel row numbers shown (first = header row); minFrom = first row of the min search (cols F:I)
-        function buildCaseABMiniTable(rows, minFrom, L) {
-            const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-            const blocks = [['B', 'C', 'D', 'E'], ['F', 'G', 'H', 'I']];   // Single A1-A4 | Combined A1-A4: the smallest value is highlighted in each block
-            const mins = blocks.map(bc => {
-                let m = Infinity;
-                rows.forEach(r => { if (r >= minFrom) bc.forEach(c => {
-                    const v = calcABCell(r, c);
-                    if (typeof v === 'number' && v < m) m = v;
-                }); });
-                return m;
-            });
+        function buildCaseABMiniTable(rows, minFrom) {
+            const cols = ['A', 'F', 'G', 'H', 'I'];
+            let min = Infinity;
+            rows.forEach(r => { if (r >= minFrom) ['F', 'G', 'H', 'I'].forEach(c => {
+                const v = calcABCell(r, c);
+                if (typeof v === 'number' && v < min) min = v;
+            }); });
             let html = '<table class="tg-drawing-table tg-caseab-mini">';
             rows.forEach((r, i) => {
                 let tds = '';
                 cols.forEach(c => {
                     const v = calcABCell(r, c);
-                    const bi = 'BCDE'.includes(c) ? 0 : ('FGHI'.includes(c) ? 1 : -1);
                     let cls = cellStatusClass(v);
-                    if (r >= minFrom && bi >= 0 && typeof v === 'number' && v === mins[bi]) cls = 'tg-caseab-min';
-                    if (c === 'B' || c === 'F') cls += ' tg-caseab-sep';
-                    let txt;
-                    if (i === 0 && v === '' && bi >= 0) txt = (bi === 0 ? 'Single ' : 'Combined ') + L + ('BCDE'.includes(c) ? 'BCDE'.indexOf(c) + 1 : 'FGHI'.indexOf(c) + 1);   // header cell empty in Excel
-                    else { const xt = calcABTxt(r, c); txt = (v === '') ? '' : (typeof v === 'number' ? escapeHtml(xt || caseABFmtNum(v)) : escapeHtml(String(v))); }
-                    tds += `<td class="${cls.trim()}">${txt}</td>`;
+                    if (r >= minFrom && c !== 'A' && typeof v === 'number' && v === min) cls = 'tg-caseab-min';
+                    const xt = calcABTxt(r, c);
+                    const txt = (v === '') ? '' : (typeof v === 'number' ? escapeHtml(xt || caseABFmtNum(v)) : escapeHtml(String(v)));
+                    tds += `<td class="${cls}">${txt}</td>`;
                 });
                 html += `<tr${i === 0 ? ' class="tg-dt-bold"' : ''}>${tds}</tr>`;
             });
@@ -8453,23 +8184,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (!el) return;
             const have = tgCalcABRows.length > 0;
             const noTbl = `<div class="tg-modal-sub" style="margin:0 0 4px 0;">${tgCalcABMissing ? `Sheet '${escapeHtml(CALCAB_SHEET_NAME)}' not found in this workbook.` : `No data pulled yet — click "⇩ Refresh from Excel" below.`}</div>`;
-            const secHave = !!caseABSections();
-            const block = (L, rl, rt, tbl, minFrom) => {
-                const secRows = secHave ? caseABSectionRows(L) : null;
-                return `<div class="tg-caseab-case" data-cab-case="${L}"><div class="tg-caseab-case-title">CASE ${L}</div>` +
-                `<div class="tg-caseab-row"><div class="tg-caseab-row-tri">` +
+            const block = (L, rl, rt, tbl, minFrom) =>
+                `<div class="tg-caseab-case"><div class="tg-caseab-case-title">CASE ${L}</div>` +
                 buildCaseABTriangleSvg(L, caseABCell(rl, 'I'), caseABCell(rt, 'I'), caseABTxt(rl, 'I'), caseABTxt(rt, 'I')) +
-                `</div><div class="tg-caseab-row-stab">` +
-                `<div class="tg-caseab-stab-title" title="Height = Excel Display!D16; base = '${CASEAB_SHEET_NAME}'!I${CASEAB_STAB_ROWS[L].base}; angle = '${CASEAB_SHEET_NAME}'!I${CASEAB_STAB_ROWS[L].angle}">Stability angle — CASE ${L}</div>` +
-                `<div id="tgCaseABStab${L}" class="tg-caseab-stab-wrap"></div></div></div>` +
                 `<div id="tgCaseABPreview${L}" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
-                `<div class="tg-caseab-stab-title">CASE ${L} — Side / Combined</div>` +
-                (have ? buildCaseABMiniTable(tbl, minFrom, L) : noTbl) +
-                (secRows && secRows.length ? `<div class="tg-caseab-stab-title">CASE ${L} (Section ${L === 'A' ? '10.5.3.16' : '10.5.3.17'})</div><div class="tg-drawing-table-wrap" id="tgCaseABSec${L}">${buildCaseABTableHtml(secRows)}</div>` : '') +
-                `</div>`;
-            };
+                (have ? buildCaseABMiniTable(tbl, minFrom) : noTbl) + `</div>`;
             el.innerHTML = block('A', 17, 25, [15, 16, 17, 18], 16) + block('B', 39, 46, [21, 22, 23, 24], 22);
-            tgCabBindControls();
         }
         function renderTgCaseABTable() {
             renderTgCaseABCases();     // rebuilds the CASE A / CASE B blocks (picture, drawing slot, table) ...
@@ -8480,16 +8200,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">No data pulled yet — click "⇩ Refresh from Excel" below (or open this add-in inside Excel) to load '${escapeHtml(CASEAB_SHEET_NAME)}'!${CASEAB_RANGE}.</div>`;
                 return;
             }
-            const sec = caseABSections();
-            if (sec) {
-                // CASE A / CASE B sections are shown under their CASE blocks; only rows above the CASE A heading stay here
-                const head = sec.head.to >= sec.head.from ? tgCaseABRows.slice(sec.head.from, sec.head.to + 1) : [];
-                const any = head.some(r => r.some(v => v !== null && v !== undefined && String(v).trim() !== ''));
-                el.innerHTML = any ? buildCaseABTableHtml(head) : '';
-                el.style.display = any ? '' : 'none';
-                return;
-            }
-            el.style.display = '';
             el.innerHTML = buildCaseABTableHtml(tgCaseABRows);
         }
         async function pullCaseABFromExcel(opts = {}) {
@@ -8531,39 +8241,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             } catch (e) {
                 console.warn(`Could not read '${CASEAB_SHEET_NAME}' sheet (${CASEAB_RANGE})`, e);
                 if (!silent) alert(`Could not read sheet "${CASEAB_SHEET_NAME}". Make sure it exists.`);
-            }
-        }
-
-        // Pushes the X, Y of the perpendicular ends (CoG = Single, CCoG = Combined; relative to CCoG 0,0) to
-        // 'Calculation Sheet Case A&B'!H3:K4. Only columns that have a construction are written.
-        const pushCaseABXYToExcel = withBtnSyncIndicator('tgPushCaseABXYBtn', pushCaseABXYToExcelImpl);
-        async function pushCaseABXYToExcelImpl(opts) {
-            const silent = !!(opts && opts.silent);
-            if (!isOfficeInitialized) {
-                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push the CASE A & CASE B X, Y.');
-                return;
-            }
-            const cells = caseABXYCells();
-            if (!Object.values(cells).some(Boolean)) {
-                if (!silent) alert('No CASE A & CASE B perpendicular yet — click "⇩ Refresh from Excel" first.');
-                return;
-            }
-            try {
-                await Excel.run(async (context) => {
-                    const norm = n => String(n).replace(/\s+/g, ' ').replace(/\s*&\s*/g, ' & ').trim().toLowerCase();
-                    const sheets = context.workbook.worksheets;
-                    sheets.load('items/name');
-                    await context.sync();
-                    const hit = sheets.items.find(w => norm(w.name) === norm(CALCAB_SHEET_NAME));
-                    if (!hit) throw new Error('Sheet not found: ' + CALCAB_SHEET_NAME);
-                    Object.entries(cells).forEach(([col, xy]) => { if (xy) hit.getRange(`${col}3:${col}4`).values = [[xy[0]], [xy[1]]]; });
-                    await context.sync();
-                });
-                tgCabXYPushedSig = JSON.stringify(cells);
-                logMsg(`📤 Pushed CASE A & CASE B X, Y to '${CALCAB_SHEET_NAME}'!${CASEAB_XY_RANGE}.`);
-            } catch (e) {
-                console.warn(`Could not write CASE A & CASE B X, Y to '${CALCAB_SHEET_NAME}'!${CASEAB_XY_RANGE}`, e);
-                if (!silent) alert(`Could not write to sheet "${CALCAB_SHEET_NAME}". Make sure it exists.`);
             }
         }
 
@@ -9927,43 +9604,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
 
             // CASE A / CASE B construction (CCoG -> CASE line -> perpendicular to the Side line), only in the CASE A & CASE B card
             const groupPtsAll = { G1: g1, G2: g2, G3: g3 };
-            // Same construction for both points: Combined (table F:I) starts at CCoG, Single (table B:E) starts at CoG
-            // solve = true (CoG / Single): the sheet only holds the CCoG's CASE shift, the CoG has its own (different) shift, so it is
-            // solved from the Single table value itself: the end of the shift must lie exactly 'min' (table value) away from the Side line.
-            const mkCab = (k, bx, by, solve) => {
-                const sa = k && groupPtsAll['G' + k.sideA], sb = k && groupPtsAll['G' + k.sideB];
-                if (!(k && sa && sb && (sa.x !== sb.x || sa.y !== sb.y))) return null;
-                const dx = sb.x - sa.x, dy = sb.y - sa.y, len = Math.hypot(dx, dy);
-                const nx = -dy / len, ny = dx / len;
-                const sd0 = (bx - sa.x) * nx + (by - sa.y) * ny;       // signed distance start point -> Side line
-                let kk = k;
-                if (solve) {
-                    const kn = k.dir[0] * nx + k.dir[1] * ny;           // how much of the shift goes across the Side
-                    const sdT = (sd0 < 0 ? -1 : 1) * k.min;             // same side of the Side line as the start point
-                    const d = Math.abs(kn) > 1e-6 ? (sdT - sd0) / kn : NaN;
-                    if (isFinite(d) && d >= -1e-6) {
-                        const f = { 1: 1, 2: -1, 3: -1, 4: 1 }[k.idx] * Math.max(d, 0);
-                        kk = Object.assign({}, k, { dim: Math.max(d, 0), signedTxt: (f > 0 ? '+' : '') + (Math.round(f * 10) / 10), sheetDim: k.dim, solved: true });
-                    }
-                }
-                const P = { x: bx + kk.dir[0] * kk.dim, y: by + kk.dir[1] * kk.dim };
-                const sd = (P.x - sa.x) * nx + (P.y - sa.y) * ny;   // signed distance P -> Side line
-                return { k: kk, sa, sb, P, F: { x: P.x - sd * nx, y: P.y - sd * ny }, geo: Math.abs(sd), geoSheet: Math.abs(sd0 + (k.dir[0] * nx + k.dir[1] * ny) * k.dim) };
-            };
-            let cab = null, cabCog = null;
+            let cab = null;
             if (opts && opts.caseAB && showCC) {
-                cab = mkCab(caseABConstruction(opts.caseAB, 'combined'), ccXmm, ccYmm);
-                cabCog = mkCab(caseABConstruction(opts.caseAB, 'single'), cogXmm, cogYmm, true);
-                // end of each perpendicular relative to CCoG (0,0), full precision (rounded only when shown / pushed to Excel)
-                tgCabXY[opts.caseAB] = {
-                    cog: cabCog ? { x: cabCog.F.x - ccXmm, y: cabCog.F.y - ccYmm } : null,
-                    ccog: cab ? { x: cab.F.x - ccXmm, y: cab.F.y - ccYmm } : null
-                };
+                const k = caseABConstruction(opts.caseAB);
+                const sa = k && groupPtsAll['G' + k.sideA], sb = k && groupPtsAll['G' + k.sideB];
+                if (k && sa && sb && (sa.x !== sb.x || sa.y !== sb.y)) {
+                    const P = { x: ccXmm + k.dir[0] * k.dim, y: ccYmm + k.dir[1] * k.dim };
+                    const dx = sb.x - sa.x, dy = sb.y - sa.y, len = Math.hypot(dx, dy);
+                    const nx = -dy / len, ny = dx / len;
+                    const sd = (P.x - sa.x) * nx + (P.y - sa.y) * ny;   // signed distance P -> Side line
+                    cab = { k, sa, sb, P, F: { x: P.x - sd * nx, y: P.y - sd * ny }, geo: Math.abs(sd) };
+                }
             }
             const padL = 90, padT = 78, padR = 90, padB = 55;
             const plotW = 560, plotH = 260;
-            const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, showCC ? ccXmm : 0, cab ? Math.max(cab.P.x, cab.F.x) : 0, cabCog ? Math.max(cabCog.P.x, cabCog.F.x) : 0, 1);
-            const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, showCC ? ccYmm : 0, cab ? Math.max(cab.P.y, cab.F.y) : 0, cabCog ? Math.max(cabCog.P.y, cabCog.F.y) : 0, 1);
+            const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, showCC ? ccXmm : 0, cab ? Math.max(cab.P.x, cab.F.x) : 0, 1);
+            const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, showCC ? ccYmm : 0, cab ? Math.max(cab.P.y, cab.F.y) : 0, 1);
             const scale = Math.min(plotW / spanX, plotH / maxY);
             const svgW = padL + plotW + padR, svgH = padT + plotH + padB;
             const ox = padL, oy = padT; // world origin (0,0) on screen — top-left, Y positive downward
@@ -10101,113 +9757,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // instead of one uniform color, matching the dimension
             // stacks above.
             if (noLC) envCalloutSvg = '';   // the 806 / 201 envelope-size call-outs belong to the LC1-4 box
-            // ---- CASE A / B card only: CoG + CCoG signs are drawn small and the SAME size, and every text of the triangle
-            // drawing (CoG, CCoG, CASE A1-A4 line, perpendicular mm, X/Y of its end, CCoG->end dimension, Side names, G1-G3)
-            // is placed by a small collision-avoiding placer so no text sits on another text, a sign or a line.
-            const useLP = !!(opts && opts.caseAB && showCC);
-            const hiColPre = '#eab308';
-            const MK_R = 2.5, MK_X = 3.5;   // shared radius / crosshair half-length of the CoG and CCoG signs (CASE A & B card)
-            const lpBoxes = [];
-            let lpMaxY = 0;
-            const lpAdd = (x0, y0, x1, y1) => { lpBoxes.push([x0, y0, x1, y1]); if (y1 > lpMaxY) lpMaxY = y1; };
-            const lpSeg = (x1, y1, x2, y2, pad) => { const n = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 4)); for (let i = 0; i <= n; i++) { const x = x1 + (x2 - x1) * i / n, y = y1 + (y2 - y1) * i / n; lpBoxes.push([x - pad, y - pad, x + pad, y + pad]); } };
-            const lpBox = (txt, x, y, anchor, fs) => { const w = String(txt).length * fs * 0.6; const x0 = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x; return [x0, y - fs * 0.85, x0 + w, y + fs * 0.25]; };
-            const lpHit = b => lpBoxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
-            const lpPlace = (txt, ax, ay, fs) => {
-                const dirs = [[1, -1], [1, 1], [-1, -1], [-1, 1], [1, 0], [-1, 0], [0, -1], [0, 1]];
-                let first = null;
-                for (const r of [7, 14, 24, 36, 50, 68]) {
-                    for (const [dx, dy] of dirs) {
-                        const k = (dx && dy) ? 0.71 : 1;
-                        const x = ax + dx * r * k;
-                        const y = dy < 0 ? ay + dy * r * k : dy > 0 ? ay + dy * r * k + fs * 0.85 : ay + fs * 0.35;
-                        const anchor = dx > 0 ? 'start' : dx < 0 ? 'end' : 'middle';
-                        const b = lpBox(txt, x, y, anchor, fs);
-                        const cand = { x, y, anchor, r, box: b };
-                        if (!first) first = cand;
-                        if (b[0] < ox - 2 || b[2] > px(spanX) + 8 || b[1] < oy - 3) continue;   // stay inside the plot: the dimension stacks live left / above / right of it
-                        if (!lpHit(b)) { lpAdd(b[0], b[1], b[2], b[3]); return cand; }
-                    }
-                }
-                lpAdd(first.box[0], first.box[1], first.box[2], first.box[3]);
-                return first;
-            };
-            const lpDraw = (txt, ax, ay, fill, fs, tip) => {
-                const c = lpPlace(txt, ax, ay, fs);
-                const lx = Math.min(Math.max(ax, c.box[0]), c.box[2]), ly = Math.min(Math.max(ay, c.box[1]), c.box[3]);
-                const lead = c.r >= 24 ? `<line x1="${ax}" y1="${ay}" x2="${lx}" y2="${ly}" stroke="${fill}" stroke-width="0.8" opacity="0.85"/>` : '';
-                return lead + `<text x="${c.x}" y="${c.y}" font-size="${fs}" font-weight="700" fill="${fill}" text-anchor="${c.anchor}" paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="3" stroke-linejoin="round">${tip ? `<title>${tip}</title>` : ''}${txt}</text>`;
-            };
-            // Dimensions of the CASE A / B construction, ALL in one style (offset dimension line + extension lines + arrow heads, value on the line):
-            // CASE line (CCoG -> end of CASE A1-A4 line), perpendicular (end of CASE line -> triangle side), CCoG -> end of the perpendicular.
-            // No arrow head is ever drawn at the CCoG end.
-            const cabDims = [];
-            const cabCaseLbls = {};   // label of a CASE line (key cc / cog) when the line is too short on screen for a dimension (the label is always shown)
-            const mkDim = (A0, B0, ref, color, label, tip, headA, headB) => {
-                const Ld = Math.hypot(B0.x - A0.x, B0.y - A0.y);
-                if (Ld < 16) return null;
-                const ux = (B0.x - A0.x) / Ld, uy = (B0.y - A0.y) / Ld;
-                let nx = -uy, ny = ux;
-                if ((ref.x - A0.x) * nx + (ref.y - A0.y) * ny > 0) { nx = -nx; ny = -ny; }   // dimension line on the side away from the third point
-                const off = 14;
-                return { A0, B0, ux, uy, nx, ny, color, label, tip, headA, headB, a: { x: A0.x + nx * off, y: A0.y + ny * off }, b: { x: B0.x + nx * off, y: B0.y + ny * off } };
-            };
-            if (useLP) {
-                const gd = { G1: [-1, 1], G2: [-1, -1], G3: [-1, 1] };
-                // obstacles: rail, wedge, Side lines + their names, G markers + their leader labels, CoG / CCoG signs
-                lpSeg(px(0), py(0), px(spanX * 1.03), py(0), 2);
-                [[apex, g2], [g2, g3], [g3, apex]].forEach(([a, b]) => lpSeg(px(a.x), py(a.y), px(b.x), py(b.y), 2));
-                [[1, 2], [2, 3], [1, 3]].forEach(([a, b]) => {
-                    const A = groupPtsAll['G' + a], B = groupPtsAll['G' + b];
-                    if (!A || !B) return;
-                    lpSeg(px(A.x), py(A.y), px(B.x), py(B.y), 2);
-                    const bx = lpBox('Side ' + a + '-' + b, (px(A.x) + px(B.x)) / 2, (py(A.y) + py(B.y)) / 2 - 5, 'middle', 9);
-                    lpAdd(bx[0], bx[1], bx[2], bx[3]);
-                });
-                Object.entries(groupPtsAll).forEach(([name, pt]) => {
-                    const cx = px(pt.x), cy = py(pt.y), [dx, dy] = gd[name];
-                    const kx = cx + dx * 22, ky = cy + dy * 16, tx = kx + dx * 16;
-                    lpAdd(cx - 4, cy - 4, cx + 4, cy + 4);
-                    lpSeg(cx, cy, kx, ky, 1.5); lpSeg(kx, ky, tx, ky, 1.5);
-                    const bx = lpBox(name, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10);
-                    lpAdd(bx[0], bx[1], bx[2], bx[3]);
-                });
-                lpAdd(ox - 6, oy - 8, ox + axisLen + 16, oy + axisLen + 20);   // origin sign (X / Y arrows)
-                lpAdd(px(cogXmm) - 5, py(cogYmm) - 5, px(cogXmm) + 5, py(cogYmm) + 5);
-                lpAdd(px(ccXmm) - 5, py(ccYmm) - 5, px(ccXmm) + 5, py(ccYmm) + 5);
-                const regCab = (c, sx, sy, color, pcol, tag, key) => {
-                    if (!c) return;
-                    const C0 = { x: px(sx), y: py(sy) }, P0 = { x: px(c.P.x), y: py(c.P.y) }, F0 = { x: px(c.F.x), y: py(c.F.y) };
-                    lpSeg(C0.x, C0.y, P0.x, P0.y, 2); lpSeg(P0.x, P0.y, F0.x, F0.y, 2);
-                    lpAdd(P0.x - 2, P0.y - 2, P0.x + 2, P0.y + 2); lpAdd(F0.x - 4, F0.y - 4, F0.x + 4, F0.y + 4);
-                    const minTxt = c.k.minTxt || caseABFmtNum(Math.round(c.k.min * 10) / 10);
-                    const caseTxt = `${tag}CASE ${c.k.L}${c.k.idx} = ${escapeHtml(c.k.signedTxt)} mm`;
-                    const caseTip = caseTxt + (c.k.solved ? ` (CoG shift solved from the Single table value ${escapeHtml(minTxt)} mm; the CCoG shift ${caseABFmtNum(Math.round(c.k.sheetDim * 10) / 10)} mm would give ${caseABFmtNum(Math.round(c.geoSheet * 10) / 10)} mm)` : '');
-                    const dCase = mkDim(C0, P0, F0, color, caseTxt, caseTip, false, true);
-                    if (!dCase) cabCaseLbls[key] = { txt: caseTxt, x: (C0.x + P0.x) / 2, y: (C0.y + P0.y) / 2 };
-                    [dCase,
-                     mkDim(P0, F0, C0, pcol, escapeHtml(minTxt) + ' mm', `${tag}perpendicular to Side ${c.k.sideA}-${c.k.sideB}: ${escapeHtml(minTxt)} mm (geometry ${caseABFmtNum(Math.round(c.geo * 10) / 10)} mm)`, true, true)
-                    ].forEach(d => { if (d) { cabDims.push(d); lpSeg(d.a.x, d.a.y, d.b.x, d.b.y, 2); } });
-                };
-                regCab(cab, ccXmm, ccYmm, ccColor, hiColPre, '', 'cc');                 // CCoG line (Combined)
-                regCab(cabCog, cogXmm, cogYmm, dimGreen, '#a3e635', 'CoG ', 'cog');     // CoG line (Single)
-            }
-            const mkR = useLP ? MK_R : 3, mkX = useLP ? MK_X : 6;
-            const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
-                `<line x1="${px(cogXmm) - mkX}" y1="${py(cogYmm)}" x2="${px(cogXmm) + mkX}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
-                `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - mkX}" x2="${px(cogXmm)}" y2="${py(cogYmm) + mkX}" stroke="${dimGreen}" stroke-width="1"/>`;
+            const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="3" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
+                `<line x1="${px(cogXmm) - 6}" y1="${py(cogYmm)}" x2="${px(cogXmm) + 6}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
+                `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - 6}" x2="${px(cogXmm)}" y2="${py(cogYmm) + 6}" stroke="${dimGreen}" stroke-width="1"/>`;
             // CoG / CCoG name tags beside the markers (CoG green, CCoG red) so the two points are told apart at a glance
-            let ccSvg = useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
-                : `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
+            // X, Y of CoG / CCoG are measured from the origin point (0,0) (same frame as the dimension stacks); the tag flips to the left near the right edge
+            const tagEnd = xx => xx > svgW - 120;
+            let ccSvg = `<text x="${px(cogXmm) + (tagEnd(px(cogXmm)) ? -9 : 9)}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}" text-anchor="${tagEnd(px(cogXmm)) ? 'end' : 'start'}" paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="3" stroke-linejoin="round"><title>CoG from origin (0,0): X ${fmtMm(cogXmm)} mm, Y ${fmtMm(cogYmm)} mm</title>CoG X ${fmtMm(cogXmm)}, Y ${fmtMm(cogYmm)}</text>`;
             if (showCC) {
-                const r = mkR, xr = mkX, cx = px(ccXmm), cy = py(ccYmm);   // CCoG sign = same radius / crosshair as the CoG sign
+                const r = 7, cx = px(ccXmm), cy = py(ccYmm);
                 ccSvg += `<g>` +
                     `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
                     `<path d="M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
                     `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ccColor}" stroke-width="1.3"/>` +
-                    `<line x1="${cx - xr}" y1="${cy}" x2="${cx + xr}" y2="${cy}" stroke="${ccColor}" stroke-width="1"/>` +
-                    `<line x1="${cx}" y1="${cy - xr}" x2="${cx}" y2="${cy + xr}" stroke="${ccColor}" stroke-width="1"/>` +
-                    (useLP ? lpDraw('CCoG', cx, cy, ccColor, 9) : `<text x="${cx + 10}" y="${cy + 14}" font-size="9" font-weight="700" fill="${ccColor}">CCoG</text>`) +
+                    `<line x1="${cx - r}" y1="${cy}" x2="${cx + r}" y2="${cy}" stroke="${ccColor}" stroke-width="1"/>` +
+                    `<line x1="${cx}" y1="${cy - r}" x2="${cx}" y2="${cy + r}" stroke="${ccColor}" stroke-width="1"/>` +
+                    `<text x="${cx + (tagEnd(cx) ? -10 : 10)}" y="${cy + 14}" font-size="9" font-weight="700" fill="${ccColor}" text-anchor="${tagEnd(cx) ? 'end' : 'start'}" paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="3" stroke-linejoin="round"><title>CCoG from origin (0,0): X ${fmtMm(ccXmm)} mm, Y ${fmtMm(ccYmm)} mm</title>CCoG X ${fmtMm(ccXmm)}, Y ${fmtMm(ccYmm)}</text>` +
                     `</g>`;
             }
             const leaderDir = { LC1: [1, -1], LC2: [-1, -1], LC3: [-1, 1], LC4: [1, 1] };
@@ -10257,55 +9822,39 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (opts && opts.caseAB && showCC) {
                 const halo = 'paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="3" stroke-linejoin="round"';
                 const sideCol = 'var(--text-muted, #94a3b8)', hiCol = '#eab308';
-                const hiColG = '#a3e635';   // CoG (Single) perpendicular / Side highlight
                 const pairs = [[1, 2], [2, 3], [1, 3]];
-                const sameSide = (c, a, b) => !!c && ((c.k.sideA === a && c.k.sideB === b) || (c.k.sideA === b && c.k.sideB === a));
                 pairs.forEach(([a, b]) => {
                     const A = groupPtsAll['G' + a], B = groupPtsAll['G' + b];
                     if (!A || !B) return;
-                    const hi = sameSide(cab, a, b), hiG = sameSide(cabCog, a, b);
+                    const hi = cab && ((cab.k.sideA === a && cab.k.sideB === b) || (cab.k.sideA === b && cab.k.sideB === a));
                     const mx = (px(A.x) + px(B.x)) / 2, my = (py(A.y) + py(B.y)) / 2;
-                    cabSvg += (hiG ? `<line x1="${px(A.x)}" y1="${py(A.y)}" x2="${px(B.x)}" y2="${py(B.y)}" stroke="${hiColG}" stroke-width="7" opacity="0.45"/>` : '') +
-                        (hi ? `<line x1="${px(A.x)}" y1="${py(A.y)}" x2="${px(B.x)}" y2="${py(B.y)}" stroke="${hiCol}" stroke-width="4" opacity="0.85"/>` : '') +
-                        `<text x="${mx}" y="${my - 5}" font-size="9" font-weight="${(hi || hiG) ? 700 : 400}" text-anchor="middle" fill="${hi ? hiCol : hiG ? hiColG : sideCol}" ${halo}>Side ${a}-${b}</text>`;
+                    cabSvg += (hi ? `<line x1="${px(A.x)}" y1="${py(A.y)}" x2="${px(B.x)}" y2="${py(B.y)}" stroke="${hiCol}" stroke-width="4" opacity="0.85"/>` : '') +
+                        `<text x="${mx}" y="${my - 5}" font-size="9" font-weight="${hi ? 700 : 400}" text-anchor="middle" fill="${hi ? hiCol : sideCol}" ${halo}>Side ${a}-${b}</text>`;
                 });
-                // one construction: CASE line from the start point (CCoG or CoG), perpendicular to the Side line, X / Y of its end (relative to CCoG = 0,0)
-                const drawCab = (c, sx, sy, lc, pc, tag, key) => {
-                    if (!c) return '';
-                    const { k, P, F, sa, sb } = c;
-                    const cx = px(sx), cy = py(sy), qx = px(P.x), qy = py(P.y), fx = px(F.x), fy = py(F.y);
+                if (cab) {
+                    const { k, P, F, sa, sb } = cab, lc = ccColor;
+                    const cx = px(ccXmm), cy = py(ccYmm), qx = px(P.x), qy = py(P.y), fx = px(F.x), fy = py(F.y);
+                    const dimShow = caseABFmtNum(Math.round(k.dim * 10) / 10);
                     const minShow = k.minTxt || caseABFmtNum(Math.round(k.min * 10) / 10);
-                    const relTxt = `X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)}`;
-                    // CASE line (start point -> P)
-                    let o = `<line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${lc}" stroke-width="2.2"><title>${tag}CASE ${k.L}${k.idx} = ${escapeHtml(k.signedTxt)} mm${k.solved ? ' (solved from the Single table value)' : ''}</title></line>`;
+                    // CASE line (CCoG -> P)
+                    cabSvg += `<line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${lc}" stroke-width="2.2" marker-end="url(#${arrowId})"><title>CASE ${k.L}${k.idx} = ${dimShow} — virtual CoG from origin (0,0): X ${caseABFmtNum(Math.round(P.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(P.y * 10) / 10)} mm</title></line>` +
+                        `<text x="${(cx + qx) / 2 + (k.dir[1] ? 5 : 0)}" y="${(cy + qy) / 2 + (k.dir[1] ? 3 : -5)}" font-size="10" font-weight="700" fill="${lc}" text-anchor="${k.dir[1] ? 'start' : 'middle'}" ${halo}>CASE ${k.L}${k.idx} = ${dimShow}</text>`;
                     // perpendicular (P -> foot on Side line) + right-angle mark
                     const pl = Math.hypot(fx - qx, fy - qy);
                     if (pl > 0.5) {
                         const ux = (fx - qx) / pl, uy = (fy - qy) / pl;                  // along the perpendicular
-                        const sx2 = (px(sb.x) - px(sa.x)), sy2 = (py(sb.y) - py(sa.y)), sl = Math.hypot(sx2, sy2);
-                        const tx = sx2 / sl, ty = sy2 / sl;                                // along the Side line
+                        const sx = (px(sb.x) - px(sa.x)), sy = (py(sb.y) - py(sa.y)), sl = Math.hypot(sx, sy);
+                        const tx = sx / sl, ty = sy / sl;                                  // along the Side line
                         const m = Math.min(7, pl * 0.4), sgn = (tx * ux + ty * uy) >= 0 ? 1 : -1;   // keep the square inside the angle
                         const ax = fx - ux * m, ay = fy - uy * m;
-                        o += `<line x1="${qx}" y1="${qy}" x2="${fx}" y2="${fy}" stroke="${pc}" stroke-width="2.2"><title>${tag}perpendicular to Side ${k.sideA}-${k.sideB}: ${minShow} mm (geometry ${caseABFmtNum(Math.round(c.geo * 10) / 10)} mm)</title></line>` +
-                            `<polyline points="${ax},${ay} ${ax - sgn * tx * m},${ay - sgn * ty * m} ${fx - sgn * tx * m},${fy - sgn * ty * m}" fill="none" stroke="${pc}" stroke-width="1"/>` +
-                            `<circle cx="${fx}" cy="${fy}" r="2.5" fill="${pc}"/>` +
-                            lpDraw(relTxt, fx, fy, pc, 9, `End of ${tag}perpendicular on Side ${k.sideA}-${k.sideB} — relative to CCoG (0,0): ${relTxt} mm | world: X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)} mm`);
+                        cabSvg += `<line x1="${qx}" y1="${qy}" x2="${fx}" y2="${fy}" stroke="${hiCol}" stroke-width="2.2"><title>Perpendicular to Side ${k.sideA}-${k.sideB}: ${minShow} mm (geometry ${caseABFmtNum(Math.round(cab.geo * 10) / 10)} mm)</title></line>` +
+                            `<polyline points="${ax},${ay} ${ax - sgn * tx * m},${ay - sgn * ty * m} ${fx - sgn * tx * m},${fy - sgn * ty * m}" fill="none" stroke="${hiCol}" stroke-width="1"/>` +
+                            `<circle cx="${fx}" cy="${fy}" r="2.5" fill="${hiCol}"/>` +
+                            `<text x="${fx}" y="${fy + 15}" font-size="9" font-weight="700" fill="${hiCol}" text-anchor="middle" ${halo}><title>End of perpendicular on Side ${k.sideA}-${k.sideB} — from origin (0,0): X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)} mm | relative to CCoG: X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)} mm</title>X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)}</text>` +
+                            `<text x="${(qx + fx) / 2 + 6}" y="${(qy + fy) / 2 + 3}" font-size="10" font-weight="700" fill="${hiCol}" ${halo}>${escapeHtml(minShow)} mm</text>`;
                     }
-                    o += `<circle cx="${qx}" cy="${qy}" r="1.2" fill="${lc}"/>`;
-                    if (cabCaseLbls[key]) o += lpDraw(cabCaseLbls[key].txt, cabCaseLbls[key].x, cabCaseLbls[key].y, lc, 10, cabCaseLbls[key].txt);   // short CASE line: label placed right at the line
-                    return o;
-                };
-                cabSvg += drawCab(cab, ccXmm, ccYmm, ccColor, hiCol, '', 'cc');                    // CCoG (Combined)
-                cabSvg += drawCab(cabCog, cogXmm, cogYmm, dimGreen, hiColG, 'CoG ', 'cog');        // CoG (Single)
-                // the dimensions of both constructions, one common style (no arrow head at the start-point end)
-                cabDims.forEach(d => {
-                    const { A0, B0, ux, uy, nx, ny, a, b, color } = d;
-                    const ah = (t, sg) => `<polygon points="${t.x},${t.y} ${t.x - sg * ux * 6 + nx * 2.2},${t.y - sg * uy * 6 + ny * 2.2} ${t.x - sg * ux * 6 - nx * 2.2},${t.y - sg * uy * 6 - ny * 2.2}" fill="${color}"/>`;
-                    cabSvg += `<g opacity="0.95"><line x1="${A0.x + nx * 3}" y1="${A0.y + ny * 3}" x2="${a.x + nx * 3}" y2="${a.y + ny * 3}" stroke="${color}" stroke-width="0.7"/>` +
-                        `<line x1="${B0.x + nx * 3}" y1="${B0.y + ny * 3}" x2="${b.x + nx * 3}" y2="${b.y + ny * 3}" stroke="${color}" stroke-width="0.7"/>` +
-                        `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" stroke-width="1"/>` + (d.headA ? ah(a, -1) : '') + (d.headB ? ah(b, 1) : '') + `</g>` +
-                        lpDraw(d.label, (a.x + b.x) / 2, (a.y + b.y) / 2, color, 10, d.tip);
-                });
+                    cabSvg += `<circle cx="${qx}" cy="${qy}" r="3" fill="${lc}"/>`;
+                }
             }
 
             // Height fits the content (the plot box is only as tall as maxY*scale; the old fixed 260px box left an empty band under wide trailers)
@@ -10315,8 +9864,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 noLC ? 0 : Math.max(...lcBaseMm.map(lc => py(lc.y) + 26)),
                 showCC ? py(ccYmm) + 22 : 0,
                 cab ? Math.max(py(cab.P.y), py(cab.F.y)) + 22 : 0,
-                cabCog ? Math.max(py(cabCog.P.y), py(cabCog.F.y)) + 22 : 0,
-                useLP ? lpMaxY + 6 : 0,
                 py(cogYmm) + 14
             );
             const svgHFit = Math.ceil(contentBottom + 4);
@@ -12426,12 +11973,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     btn.type = 'button';
                     btn.className = 'tg-tab-btn';
                     btn.setAttribute('role', 'tab');
-                    tgTabFill(doc, btn, t);
+                    btn.textContent = t;
                     btn.onclick = () => tgDispSelectTab(t);
                     bar.appendChild(btn);
                 });
             }
-            Array.from(bar.children).forEach(b => b.classList.toggle('active', b.dataset.title === tgDispActiveTitle));
+            Array.from(bar.children).forEach(b => b.classList.toggle('active', b.textContent === tgDispActiveTitle));
         }
         function tgDispApplyTab() {
             if (!tgDispWin || tgDispWin.closed) return;
@@ -12676,27 +12223,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             { key: 'bottom', colSel: '.tg-modal-col-right', barId: 'tgTabbarBottom', store: TAB_BOTTOM_STORAGE_KEY }
         ];
         function tgTabItems(col) { return col ? Array.from(col.children).filter(el => el.matches(TG_TAB_SEL)) : []; }
-        function tgTabTitle(el) {
-            const h = el.querySelector('.tg-cargo-title');
-            if (!h) return '';
-            const logo = h.querySelector('.tg-caseab-logo');   // the A/B sign chips are not part of the title text (they would read "ABCASE A & CASE B")
-            if (!logo) return h.textContent.trim();
-            const c = h.cloneNode(true);
-            c.querySelectorAll('.tg-caseab-logo').forEach(n => n.remove());
-            return c.textContent.trim();
-        }
-        // Tab label = the card's own header: the A/B sign chips + the title text (CASE A & CASE B), same look in the docked tabs and in the 🗗 Display window
-        function tgTabFill(doc, btn, title) {
-            if (title === 'CASE A & CASE B') {
-                const logo = doc.createElement('span');
-                logo.className = 'tg-caseab-logo';
-                logo.setAttribute('aria-hidden', 'true');
-                logo.innerHTML = '<b class="tg-cab-a">A</b><b class="tg-cab-b">B</b>';
-                btn.appendChild(logo);
-            }
-            btn.appendChild(doc.createTextNode(title));
-            btn.dataset.title = title;
-        }
+        function tgTabTitle(el) { const h = el.querySelector('.tg-cargo-title'); return h ? h.textContent.trim() : ''; }
         function tgIsMinimized(el) { return el.classList.contains('tg-card-minimized') || el.classList.contains('tg-preview-minimized'); }
         function tgSetMinimized(el, min) {
             el.classList.toggle(el.matches('.tg-preview-wrap, .tg-3d-wrap') ? 'tg-preview-minimized' : 'tg-card-minimized', min);
@@ -12738,7 +12265,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     btn.type = 'button';
                     btn.className = 'tg-tab-btn' + (el.matches('.tg-card-concept, .tg-card-concept-bg') ? ' tg-tab-concept' : '');
                     btn.setAttribute('role', 'tab');
-                    tgTabFill(document, btn, tgTabTitle(el));
+                    btn.textContent = tgTabTitle(el);
                     btn.onclick = () => selectTgTab(area.key, el);
                     el._tgTabBtn = btn;
                     bar.appendChild(btn);
