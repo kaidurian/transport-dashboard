@@ -1127,7 +1127,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.183.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.182.3)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8210,9 +8210,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // ---- CASE A / CASE B perpendicular points -> Excel sheet 'CASE_A_B_Graph _Option1'
         //   X (row 9) and Y (row 10) of the foot of the perpendicular on the triangle side:
         //   B9:B10 CoG CASE A, C9:C10 CCoG CASE A, D9:D10 CoG CASE B, E9:E10 CCoG CASE B.
-        //   Frame = same plan frame (mm) as G1-G3 / Display!B16:C16 (CCoG); set CASEAB_GRAPH_REL_CCOG = true for X/Y relative to CCoG (0,0).
+        //   Frame: relative to CCoG (0,0) when CASEAB_GRAPH_REL_CCOG = true (labels show exactly the pushed values), else the plan frame of G1-G3 / Display!B16:C16.
         const CASEAB_GRAPH_SHEET_NAME = 'CASE_A_B_Graph _Option1';
-        const CASEAB_GRAPH_REL_CCOG = false;
+        const CASEAB_GRAPH_REL_CCOG = true;   // X,Y relative to CCoG (0,0) — same as the end-of-perpendicular label; false = plan frame (G1-G3 / Display!B16:C16)
         let tgCaseABGraph = { A: null, B: null };   // filled by renderTgCogEnvPreview (full float precision; rounded only when pushed)
         let tgCaseABGraphPushedSig = '';
         let tgCaseABGraphTimer = null;
@@ -10327,12 +10327,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                                     `<polyline points="${ax},${ay} ${ax - sg * tx * m},${ay - sg * ty * m} ${F2.x - sg * tx * m},${F2.y - sg * ty * m}" fill="none" stroke="${a.col}" stroke-width="1"/>`;
                             }
                             cabSvg += `<circle cx="${F2.x}" cy="${F2.y}" r="2.5" fill="${a.col}"/>`;
-                            // the point the perpendicular starts from, in the same frame, so the two can be compared at a glance
-                            const srcXY = a.name === 'CoG' ? { x: cogXmm, y: cogYmm } : { x: ccXmm, y: ccYmm };
-                            const srcP = caseABGraphPt(srcXY, ccXmm, ccYmm);
-                            cabSvg += lpDraw(`${a.name} X ${f1(srcP.x)}, Y ${f1(srcP.y)}`, a.A.x, a.A.y, a.col, 9, `${a.name} used for the perpendicular: X ${f1(srcP.x)}, Y ${f1(srcP.y)} mm${a.name === 'CoG' ? " (Excel Display!B14:C14)" : " (Excel Display!B16:C16)"} — distance to Side ${k.sideA}-${k.sideB}: ${f1(a.geo)} mm`);
                             const xy = `X ${f1(gp.x)}, Y ${f1(gp.y)}`;
-                            cabSvg += lpDraw(`${a.name}⊥ ${xy}`, F2.x, F2.y, a.col, 9, `${a.name} perpendicular on Side ${k.sideA}-${k.sideB}: ${xy} mm${CASEAB_GRAPH_REL_CCOG ? ' (relative to CCoG)' : ''} — pushed to '${escapeHtml(CASEAB_GRAPH_SHEET_NAME)}'`);
+                            cabSvg += lpDraw(xy, F2.x, F2.y, a.col, 9, `${a.name} perpendicular on Side ${k.sideA}-${k.sideB}: ${xy} mm${CASEAB_GRAPH_REL_CCOG ? ' (relative to CCoG)' : ''} — pushed to '${escapeHtml(CASEAB_GRAPH_SHEET_NAME)}'`);
                             if (a.name === 'CoG' && L2 > 0.5) {
                                 // tipping arm of the CoG line = Excel 'Calculation Sheet Case A&B'!B6 (CASE A) / D6 (CASE B)
                                 const have = arm.v !== null;
