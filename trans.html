@@ -1127,7 +1127,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.182.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.183)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -3860,6 +3860,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // of x/y/z above; not a position.
         let cogCombinedSign = { x: 0, y: 0, z: 0, weight: 0 };
         let cogCombinedSignLoaded = false;
+        // CoG used by the CASE A & CASE B drawings / perpendiculars: Display!B14:C14 (X / Y, mm), pull-only
+        const COG_CASE_RANGE = 'B14:C14';
+        let cogCaseSign = { x: 0, y: 0 };
+        let cogCaseSignLoaded = false;
 
         // Stability angle triangles — see STAB_* constants above.
         // stabilityArm*Mm: Display!B26 (single) / C26 (combined), mm.
@@ -5423,6 +5427,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 logMsg(`❌ ${writeErrors.length} train(s) failed to write: ${detail}`);
                 if (!silent) alert(`${writeErrors.length} train(s) could not be written to ${ADJUST_SHEET_NAME} (see log/console for which and why) — often caused by a merged cell or sheet protection over that train's columns.`);
             }
+            // CASE A / CASE B perpendicular points (CoG, CCoG) -> CASE_A_B_Graph _Option1 (only changed values, or all on a manual push)
+            try { await pushCaseABGraphToExcelImpl({ silent: true, force: !silent }); } catch (e) { console.warn('CASE A/B graph push error', e); }
         }
         // "📤 Push to Excel" button — pulses tgPushWheelsBtn amber while
         // in flight, flashes green/red on settle. See withBtnSyncIndicator.
@@ -6504,14 +6510,24 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         async function pullCogSignsFromExcel() {
             if (!isOfficeInitialized) return;
             try {
-                let rows = null;
+                let rows = null, caseRow = null;
                 await Excel.run(async (context) => {
                     const sheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
                     const range = sheet.getRange(COG_SIGNS_RANGE);
+                    const caseRange = sheet.getRange(COG_CASE_RANGE);
                     range.load('values');
+                    caseRange.load('values');
                     await context.sync();
                     rows = range.values;
+                    caseRow = caseRange.values && caseRange.values[0];
                 });
+                if (caseRow) {
+                    const [kx, ky] = caseRow.map(v => parseFloat(v));
+                    if (Number.isFinite(kx) && Number.isFinite(ky)) {
+                        cogCaseSign = { x: kx, y: ky };
+                        cogCaseSignLoaded = true;
+                    }
+                }
                 if (rows && rows[0]) {
                     const [tx, ty, tz] = rows[0].map(v => parseFloat(v));
                     cogTrailerSign = { x: Number.isFinite(tx) ? tx : 0, y: Number.isFinite(ty) ? ty : 0, z: Number.isFinite(tz) ? tz : 0 };
@@ -6530,6 +6546,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     };
                     cogCombinedSignLoaded = true;
                     try { renderTgCaseABStab(); } catch (e2) { /* CASE A & B card not built yet */ }
+                }
+                if (cogCaseSignLoaded) {
+                    try { renderTgCaseABPreview(); } catch (e2) { /* CASE A & B card not built yet */ }
                 }
             } catch (e) {
                 console.warn(`Could not pull CoG signs from '${DISPLAY_SHEET_NAME}'!${COG_SIGNS_RANGE}`, e);
@@ -8017,10 +8036,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         let tgCaseABRows = [];
         let tgCaseABText = [];   // Excel's displayed text (number formats applied) for the same A7:K49 grid
         // Small CASE A / CASE B tables under the triangles sync with 'Calculation Sheet Case A&B'!A15:I24
-        // (A15:A18 + F15:I18 for CASE A, A21:A24 + F21:I24 for CASE B); grid row r -> index r-15.
+        // (A15:A18 + F15:I18 for CASE A, A21:A24 + F21:I24 for CASE B); grid row r -> index r-CALCAB_FIRST_ROW.
+        // B6 (CASE A) / D6 (CASE B) = tipping arm, drawn on the perpendicular line of the triangle drawing.
         const CALCAB_SHEET_NAME = "Calculation Sheet Case A&B";
-        const CALCAB_RANGE = 'A15:I24';
-        const CALCAB_FIRST_ROW = 15;
+        const CALCAB_RANGE = 'A6:I24';   // row 6 = tipping arm (B6 CASE A, D6 CASE B); rows 15-24 = the small Side / Combined tables
+        const CALCAB_FIRST_ROW = 6;
         let tgCalcABRows = [];
         let tgCalcABText = [];
         let tgCalcABMissing = false;   // true when the sheet could not be found in the workbook
@@ -8069,6 +8089,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             renderTgCogEnvPreview(snap, { targetId: 'tgCaseABPreviewA', noLC: true, idSuffix: 'A', caseAB: 'A' });
             renderTgCogEnvPreview(snap, { targetId: 'tgCaseABPreviewB', noLC: true, idSuffix: 'B', caseAB: 'B' });
             renderTgCaseABStab();   // stability-angle sketches (height = Display!D16) follow the same refresh
+            caseABGraphSchedulePush();   // perpendicular X,Y of CoG / CCoG -> 'CASE_A_B_Graph _Option1' (only when changed)
             try { tgCabApplyViews(); } catch (e) { /* card not built yet */ }
         }
 
@@ -8177,6 +8198,71 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const dir = { 1: [1, 0], 2: [-1, 0], 3: [0, 1], 4: [0, -1] }[idx];   // plan frame: +X = rear, +Y = down on screen
             const sgnTxt = caseABSigned(dimRaw, { 1: 1, 2: -1, 3: -1, 4: 1 }[idx], caseABTxt(longIdx ? cfg.longRow : cfg.transRow, 'I')).replace(/\s*mm\s*$/i, '');   // same signed text as the CASE label in the picture (e.g. -103)
             return { L, idx, dir, dim: Math.abs(dimRaw), signedTxt: sgnTxt, min: best.v, minTxt: calcABTxt(best.r, best.c), sideA, sideB, sideLabel: lab };
+        }
+        // Tipping arm of the CoG perpendicular, pulled from 'Calculation Sheet Case A&B': B6 = CASE A, D6 = CASE B
+        const CASEAB_ARM_COL = { A: 'B', B: 'D' };
+        function caseABArm(L) {
+            const col = CASEAB_ARM_COL[L];
+            const raw = calcABCell(6, col);
+            const n = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(',', '.'));
+            return { cell: col + '6', v: isFinite(n) ? Math.abs(n) : null, txt: calcABTxt(6, col).replace(/\s*mm\s*$/i, '').replace(/^[-\u2212]\s*/, '') };
+        }
+        // ---- CASE A / CASE B perpendicular points -> Excel sheet 'CASE_A_B_Graph _Option1'
+        //   X (row 9) and Y (row 10) of the foot of the perpendicular on the triangle side:
+        //   B9:B10 CoG CASE A, C9:C10 CCoG CASE A, D9:D10 CoG CASE B, E9:E10 CCoG CASE B.
+        //   Frame = same plan frame (mm) as G1-G3 / Display!B16:C16 (CCoG); set CASEAB_GRAPH_REL_CCOG = true for X/Y relative to CCoG (0,0).
+        const CASEAB_GRAPH_SHEET_NAME = 'CASE_A_B_Graph _Option1';
+        const CASEAB_GRAPH_REL_CCOG = false;
+        let tgCaseABGraph = { A: null, B: null };   // filled by renderTgCogEnvPreview (full float precision; rounded only when pushed)
+        let tgCaseABGraphPushedSig = '';
+        let tgCaseABGraphTimer = null;
+        function caseABGraphPt(F, ccXmm, ccYmm) {
+            return CASEAB_GRAPH_REL_CCOG ? { x: F.x - ccXmm, y: F.y - ccYmm } : { x: F.x, y: F.y };
+        }
+        function caseABGraphSig() {
+            const r3 = v => Math.round(v * 1000) / 1000;
+            const one = g => g ? [r3(g.cog.x), r3(g.cog.y), r3(g.cc.x), r3(g.cc.y)] : null;
+            return JSON.stringify([one(tgCaseABGraph.A), one(tgCaseABGraph.B)]);
+        }
+        function caseABGraphSchedulePush() {
+            if (!isOfficeInitialized || !autoSyncEnabled) return;
+            if (caseABGraphSig() === tgCaseABGraphPushedSig) return;
+            if (tgCaseABGraphTimer) clearTimeout(tgCaseABGraphTimer);
+            tgCaseABGraphTimer = setTimeout(() => {
+                tgCaseABGraphTimer = null;
+                pushCaseABGraphToExcelImpl({ silent: true }).catch(e => console.warn('CASE A/B graph push error', e));
+            }, 600);
+        }
+        async function pushCaseABGraphToExcelImpl(opts) {
+            const silent = !!(opts && opts.silent), force = !!(opts && opts.force);
+            if (!isOfficeInitialized) {
+                if (!silent) alert('Not connected to Excel — open this add-in inside an Excel workbook to push the CASE A & CASE B graph points.');
+                return;
+            }
+            const g = tgCaseABGraph;
+            if (!g.A && !g.B) return;   // nothing computed yet (CCoG / groups / Excel table not pulled)
+            const sig = caseABGraphSig();
+            if (!force && sig === tgCaseABGraphPushedSig) return;
+            const r3 = v => Math.round(v * 1000) / 1000;
+            try {
+                await Excel.run(async (context) => {
+                    // match 'CASE_A_B_Graph _Option1' ignoring spaces / underscores / case (the workbook's tab may differ slightly)
+                    const norm = n => String(n).replace(/[\s_]+/g, '').toLowerCase();
+                    const sheets = context.workbook.worksheets;
+                    sheets.load('items/name');
+                    await context.sync();
+                    const hit = sheets.items.find(w => norm(w.name) === norm(CASEAB_GRAPH_SHEET_NAME));
+                    if (!hit) throw new Error('Sheet not found: ' + CASEAB_GRAPH_SHEET_NAME);
+                    if (g.A) hit.getRange('B9:C10').values = [[r3(g.A.cog.x), r3(g.A.cc.x)], [r3(g.A.cog.y), r3(g.A.cc.y)]];
+                    if (g.B) hit.getRange('D9:E10').values = [[r3(g.B.cog.x), r3(g.B.cc.x)], [r3(g.B.cog.y), r3(g.B.cc.y)]];
+                    await context.sync();
+                });
+                tgCaseABGraphPushedSig = sig;
+                logMsg(`📤 Pushed CASE A / CASE B perpendicular X,Y (CoG, CCoG) to '${CASEAB_GRAPH_SHEET_NAME}'!B9:E10.`);
+            } catch (e) {
+                console.warn(`Could not write CASE A/B graph points to '${CASEAB_GRAPH_SHEET_NAME}'`, e);
+                if (!silent) alert(`Could not write to sheet "${CASEAB_GRAPH_SHEET_NAME}". Make sure it exists.`);
+            }
         }
         // ---- CASE A / CASE B stability angle (same sketch as the FYI picture): CCoG on top, vertical line to the ground,
         // inclined line to the tipping point, angle between them, height (right) and base (below the ground line).
@@ -8482,7 +8568,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     if (!hit) throw new Error('Sheet not found: ' + CASEAB_SHEET_NAME);
                     const range = hit.getRange(CASEAB_RANGE);
                     range.load('values,text');
-                    // 'Calculation Sheet Case A&B'!A15:I24 feeds the small tables under the CASE A / CASE B triangles
+                    // 'Calculation Sheet Case A&B'!A6:I24 feeds the tipping arm (B6 / D6) and the small tables under the CASE A / CASE B triangles
                     const cHit = sheets.items.find(w => norm(w.name) === norm(CALCAB_SHEET_NAME));
                     let cRange = null;
                     if (cHit) { cRange = cHit.getRange(CALCAB_RANGE); cRange.load('values,text'); } else { cMissing = true; }
@@ -9840,7 +9926,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
 
             // ---- Convert to millimeters (see comment above) ----
-            const cogXmm = cogX * 1000, cogYmm = cogY * 1000;
+            // CASE A & CASE B drawings: the CoG is Display!B14:C14 (mm); every other drawing keeps the Cargo CoG
+            const useCaseCog = !!(opts && opts.caseAB && cogCaseSignLoaded);
+            const cogXmm = useCaseCog ? cogCaseSign.x : cogX * 1000, cogYmm = useCaseCog ? cogCaseSign.y : cogY * 1000;
             const envXmm = envX * 1000, envYmm = envY * 1000;
             const halfEnvXmm = envXmm / 2, halfEnvYmm = envYmm / 2;
             const lcBaseMm = lcBase.map(lc => ({ name: lc.name, x: lc.x * 1000, y: lc.y * 1000 }));
@@ -9874,13 +9962,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const dx = sb.x - sa.x, dy = sb.y - sa.y, len = Math.hypot(dx, dy);
                     const nx = -dy / len, ny = dx / len;
                     const sd = (P.x - sa.x) * nx + (P.y - sa.y) * ny;   // signed distance P -> Side line
-                    cab = { k, sa, sb, P, F: { x: P.x - sd * nx, y: P.y - sd * ny }, geo: Math.abs(sd) };
+                    // feet of the perpendiculars from CoG and from CCoG on the same Side line (tipping arms)
+                    const foot = pt => { const d = (pt.x - sa.x) * nx + (pt.y - sa.y) * ny; return { x: pt.x - d * nx, y: pt.y - d * ny, d: Math.abs(d) }; };
+                    cab = { k, sa, sb, P, F: { x: P.x - sd * nx, y: P.y - sd * ny }, geo: Math.abs(sd), nx, ny,
+                            FC: foot({ x: cogXmm, y: cogYmm }), FK: foot({ x: ccXmm, y: ccYmm }) };
                 }
+            }
+            if (opts && opts.caseAB) {
+                tgCaseABGraph[opts.caseAB] = cab ? { cog: caseABGraphPt(cab.FC, ccXmm, ccYmm), cc: caseABGraphPt(cab.FK, ccXmm, ccYmm) } : null;
             }
             const padL = 90, padT = 78, padR = 90, padB = 55;
             const plotW = 560, plotH = 260;
-            const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, showCC ? ccXmm : 0, cab ? Math.max(cab.P.x, cab.F.x) : 0, 1);
-            const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, showCC ? ccYmm : 0, cab ? Math.max(cab.P.y, cab.F.y) : 0, 1);
+            const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, showCC ? ccXmm : 0, cab ? Math.max(cab.P.x, cab.F.x, cab.FC.x, cab.FK.x) : 0, 1);
+            const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, showCC ? ccYmm : 0, cab ? Math.max(cab.P.y, cab.F.y, cab.FC.y, cab.FK.y) : 0, 1);
             const scale = Math.min(plotW / spanX, plotH / maxY);
             const svgW = padL + plotW + padR, svgH = padT + plotH + padB;
             const ox = padL, oy = padT; // world origin (0,0) on screen — top-left, Y positive downward
@@ -10096,6 +10190,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const C0 = { x: px(ccXmm), y: py(ccYmm) }, P0 = { x: px(cab.P.x), y: py(cab.P.y) }, F0 = { x: px(cab.F.x), y: py(cab.F.y) };
                     lpSeg(C0.x, C0.y, P0.x, P0.y, 2); lpSeg(P0.x, P0.y, F0.x, F0.y, 2);
                     lpAdd(P0.x - 2, P0.y - 2, P0.x + 2, P0.y + 2); lpAdd(F0.x - 4, F0.y - 4, F0.x + 4, F0.y + 4);
+                    const GC0 = { x: px(cogXmm), y: py(cogYmm) }, FC0 = { x: px(cab.FC.x), y: py(cab.FC.y) }, FK0 = { x: px(cab.FK.x), y: py(cab.FK.y) };
+                    lpSeg(GC0.x, GC0.y, FC0.x, FC0.y, 2); lpSeg(C0.x, C0.y, FK0.x, FK0.y, 2);
+                    lpAdd(FC0.x - 4, FC0.y - 4, FC0.x + 4, FC0.y + 4); lpAdd(FK0.x - 4, FK0.y - 4, FK0.x + 4, FK0.y + 4);
                     const dimTxt = caseABFmtNum(Math.round(cab.k.dim * 10) / 10);
                     const minTxt = cab.k.minTxt || caseABFmtNum(Math.round(cab.k.min * 10) / 10);
                     const dc = 'var(--text-main, #e2e8f0)';
@@ -10203,6 +10300,41 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             lpDraw(`X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)}`, fx, fy, hiCol, 9, `End of perpendicular on Side ${k.sideA}-${k.sideB} — relative to CCoG (0,0): X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)} mm | world: X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)} mm`) +
                             '';
                     }
+                    // perpendiculars CoG -> side and CCoG -> side, both perpendicular to the same Side line; X,Y of the feet = the values pushed to Excel
+                    {
+                        const g1c = dimGreen, g2c = lc;
+                        const sx = px(sb.x) - px(sa.x), sy = py(sb.y) - py(sa.y), sl = Math.hypot(sx, sy) || 1, tx = sx / sl, ty = sy / sl;
+                        const arm = caseABArm(k.L);
+                        const f1 = v => caseABFmtNum(Math.round(v * 10) / 10);
+                        const arms = [
+                            { name: 'CoG', col: g1c, A: { x: px(cogXmm), y: py(cogYmm) }, Fp: cab.FC, geo: cab.FC.d, dash: '5 3' },
+                            { name: 'CCoG', col: g2c, A: { x: cx, y: cy }, Fp: cab.FK, geo: cab.FK.d, dash: '' }
+                        ];
+                        arms.forEach(a => {
+                            const F2 = { x: px(a.Fp.x), y: py(a.Fp.y) };
+                            const L2 = Math.hypot(F2.x - a.A.x, F2.y - a.A.y);
+                            const gp = caseABGraphPt(a.Fp, ccXmm, ccYmm);
+                            if (L2 > 0.5) {
+                                const ux = (F2.x - a.A.x) / L2, uy = (F2.y - a.A.y) / L2;
+                                const m = Math.min(6, L2 * 0.4), sg = (tx * ux + ty * uy) >= 0 ? 1 : -1;
+                                const ax = F2.x - ux * m, ay = F2.y - uy * m;
+                                cabSvg += `<line x1="${a.A.x}" y1="${a.A.y}" x2="${F2.x}" y2="${F2.y}" stroke="${a.col}" stroke-width="1.6"${a.dash ? ` stroke-dasharray="${a.dash}"` : ''}><title>${a.name} → Side ${k.sideA}-${k.sideB} (perpendicular, tipping arm)</title></line>` +
+                                    `<polyline points="${ax},${ay} ${ax - sg * tx * m},${ay - sg * ty * m} ${F2.x - sg * tx * m},${F2.y - sg * ty * m}" fill="none" stroke="${a.col}" stroke-width="1"/>`;
+                            }
+                            cabSvg += `<circle cx="${F2.x}" cy="${F2.y}" r="2.5" fill="${a.col}"/>`;
+                            const xy = `X ${f1(gp.x)}, Y ${f1(gp.y)}`;
+                            cabSvg += lpDraw(`${a.name}⊥ ${xy}`, F2.x, F2.y, a.col, 9, `${a.name} perpendicular on Side ${k.sideA}-${k.sideB}: ${xy} mm${CASEAB_GRAPH_REL_CCOG ? ' (relative to CCoG)' : ''} — pushed to '${escapeHtml(CASEAB_GRAPH_SHEET_NAME)}'`);
+                            if (a.name === 'CoG' && L2 > 0.5) {
+                                // tipping arm of the CoG line = Excel 'Calculation Sheet Case A&B'!B6 (CASE A) / D6 (CASE B)
+                                const have = arm.v !== null;
+                                const diff = have ? Math.abs(arm.v - a.geo) : 0;
+                                const armTxt = have ? (arm.txt || f1(arm.v)) : f1(a.geo);
+                                const warn = have && diff > 1;
+                                const tip = have ? `Tipping arm = '${escapeHtml(CALCAB_SHEET_NAME)}'!${arm.cell} = ${armTxt} mm; drawn perpendicular distance ${f1(a.geo)} mm${warn ? ' — differs from Excel by ' + f1(diff) + ' mm' : ''}` : `Tipping arm ('${escapeHtml(CALCAB_SHEET_NAME)}'!${arm.cell} not available) — drawn perpendicular distance ${f1(a.geo)} mm`;
+                                cabSvg += lpDraw(`Tipping arm ${armTxt} mm${warn ? ' ⚠' : ''}`, (a.A.x + F2.x) / 2, (a.A.y + F2.y) / 2, a.col, 9, tip);
+                            }
+                        });
+                    }
                     cabSvg += `<circle cx="${qx}" cy="${qy}" r="1.2" fill="${lc}"/>`;
                     if (cabCaseLbl) cabSvg += lpDraw(cabCaseLbl.txt, cabCaseLbl.x, cabCaseLbl.y, lc, 10, cabCaseLbl.txt);   // short CASE line: label placed right at the line
                     // the three dimensions, one common style (no arrow head at the CCoG end)
@@ -10223,7 +10355,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 noLC ? 0 : envCallY + 18,
                 noLC ? 0 : Math.max(...lcBaseMm.map(lc => py(lc.y) + 26)),
                 showCC ? py(ccYmm) + 22 : 0,
-                cab ? Math.max(py(cab.P.y), py(cab.F.y)) + 22 : 0,
+                cab ? Math.max(py(cab.P.y), py(cab.F.y), py(cab.FC.y), py(cab.FK.y)) + 22 : 0,
                 useLP ? lpMaxY + 6 : 0,
                 py(cogYmm) + 14
             );
@@ -12408,7 +12540,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             root.scrollTop = rsy;
             doc.body.className = document.body.className;
             // 2D drawing: same mouse controls as the docked view (left/middle drag = pan, wheel = zoom,
-            // double middle-click = reset) with the display window's own zoom level and scroll position.
+            // double left-click = reset) with the display window's own zoom level and scroll position.
             const w2 = root.querySelector('#tgPreview');
             if (w2) {
                 const inner = w2.querySelector('#tgPreviewScaleInner');
@@ -13156,12 +13288,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // Middle-click already pans; double-middle-click resets zoom
             // (AutoCAD "Zoom Extents" equivalent — quick way back to 1x
             // after scrolling deep in/out).
+            // Double-click with the LEFT (or middle) button anywhere on the drawing = back to default view (zoom 1x + scroll 0,0).
+            // Double-clicks on interactive items (lashing signs, inputs, buttons ...) are left alone.
             wrap.addEventListener('dblclick', (e) => {
-                if (e.button !== 1) return;
+                if (e.button !== 0 && e.button !== 1) return;
+                if (e.target && e.target.closest && e.target.closest('input,select,textarea,button,a,label,[onclick]')) return;
                 const inner = wrap.querySelector('#tgPreviewScaleInner');
                 if (!inner) return;
                 zs.zoom = 1;
                 inner.style.width = (Math.max(1, tgPreviewScaleMult || 1) * 100) + '%';
+                wrap.scrollLeft = 0; wrap.scrollTop = 0;
+                // the pan may be done by a scrolling ancestor (task pane / display window): bring it back horizontally too
+                const win = wrap.ownerDocument.defaultView || window;
+                for (let n = wrap.parentElement; n && n !== wrap.ownerDocument.body && n !== wrap.ownerDocument.documentElement; n = n.parentElement) {
+                    if (/(auto|scroll)/.test(win.getComputedStyle(n).overflowX) && n.scrollLeft) n.scrollLeft = 0;
+                }
+                if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (err) { /* ignore */ } }
             });
         }
         function tgApplyFontScale(markup, k) {
@@ -18853,6 +18995,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 cogTrailerSign: cogTrailerSign,
                 cogTrailerSignLoaded: cogTrailerSignLoaded,
                 cogCombinedSign: cogCombinedSign,
+                cogCaseSign: cogCaseSign,
+                cogCaseSignLoaded: cogCaseSignLoaded,
                 cogCombinedSignLoaded: cogCombinedSignLoaded,
                 // Stability-arm view readouts — pull-only, gate whether
                 // that view has anything to draw (see stabHasData in
@@ -18986,6 +19130,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         });
                     }
                     if (typeof state.cogCombinedSignLoaded === 'boolean') cogCombinedSignLoaded = state.cogCombinedSignLoaded;
+                    if (state.cogCaseSign && Number.isFinite(parseFloat(state.cogCaseSign.x)) && Number.isFinite(parseFloat(state.cogCaseSign.y))) cogCaseSign = { x: parseFloat(state.cogCaseSign.x), y: parseFloat(state.cogCaseSign.y) };
+                    if (typeof state.cogCaseSignLoaded === 'boolean') cogCaseSignLoaded = state.cogCaseSignLoaded;
                     if (Number.isFinite(parseFloat(state.stabilityArmSingleMm))) stabilityArmSingleMm = parseFloat(state.stabilityArmSingleMm);
                     if (Number.isFinite(parseFloat(state.stabilityArmCombinedMm))) stabilityArmCombinedMm = parseFloat(state.stabilityArmCombinedMm);
                     if (typeof state.stabilityArmLoaded === 'boolean') stabilityArmLoaded = state.stabilityArmLoaded;
