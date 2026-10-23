@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.183.5)</h1>
+            <h1>🚂 Transport Dashboard (Rev.184.6)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1692,7 +1692,7 @@
                             <strong>CASE A</strong> / <strong>CASE B</strong> blocks on top: the load-case picture (A1 = +I17, A2 = −I17, A3 = −I25, A4 = +I25;
                             B1 = +I39, B2 = −I39, B3 = −I46, B4 = +I46) , the group triangle, the <strong>stability angle</strong> sketch and, under it, a small table synced with Excel <strong>"Calculation Sheet Case A&amp;B"</strong>
                             (A15:I18 / A21:I24): <strong>Single A1–A4</strong> (B16:E18 / B22:E24) and <strong>Combined A1–A4</strong> (F16:I18 / F22:I24), the smallest value of each block highlighted.
-                            The Combined minimum drives the line from the <strong>CCoG</strong> and the Single minimum the line from the <strong>CoG</strong>, each down to its perpendicular on the triangle side; the X, Y of both perpendicular ends (relative to CCoG = 0,0) are pushed to 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B).
+                            The Combined minimum drives the line from the <strong>CCoG</strong> and the Single minimum the line from the <strong>CoG</strong>, each down to its perpendicular on the triangle side; the X, Y of both perpendicular ends (measured from the drawing origin 0,0, shown as dimensions like the others) are pushed to 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B).
                             (OK / NOT OK results are shown green / red, like the other result cards). Under it come the <strong>CASE A (Section 10.5.3.16)</strong> / <strong>CASE B (Section 10.5.3.17)</strong> tables of 'Check CASE A &amp; CASE B'. Zoom / pan on the drawings: mouse wheel = zoom, middle or left button drag = move, double-click = reset (same as the 2D drawing).
                             The CASE label (and its arrow) whose value feeds the group triangle is highlighted in the same colour as its CASE line in the triangle. The <strong>stability angle</strong> sketch shows the height (Display!D16), the base and the angle (A=12.3°, green when OK / red when NOT OK, like the section table)
                             ('Check CASE A &amp; CASE B'!I27 / I28 for CASE A, I48 / I49 for CASE B).
@@ -1705,7 +1705,7 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Check CASE A &amp; CASE B'!A7:K49 and the CASE A / CASE B tables from 'Calculation Sheet Case A&amp;B'!A15:I24"
                                     onclick="pullCaseABFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgPushCaseABXYBtn" title="Push the X, Y of the CoG / CCoG perpendicular ends (relative to CCoG 0,0) to Excel 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B; row 3 = X, row 4 = Y)"
+                            <button type="button" class="tg-add-train-btn" id="tgPushCaseABXYBtn" title="Push the X, Y of the CoG / CCoG perpendicular ends (from the origin 0,0) to Excel 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B; row 3 = X, row 4 = Y)"
                                     onclick="pushCaseABXYToExcel()">📤 Push X, Y to Excel</button>
                         </div>
                     </div>
@@ -8029,7 +8029,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         let tgCalcABRows = [];
         let tgCalcABText = [];
         let tgCalcABMissing = false;   // true when the sheet could not be found in the workbook
-        // X, Y of the end of each perpendicular (relative to CCoG = 0,0) per case -> 'Calculation Sheet Case A&B'!H3:K4
+        // X, Y of the end of each perpendicular (from the drawing origin 0,0, same frame as the other dimensions) per case -> 'Calculation Sheet Case A&B'!H3:K4
         //   H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B (row 3 = X, row 4 = Y)
         const CASEAB_XY_RANGE = 'H3:K4';
         let tgCabXY = {};
@@ -8534,7 +8534,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             }
         }
 
-        // Pushes the X, Y of the perpendicular ends (CoG = Single, CCoG = Combined; relative to CCoG 0,0) to
+        // Pushes the X, Y of the perpendicular ends (CoG = Single, CCoG = Combined; from origin 0,0) to
         // 'Calculation Sheet Case A&B'!H3:K4. Only columns that have a construction are written.
         const pushCaseABXYToExcel = withBtnSyncIndicator('tgPushCaseABXYBtn', pushCaseABXYToExcelImpl);
         async function pushCaseABXYToExcelImpl(opts) {
@@ -9954,13 +9954,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             if (opts && opts.caseAB && showCC) {
                 cab = mkCab(caseABConstruction(opts.caseAB, 'combined'), ccXmm, ccYmm);
                 cabCog = mkCab(caseABConstruction(opts.caseAB, 'single'), cogXmm, cogYmm, true);
-                // end of each perpendicular relative to CCoG (0,0), full precision (rounded only when shown / pushed to Excel)
+                // end of each perpendicular measured from the drawing origin (0,0), full precision (rounded only when shown / pushed to Excel)
                 tgCabXY[opts.caseAB] = {
-                    cog: cabCog ? { x: cabCog.F.x - ccXmm, y: cabCog.F.y - ccYmm } : null,
-                    ccog: cab ? { x: cab.F.x - ccXmm, y: cab.F.y - ccYmm } : null
+                    cog: cabCog ? { x: cabCog.F.x, y: cabCog.F.y } : null,
+                    ccog: cab ? { x: cab.F.x, y: cab.F.y } : null
                 };
             }
-            const padL = 90, padT = 78, padR = 90, padB = 55;
+            const cabEndCol = '#eab308', cabEndColG = '#a3e635';   // perpendicular-end colors (CCoG = Combined / CoG = Single), same as the perpendicular lines
+            const nCabEnd = (cab ? 1 : 0) + (cabCog ? 1 : 0);        // extra dimension rows: X / Y of each perpendicular end from 0,0
+            const padL = 90 + nCabEnd * 18, padT = 78 + nCabEnd * 13, padR = 90, padB = 55;
             const plotW = 560, plotH = 260;
             const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, showCC ? ccXmm : 0, cab ? Math.max(cab.P.x, cab.F.x) : 0, cabCog ? Math.max(cabCog.P.x, cabCog.F.x) : 0, 1);
             const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, showCC ? ccYmm : 0, cab ? Math.max(cab.P.y, cab.F.y) : 0, cabCog ? Math.max(cabCog.P.y, cabCog.F.y) : 0, 1);
@@ -10017,6 +10019,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ...(noLC ? [] : [{ v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)`, color: lcColors.LC1 }]),
                 { v: Math.max(g2.x, g3.x), label: `${fmtMm(Math.max(g2.x, g3.x))} (G2, G3)`, color: dimBlue },
                 ...(showCC ? [{ v: ccXmm, label: `${fmtMm(ccXmm)} (CCoG)`, color: ccColor }] : []),
+                ...(cab ? [{ v: cab.F.x, label: `${caseABFmtNum(Math.round(cab.F.x * 10) / 10)} (CCoG end)`, color: cabEndCol }] : []),
+                ...(cabCog ? [{ v: cabCog.F.x, label: `${caseABFmtNum(Math.round(cabCog.F.x * 10) / 10)} (CoG end)`, color: cabEndColG }] : []),
             ].sort((a, b) => a.v - b.v);
             let hDimSvg = '';
             hStack.forEach((d, i) => {
@@ -10040,6 +10044,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 { v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)`, color: dimGreen },
                 ...(noLC ? [] : [{ v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)`, color: lcColors.LC3 }]),
                 ...(showCC ? [{ v: ccYmm, label: `${fmtMm(ccYmm)} (CCoG)`, color: ccColor }] : []),
+                ...(cab ? [{ v: cab.F.y, label: `${caseABFmtNum(Math.round(cab.F.y * 10) / 10)} (CCoG end)`, color: cabEndCol }] : []),
+                ...(cabCog ? [{ v: cabCog.F.y, label: `${caseABFmtNum(Math.round(cabCog.F.y * 10) / 10)} (CoG end)`, color: cabEndColG }] : []),
             ].sort((a, b) => a.v - b.v);
             let vDimSvg = '';
             vStack.forEach((d, i) => {
@@ -10269,13 +10275,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         (hi ? `<line x1="${px(A.x)}" y1="${py(A.y)}" x2="${px(B.x)}" y2="${py(B.y)}" stroke="${hiCol}" stroke-width="4" opacity="0.85"/>` : '') +
                         `<text x="${mx}" y="${my - 5}" font-size="9" font-weight="${(hi || hiG) ? 700 : 400}" text-anchor="middle" fill="${hi ? hiCol : hiG ? hiColG : sideCol}" ${halo}>Side ${a}-${b}</text>`;
                 });
-                // one construction: CASE line from the start point (CCoG or CoG), perpendicular to the Side line, X / Y of its end (relative to CCoG = 0,0)
+                // one construction: CASE line from the start point (CCoG or CoG), perpendicular to the Side line, X / Y of its end (from the origin 0,0)
                 const drawCab = (c, sx, sy, lc, pc, tag, key) => {
                     if (!c) return '';
                     const { k, P, F, sa, sb } = c;
                     const cx = px(sx), cy = py(sy), qx = px(P.x), qy = py(P.y), fx = px(F.x), fy = py(F.y);
                     const minShow = k.minTxt || caseABFmtNum(Math.round(k.min * 10) / 10);
-                    const relTxt = `X ${caseABFmtNum(Math.round((F.x - ccXmm) * 10) / 10)}, Y ${caseABFmtNum(Math.round((F.y - ccYmm) * 10) / 10)}`;
+                    const relTxt = `X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)}`;
                     // CASE line (start point -> P)
                     let o = `<line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${lc}" stroke-width="2.2"><title>${tag}CASE ${k.L}${k.idx} = ${escapeHtml(k.signedTxt)} mm${k.solved ? ' (solved from the Single table value)' : ''}</title></line>`;
                     // perpendicular (P -> foot on Side line) + right-angle mark
@@ -10289,7 +10295,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         o += `<line x1="${qx}" y1="${qy}" x2="${fx}" y2="${fy}" stroke="${pc}" stroke-width="2.2"><title>${tag}perpendicular to Side ${k.sideA}-${k.sideB}: ${minShow} mm (geometry ${caseABFmtNum(Math.round(c.geo * 10) / 10)} mm)</title></line>` +
                             `<polyline points="${ax},${ay} ${ax - sgn * tx * m},${ay - sgn * ty * m} ${fx - sgn * tx * m},${fy - sgn * ty * m}" fill="none" stroke="${pc}" stroke-width="1"/>` +
                             `<circle cx="${fx}" cy="${fy}" r="2.5" fill="${pc}"/>` +
-                            lpDraw(relTxt, fx, fy, pc, 9, `End of ${tag}perpendicular on Side ${k.sideA}-${k.sideB} — relative to CCoG (0,0): ${relTxt} mm | world: X ${caseABFmtNum(Math.round(F.x * 10) / 10)}, Y ${caseABFmtNum(Math.round(F.y * 10) / 10)} mm`);
+                            lpDraw(relTxt, fx, fy, pc, 9, `End of ${tag}perpendicular on Side ${k.sideA}-${k.sideB} — from origin (0,0): ${relTxt} mm`);
                     }
                     o += `<circle cx="${qx}" cy="${qy}" r="1.2" fill="${lc}"/>`;
                     if (cabCaseLbls[key]) o += lpDraw(cabCaseLbls[key].txt, cabCaseLbls[key].x, cabCaseLbls[key].y, lc, 10, cabCaseLbls[key].txt);   // short CASE line: label placed right at the line
