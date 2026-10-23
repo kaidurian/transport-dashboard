@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.183.8)</h1>
+            <h1>🚂 Transport Dashboard (Rev.184)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1692,7 +1692,7 @@
                             <strong>CASE A</strong> / <strong>CASE B</strong> blocks on top: the load-case picture (A1 = +I17, A2 = −I17, A3 = −I25, A4 = +I25;
                             B1 = +I39, B2 = −I39, B3 = −I46, B4 = +I46) , the group triangle, the <strong>stability angle</strong> sketch and, under it, a small table synced with Excel <strong>"Calculation Sheet Case A&amp;B"</strong>
                             (A15:I18 / A21:I24): <strong>Single A1–A4</strong> (B16:E18 / B22:E24) and <strong>Combined A1–A4</strong> (F16:I18 / F22:I24), the smallest value of each block highlighted.
-                            The Combined minimum drives the line from the <strong>CCoG</strong> and the Single minimum the line from the <strong>CoG</strong>, each down to its perpendicular on the triangle side; the X, Y of both perpendicular ends (measured from the drawing origin 0,0, shown as dimensions like the others) are pushed to 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B).
+                            The Combined minimum drives the line from the <strong>CCoG</strong> and the Single minimum the line from the <strong>CoG</strong>, each down to its perpendicular on the triangle side; the X, Y of both perpendicular ends (measured from the drawing origin 0,0, shown as dimensions like the others) are pushed to 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B). The load case X, Y of the minimum line (end of the CASE line from CoG / CCoG, also from the origin 0,0) are pushed to H5:K6 (row 5 = X, row 6 = Y, same column mapping).
                             (OK / NOT OK results are shown green / red, like the other result cards). Under it come the <strong>CASE A (Section 10.5.3.16)</strong> / <strong>CASE B (Section 10.5.3.17)</strong> tables of 'Check CASE A &amp; CASE B'. Zoom / pan on the drawings: mouse wheel = zoom, middle or left button drag = move, double-click = reset (same as the 2D drawing).
                             The CASE label (and its arrow) whose value feeds the group triangle is highlighted in the same colour as its CASE line in the triangle. The <strong>stability angle</strong> sketch shows the height (Display!D16), the base and the angle (A=12.3°, green when OK / red when NOT OK, like the section table)
                             ('Check CASE A &amp; CASE B'!I27 / I28 for CASE A, I48 / I49 for CASE B).
@@ -1705,7 +1705,7 @@
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull the table from Excel 'Check CASE A &amp; CASE B'!A7:K49 and the CASE A / CASE B tables from 'Calculation Sheet Case A&amp;B'!A15:I24"
                                     onclick="pullCaseABFromExcel()">⇩ Refresh from Excel</button>
-                            <button type="button" class="tg-add-train-btn" id="tgPushCaseABXYBtn" title="Push the X, Y of the CoG / CCoG perpendicular ends (from the origin 0,0) to Excel 'Calculation Sheet Case A&amp;B'!H3:K4 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B; row 3 = X, row 4 = Y)"
+                            <button type="button" class="tg-add-train-btn" id="tgPushCaseABXYBtn" title="Push the X, Y of the CoG / CCoG perpendicular ends (from the origin 0,0) to Excel 'Calculation Sheet Case A&amp;B'!H3:K4, and the load case X, Y of the minimum line (from the origin 0,0) to H5:K6 (H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B; rows 3/5 = X, rows 4/6 = Y)"
                                     onclick="pushCaseABXYToExcel()">📤 Push X, Y to Excel</button>
                         </div>
                     </div>
@@ -8031,7 +8031,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         let tgCalcABMissing = false;   // true when the sheet could not be found in the workbook
         // X, Y of the end of each perpendicular (from the drawing origin 0,0, same frame as the other dimensions) per case -> 'Calculation Sheet Case A&B'!H3:K4
         //   H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B (row 3 = X, row 4 = Y)
+        //   Load case X, Y of the minimum line (end of the CASE line from CoG / CCoG, from the drawing origin 0,0) -> H5:K6 (row 5 = X, row 6 = Y)
         const CASEAB_XY_RANGE = 'H3:K4';
+        const CASEAB_LC_XY_RANGE = 'H5:K6';
         let tgCabXY = {};
         let tgCabXYPushedSig = '';
         function caseABXYCells() {
@@ -8039,8 +8041,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const col = (L, key) => { const o = tgCabXY[L] && tgCabXY[L][key]; return o ? [r1(o.x), r1(o.y)] : null; };
             return { H: col('A', 'cog'), I: col('A', 'ccog'), J: col('B', 'cog'), K: col('B', 'ccog') };
         }
+        // Load case X, Y of the minimum line (CoG / CCoG, Case A / Case B; from origin 0,0) -> 'Calculation Sheet Case A&B'!H5:K6
+        function caseABLCXYCells() {
+            const r1 = v => (v === null || v === undefined || !isFinite(v)) ? null : Math.round(v * 10) / 10;
+            const col = (L, key) => { const o = tgCabXY[L] && tgCabXY[L][key]; return o ? [r1(o.x), r1(o.y)] : null; };
+            return { H: col('A', 'cogLC'), I: col('A', 'ccogLC'), J: col('B', 'cogLC'), K: col('B', 'ccogLC') };
+        }
         function schedulePushCaseABXY() {
-            if (JSON.stringify(caseABXYCells()) === tgCabXYPushedSig) return;
+            if (JSON.stringify([caseABXYCells(), caseABLCXYCells()]) === tgCabXYPushedSig) return;
             scheduleAutoPush('pushCaseABXYToExcel', pushCaseABXYToExcel);
         }
         function buildCaseABTableHtml(rows) {
@@ -8544,7 +8552,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return;
             }
             const cells = caseABXYCells();
-            if (!Object.values(cells).some(Boolean)) {
+            const lcCells = caseABLCXYCells();
+            if (!Object.values(cells).some(Boolean) && !Object.values(lcCells).some(Boolean)) {
                 if (!silent) alert('No CASE A & CASE B perpendicular yet — click "⇩ Refresh from Excel" first.');
                 return;
             }
@@ -8557,10 +8566,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const hit = sheets.items.find(w => norm(w.name) === norm(CALCAB_SHEET_NAME));
                     if (!hit) throw new Error('Sheet not found: ' + CALCAB_SHEET_NAME);
                     Object.entries(cells).forEach(([col, xy]) => { if (xy) hit.getRange(`${col}3:${col}4`).values = [[xy[0]], [xy[1]]]; });
+                    // Load case X, Y of the minimum line: H5/H6 = CoG Case A, I5/I6 = CCoG Case A, J5/J6 = CoG Case B, K5/K6 = CCoG Case B
+                    Object.entries(lcCells).forEach(([col, xy]) => { if (xy) hit.getRange(`${col}5:${col}6`).values = [[xy[0]], [xy[1]]]; });
                     await context.sync();
                 });
-                tgCabXYPushedSig = JSON.stringify(cells);
-                logMsg(`📤 Pushed CASE A & CASE B X, Y to '${CALCAB_SHEET_NAME}'!${CASEAB_XY_RANGE}.`);
+                tgCabXYPushedSig = JSON.stringify([cells, lcCells]);
+                logMsg(`📤 Pushed CASE A & CASE B X, Y to '${CALCAB_SHEET_NAME}'!${CASEAB_XY_RANGE} and load case X, Y (minimum line) to !${CASEAB_LC_XY_RANGE}.`);
             } catch (e) {
                 console.warn(`Could not write CASE A & CASE B X, Y to '${CALCAB_SHEET_NAME}'!${CASEAB_XY_RANGE}`, e);
                 if (!silent) alert(`Could not write to sheet "${CALCAB_SHEET_NAME}". Make sure it exists.`);
@@ -9957,7 +9968,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // end of each perpendicular measured from the drawing origin (0,0), full precision (rounded only when shown / pushed to Excel)
                 tgCabXY[opts.caseAB] = {
                     cog: cabCog ? { x: cabCog.F.x, y: cabCog.F.y } : null,
-                    ccog: cab ? { x: cab.F.x, y: cab.F.y } : null
+                    ccog: cab ? { x: cab.F.x, y: cab.F.y } : null,
+                    // end of the load-case (minimum) line itself, before the perpendicular, from the drawing origin (0,0)
+                    cogLC: cabCog ? { x: cabCog.P.x, y: cabCog.P.y } : null,
+                    ccogLC: cab ? { x: cab.P.x, y: cab.P.y } : null
                 };
             }
             const cabEndCol = '#eab308', cabEndColG = '#a3e635';   // perpendicular-end colors (CCoG = Combined / CoG = Single), same as the perpendicular lines
