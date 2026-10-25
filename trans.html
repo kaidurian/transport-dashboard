@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.184)</h1>
+            <h1>🚂 Transport Dashboard (Rev.185)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8032,6 +8032,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // X, Y of the end of each perpendicular (from the drawing origin 0,0, same frame as the other dimensions) per case -> 'Calculation Sheet Case A&B'!H3:K4
         //   H = CoG Case A, I = CCoG Case A, J = CoG Case B, K = CCoG Case B (row 3 = X, row 4 = Y)
         //   Load case X, Y of the minimum line (end of the CASE line from CoG / CCoG, from the drawing origin 0,0) -> H5:K6 (row 5 = X, row 6 = Y)
+        // After "🧮 Calculate CoG Envelope": for each of LC1-LC4, copy 'Calculation Sheet Case A&B'!A2:K25 (values)
+        // into the matching block of sheet 'CASE_A_B_Graph _Option1'.
+        const CASEAB_GRAPH_SHEET_NAME = 'CASE_A_B_Graph _Option1';
+        const CASEAB_GRAPH_SRC_RANGE = 'A2:K25';   // 24 rows x 11 cols
+        const CASEAB_GRAPH_DEST_START = ['A29', 'A56', 'A83', 'A110'];   // LC1, LC2, LC3, LC4 (top-left cell of each 24 x 11 block)
         const CASEAB_XY_RANGE = 'H3:K4';
         const CASEAB_LC_XY_RANGE = 'H5:K6';
         let tgCabXY = {};
@@ -9312,6 +9317,42 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             };
         }
 
+        // Copies 'Calculation Sheet Case A&B'!A2:K25 (values) to 'CASE_A_B_Graph _Option1' block {idx} (0-3 = LC1-LC4)
+        // for the load case that is currently active in Input!BB35:BD35. H3:K6 of the source are dashboard-pushed
+        // (CASE A / B perpendicular + minimum-line X, Y), so first refresh the CASE A & CASE B pull, re-render so
+        // tgCabXY follows the new load case, and push H3:K6 before the copy. Best-effort: never throws.
+        async function copyCaseABToGraphSheet(idx, lcName) {
+            if (!isOfficeInitialized) return;
+            const dest = CASEAB_GRAPH_DEST_START[idx];
+            try {
+                try {
+                    await pullCaseABFromExcel({ silent: true });
+                    renderTgCaseABPreview();
+                    await pushCaseABXYToExcelImpl({ silent: true });
+                } catch (e0) { console.warn('CASE A&B refresh before Graph copy failed', e0); }
+                await Excel.run(async (context) => {
+                    try { context.workbook.application.calculate(Excel.CalculationType.full); } catch (e1) { /* older hosts */ }
+                    const norm = n => String(n).replace(/\s+/g, '').toLowerCase();
+                    const sheets = context.workbook.worksheets;
+                    sheets.load('items/name');
+                    await context.sync();
+                    const src = sheets.items.find(w => norm(w.name) === norm(CALCAB_SHEET_NAME));
+                    if (!src) throw new Error('Sheet not found: ' + CALCAB_SHEET_NAME);
+                    const dst = sheets.items.find(w => w.name === CASEAB_GRAPH_SHEET_NAME) || sheets.items.find(w => norm(w.name) === norm(CASEAB_GRAPH_SHEET_NAME));
+                    if (!dst) throw new Error('Sheet not found: ' + CASEAB_GRAPH_SHEET_NAME);
+                    const sr = src.getRange(CASEAB_GRAPH_SRC_RANGE);
+                    sr.load('values');
+                    await context.sync();
+                    dst.getRange(dest).getResizedRange(sr.values.length - 1, sr.values[0].length - 1).values = sr.values;
+                    await context.sync();
+                });
+                logMsg(`📋 ${lcName}: copied '${CALCAB_SHEET_NAME}'!${CASEAB_GRAPH_SRC_RANGE} to '${CASEAB_GRAPH_SHEET_NAME}' starting at ${dest}.`);
+            } catch (e) {
+                console.warn(`Could not copy ${CASEAB_GRAPH_SRC_RANGE} to '${CASEAB_GRAPH_SHEET_NAME}'!${dest} for ${lcName}`, e);
+                logMsg(`⚠️ ${lcName}: could not copy '${CALCAB_SHEET_NAME}'!${CASEAB_GRAPH_SRC_RANGE} to '${CASEAB_GRAPH_SHEET_NAME}'!${dest} — ${e && e.code ? `${e.code}: ${e.message || e}` : (e && e.message) || e}`);
+            }
+        }
+
         // "🧮 Calculate CoG Envelope" — the ONLY thing that flips
         // tgCogEnvCalculated on and reveals the table (see the blank
         // gate in renderTgCogEnvTable()). Computes locally first (that
@@ -9406,6 +9447,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 ];
                 for (const lc of lcPushSequence) {
                     await pushLoadCaseToExcel(null, lc.name, lc.x, lc.y, lc.z, { silent: true });
+                    // LC1-LC4 (plain section only): snapshot 'Calculation Sheet Case A&B'!A2:K25 into the Graph sheet
+                    const gi = COGENV_LC_MAIN_NAMES.indexOf(lc.name);
+                    if (gi >= 0) await copyCaseABToGraphSheet(gi, lc.name);
                 }
                 logMsg(`📤 Auto-pushed CoG-LC0, LC1-LC4, and LC1-Slope-LC4-Slope to '${INPUT_SHEET_NAME}'!BB35:BD35 in sequence (refreshing each load case's Drawing Table mirror along the way), then landed back on CoG-LC0 as the default.`);
                 // Auto-continue (per KKKai's spec): once 📈 CoG Envelope
@@ -13268,12 +13312,28 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // Middle-click already pans; double-middle-click resets zoom
             // (AutoCAD "Zoom Extents" equivalent — quick way back to 1x
             // after scrolling deep in/out).
+            // Left (or middle) double-click on the drawing = zoom back out to the
+            // default 1x view AND return to the default location (scrolled to the
+            // top-left), like AutoCAD's Zoom Extents. Double-clicks on form controls
+            // / links are ignored so they keep their own behaviour.
             wrap.addEventListener('dblclick', (e) => {
-                if (e.button !== 1) return;
+                if (e.button !== 0 && e.button !== 1) return;
+                if (e.target && e.target.closest && e.target.closest('input,select,textarea,button,a,label')) return;
                 const inner = wrap.querySelector('#tgPreviewScaleInner');
                 if (!inner) return;
                 zs.zoom = 1;
                 inner.style.width = (Math.max(1, tgPreviewScaleMult || 1) * 100) + '%';
+                // default location: scroll the drawing's own scroller(s) back to 0,0
+                const d = wrap.ownerDocument, win = d.defaultView || window;
+                let n = wrap;
+                while (n && n !== d.body && n !== d.documentElement) {
+                    const cs = win.getComputedStyle(n);
+                    if (/(auto|scroll)/.test(cs.overflowX + ' ' + cs.overflowY)) { n.scrollLeft = 0; n.scrollTop = 0; }
+                    n = n.parentElement;
+                }
+                wrap.scrollLeft = 0; wrap.scrollTop = 0;
+                if (d.scrollingElement) { d.scrollingElement.scrollLeft = 0; }
+                const sel = win.getSelection && win.getSelection(); if (sel && sel.removeAllRanges) sel.removeAllRanges();   // double-click selects a word: clear it
             });
         }
         function tgApplyFontScale(markup, k) {
