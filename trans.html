@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.186.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.187)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1859,8 +1859,8 @@
             </div>
 
             <div class="tg-footer">
-                <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, Z Trailer Height, and other settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
-                <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
+                <button type="button" id="appExportBtn" title="Save the entire dashboard (trailers, cargo, every card's data, the CASE A &amp; B records of LC0-LC4 and the screen layout / view settings) to a JSON file on your computer — works standalone, without Excel." onclick="exportAppState()">💾 Export</button>
+                <button type="button" id="appImportBtn" title="Load a dashboard previously saved with 💾 Export back in — replaces everything currently on screen. You are asked whether to restore the saved screen layout / view settings too." onclick="document.getElementById('appImportFileInput').click()">📂 Import</button>
                 <input type="file" id="appImportFileInput" accept=".json,application/json" style="display:none" onchange="importAppState(event)">
                 <label class="tg-preview-toggle" title="Applies to every train in the AutoCAD export. Load in (Right to Left): 0° rotation. Load out (Left to Right): top view rotated 180°, front view mirrored instead.">
                     AutoCAD Load direction:
@@ -19186,7 +19186,50 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // EXCEPT Excel connection state itself (isOfficeInitialized),
         // which always reflects the live host, not a saved file.
         // ============================================================
-        const APP_STATE_VERSION = 2;
+        const APP_STATE_VERSION = 3;   // 3: + CASE A&B / Transport LC / Lashing calc / Traction / Concept data, LC0-LC4 CASE A&B records and the screen layout / view settings
+
+        // Screen layout / view settings — kept in the browser's localStorage and a few in-memory multipliers.
+        const VIEW_LS_KEYS = () => [SPLIT_DIR_STORAGE_KEY, SPLIT_TOP_STORAGE_KEY, BESIDE_STORAGE_KEY, BESIDE_LEFT_STORAGE_KEY,
+            TAB_TOP_STORAGE_KEY, TAB_BOTTOM_STORAGE_KEY, TG_DISP_TAB_STORAGE_KEY, TG3D_SAVED_VIEW_KEY];
+        function collectViewSettings() {
+            const ls = {};
+            VIEW_LS_KEYS().forEach(k => { try { ls[k] = localStorage.getItem(k); } catch (e) { ls[k] = null; } });
+            return {
+                theme: document.body.classList.contains('tg-light-theme') ? 'light' : 'dark',
+                ls,
+                previewScaleMult: tgPreviewScaleMult, previewFontMult: tgPreviewFontMult, previewZoom: tgPreviewZoom,
+                magnifierSizeMult: tgMagnifierSizeMult
+            };
+        }
+        function applyImportedView(v) {
+            if (!v || typeof v !== 'object') return;
+            const ls = (v.ls && typeof v.ls === 'object') ? v.ls : {};
+            VIEW_LS_KEYS().forEach(k => {          // whitelist: only the app's own keys are written
+                if (!(k in ls)) return;
+                try { if (ls[k] === null || ls[k] === undefined) localStorage.removeItem(k); else localStorage.setItem(k, String(ls[k])); } catch (e) { /* ignore */ }
+            });
+            if (v.theme === 'light' || v.theme === 'dark') {
+                try { localStorage.setItem(THEME_STORAGE_KEY, v.theme); } catch (e) { /* ignore */ }
+                applyThemeMode(v.theme);
+            }
+            const num = (x, lo) => { const n = parseFloat(x); return (Number.isFinite(n) && n >= lo) ? n : null; };
+            const sc = num(v.previewScaleMult, 0.1), fs = num(v.previewFontMult, 0.1), zm = num(v.previewZoom, 0.1), mg = num(v.magnifierSizeMult, 0.1);
+            if (sc !== null) { tgPreviewScaleMult = sc; const el = document.getElementById('tgPreviewScaleSelect'); if (el) el.value = String(sc); }
+            if (fs !== null) { tgPreviewFontMult = fs; const el = document.getElementById('tgPreviewFontScaleSelect'); if (el) el.value = String(fs); }
+            if (zm !== null) tgPreviewZoom = zm;
+            if (mg !== null) { try { setTgMagnifierSize(mg); const el = document.getElementById('tgMagnifierSizeSelect'); if (el) el.value = String(mg); } catch (e) { /* ignore */ } }
+            // layout: split direction / divider position / preview beside, then the tabs that were open
+            try {
+                const body = document.getElementById('tgModalBody');
+                const px = parseInt(ls[SPLIT_TOP_STORAGE_KEY], 10), bpx = parseInt(ls[BESIDE_LEFT_STORAGE_KEY], 10);
+                if (body && px > 0) body.style.setProperty('--tg-split-top', px + 'px');
+                if (body && bpx > 0) body.style.setProperty('--tg-beside-left', bpx + 'px');
+                tgBesideOn = ls[BESIDE_STORAGE_KEY] === '1';
+                applyTgSplitDir(ls[SPLIT_DIR_STORAGE_KEY] === 'vertical' ? 'vertical' : 'horizontal');   // also re-selects the saved tabs
+            } catch (e) { console.warn('Layout restore failed', e); }
+            try { if (ls[TG3D_SAVED_VIEW_KEY] && restore3DViewTG()) renderTrailerGen3D(); } catch (e) { /* ignore */ }
+            try { renderTrailerGenPreview(); } catch (e) { /* ignore */ }
+        }
 
         function exportAppState() {
             const state = {
@@ -19252,7 +19295,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 stabilityAngleCombinedDeg: stabilityAngleCombinedDeg,
                 stabilityAngleLoaded: stabilityAngleLoaded,
                 stabilityArmHeightMm: stabilityArmHeightMm,
-                stabilityArmHeightLoaded: stabilityArmHeightLoaded
+                stabilityArmHeightLoaded: stabilityArmHeightLoaded,
+                // ---- v3: the other cards' pulled / local data, so a standalone import is complete ----
+                tgCaseABRows: tgCaseABRows, tgCaseABText: tgCaseABText, tgCalcABRows: tgCalcABRows, tgCalcABText: tgCalcABText, tgCalcABMissing: tgCalcABMissing,
+                tgCabLcSnaps: tgCabLcSnaps,                       // 🅰🅱 CASE A & CASE B w/ CoG Env: LC0-LC4 records
+                tgTransportLcRows: tgTransportLcRows,
+                tgLashingCalcRows: tgLashingCalcRows, tgLashingCalcInfo: tgLashingCalcInfo,
+                tgTraction: tgTraction, tgTractionDataRows: tgTractionDataRows,
+                tgConcept: tgConcept, tgConceptView: tgConceptView,
+                tgHeaderDbarLengthMm: tgHeaderDbarLengthMm,
+                // ---- v3: screen layout / view settings (restored only if the user agrees on import) ----
+                view: collectViewSettings()
             };
             const json = JSON.stringify(state, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
@@ -19383,6 +19436,23 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     if (Number.isFinite(parseFloat(state.stabilityArmHeightMm))) stabilityArmHeightMm = parseFloat(state.stabilityArmHeightMm);
                     if (typeof state.stabilityArmHeightLoaded === 'boolean') stabilityArmHeightLoaded = state.stabilityArmHeightLoaded;
 
+                    // ---- v3 data (older files simply don't have these keys, so nothing is touched) ----
+                    const isArr = Array.isArray, isObj = o => o && typeof o === 'object' && !isArr(o);
+                    if (isArr(state.tgCaseABRows)) tgCaseABRows = state.tgCaseABRows;
+                    if (isArr(state.tgCaseABText)) tgCaseABText = state.tgCaseABText;
+                    if (isArr(state.tgCalcABRows)) tgCalcABRows = state.tgCalcABRows;
+                    if (isArr(state.tgCalcABText)) tgCalcABText = state.tgCalcABText;
+                    if (typeof state.tgCalcABMissing === 'boolean') tgCalcABMissing = state.tgCalcABMissing;
+                    if (isObj(state.tgCabLcSnaps)) { tgCabLcSnaps = state.tgCabLcSnaps; tgCabAllSig = ''; }
+                    if (isObj(state.tgTransportLcRows)) [1, 2, 3, 4].forEach(i => { if (isArr(state.tgTransportLcRows[i])) tgTransportLcRows[i] = state.tgTransportLcRows[i]; });
+                    if (isArr(state.tgLashingCalcRows)) tgLashingCalcRows = state.tgLashingCalcRows;
+                    if (state.tgLashingCalcInfo === null || isObj(state.tgLashingCalcInfo)) tgLashingCalcInfo = state.tgLashingCalcInfo;
+                    if (isObj(state.tgTraction)) Object.keys(tgTraction).forEach(k => { if (k in state.tgTraction) tgTraction[k] = state.tgTraction[k]; });
+                    if (isArr(state.tgTractionDataRows)) tgTractionDataRows = state.tgTractionDataRows;
+                    if (isObj(state.tgConcept) && isObj(state.tgConcept.port) && isObj(state.tgConcept.doh)) tgConcept = state.tgConcept;
+                    if (isObj(state.tgConceptView) && isObj(state.tgConceptView.port) && isObj(state.tgConceptView.doh)) tgConceptView = state.tgConceptView;
+                    if (isObj(state.tgHeaderDbarLengthMm)) Object.keys(tgHeaderDbarLengthMm).forEach(k => { const n = parseFloat(state.tgHeaderDbarLengthMm[k]); if (Number.isFinite(n) && n > 0) tgHeaderDbarLengthMm[k] = n; });
+
                     // ID counters: trust the saved counters if present and
                     // high enough, otherwise recompute from the highest id
                     // actually present in the restored arrays — either way,
@@ -19412,7 +19482,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // call it directly so a restored tgCogEnvSummary
                     // actually shows up standalone.
                     renderTgCogEnvSummary();
-                    logMsg(`📂 Imported dashboard (${trailerGenTrains.length} train(s), ${cargoItems.length} cargo item(s)) from "${file.name}".`);
+                    // the other cards, from the restored data (each guarded: one failing card must not stop the rest)
+                    [renderTgCogEnvFields, renderTgCogEnvTable, renderTgDrawingTable, () => [1, 2, 3, 4].forEach(i => renderTransportLcTable(i)),
+                     renderTgLashingCalcInfo, renderTgLashingCalcTable, renderTgTractionFields, renderTgTractionDataTable,
+                     renderTgConceptFields, renderTgConceptDisplay, renderTgCaseABTable, () => renderTgCaseABAll(true)
+                    ].forEach(fn => { try { fn(); } catch (e) { console.warn('Import re-render step failed', e); } });
+                    let viewMsg = '';
+                    if (state.view && typeof state.view === 'object') {
+                        let yes = false;
+                        try { yes = confirm('This file also contains the screen layout and view settings (open tabs, split / divider position, 3D view, theme, 2D drawing scale and font).\n\nRestore them too?\n\nOK = restore them   |   Cancel = keep my current layout'); } catch (e) { yes = false; }
+                        if (yes) { applyImportedView(state.view); viewMsg = ' Screen layout / view settings restored.'; }
+                        else viewMsg = ' Screen layout / view settings kept as they were.';
+                    }
+                    logMsg(`📂 Imported dashboard (${trailerGenTrains.length} train(s), ${cargoItems.length} cargo item(s)) from "${file.name}".${viewMsg}`);
                 } catch (e) {
                     console.warn('Dashboard import error', e);
                     alert(`Could not import "${file.name}" — it doesn't look like a valid dashboard export. See console for details.`);
