@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.187)</h1>
+            <h1>🚂 Transport Dashboard (Rev.187.2)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -19198,7 +19198,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 theme: document.body.classList.contains('tg-light-theme') ? 'light' : 'dark',
                 ls,
                 previewScaleMult: tgPreviewScaleMult, previewFontMult: tgPreviewFontMult, previewZoom: tgPreviewZoom,
-                magnifierSizeMult: tgMagnifierSizeMult
+                magnifierSizeMult: tgMagnifierSizeMult,
+                cabViews: JSON.parse(JSON.stringify(tgCabViews))   // zoom / pan of the CASE A & CASE B drawings
             };
         }
         function applyImportedView(v) {
@@ -19228,6 +19229,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 applyTgSplitDir(ls[SPLIT_DIR_STORAGE_KEY] === 'vertical' ? 'vertical' : 'horizontal');   // also re-selects the saved tabs
             } catch (e) { console.warn('Layout restore failed', e); }
             try { if (ls[TG3D_SAVED_VIEW_KEY] && restore3DViewTG()) renderTrailerGen3D(); } catch (e) { /* ignore */ }
+            try {   // zoom / pan of the CASE A & CASE B drawings
+                if (v.cabViews && typeof v.cabViews === 'object') {
+                    Object.keys(tgCabViews).forEach(k => delete tgCabViews[k]);
+                    Object.keys(v.cabViews).forEach(k => {
+                        const e = v.cabViews[k];
+                        if (e && [e.z, e.ox, e.oy].every(n => Number.isFinite(parseFloat(n)))) tgCabViews[k] = { z: parseFloat(e.z), ox: parseFloat(e.ox), oy: parseFloat(e.oy) };
+                    });
+                    document.querySelectorAll('svg[data-cab-key]').forEach(svg => tgCabApply(svg));
+                }
+            } catch (e) { /* ignore */ }
             try { renderTrailerGenPreview(); } catch (e) { /* ignore */ }
         }
 
@@ -19481,7 +19492,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     // live Excel pull — see pullCogEnvSummaryFromExcel) —
                     // call it directly so a restored tgCogEnvSummary
                     // actually shows up standalone.
-                    renderTgCogEnvSummary();
+                    try { renderTgCogEnvSummary(); } catch (e) { console.warn('CoG Envelope Summary could not be redrawn from the file', e); }
                     // the other cards, from the restored data (each guarded: one failing card must not stop the rest)
                     [renderTgCogEnvFields, renderTgCogEnvTable, renderTgDrawingTable, () => [1, 2, 3, 4].forEach(i => renderTransportLcTable(i)),
                      renderTgLashingCalcInfo, renderTgLashingCalcTable, renderTgTractionFields, renderTgTractionDataTable,
