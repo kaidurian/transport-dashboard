@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.187.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.188)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1783,7 +1783,7 @@
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub">
-                            Display of <strong>CASE A</strong> / <strong>CASE B</strong> for every load case <strong>LC0–LC4</strong> of the 📊 CoG Envelope Table. Each CASE has <strong>one group triangle</strong> drawn like the 📊 CoG Envelope Table (G1 / G2 / G3, CoG, LC1–LC4 envelope) plus the <strong>CCoG of every load case</strong> and its line to the triangle side (CASE line, then the perpendicular), each load case in its own colour; under it a CCoG table (with the stability angle and the result) and, for each load case separately, the <strong>4-direction arrows</strong> and the <strong>stability angle</strong>.
+                            Display of <strong>CASE A</strong> / <strong>CASE B</strong> for every load case <strong>LC0–LC4</strong> of the 📊 CoG Envelope Table. Each CASE has <strong>two group triangles</strong>, CoG and CCoG kept apart: <strong>triangle 1</strong> shows only the CoG (LC0 CoG sign + LC1–LC4 CoG, 📊 CoG Envelope Table style); <strong>triangle 2</strong> shows the LC0 CoG sign and the <strong>CCoG of every load case</strong> LC0–LC4 with its line to the triangle side (CASE line, then the perpendicular), each load case in its own colour; under it a CCoG table (with the stability angle and the result) and, for each load case separately, the <strong>4-direction arrows</strong> and the <strong>stability angle</strong>.
                             Filled by <strong>🧮 Calculate CoG Envelope</strong>, which steps through LC0–LC4 and records 'Check CASE A &amp; CASE B' / 'Calculation Sheet Case A&amp;B' / Display!B16:D16 for each one (kept until the next calculation or a reload).
                         </p>
                         <div id="tgCaseABAllCases"></div>
@@ -8394,11 +8394,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         `</div><div class="tg-caseab-row-stab">` + buildCaseABStabilitySvg(L) + `</div></div>`);
                 });
                 return `<div class="tg-caseab-case"><div class="tg-caseab-case-title">CASE ${L} — LC0 to LC4</div>` +
-                    `<div id="tgCaseABAllPrev${L}" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>${caseABAllTable(L, items)}${rows}</div>`;
+                    `<div class="tg-caseab-stab-title" style="border-top:none; margin-top:4px;">Triangle 1 — CoG only: LC0 CoG sign, LC1–LC4 CoG</div>` +
+                    `<div id="tgCaseABAllPrev${L}Cog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
+                    `<div class="tg-caseab-stab-title">Triangle 2 — CCoG: LC0 CoG + CCoG sign, LC1–LC4 CCoG only</div>` +
+                    `<div id="tgCaseABAllPrev${L}Ccog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>${caseABAllTable(L, items)}${rows}</div>`;
             };
             el.innerHTML = block('A') + block('B');
             // the triangle = the 📊 CoG Envelope Table drawing + the CCoG of each load case and its line to the triangle side
-            ['A', 'B'].forEach(L => renderTgCogEnvPreview(tgCogEnvCalculated ? (tgCogEnvComputed || undefined) : undefined, { targetId: 'tgCaseABAllPrev' + L, idSuffix: 'All' + L, cabAll: { L, items: caseABAllItems(L) } }));
+            ['A', 'B'].forEach(L => {
+                const base = tgCogEnvCalculated ? (tgCogEnvComputed || undefined) : undefined;
+                // Triangle 1: CoG only — LC0 CoG sign + LC1-LC4 CoG (CoG Envelope Table style), no CCoG
+                renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Cog', idSuffix: 'All' + L + 'Cog', cabAll: { L, items: [], mode: 'cog' } });
+                // Triangle 2: LC0 CoG sign + CCoG of LC0-LC4 (+ CASE line / perpendicular); the LC1-LC4 CoG points are left out (noLC)
+                renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Ccog', idSuffix: 'All' + L + 'Ccog', noLC: true, cabAll: { L, items: caseABAllItems(L), mode: 'ccog' } });
+            });
         }
         function renderTgCaseABStab() {
             ['A', 'B'].forEach(L => {
