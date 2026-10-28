@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.191.2)</h1>
+            <h1>🚂 Transport Dashboard (Rev.192)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8356,16 +8356,6 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             return items;
         }
-        // required stability angle: a number with ° on the angle row of the CASE table that comes with a limit word / sign (e.g. '≥ 5°'); null if the sheet states none
-        function caseABAngleLimit(L) {
-            const r = CASEAB_STAB_ROWS[L].angle;
-            for (const c of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
-                const t = String(caseABTxt(r, c) || '');
-                const m = t.match(/(\d+(?:\.\d+)?)\s*°/);
-                if (m && /[≥≤><=]|min|req|limit|allow/i.test(t)) return parseFloat(m[1]);
-            }
-            return null;
-        }
         // Triangle 1 (CoG only): LC1-LC4 CoG point + its CASE line (Single table B:E) per recorded load case
         function caseABAllCogItems(L) {
             const items = [];
@@ -8374,8 +8364,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 if (!sn || !sn.cog) return;
                 const k = cabWithSnap(sn, () => caseABConstruction(L, 'single'));
                 const h = sn.trLoaded ? parseFloat(sn.tr.z) : NaN;   // CoG height (Display row 15, Z)
-                const lim = cabWithSnap(sn, () => caseABAngleLimit(L));
-                items.push({ lc, cog: { x: +sn.cog.x || 0, y: +sn.cog.y || 0 }, k, h, lim });
+                items.push({ lc, cog: { x: +sn.cog.x || 0, y: +sn.cog.y || 0 }, k, h });
             });
             return items;
         }
@@ -8389,6 +8378,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const ccog = mode === 'ccog';
             let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>' + (ccog ? 'CCoG' : 'CoG') + ' X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>Stability angle</td><td>Result</td></tr>';
             CABALL_LC.forEach(lc => {
+                if (lc.i === 0) return;   // LC0 is only a sign in the triangle, not listed in the table
                 const dot = `<td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>`;
                 if (!ccog) {
                     const cg = (cogRows || []).find(r => r.lc.i === lc.i);
@@ -8396,7 +8386,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const k = cg.cb && cg.cb.k;
                     // CoG stability angle = atan(tipping arm / CoG height); OK when it reaches the required angle of the CASE table
                     const ang = (k && isFinite(cg.h) && cg.h > 0) ? Math.atan(k.min / cg.h) * 180 / Math.PI : null;
-                    const okCls = (ang !== null && cg.lim !== null && cg.lim !== undefined) ? (ang >= cg.lim ? 'tg-dt-ok' : 'tg-dt-notok') : '';
+                    const itC = items.find(r => r.lc.i === lc.i);   // same condition result as the CCoG of this load case
+                    const okCls = itC && (itC.st === 'tg-dt-ok' || itC.st === 'tg-dt-notok') ? itC.st : '';
                     tbl += `<tr>${dot}<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(k)}${perpTd(k)}` +
                         `<td class="${okCls}">${ang !== null ? escapeHtml(L + '=' + r1(ang) + '°') : '–'}</td>` +
                         `<td class="${okCls}">${okCls === 'tg-dt-ok' ? 'OK' : (okCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
@@ -8449,7 +8440,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // Triangle 2: LC0 CoG sign + LC1-LC4 CoG points + CCoG of LC0-LC4 (+ CASE line / perpendicular, CCoG dimensions)
                 renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Ccog', idSuffix: 'All' + L + 'Ccog', cabAll: { L, items: caseABAllItems(L), mode: 'ccog' } });
                 const tblCog = document.getElementById('tgCaseABAllTblCog' + L);
-                if (tblCog) tblCog.innerHTML = caseABAllTable(L, [], cabOut.cog, 'cog');
+                if (tblCog) tblCog.innerHTML = caseABAllTable(L, caseABAllItems(L), cabOut.cog, 'cog');
                 const tblCcog = document.getElementById('tgCaseABAllTblCcog' + L);
                 if (tblCcog) tblCcog.innerHTML = caseABAllTable(L, caseABAllItems(L), null, 'ccog');
             });
@@ -10203,7 +10194,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const ccogMode = !!(opts && opts.cabAll && opts.cabAll.mode === 'ccog');   // Triangle 2: CCoG + LCx-CCoG only (no CoG sign, no LC1-4 CoG points)
             const noEnv = noLC || ccogMode;
             const cabAllCogRes = ((opts && opts.cabAll && opts.cabAll.cogItems) || []).map(it => ({ it, cab: mkCab(it.k, it.cog.x, it.cog.y, true) }));
-            if (opts && opts.cabAll && opts.cabAll.out) opts.cabAll.out.cog = cabAllCogRes.map(r => ({ lc: r.it.lc, cog: r.it.cog, cb: r.cab, h: r.it.h, lim: r.it.lim }));
+            if (opts && opts.cabAll && opts.cabAll.out) opts.cabAll.out.cog = cabAllCogRes.map(r => ({ lc: r.it.lc, cog: r.it.cog, cb: r.cab, h: r.it.h }));
             const cogLc0 = cogMode && cabAllCogRes.some(r => r.it.lc.i === 0);   // LC0 CoG is drawn as its own load-case item (with CASE line + perpendicular)
             // Triangle 2: dimensions of the CCoG of every load case in the LC1/LC4 style ("9601 (LC1, LC4)"): equal values share one line
             const ccDimGroup = ax => {
@@ -10556,11 +10547,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 }
                 cabAllCogRes.forEach(({ it, cab: cb }) => {
                     bx.push([px(it.cog.x) - 5, py(it.cog.y) - 5, px(it.cog.x) + 5, py(it.cog.y) + 5]);
-                    if (cb) { segA(px(it.cog.x), py(it.cog.y), px(cb.P.x), py(cb.P.y), 2); segA(px(cb.P.x), py(cb.P.y), px(cb.F.x), py(cb.F.y), 2); bx.push([px(cb.F.x) - 4, py(cb.F.y) - 4, px(cb.F.x) + 4, py(cb.F.y) + 4]); }
+                    if (cb && it.lc.i !== 0) { segA(px(it.cog.x), py(it.cog.y), px(cb.P.x), py(cb.P.y), 2); segA(px(cb.P.x), py(cb.P.y), px(cb.F.x), py(cb.F.y), 2); bx.push([px(cb.F.x) - 4, py(cb.F.y) - 4, px(cb.F.x) + 4, py(cb.F.y) + 4]); }
                 });
                 cabAllRes.forEach(({ it, cab: cb }) => {
                     bx.push([px(it.cc.x) - 5, py(it.cc.y) - 5, px(it.cc.x) + 5, py(it.cc.y) + 5]);
-                    if (cb) { segA(px(it.cc.x), py(it.cc.y), px(cb.P.x), py(cb.P.y), 2); segA(px(cb.P.x), py(cb.P.y), px(cb.F.x), py(cb.F.y), 2); bx.push([px(cb.F.x) - 4, py(cb.F.y) - 4, px(cb.F.x) + 4, py(cb.F.y) + 4]); }
+                    if (cb && it.lc.i !== 0) { segA(px(it.cc.x), py(it.cc.y), px(cb.P.x), py(cb.P.y), 2); segA(px(cb.P.x), py(cb.P.y), px(cb.F.x), py(cb.F.y), 2); bx.push([px(cb.F.x) - 4, py(cb.F.y) - 4, px(cb.F.x) + 4, py(cb.F.y) + 4]); }
                 });
                 // leader-line label (same look as the G1-G3 / LC1-LC4 labels): placed so that no label sits on another label, point or line
                 const leaderLabel = (txt, ax, ay, fill, fs) => {
@@ -10670,7 +10661,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // LC1-LC4 CoG (Triangle 1): CoG sign in the load case colour, CASE line, perpendicular, "CoG LCx" label
                 cabAllCogRes.forEach(({ it, cab: cb }) => {
                     const col = it.lc.color, nm = it.lc.name, cx = px(it.cog.x), cy = py(it.cog.y);
-                    if (cb) {
+                    if (cb && it.lc.i !== 0) {
                         const qx = px(cb.P.x), qy = py(cb.P.y), fx = px(cb.F.x), fy = py(cb.F.y);
                         const minShow = cb.k.minTxt || caseABFmtNum(Math.round(cb.k.min * 10) / 10);
                         lines += `<g opacity="0.95"><line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${col}" stroke-width="1.4"><title>CoG ${nm}: CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)} mm${cb.k.solved ? ' (solved from the Single table value)' : ''}</title></line>` +
@@ -10678,11 +10669,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             `<circle cx="${qx}" cy="${qy}" r="1.8" fill="${col}"/><rect x="${fx - 2.5}" y="${fy - 2.5}" width="5" height="5" fill="${col}"/></g>`;
                     }
                     signs += `<g><circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.5"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    picItems.push({ col, nm: nm + '-CoG', cx, cy, cb, L: it.k && it.k.L, mir: it.lc.i === 0 });   // mir: green LC0 CoG label is mirrored to the opposite side
+                    if (it.lc.i !== 0) picItems.push({ col, nm: nm + '-CoG', cx, cy, cb, L: it.k && it.k.L });   // LC0 = sign only
                 });
                 cabAllRes.forEach(({ it, cab: cb }) => {
                     const col = it.lc.color, nm = it.lc.name, cx = px(it.cc.x), cy = py(it.cc.y);
-                    if (cb) {
+                    if (cb && it.lc.i !== 0) {
                         const qx = px(cb.P.x), qy = py(cb.P.y), fx = px(cb.F.x), fy = py(cb.F.y);
                         const minShow = cb.k.minTxt || caseABFmtNum(Math.round(cb.k.min * 10) / 10);
                         lines += `<g opacity="0.95"><line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${col}" stroke-width="1.4"><title>${nm}: CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)} mm</title></line>` +
@@ -10691,7 +10682,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     }
                     signs += `<g><path d="M ${cx} ${cy} L ${cx} ${cy - 3} A 3 3 0 0 1 ${cx + 3} ${cy} Z" fill="${col}" opacity="0.85"/><path d="M ${cx} ${cy} L ${cx} ${cy + 3} A 3 3 0 0 1 ${cx - 3} ${cy} Z" fill="${col}" opacity="0.85"/>` +
                         `<circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.3"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    picItems.push({ col, nm: nm + '-CCoG', cx, cy, cb });
+                    if (it.lc.i !== 0) picItems.push({ col, nm: nm + '-CCoG', cx, cy, cb });   // LC0 = sign only
                 });
                 lbls += pictureLabels(picItems);
                 cabAllSvg = lines + signs + lbls;
