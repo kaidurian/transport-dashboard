@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.191)</h1>
+            <h1>🚂 Transport Dashboard (Rev.191.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8314,6 +8314,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 tgCabLcSnaps[idx] = {
                     caseABRows: tgCaseABRows, caseABText: tgCaseABText, calcRows: tgCalcABRows, calcText: tgCalcABText,
                     cc: Object.assign({}, cogCombinedSign), ccLoaded: !!cogCombinedSignLoaded,
+                    tr: Object.assign({}, cogTrailerSign), trLoaded: !!cogTrailerSignLoaded,
                     cog: { x: (+cogXm || 0) * 1000, y: (+cogYm || 0) * 1000 }
                 };
                 renderTgCaseABAll(true);
@@ -8355,6 +8356,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             return items;
         }
+        // required stability angle: a number with ° on the angle row of the CASE table that comes with a limit word / sign (e.g. '≥ 5°'); null if the sheet states none
+        function caseABAngleLimit(L) {
+            const r = CASEAB_STAB_ROWS[L].angle;
+            for (const c of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+                const t = String(caseABTxt(r, c) || '');
+                const m = t.match(/(\d+(?:\.\d+)?)\s*°/);
+                if (m && /[≥≤><=]|min|req|limit|allow/i.test(t)) return parseFloat(m[1]);
+            }
+            return null;
+        }
         // Triangle 1 (CoG only): LC1-LC4 CoG point + its CASE line (Single table B:E) per recorded load case
         function caseABAllCogItems(L) {
             const items = [];
@@ -8362,27 +8373,33 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const sn = tgCabLcSnaps[lc.i];   // LC0 included: its CoG now also gets the CASE line + perpendicular
                 if (!sn || !sn.cog) return;
                 const k = cabWithSnap(sn, () => caseABConstruction(L, 'single'));
-                items.push({ lc, cog: { x: +sn.cog.x || 0, y: +sn.cog.y || 0 }, k });
+                const h = sn.trLoaded ? parseFloat(sn.tr.z) : NaN;   // CoG height (Display row 15, Z)
+                const lim = cabWithSnap(sn, () => caseABAngleLimit(L));
+                items.push({ lc, cog: { x: +sn.cog.x || 0, y: +sn.cog.y || 0 }, k, h, lim });
             });
             return items;
         }
         // tables under the triangles: one row per load case LC0-LC4.
-        // mode 'cog'  -> table under Triangle 1 (CoG: X, Y, CASE line, perpendicular)
-        // mode 'ccog' -> table under Triangle 2 (CCoG: same columns + stability angle and result)
+        // mode 'cog'  -> table under Triangle 1 (CoG: X, Y, CASE line, perpendicular, stability angle, result)
+        // mode 'ccog' -> table under Triangle 2 (CCoG: same columns)
         function caseABAllTable(L, items, cogRows, mode) {
             const r1 = v => caseABFmtNum(Math.round(v * 10) / 10);
             const caseTd = k => `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>`;
             const perpTd = k => `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>`;
             const ccog = mode === 'ccog';
-            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>' + (ccog ? 'CCoG' : 'CoG') + ' X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td>' +
-                (ccog ? '<td>Stability angle</td><td>Result</td>' : '') + '</tr>';
+            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>' + (ccog ? 'CCoG' : 'CoG') + ' X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>Stability angle</td><td>Result</td></tr>';
             CABALL_LC.forEach(lc => {
                 const dot = `<td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>`;
                 if (!ccog) {
                     const cg = (cogRows || []).find(r => r.lc.i === lc.i);
                     if (!cg) return;
                     const k = cg.cb && cg.cb.k;
-                    tbl += `<tr>${dot}<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(k)}${perpTd(k)}</tr>`;
+                    // CoG stability angle = atan(tipping arm / CoG height); OK when it reaches the required angle of the CASE table
+                    const ang = (k && isFinite(cg.h) && cg.h > 0) ? Math.atan(k.min / cg.h) * 180 / Math.PI : null;
+                    const okCls = (ang !== null && cg.lim !== null && cg.lim !== undefined) ? (ang >= cg.lim ? 'tg-dt-ok' : 'tg-dt-notok') : '';
+                    tbl += `<tr>${dot}<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(k)}${perpTd(k)}` +
+                        `<td class="${okCls}">${ang !== null ? escapeHtml(L + '=' + r1(ang) + '°') : '–'}</td>` +
+                        `<td class="${okCls}">${okCls === 'tg-dt-ok' ? 'OK' : (okCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
                     return;
                 }
                 const it = items.find(r => r.lc.i === lc.i);
@@ -10186,7 +10203,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const ccogMode = !!(opts && opts.cabAll && opts.cabAll.mode === 'ccog');   // Triangle 2: CCoG + LCx-CCoG only (no CoG sign, no LC1-4 CoG points)
             const noEnv = noLC || ccogMode;
             const cabAllCogRes = ((opts && opts.cabAll && opts.cabAll.cogItems) || []).map(it => ({ it, cab: mkCab(it.k, it.cog.x, it.cog.y, true) }));
-            if (opts && opts.cabAll && opts.cabAll.out) opts.cabAll.out.cog = cabAllCogRes.map(r => ({ lc: r.it.lc, cog: r.it.cog, cb: r.cab }));
+            if (opts && opts.cabAll && opts.cabAll.out) opts.cabAll.out.cog = cabAllCogRes.map(r => ({ lc: r.it.lc, cog: r.it.cog, cb: r.cab, h: r.it.h, lim: r.it.lim }));
             const cogLc0 = cogMode && cabAllCogRes.some(r => r.it.lc.i === 0);   // LC0 CoG is drawn as its own load-case item (with CASE line + perpendicular)
             // Triangle 2: dimensions of the CCoG of every load case in the LC1/LC4 style ("9601 (LC1, LC4)"): equal values share one line
             const ccDimGroup = ax => {
@@ -10634,7 +10651,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         out += putRow(escapeHtml(o.nm), cx + sx * offX, base(2.2), sx, sy, col, P0, 4, true);
                         if (!cb) return;
                         const caseTxt = `CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)}`;
-                        out += putRow(caseTxt, cx + sx * offX, base(2.2) + sy * rowH, sx, sy, col, P0, 4, false);
+                        out += putRow(caseTxt, cx + sx * offX, base(2.2) + sy * rowH, sx, sy, col, { x: px(cb.P.x), y: py(cb.P.y) }, 0, false);   // arrow head on the END of the CASE line
                         const tip = `TIPPING ARM=${rnd(cb.k.min)} (X=${rnd(cb.F.x)}, Y= ${rnd(cb.F.y)})`;
                         const syT = Math.abs(cb.F.y * 0 + py(cb.F.y) - cy) > 3 ? (py(cb.F.y) < cy ? -1 : 1) : sy;   // beside the side line the foot lies on
                         const baseT = cy + syT * (2.2 + 1.2) * fs + (syT > 0 ? fs * 0.8 : 0) + syT * (rowH + fs * 1.9 - rowH);
