@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.193)</h1>
+            <h1>🚂 Transport Dashboard (Rev.193.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -10665,9 +10665,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const { cx, cy, sx, sy, col, cb } = o, P0 = { x: cx, y: cy };
                         const offX = o.mir ? offX0 + 30 : offX0;   // mirrored green label is set further out, clear of the violet LC2 / LC3 labels
                         const base = (n) => cy + sy * n * fs + (sy > 0 ? fs * 0.8 : 0);   // baseline of the n-th row away from the point
-                        out += putRow(escapeHtml(o.nm), cx + sx * offX, base(2.2), sx, sy, col, P0, 4, true, o.worst);
+                        const caseTxt = cb ? `CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)}` : '';
+                        // right side: the LCx-CCoG / LCx-CoG name sits in the SAME column as its CASE row (LC1 under CASE A4, LC4 above CASE A3),
+                        // so when the CASE row is pushed beyond the G2 / G3 dimension stack the name goes with it
+                        let exName = cx + sx * offX;
+                        if (sx > 0 && cb && exName < rEdge && exName + tw(caseTxt) > rEdge - 58) exName = rEdge;
+                        out += putRow(escapeHtml(o.nm), exName, base(2.2), sx, sy, col, P0, 4, true, o.worst);
                         if (!cb) return;
-                        const caseTxt = `CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)}`;
                         out += putRow(caseTxt, cx + sx * offX, base(2.2) + sy * rowH, sx, sy, col, { x: px(cb.P.x), y: py(cb.P.y) }, 0, false);   // arrow head on the END of the CASE line
                         tips.push({ txt: `TIPPING ARM=${rnd(cb.k.min)} (X=${rnd(cb.F.x)}, Y= ${rnd(cb.F.y)})`, col, F: { x: px(cb.F.x), y: py(cb.F.y) } });
                     });
