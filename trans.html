@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.188.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.189)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1783,7 +1783,7 @@
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub">
-                            Display of <strong>CASE A</strong> / <strong>CASE B</strong> for every load case <strong>LC0–LC4</strong> of the 📊 CoG Envelope Table. Each CASE has <strong>two group triangles</strong>, CoG and CCoG kept apart: <strong>triangle 1</strong> shows only the CoG (LC0 CoG sign + LC1–LC4 CoG, each in its load case colour with its CASE line, the perpendicular to the triangle side and a “CoG LCx” label); <strong>triangle 2</strong> shows the LC0 CoG sign, the LC1–LC4 CoG points and the <strong>CCoG of every load case</strong> LC0–LC4 with its line to the triangle side (CASE line, then the perpendicular) and its X / Y dimensions, each load case in its own colour; under it a CCoG table (with the stability angle and the result) and, for each load case separately, the <strong>4-direction arrows</strong> and the <strong>stability angle</strong>.
+                            Display of <strong>CASE A</strong> / <strong>CASE B</strong> for every load case <strong>LC0–LC4</strong> of the 📊 CoG Envelope Table. Each CASE has <strong>two group triangles</strong>, CoG and CCoG kept apart: <strong>triangle 1</strong> shows only the CoG (LC0 CoG sign + LC1–LC4 CoG, each in its load case colour with its CASE line, the perpendicular to the triangle side and a “CoG LCx” label); <strong>triangle 2</strong> shows only the <strong>CCoG of every load case</strong> (CCoG for LC0, LCx-CCoG for LC1–LC4) with its line to the triangle side (CASE line, then the perpendicular) and its X / Y dimensions, each load case in its own colour; under it a CCoG table (with the stability angle and the result) and, for each load case separately, the <strong>4-direction arrows</strong> and the <strong>stability angle</strong>.
                             Filled by <strong>🧮 Calculate CoG Envelope</strong>, which steps through LC0–LC4 and records 'Check CASE A &amp; CASE B' / 'Calculation Sheet Case A&amp;B' / Display!B16:D16 for each one (kept until the next calculation or a reload).
                         </p>
                         <div id="tgCaseABAllCases"></div>
@@ -8408,7 +8408,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return `<div class="tg-caseab-case"><div class="tg-caseab-case-title">CASE ${L} — LC0 to LC4</div>` +
                     `<div class="tg-caseab-stab-title" style="border-top:none; margin-top:4px;">Triangle 1 — CoG only: LC0 CoG sign, LC1–LC4 CoG (CASE line + perpendicular)</div>` +
                     `<div id="tgCaseABAllPrev${L}Cog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
-                    `<div class="tg-caseab-stab-title">Triangle 2 — CoG &amp; CCoG: LC0 CoG sign, LC1–LC4 CoG points, CCoG of LC0–LC4</div>` +
+                    `<div class="tg-caseab-stab-title">Triangle 2 — CCoG only: CCoG (LC0) and LC1–LC4 CCoG</div>` +
                     `<div id="tgCaseABAllPrev${L}Ccog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>${caseABAllTable(L, items)}${rows}</div>`;
             };
             el.innerHTML = block('A') + block('B');
@@ -10167,6 +10167,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const cabAllRes = ((opts && opts.cabAll && opts.cabAll.items) || []).map(it => ({ it, cab: caseABMkCabStd(groupPtsAll, it.k, it.cc.x, it.cc.y) }));
             // Triangle 1: LC1-LC4 CoG -> CASE line (Single table) -> perpendicular, same style as the CCoG items
             const cogMode = !!(opts && opts.cabAll && opts.cabAll.mode === 'cog');
+            const ccogMode = !!(opts && opts.cabAll && opts.cabAll.mode === 'ccog');   // Triangle 2: CCoG + LCx-CCoG only (no CoG sign, no LC1-4 CoG points)
+            const noEnv = noLC || ccogMode;
             const cabAllCogRes = ((opts && opts.cabAll && opts.cabAll.cogItems) || []).map(it => ({ it, cab: mkCab(it.k, it.cog.x, it.cog.y, true) }));
             // Triangle 2: dimensions of the CCoG of every load case in the LC1/LC4 style ("9601 (LC1, LC4)"): equal values share one line
             const ccDimGroup = ax => {
@@ -10179,7 +10181,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return [...m.values()].map(g => ({ v: g.v, label: `${Math.round(g.v)} (CCoG ${g.lcs.join(', ')})`, color: g.color }));
             };
             const ccDimsX = ccDimGroup('x'), ccDimsY = ccDimGroup('y');
-            let cabAllBottom = 0;
+            let cabAllBottom = 0, cabRightMax = 0;
             const cabEndCol = '#eab308', cabEndColG = '#a3e635';   // perpendicular-end colors (CCoG = Combined / CoG = Single), same as the perpendicular lines
             const nCabEnd = (cab ? 1 : 0) + (cabCog ? 1 : 0);        // extra dimension rows: X / Y of each perpendicular end from 0,0
             const padL = 90 + nCabEnd * 18 + ccDimsY.length * 18, padT = 78 + nCabEnd * 13 + ccDimsX.length * 13, padR = 90, padB = 55;
@@ -10187,7 +10189,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const spanX = Math.max(g2.x, g3.x, cogXmm + (noLC ? 0 : halfEnvXmm), apex.x, showCC ? ccXmm : 0, cab ? Math.max(cab.P.x, cab.F.x) : 0, cabCog ? Math.max(cabCog.P.x, cabCog.F.x) : 0, ...cabAllRes.flatMap(r => [r.it.cc.x, r.cab ? Math.max(r.cab.P.x, r.cab.F.x) : 0]), ...cabAllCogRes.flatMap(r => [r.it.cog.x, r.cab ? Math.max(r.cab.P.x, r.cab.F.x) : 0]), 1);
             const maxY = Math.max(g2.y, g3.y, cogYmm + (noLC ? 0 : halfEnvYmm), apex.y, showCC ? ccYmm : 0, cab ? Math.max(cab.P.y, cab.F.y) : 0, cabCog ? Math.max(cabCog.P.y, cabCog.F.y) : 0, ...cabAllRes.flatMap(r => [r.it.cc.y, r.cab ? Math.max(r.cab.P.y, r.cab.F.y) : 0]), ...cabAllCogRes.flatMap(r => [r.it.cog.y, r.cab ? Math.max(r.cab.P.y, r.cab.F.y) : 0]), 1);
             const scale = Math.min(plotW / spanX, plotH / maxY);
-            const svgW = padL + plotW + padR, svgH = padT + plotH + padB;
+            let svgW = padL + plotW + padR; const svgH = padT + plotH + padB;
             const ox = padL, oy = padT; // world origin (0,0) on screen — top-left, Y positive downward
             const px = x => ox + x * scale;
             const py = y => oy + y * scale;
@@ -10234,9 +10236,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // LC color — the first-named LC in a shared-X pair).
             const hStack = [
                 { v: g1.x, label: `${fmtMm(g1.x)} (G1)`, color: dimBlue },
-                ...(noLC ? [] : [{ v: cogXmm - halfEnvXmm, label: `${fmtMm(cogXmm - halfEnvXmm)} (LC2, LC3)`, color: lcColors.LC2 }]),
-                { v: cogXmm, label: `${fmtMm(cogXmm)} (CoG)`, color: dimGreen },
-                ...(noLC ? [] : [{ v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)`, color: lcColors.LC1 }]),
+                ...(noEnv ? [] : [{ v: cogXmm - halfEnvXmm, label: `${fmtMm(cogXmm - halfEnvXmm)} (LC2, LC3)`, color: lcColors.LC2 }]),
+                ...(ccogMode ? [] : [{ v: cogXmm, label: `${fmtMm(cogXmm)} (CoG)`, color: dimGreen }]),
+                ...(noEnv ? [] : [{ v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)`, color: lcColors.LC1 }]),
                 { v: Math.max(g2.x, g3.x), label: `${fmtMm(Math.max(g2.x, g3.x))} (G2, G3)`, color: dimBlue },
                 ...(showCC ? [{ v: ccXmm, label: `${fmtMm(ccXmm)} (CCoG)`, color: ccColor }] : []),
                 ...(cab ? [{ v: cab.F.x, label: `${caseABFmtNum(Math.round(cab.F.x * 10) / 10)} (CCoG end)`, color: cabEndCol }] : []),
@@ -10260,10 +10262,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // 90° — LC1/LC2, G1, CoG, LC3/LC4, ascending/innermost-out.
             // Colors follow the same per-vertex rule as hStack above.
             const vStack = [
-                ...(noLC ? [] : [{ v: cogYmm - halfEnvYmm, label: `${fmtMm(cogYmm - halfEnvYmm)} (LC1, LC2)`, color: lcColors.LC1 }]),
+                ...(noEnv ? [] : [{ v: cogYmm - halfEnvYmm, label: `${fmtMm(cogYmm - halfEnvYmm)} (LC1, LC2)`, color: lcColors.LC1 }]),
                 { v: g1.y, label: `${fmtMm(g1.y)} (G1)`, color: dimBlue },
-                { v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)`, color: dimGreen },
-                ...(noLC ? [] : [{ v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)`, color: lcColors.LC3 }]),
+                ...(ccogMode ? [] : [{ v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)`, color: dimGreen }]),
+                ...(noEnv ? [] : [{ v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)`, color: lcColors.LC3 }]),
                 ...(showCC ? [{ v: ccYmm, label: `${fmtMm(ccYmm)} (CCoG)`, color: ccColor }] : []),
                 ...(cab ? [{ v: cab.F.y, label: `${caseABFmtNum(Math.round(cab.F.y * 10) / 10)} (CCoG end)`, color: cabEndCol }] : []),
                 ...(cabCog ? [{ v: cabCog.F.y, label: `${caseABFmtNum(Math.round(cabCog.F.y * 10) / 10)} (CoG end)`, color: cabEndColG }] : []),
@@ -10328,7 +10330,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // (CoG green, LC1-4 their own colors from lcColors above)
             // instead of one uniform color, matching the dimension
             // stacks above.
-            if (noLC) envCalloutSvg = '';   // the 806 / 201 envelope-size call-outs belong to the LC1-4 box
+            if (noEnv) envCalloutSvg = '';   // the 806 / 201 envelope-size call-outs belong to the LC1-4 box
             // ---- CASE A / B card only: CoG + CCoG signs are drawn small and the SAME size, and every text of the triangle
             // drawing (CoG, CCoG, CASE A1-A4 line, perpendicular mm, X/Y of its end, CCoG->end dimension, Side names, G1-G3)
             // is placed by a small collision-avoiding placer so no text sits on another text, a sign or a line.
@@ -10421,11 +10423,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 regCab(cabCog, cogXmm, cogYmm, dimGreen, '#a3e635', 'CoG ', 'cog');     // CoG line (Single)
             }
             const mkR = useLP ? MK_R : 3, mkX = useLP ? MK_X : 6;
-            const cogMarkerSvg = `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
+            const cogMarkerSvg = ccogMode ? '' : `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
                 `<line x1="${px(cogXmm) - mkX}" y1="${py(cogYmm)}" x2="${px(cogXmm) + mkX}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
                 `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - mkX}" x2="${px(cogXmm)}" y2="${py(cogYmm) + mkX}" stroke="${dimGreen}" stroke-width="1"/>`;
             // CoG / CCoG name tags beside the markers (CoG green, CCoG red) so the two points are told apart at a glance
-            let ccSvg = useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
+            let ccSvg = ccogMode ? '' : useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
                 : `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
             if (showCC) {
                 const r = mkR, xr = mkX, cx = px(ccXmm), cy = py(ccYmm);   // CCoG sign = same radius / crosshair as the CoG sign
@@ -10463,7 +10465,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // Y-axis (flips their horizontal direction) — both now
             // point back toward the origin/X-axis instead of away from
             // the drawing, keeping them clear of the dimension stacks.
-            if (noLC || cogMode) lcSvg = '';
+            if (noLC || cogMode || ccogMode) lcSvg = '';
             const groupDir = { G1: [-1, 1], G2: [-1, -1], G3: [-1, 1] };
             const groupPts = { G1: g1, G2: g2, G3: g3 };
             let groupSvg = '';
@@ -10492,16 +10494,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // obstacles: rail, wedge, origin sign, G markers + labels, CoG + LC1-4 markers + labels, envelope call-outs
                 segA(px(0), py(0), px(spanX * 1.03), py(0), 2);
                 [[apex, g2], [g2, g3], [g3, apex]].forEach(([a, b]) => segA(px(a.x), py(a.y), px(b.x), py(b.y), 2));
+                const bxLabelFrom = bx.length;   // everything registered from here on is avoided by the picture-style labels (the rail / triangle outline is not)
                 bx.push([ox - 6, oy - 8, ox + axisLen + 16, oy + axisLen + 20]);
+                bx.push([px(Math.max(g2.x, g3.x)) + 6, py(Math.min(g2.y, g3.y)) - 24, px(Math.max(g2.x, g3.x)) + 60, py(Math.max(g2.y, g3.y)) + 8]);   // G2 / G3 dimension stack on the right
                 Object.entries(groupPts).forEach(([name, pt]) => {
                     const cx = px(pt.x), cy = py(pt.y), [dx, dy] = groupDir[name];
                     const kx = cx + dx * 22, ky = cy + dy * 16, tx = kx + dx * 16;
                     bx.push([cx - 4, cy - 4, cx + 4, cy + 4]); segA(cx, cy, kx, ky, 1.5); segA(kx, ky, tx, ky, 1.5);
                     bx.push(tbA(name, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10));
                 });
-                bx.push([px(cogXmm) - 5, py(cogYmm) - 5, px(cogXmm) + 5, py(cogYmm) + 5]);
-                bx.push(tbA('CoG', px(cogXmm) + 9, py(cogYmm) - 6, 'start', 9));
-                if (!noLC) {
+                if (!ccogMode) {
+                    bx.push([px(cogXmm) - 5, py(cogYmm) - 5, px(cogXmm) + 5, py(cogYmm) + 5]);
+                    bx.push(tbA('CoG', px(cogXmm) + 9, py(cogYmm) - 6, 'start', 9));
+                }
+                if (!noEnv) {
                     if (!cogMode) lcBaseMm.forEach(lc => {
                         const cx = px(lc.x), cy = py(lc.y), [dx, dy] = leaderDir[lc.name] || [1, 1];
                         const kx = cx + dx * 26, ky = cy + dy * 18, tx = kx + dx * 18;
@@ -10545,6 +10551,75 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         `<text x="${pick.x}" y="${pick.y}" font-size="${fs}" font-weight="700" fill="${fill}" text-anchor="${pick.an}" ${haloA}>${txt}</text>`;
                 };
                 let lines = '', signs = '', lbls = '';
+                const picItems = [];
+                // ---- label style of the CAD reference picture ----
+                // per load case point: leader + arrow head to the point from  "LCx-CoG" (nearest row) and "CASE A3 = 103.3" (outer row);
+                // "TIPPING ARM=608 (X=9549, Y= 1263)" (outermost row) with a leader + arrow head to the foot of the perpendicular on the triangle side.
+                // Points left of the cluster are labelled on the left, right ones on the right, upper ones above, lower ones below.
+                const pictureLabels = (arr) => {
+                    if (!arr.length) return '';
+                    const fs = 10, rowH = fs * 1.25, offX = 26, stub = 12;
+                    const xs = arr.map(o => o.cx), ys = arr.map(o => o.cy);
+                    const midX = (Math.min(...xs) + Math.max(...xs)) / 2, midY = (Math.min(...ys) + Math.max(...ys)) / 2;
+                    const cnt = {}, quad = (sx, sy) => sx + ',' + sy;
+                    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => { cnt[quad(a, b)] = 0; });
+                    const near = o => Math.abs(o.cx - midX) < 1.5 && Math.abs(o.cy - midY) < 1.5;
+                    arr.forEach(o => { if (!near(o)) { o.sx = o.cx < midX ? -1 : 1; o.sy = o.cy < midY ? -1 : 1; cnt[quad(o.sx, o.sy)]++; } });
+                    arr.forEach(o => {   // a point in the middle (LC0) goes to the emptiest quadrant
+                        if (!near(o)) return;
+                        let best = [-1, -1];
+                        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(q => { if (cnt[quad(q[0], q[1])] < cnt[quad(best[0], best[1])]) best = q; });
+                        o.sx = best[0]; o.sy = best[1]; cnt[quad(o.sx, o.sy)]++;
+                    });
+                    const rnd = v => String(Math.round(v));
+                    const rEdge = px(Math.max(g2.x, g3.x)) + 64;   // labels on the right start beyond the G2 / G3 dimension stack
+                    const tw = txt => String(txt).replace(/&[a-z]+;/g, '_').length * fs * 0.68;   // bold text width estimate
+                    const tb = (txt, x, y, an) => { const w = tw(txt), x0 = an === 'end' ? x - w : x; return [x0, y - fs * 0.9, x0 + w, y + fs * 0.3]; };
+                    const hitP = b => bx.some((o, i) => i >= bxLabelFrom && b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+                    const arrow = (S, T, col, gap) => {
+                        const L = Math.hypot(T.x - S.x, T.y - S.y) || 1, ux = (T.x - S.x) / L, uy = (T.y - S.y) / L, nx = -uy, ny = ux;
+                        const tip = { x: T.x - ux * gap, y: T.y - uy * gap };
+                        return `<polygon points="${tip.x},${tip.y} ${tip.x - ux * 7 + nx * 2.6},${tip.y - uy * 7 + ny * 2.6} ${tip.x - ux * 7 - nx * 2.6},${tip.y - uy * 7 - ny * 2.6}" fill="${col}"/>`;
+                    };
+                    // one text row + its leader (stub, then a straight line with an arrow head on the target)
+                    const putRow = (txt, ex, y0, sx, sy, col, T, gap, bold) => {
+                        const an = sx < 0 ? 'end' : 'start';
+                        if (sx > 0 && ex < rEdge && ex + tw(txt) > rEdge - 58) ex = rEdge;
+                        let pick = null, first = null;
+                        search: for (const flip of [1, -1]) {
+                            for (let k = 0; k < 24; k++) {
+                                const y = y0 + sy * flip * k * rowH + (flip < 0 ? -2 * (y0 - T.y) : 0);
+                                const b = tb(txt, ex, y, an), cand = { y, b };
+                                if (!first) first = cand;
+                                if (b[0] < ox - 2 || b[1] < oy - 3) continue;
+                                if (!hitP(b)) { pick = cand; break search; }
+                            }
+                        }
+                        pick = pick || first;
+                        bx.push(pick.b);
+                        if (pick.b[3] > cabAllBottom) cabAllBottom = pick.b[3] + 6;
+                        if (pick.b[2] > cabRightMax) cabRightMax = pick.b[2];
+                        const ym = pick.y - fs * 0.3, S = { x: ex - sx * stub, y: ym };
+                        segA(ex, ym, S.x, S.y, 1); segA(S.x, S.y, T.x, T.y, 1.2);
+                        return `<line x1="${ex}" y1="${ym}" x2="${S.x}" y2="${S.y}" stroke="${col}" stroke-width="1"/>` +
+                            `<line x1="${S.x}" y1="${S.y}" x2="${T.x}" y2="${T.y}" stroke="${col}" stroke-width="1"/>` + arrow(S, T, col, gap) +
+                            `<text x="${ex}" y="${pick.y}" font-size="${fs}" font-weight="${bold ? 700 : 600}" fill="${col}" text-anchor="${an}" ${haloA}>${txt}</text>`;
+                    };
+                    let out = '';
+                    arr.forEach(o => {
+                        const { cx, cy, sx, sy, col, cb } = o, P0 = { x: cx, y: cy };
+                        const base = (n) => cy + sy * n * fs + (sy > 0 ? fs * 0.8 : 0);   // baseline of the n-th row away from the point
+                        out += putRow(escapeHtml(o.nm), cx + sx * offX, base(2.2), sx, sy, col, P0, 4, true);
+                        if (!cb) return;
+                        const caseTxt = `CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)}`;
+                        out += putRow(caseTxt, cx + sx * offX, base(2.2) + sy * rowH, sx, sy, col, P0, 4, false);
+                        const tip = `TIPPING ARM=${rnd(cb.k.min)} (X=${rnd(cb.F.x)}, Y= ${rnd(cb.F.y)})`;
+                        const syT = Math.abs(cb.F.y * 0 + py(cb.F.y) - cy) > 3 ? (py(cb.F.y) < cy ? -1 : 1) : sy;   // beside the side line the foot lies on
+                        const baseT = cy + syT * (2.2 + 1.2) * fs + (syT > 0 ? fs * 0.8 : 0) + syT * (rowH + fs * 1.9 - rowH);
+                        out += putRow(tip, cx + sx * (offX + 8), baseT, sx, syT, col, { x: px(cb.F.x), y: py(cb.F.y) }, 0, false);
+                    });
+                    return out;
+                };
                 // LC1-LC4 CoG (Triangle 1): CoG sign in the load case colour, CASE line, perpendicular, "CoG LCx" label
                 cabAllCogRes.forEach(({ it, cab: cb }) => {
                     const col = it.lc.color, nm = it.lc.name, cx = px(it.cog.x), cy = py(it.cog.y);
@@ -10554,10 +10629,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         lines += `<g opacity="0.95"><line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${col}" stroke-width="1.4"><title>CoG ${nm}: CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)} mm${cb.k.solved ? ' (solved from the Single table value)' : ''}</title></line>` +
                             `<line x1="${qx}" y1="${qy}" x2="${fx}" y2="${fy}" stroke="${col}" stroke-width="1.4" stroke-dasharray="4 3"><title>CoG ${nm}: perpendicular ${escapeHtml(minShow)} mm to Side ${cb.k.sideA}-${cb.k.sideB}</title></line>` +
                             `<circle cx="${qx}" cy="${qy}" r="1.8" fill="${col}"/><rect x="${fx - 2.5}" y="${fy - 2.5}" width="5" height="5" fill="${col}"/></g>`;
-                        lbls += leaderLabel(escapeHtml(nm + ' ' + minShow + ' mm'), fx, fy, col, 9);
                     }
                     signs += `<g><circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.5"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    lbls += leaderLabel('CoG ' + nm, cx, cy, col, 10);
+                    picItems.push({ col, nm: nm + '-CoG', cx, cy, cb, L: it.k && it.k.L });
                 });
                 cabAllRes.forEach(({ it, cab: cb }) => {
                     const col = it.lc.color, nm = it.lc.name, cx = px(it.cc.x), cy = py(it.cc.y);
@@ -10567,12 +10641,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         lines += `<g opacity="0.95"><line x1="${cx}" y1="${cy}" x2="${qx}" y2="${qy}" stroke="${col}" stroke-width="1.4"><title>${nm}: CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)} mm</title></line>` +
                             `<line x1="${qx}" y1="${qy}" x2="${fx}" y2="${fy}" stroke="${col}" stroke-width="1.4" stroke-dasharray="4 3"><title>${nm}: perpendicular ${escapeHtml(minShow)} mm to Side ${cb.k.sideA}-${cb.k.sideB}</title></line>` +
                             `<circle cx="${qx}" cy="${qy}" r="1.8" fill="${col}"/><rect x="${fx - 2.5}" y="${fy - 2.5}" width="5" height="5" fill="${col}"/></g>`;
-                        lbls += leaderLabel(escapeHtml(nm + ' ' + minShow + ' mm'), fx, fy, col, 9);
                     }
                     signs += `<g><path d="M ${cx} ${cy} L ${cx} ${cy - 3} A 3 3 0 0 1 ${cx + 3} ${cy} Z" fill="${col}" opacity="0.85"/><path d="M ${cx} ${cy} L ${cx} ${cy + 3} A 3 3 0 0 1 ${cx - 3} ${cy} Z" fill="${col}" opacity="0.85"/>` +
                         `<circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.3"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    lbls += leaderLabel('CCoG ' + nm, cx, cy, col, 10);
+                    picItems.push({ col, nm: it.lc.i === 0 ? 'CCoG' : nm + '-CCoG', cx, cy, cb });
                 });
+                lbls += pictureLabels(picItems);
                 cabAllSvg = lines + signs + lbls;
             }
             let cabSvg = '';
@@ -10633,16 +10707,17 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // Height fits the content (the plot box is only as tall as maxY*scale; the old fixed 260px box left an empty band under wide trailers)
             const contentBottom = Math.max(
                 py(maxY) + 24,
-                noLC ? 0 : envCallY + 18,
-                noLC ? 0 : Math.max(...lcBaseMm.map(lc => py(lc.y) + 26)),
+                noEnv ? 0 : envCallY + 18,
+                noEnv ? 0 : Math.max(...lcBaseMm.map(lc => py(lc.y) + 26)),
                 showCC ? py(ccYmm) + 22 : 0,
                 cab ? Math.max(py(cab.P.y), py(cab.F.y)) + 22 : 0,
                 cabCog ? Math.max(py(cabCog.P.y), py(cabCog.F.y)) + 22 : 0,
                 useLP ? lpMaxY + 6 : 0,
                 cabAllBottom,
-                py(cogYmm) + 14
+                ccogMode ? 0 : py(cogYmm) + 14
             );
             const svgHFit = Math.ceil(contentBottom + 4);
+            if (cabRightMax > svgW - 6) svgW = Math.ceil(cabRightMax + 8);   // labels placed right of the cluster
             el.innerHTML = `<svg width="100%" viewBox="0 0 ${svgW} ${svgHFit}" style="display:block; min-width:520px;">
                 <defs>
                     <marker id="${arrowId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
