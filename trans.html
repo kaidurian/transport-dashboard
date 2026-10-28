@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.190.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.191)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8366,24 +8366,30 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             return items;
         }
-        // table under the triangle: one row per load case LC0-LC4, CoG and CCoG side by side as column groups;
-        // stability angle / result exist only for the CCoG (Combined)
-        function caseABAllTable(L, items, cogRows) {
+        // tables under the triangles: one row per load case LC0-LC4.
+        // mode 'cog'  -> table under Triangle 1 (CoG: X, Y, CASE line, perpendicular)
+        // mode 'ccog' -> table under Triangle 2 (CCoG: same columns + stability angle and result)
+        function caseABAllTable(L, items, cogRows, mode) {
             const r1 = v => caseABFmtNum(Math.round(v * 10) / 10);
             const caseTd = k => `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>`;
             const perpTd = k => `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>`;
-            let tbl = '<table class="tg-drawing-table tg-caseab-mini">' +
-                '<tr class="tg-dt-bold"><td rowspan="2">Load case</td><td colspan="3">CoG</td><td colspan="3">CCoG</td><td rowspan="2">Stability angle</td><td rowspan="2">Result</td></tr>' +
-                '<tr class="tg-dt-bold"><td>X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td></tr>';
+            const ccog = mode === 'ccog';
+            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>' + (ccog ? 'CCoG' : 'CoG') + ' X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td>' +
+                (ccog ? '<td>Stability angle</td><td>Result</td>' : '') + '</tr>';
             CABALL_LC.forEach(lc => {
-                const cg = (cogRows || []).find(r => r.lc.i === lc.i);
+                const dot = `<td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>`;
+                if (!ccog) {
+                    const cg = (cogRows || []).find(r => r.lc.i === lc.i);
+                    if (!cg) return;
+                    const k = cg.cb && cg.cb.k;
+                    tbl += `<tr>${dot}<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(k)}${perpTd(k)}</tr>`;
+                    return;
+                }
                 const it = items.find(r => r.lc.i === lc.i);
-                if (!cg && !it) return;
-                const stCls = it ? (it.st === 'tg-dt-ok' ? 'tg-dt-ok' : (it.st === 'tg-dt-notok' ? 'tg-dt-notok' : '')) : '';
-                tbl += `<tr><td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>` +
-                    (cg ? `<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(cg.cb && cg.cb.k)}${perpTd(cg.cb && cg.cb.k)}` : '<td>–</td><td>–</td><td>–</td>') +
-                    (it ? `<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>${caseTd(it.k)}${perpTd(it.k)}` : '<td>–</td><td>–</td><td>–</td>') +
-                    `<td class="${stCls}">${it ? escapeHtml(it.angTxt) : '–'}</td>` +
+                if (!it) return;
+                const stCls = it.st === 'tg-dt-ok' ? 'tg-dt-ok' : (it.st === 'tg-dt-notok' ? 'tg-dt-notok' : '');
+                tbl += `<tr>${dot}<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>${caseTd(it.k)}${perpTd(it.k)}` +
+                    `<td class="${stCls}">${escapeHtml(it.angTxt)}</td>` +
                     `<td class="${stCls}">${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
             });
             return tbl + '</table>';
@@ -8412,9 +8418,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 });
                 return `<div class="tg-caseab-case"><div class="tg-caseab-case-title">CASE ${L} — LC0 to LC4</div>` +
                     `<div class="tg-caseab-stab-title" style="border-top:none; margin-top:4px;">Triangle 1 — CoG only: LC0 CoG sign, LC1–LC4 CoG (CASE line + perpendicular)</div>` +
-                    `<div id="tgCaseABAllPrev${L}Cog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
+                    `<div id="tgCaseABAllPrev${L}Cog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div><div id="tgCaseABAllTblCog${L}" style="margin-bottom:6px;"></div>` +
                     `<div class="tg-caseab-stab-title">Triangle 2 — CCoG only: CCoG (LC0) and LC1–LC4 CCoG</div>` +
-                    `<div id="tgCaseABAllPrev${L}Ccog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div><div id="tgCaseABAllTbl${L}"></div>${rows}</div>`;
+                    `<div id="tgCaseABAllPrev${L}Ccog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div><div id="tgCaseABAllTblCcog${L}"></div>${rows}</div>`;
             };
             el.innerHTML = block('A') + block('B');
             // the triangle = the 📊 CoG Envelope Table drawing + the CCoG of each load case and its line to the triangle side
@@ -8425,8 +8431,10 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Cog', idSuffix: 'All' + L + 'Cog', cabAll: { L, items: [], cogItems: caseABAllCogItems(L), mode: 'cog', out: cabOut } });
                 // Triangle 2: LC0 CoG sign + LC1-LC4 CoG points + CCoG of LC0-LC4 (+ CASE line / perpendicular, CCoG dimensions)
                 renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Ccog', idSuffix: 'All' + L + 'Ccog', cabAll: { L, items: caseABAllItems(L), mode: 'ccog' } });
-                const tblEl = document.getElementById('tgCaseABAllTbl' + L);
-                if (tblEl) tblEl.innerHTML = caseABAllTable(L, caseABAllItems(L), cabOut.cog);
+                const tblCog = document.getElementById('tgCaseABAllTblCog' + L);
+                if (tblCog) tblCog.innerHTML = caseABAllTable(L, [], cabOut.cog, 'cog');
+                const tblCcog = document.getElementById('tgCaseABAllTblCcog' + L);
+                if (tblCcog) tblCcog.innerHTML = caseABAllTable(L, caseABAllItems(L), null, 'ccog');
             });
         }
         function renderTgCaseABStab() {
@@ -10568,7 +10576,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // Points left of the cluster are labelled on the left, right ones on the right, upper ones above, lower ones below.
                 const pictureLabels = (arr) => {
                     if (!arr.length) return '';
-                    const fs = 10, rowH = fs * 1.25, offX = 26, stub = 12;
+                    const fs = 10, rowH = fs * 1.25, offX0 = 26, stub = 12;
                     const xs = arr.map(o => o.cx), ys = arr.map(o => o.cy);
                     const midX = (Math.min(...xs) + Math.max(...xs)) / 2, midY = (Math.min(...ys) + Math.max(...ys)) / 2;
                     const cnt = {}, quad = (sx, sy) => sx + ',' + sy;
@@ -10581,6 +10589,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(q => { if (cnt[quad(q[0], q[1])] < cnt[quad(best[0], best[1])]) best = q; });
                         o.sx = best[0]; o.sy = best[1]; cnt[quad(o.sx, o.sy)]++;
                     });
+                    arr.forEach(o => { if (o.mir) { o.sx = -o.sx; o.sy = -o.sy; } });   // mirror the green label: opposite side of its point
                     const rnd = v => String(Math.round(v));
                     const rEdge = px(Math.max(g2.x, g3.x)) + 64;   // labels on the right start beyond the G2 / G3 dimension stack
                     const tw = txt => String(txt).replace(/&[a-z]+;/g, '_').length * fs * 0.68;   // bold text width estimate
@@ -10618,8 +10627,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     let out = '';
                     // place the labels from the cluster centre outwards (nearest point first), so the labels of the outer load cases
                     // stack beyond the inner ones instead of landing on them and the leaders fan out without crossing
-                    arr.slice().sort((a, b) => (Math.abs(a.cy - midY) + Math.abs(a.cx - midX) * 0.01) - (Math.abs(b.cy - midY) + Math.abs(b.cx - midX) * 0.01)).forEach(o => {
+                    arr.slice().sort((a, b) => (a.mir ? 1 : 0) - (b.mir ? 1 : 0) || (Math.abs(a.cy - midY) + Math.abs(a.cx - midX) * 0.01) - (Math.abs(b.cy - midY) + Math.abs(b.cx - midX) * 0.01)).forEach(o => {
                         const { cx, cy, sx, sy, col, cb } = o, P0 = { x: cx, y: cy };
+                        const offX = o.mir ? offX0 + 30 : offX0;   // mirrored green label is set further out, clear of the violet LC2 / LC3 labels
                         const base = (n) => cy + sy * n * fs + (sy > 0 ? fs * 0.8 : 0);   // baseline of the n-th row away from the point
                         out += putRow(escapeHtml(o.nm), cx + sx * offX, base(2.2), sx, sy, col, P0, 4, true);
                         if (!cb) return;
@@ -10643,7 +10653,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             `<circle cx="${qx}" cy="${qy}" r="1.8" fill="${col}"/><rect x="${fx - 2.5}" y="${fy - 2.5}" width="5" height="5" fill="${col}"/></g>`;
                     }
                     signs += `<g><circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.5"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    picItems.push({ col, nm: nm + '-CoG', cx, cy, cb, L: it.k && it.k.L });
+                    picItems.push({ col, nm: nm + '-CoG', cx, cy, cb, L: it.k && it.k.L, mir: it.lc.i === 0 });   // mir: green LC0 CoG label is mirrored to the opposite side
                 });
                 cabAllRes.forEach(({ it, cab: cb }) => {
                     const col = it.lc.color, nm = it.lc.name, cx = px(it.cc.x), cy = py(it.cc.y);
