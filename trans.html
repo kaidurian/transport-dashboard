@@ -8341,6 +8341,16 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             return { k, sa, sb, P, F: { x: P.x - sd * nx, y: P.y - sd * ny }, geo: Math.abs(sd) };
         }
         // per load case: CCoG, the CASE construction (line from the CCoG to the triangle side) and the stability angle / result of the recorded data
+        // worst case = minimum tipping arm; if two or more load cases have the same minimum, the lowest load case wins (LC2 before LC3)
+        function caseABWorstLc(list) {
+            let best = null;
+            list.forEach(o => {
+                if (!o || !isFinite(o.m)) return;
+                const m = Math.round(o.m * 10) / 10;
+                if (best === null || m < best.m - 1e-9 || (Math.abs(m - best.m) < 1e-9 && o.i < best.i)) best = { i: o.i, m };
+            });
+            return best ? best.i : -1;
+        }
         function caseABAllItems(L) {
             const items = [];
             CABALL_LC.forEach(lc => {
@@ -8382,7 +8392,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const k = ccog ? (items.find(r => r.lc.i === l.i) || {}).k : ((cogRows || []).find(r => r.lc.i === l.i) || {}).cb && (cogRows || []).find(r => r.lc.i === l.i).cb.k;
                 return k ? { i: l.i, m: k.min } : null;
             }).filter(Boolean);
-            const worstI = wv.length ? wv.reduce((a, b) => b.m < a.m ? b : a).i : -1;
+            const worstI = caseABWorstLc(wv);
             const wTag = lc => lc.i === worstI ? ` <span style="${HL}padding:0 3px;border-radius:2px;">(WORST CASE)</span>` : '';
             let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>' + (ccog ? 'CCoG' : 'CoG') + ' X, Y</td><td>CASE ' + L + ' line</td><td>Tipping Arm</td><td>Stability angle</td><td>Result</td></tr>';
             CABALL_LC.forEach(lc => {
@@ -8425,7 +8435,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const items = caseABAllItems(L);
                 let rows = '';
                 const wv = items.filter(r => r.lc.i > 0 && r.k).map(r => ({ i: r.lc.i, m: r.k.min }));
-                const worstI = wv.length ? wv.reduce((a, b) => b.m < a.m ? b : a).i : -1;   // minimum tipping arm of the CCoG
+                const worstI = caseABWorstLc(wv);   // minimum tipping arm of the CCoG (tie -> lowest LC)
                 CABALL_LC.forEach(lc => {
                     if (lc.i === 0) return;   // no LC0 stability angle
                     const sn = tgCabLcSnaps[lc.i];
@@ -10589,7 +10599,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 };
                 let lines = '', signs = '', lbls = '';
                 // worst case = LC1-LC4 point with the minimum tipping arm (same rule as the table)
-                const worstOf = res => { let b = null; res.forEach(r => { if (r.it.lc.i !== 0 && r.cab && (b === null || r.cab.k.min < b.m)) b = { i: r.it.lc.i, m: r.cab.k.min }; }); return b ? b.i : -1; };
+                const worstOf = res => caseABWorstLc(res.filter(r => r.it.lc.i !== 0 && r.cab).map(r => ({ i: r.it.lc.i, m: r.cab.k.min })));
                 const worstCogI = worstOf(cabAllCogRes), worstCcI = worstOf(cabAllRes);
                 const picItems = [];
                 // ---- label style of the CAD reference picture ----
