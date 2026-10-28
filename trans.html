@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.192)</h1>
+            <h1>🚂 Transport Dashboard (Rev.193)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8374,12 +8374,20 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function caseABAllTable(L, items, cogRows, mode) {
             const r1 = v => caseABFmtNum(Math.round(v * 10) / 10);
             const caseTd = k => `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>`;
-            const perpTd = k => `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>`;
+            const HL = 'background:#fde047;color:#111827;font-weight:700;';   // highlight of the minimum tipping arm (worst case)
+            const perpTd = (k, hl) => `<td${hl ? ` style="${HL}"` : ''}>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>`;
             const ccog = mode === 'ccog';
-            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>' + (ccog ? 'CCoG' : 'CoG') + ' X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>Stability angle</td><td>Result</td></tr>';
+            // worst case = load case (LC1-LC4) with the minimum tipping arm of this table
+            const wv = CABALL_LC.filter(l => l.i > 0).map(l => {
+                const k = ccog ? (items.find(r => r.lc.i === l.i) || {}).k : ((cogRows || []).find(r => r.lc.i === l.i) || {}).cb && (cogRows || []).find(r => r.lc.i === l.i).cb.k;
+                return k ? { i: l.i, m: k.min } : null;
+            }).filter(Boolean);
+            const worstI = wv.length ? wv.reduce((a, b) => b.m < a.m ? b : a).i : -1;
+            const wTag = lc => lc.i === worstI ? ` <span style="${HL}padding:0 3px;border-radius:2px;">(WORST CASE)</span>` : '';
+            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>' + (ccog ? 'CCoG' : 'CoG') + ' X, Y</td><td>CASE ' + L + ' line</td><td>Tipping Arm</td><td>Stability angle</td><td>Result</td></tr>';
             CABALL_LC.forEach(lc => {
                 if (lc.i === 0) return;   // LC0 is only a sign in the triangle, not listed in the table
-                const dot = `<td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>`;
+                const dot = `<td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span>${wTag(lc)}</td>`;
                 if (!ccog) {
                     const cg = (cogRows || []).find(r => r.lc.i === lc.i);
                     if (!cg) return;
@@ -8388,7 +8396,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const ang = (k && isFinite(cg.h) && cg.h > 0) ? Math.atan(k.min / cg.h) * 180 / Math.PI : null;
                     const itC = items.find(r => r.lc.i === lc.i);   // same condition result as the CCoG of this load case
                     const okCls = itC && (itC.st === 'tg-dt-ok' || itC.st === 'tg-dt-notok') ? itC.st : '';
-                    tbl += `<tr>${dot}<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(k)}${perpTd(k)}` +
+                    tbl += `<tr>${dot}<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(k)}${perpTd(k, lc.i === worstI)}` +
                         `<td class="${okCls}">${ang !== null ? escapeHtml(L + '=' + r1(ang) + '°') : '–'}</td>` +
                         `<td class="${okCls}">${okCls === 'tg-dt-ok' ? 'OK' : (okCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
                     return;
@@ -8396,7 +8404,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const it = items.find(r => r.lc.i === lc.i);
                 if (!it) return;
                 const stCls = it.st === 'tg-dt-ok' ? 'tg-dt-ok' : (it.st === 'tg-dt-notok' ? 'tg-dt-notok' : '');
-                tbl += `<tr>${dot}<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>${caseTd(it.k)}${perpTd(it.k)}` +
+                tbl += `<tr>${dot}<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>${caseTd(it.k)}${perpTd(it.k, lc.i === worstI)}` +
                     `<td class="${stCls}">${escapeHtml(it.angTxt)}</td>` +
                     `<td class="${stCls}">${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
             });
@@ -8416,9 +8424,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 const rl = L === 'A' ? 17 : 39, rt = L === 'A' ? 25 : 46;
                 const items = caseABAllItems(L);
                 let rows = '';
+                const wv = items.filter(r => r.lc.i > 0 && r.k).map(r => ({ i: r.lc.i, m: r.k.min }));
+                const worstI = wv.length ? wv.reduce((a, b) => b.m < a.m ? b : a).i : -1;   // minimum tipping arm of the CCoG
                 CABALL_LC.forEach(lc => {
+                    if (lc.i === 0) return;   // no LC0 stability angle
                     const sn = tgCabLcSnaps[lc.i];
-                    rows += `<div class="tg-caseab-stab-title" style="color:${lc.color};">${lc.name} — CASE ${L}</div>`;
+                    rows += `<div class="tg-caseab-stab-title" style="color:${lc.color};">${lc.name} — CASE ${L}${lc.i === worstI ? ` <span style="background:#fde047;color:#111827;font-weight:700;padding:0 4px;border-radius:2px;">(WORST CASE)</span>` : ''}</div>`;
                     if (!sn) { rows += '<div class="tg-modal-sub" style="margin:0 0 4px 0;">Not recorded.</div>'; return; }
                     rows += cabWithSnap(sn, () => `<div class="tg-caseab-row"><div class="tg-caseab-row-tri">` +
                         buildCaseABTriangleSvg(L, caseABCell(rl, 'I'), caseABCell(rt, 'I'), caseABTxt(rl, 'I'), caseABTxt(rt, 'I'), 'LC' + lc.i) +
@@ -10577,6 +10588,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         `<text x="${pick.x}" y="${pick.y}" font-size="${fs}" font-weight="700" fill="${fill}" text-anchor="${pick.an}" ${haloA}>${txt}</text>`;
                 };
                 let lines = '', signs = '', lbls = '';
+                // worst case = LC1-LC4 point with the minimum tipping arm (same rule as the table)
+                const worstOf = res => { let b = null; res.forEach(r => { if (r.it.lc.i !== 0 && r.cab && (b === null || r.cab.k.min < b.m)) b = { i: r.it.lc.i, m: r.cab.k.min }; }); return b ? b.i : -1; };
+                const worstCogI = worstOf(cabAllCogRes), worstCcI = worstOf(cabAllRes);
                 const picItems = [];
                 // ---- label style of the CAD reference picture ----
                 // per load case point: leader + arrow head to the point from  "LCx-CoG" (nearest row) and "CASE A3 = 103.3" (outer row);
@@ -10609,7 +10623,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         return `<polygon points="${tip.x},${tip.y} ${tip.x - ux * 7 + nx * 2.6},${tip.y - uy * 7 + ny * 2.6} ${tip.x - ux * 7 - nx * 2.6},${tip.y - uy * 7 - ny * 2.6}" fill="${col}"/>`;
                     };
                     // one text row + its leader (stub, then a straight line with an arrow head on the target)
-                    const putRow = (txt, ex, y0, sx, sy, col, T, gap, bold) => {
+                    const putRow = (txt, ex, y0, sx, sy, col, T, gap, bold, hl) => {
                         const an = sx < 0 ? 'end' : 'start';
                         if (sx > 0 && ex < rEdge && ex + tw(txt) > rEdge - 58) ex = rEdge;
                         let pick = null, first = null;
@@ -10630,7 +10644,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         segA(ex, ym, S.x, S.y, 1); segA(S.x, S.y, T.x, T.y, 1.2);
                         return `<line x1="${ex}" y1="${ym}" x2="${S.x}" y2="${S.y}" stroke="${col}" stroke-width="1"/>` +
                             `<line x1="${S.x}" y1="${S.y}" x2="${T.x}" y2="${T.y}" stroke="${col}" stroke-width="1"/>` + arrow(S, T, col, gap) +
-                            `<text x="${ex}" y="${pick.y}" font-size="${fs}" font-weight="${bold ? 700 : 600}" fill="${col}" text-anchor="${an}" ${haloA}>${txt}</text>`;
+                            (hl ? `<rect x="${pick.b[0] - 2}" y="${pick.b[1] - 1}" width="${pick.b[2] - pick.b[0] + 4}" height="${pick.b[3] - pick.b[1] + 2}" rx="2" fill="#fde047"/>` : '') +
+                            `<text x="${ex}" y="${pick.y}" font-size="${fs}" font-weight="${bold ? 700 : 600}" fill="${hl ? '#111827' : col}" text-anchor="${an}" ${hl ? '' : haloA}>${txt}</text>`;
                     };
                     let out = '';
                     const tips = [];
@@ -10640,7 +10655,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                         const { cx, cy, sx, sy, col, cb } = o, P0 = { x: cx, y: cy };
                         const offX = o.mir ? offX0 + 30 : offX0;   // mirrored green label is set further out, clear of the violet LC2 / LC3 labels
                         const base = (n) => cy + sy * n * fs + (sy > 0 ? fs * 0.8 : 0);   // baseline of the n-th row away from the point
-                        out += putRow(escapeHtml(o.nm), cx + sx * offX, base(2.2), sx, sy, col, P0, 4, true);
+                        out += putRow(escapeHtml(o.nm), cx + sx * offX, base(2.2), sx, sy, col, P0, 4, true, o.worst);
                         if (!cb) return;
                         const caseTxt = `CASE ${cb.k.L}${cb.k.idx} = ${escapeHtml(cb.k.signedTxt)}`;
                         out += putRow(caseTxt, cx + sx * offX, base(2.2) + sy * rowH, sx, sy, col, { x: px(cb.P.x), y: py(cb.P.y) }, 0, false);   // arrow head on the END of the CASE line
@@ -10669,7 +10684,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             `<circle cx="${qx}" cy="${qy}" r="1.8" fill="${col}"/><rect x="${fx - 2.5}" y="${fy - 2.5}" width="5" height="5" fill="${col}"/></g>`;
                     }
                     signs += `<g><circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.5"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    if (it.lc.i !== 0) picItems.push({ col, nm: nm + '-CoG', cx, cy, cb, L: it.k && it.k.L });   // LC0 = sign only
+                    if (it.lc.i !== 0) picItems.push({ col, nm: nm + '-CoG' + (it.lc.i === worstCogI ? ' (WORST CASE)' : ''), worst: it.lc.i === worstCogI, cx, cy, cb, L: it.k && it.k.L });   // LC0 = sign only
                 });
                 cabAllRes.forEach(({ it, cab: cb }) => {
                     const col = it.lc.color, nm = it.lc.name, cx = px(it.cc.x), cy = py(it.cc.y);
@@ -10682,7 +10697,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     }
                     signs += `<g><path d="M ${cx} ${cy} L ${cx} ${cy - 3} A 3 3 0 0 1 ${cx + 3} ${cy} Z" fill="${col}" opacity="0.85"/><path d="M ${cx} ${cy} L ${cx} ${cy + 3} A 3 3 0 0 1 ${cx - 3} ${cy} Z" fill="${col}" opacity="0.85"/>` +
                         `<circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.3"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    if (it.lc.i !== 0) picItems.push({ col, nm: nm + '-CCoG', cx, cy, cb });   // LC0 = sign only
+                    if (it.lc.i !== 0) picItems.push({ col, nm: nm + '-CCoG' + (it.lc.i === worstCcI ? ' (WORST CASE)' : ''), worst: it.lc.i === worstCcI, cx, cy, cb });   // LC0 = sign only
                 });
                 lbls += pictureLabels(picItems);
                 cabAllSvg = lines + signs + lbls;
