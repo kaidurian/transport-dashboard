@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.190)</h1>
+            <h1>🚂 Transport Dashboard (Rev.190.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -8366,31 +8366,25 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             });
             return items;
         }
-        // table under the triangle: CoG + CCoG of every load case (CoG rows from Triangle 1, CCoG rows from Triangle 2);
-        // stability angle / result exist only for the CCoG (Combined) rows
+        // table under the triangle: one row per load case LC0-LC4, CoG and CCoG side by side as column groups;
+        // stability angle / result exist only for the CCoG (Combined)
         function caseABAllTable(L, items, cogRows) {
             const r1 = v => caseABFmtNum(Math.round(v * 10) / 10);
-            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>Point</td><td>X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>Stability angle</td><td>Result</td></tr>';
+            const caseTd = k => `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>`;
+            const perpTd = k => `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>`;
+            let tbl = '<table class="tg-drawing-table tg-caseab-mini">' +
+                '<tr class="tg-dt-bold"><td rowspan="2">Load case</td><td colspan="3">CoG</td><td colspan="3">CCoG</td><td rowspan="2">Stability angle</td><td rowspan="2">Result</td></tr>' +
+                '<tr class="tg-dt-bold"><td>X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td></tr>';
             CABALL_LC.forEach(lc => {
                 const cg = (cogRows || []).find(r => r.lc.i === lc.i);
                 const it = items.find(r => r.lc.i === lc.i);
-                const dot = `<td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>`;
-                if (cg) {
-                    const k = cg.cb && cg.cb.k;
-                    tbl += `<tr>${dot}<td>CoG</td><td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>` +
-                        `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>` +
-                        `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td><td>–</td><td></td></tr>`;
-                }
-                if (it) {
-                    const k = it.k;
-                    const stCls = it.st === 'tg-dt-ok' ? 'tg-dt-ok' : (it.st === 'tg-dt-notok' ? 'tg-dt-notok' : '');
-                    tbl += `<tr>${dot}<td>CCoG</td>` +
-                        `<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>` +
-                        `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>` +
-                        `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>` +
-                        `<td class="${stCls}">${escapeHtml(it.angTxt)}</td>` +
-                        `<td class="${stCls}">${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
-                }
+                if (!cg && !it) return;
+                const stCls = it ? (it.st === 'tg-dt-ok' ? 'tg-dt-ok' : (it.st === 'tg-dt-notok' ? 'tg-dt-notok' : '')) : '';
+                tbl += `<tr><td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>` +
+                    (cg ? `<td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>${caseTd(cg.cb && cg.cb.k)}${perpTd(cg.cb && cg.cb.k)}` : '<td>–</td><td>–</td><td>–</td>') +
+                    (it ? `<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>${caseTd(it.k)}${perpTd(it.k)}` : '<td>–</td><td>–</td><td>–</td>') +
+                    `<td class="${stCls}">${it ? escapeHtml(it.angTxt) : '–'}</td>` +
+                    `<td class="${stCls}">${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
             });
             return tbl + '</table>';
         }
