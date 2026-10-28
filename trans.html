@@ -1128,7 +1128,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.189)</h1>
+            <h1>🚂 Transport Dashboard (Rev.190)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1783,7 +1783,7 @@
                             <button type="button" class="tg-minimize-btn" title="Minimize this card (show only the header)">—</button>
                         </div>
                         <p class="tg-modal-sub">
-                            Display of <strong>CASE A</strong> / <strong>CASE B</strong> for every load case <strong>LC0–LC4</strong> of the 📊 CoG Envelope Table. Each CASE has <strong>two group triangles</strong>, CoG and CCoG kept apart: <strong>triangle 1</strong> shows only the CoG (LC0 CoG sign + LC1–LC4 CoG, each in its load case colour with its CASE line, the perpendicular to the triangle side and a “CoG LCx” label); <strong>triangle 2</strong> shows only the <strong>CCoG of every load case</strong> (CCoG for LC0, LCx-CCoG for LC1–LC4) with its line to the triangle side (CASE line, then the perpendicular) and its X / Y dimensions, each load case in its own colour; under it a CCoG table (with the stability angle and the result) and, for each load case separately, the <strong>4-direction arrows</strong> and the <strong>stability angle</strong>.
+                            Display of <strong>CASE A</strong> / <strong>CASE B</strong> for every load case <strong>LC0–LC4</strong> of the 📊 CoG Envelope Table. Each CASE has <strong>two group triangles</strong>, CoG and CCoG kept apart: <strong>triangle 1</strong> shows only the CoG (LC0–LC4 CoG, each in its load case colour with its CASE line, the perpendicular to the triangle side and a “CoG LCx” label); <strong>triangle 2</strong> shows only the <strong>CCoG of every load case</strong> (CCoG for LC0, LCx-CCoG for LC1–LC4) with its line to the triangle side (CASE line, then the perpendicular) and its X / Y dimensions, each load case in its own colour; under it a table with the CoG and CCoG of every load case (CCoG rows with the stability angle and the result) and, for each load case separately, the <strong>4-direction arrows</strong> and the <strong>stability angle</strong>.
                             Filled by <strong>🧮 Calculate CoG Envelope</strong>, which steps through LC0–LC4 and records 'Check CASE A &amp; CASE B' / 'Calculation Sheet Case A&amp;B' / Display!B16:D16 for each one (kept until the next calculation or a reload).
                         </p>
                         <div id="tgCaseABAllCases"></div>
@@ -8359,27 +8359,38 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function caseABAllCogItems(L) {
             const items = [];
             CABALL_LC.forEach(lc => {
-                if (lc.i < 1) return;   // LC0 = CoG sign only
-                const sn = tgCabLcSnaps[lc.i];
+                const sn = tgCabLcSnaps[lc.i];   // LC0 included: its CoG now also gets the CASE line + perpendicular
                 if (!sn || !sn.cog) return;
                 const k = cabWithSnap(sn, () => caseABConstruction(L, 'single'));
                 items.push({ lc, cog: { x: +sn.cog.x || 0, y: +sn.cog.y || 0 }, k });
             });
             return items;
         }
-        // table under the triangle: CCoG only, stability angle column before the result
-        function caseABAllTable(L, items, pts) {
+        // table under the triangle: CoG + CCoG of every load case (CoG rows from Triangle 1, CCoG rows from Triangle 2);
+        // stability angle / result exist only for the CCoG (Combined) rows
+        function caseABAllTable(L, items, cogRows) {
             const r1 = v => caseABFmtNum(Math.round(v * 10) / 10);
-            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>CCoG X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>Stability angle</td><td>Result</td></tr>';
-            items.forEach(it => {
-                const k = it.k;
-                const stCls = it.st === 'tg-dt-ok' ? 'tg-dt-ok' : (it.st === 'tg-dt-notok' ? 'tg-dt-notok' : '');
-                tbl += `<tr><td><span style="color:${it.lc.color};font-weight:700;">● ${it.lc.name}</span></td>` +
-                    `<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>` +
-                    `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>` +
-                    `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>` +
-                    `<td class="${stCls}">${escapeHtml(it.angTxt)}</td>` +
-                    `<td class="${stCls}">${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
+            let tbl = '<table class="tg-drawing-table tg-caseab-mini"><tr class="tg-dt-bold"><td>Load case</td><td>Point</td><td>X, Y</td><td>CASE ' + L + ' line</td><td>Perpendicular</td><td>Stability angle</td><td>Result</td></tr>';
+            CABALL_LC.forEach(lc => {
+                const cg = (cogRows || []).find(r => r.lc.i === lc.i);
+                const it = items.find(r => r.lc.i === lc.i);
+                const dot = `<td><span style="color:${lc.color};font-weight:700;">● ${lc.name}</span></td>`;
+                if (cg) {
+                    const k = cg.cb && cg.cb.k;
+                    tbl += `<tr>${dot}<td>CoG</td><td>${r1(cg.cog.x)}, ${r1(cg.cog.y)}</td>` +
+                        `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>` +
+                        `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td><td>–</td><td></td></tr>`;
+                }
+                if (it) {
+                    const k = it.k;
+                    const stCls = it.st === 'tg-dt-ok' ? 'tg-dt-ok' : (it.st === 'tg-dt-notok' ? 'tg-dt-notok' : '');
+                    tbl += `<tr>${dot}<td>CCoG</td>` +
+                        `<td>${r1(it.cc.x)}, ${r1(it.cc.y)}</td>` +
+                        `<td>${k ? escapeHtml('CASE ' + L + k.idx + ' = ' + k.signedTxt + ' mm') : '–'}</td>` +
+                        `<td>${k ? escapeHtml((k.minTxt || r1(k.min)) + ' mm') : '–'}</td>` +
+                        `<td class="${stCls}">${escapeHtml(it.angTxt)}</td>` +
+                        `<td class="${stCls}">${stCls === 'tg-dt-ok' ? 'OK' : (stCls === 'tg-dt-notok' ? 'NOT OK' : '')}</td></tr>`;
+                }
             });
             return tbl + '</table>';
         }
@@ -8409,16 +8420,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `<div class="tg-caseab-stab-title" style="border-top:none; margin-top:4px;">Triangle 1 — CoG only: LC0 CoG sign, LC1–LC4 CoG (CASE line + perpendicular)</div>` +
                     `<div id="tgCaseABAllPrev${L}Cog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>` +
                     `<div class="tg-caseab-stab-title">Triangle 2 — CCoG only: CCoG (LC0) and LC1–LC4 CCoG</div>` +
-                    `<div id="tgCaseABAllPrev${L}Ccog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div>${caseABAllTable(L, items)}${rows}</div>`;
+                    `<div id="tgCaseABAllPrev${L}Ccog" class="tg-cogenv-preview" style="margin:0 0 4px 0;"></div><div id="tgCaseABAllTbl${L}"></div>${rows}</div>`;
             };
             el.innerHTML = block('A') + block('B');
             // the triangle = the 📊 CoG Envelope Table drawing + the CCoG of each load case and its line to the triangle side
             ['A', 'B'].forEach(L => {
                 const base = tgCogEnvCalculated ? (tgCogEnvComputed || undefined) : undefined;
                 // Triangle 1: CoG only — LC0 CoG sign + LC1-LC4 CoG (CoG Envelope Table style), no CCoG
-                renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Cog', idSuffix: 'All' + L + 'Cog', cabAll: { L, items: [], cogItems: caseABAllCogItems(L), mode: 'cog' } });
+                const cabOut = {};   // the preview hands back the solved CoG construction so the table shows exactly what is drawn
+                renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Cog', idSuffix: 'All' + L + 'Cog', cabAll: { L, items: [], cogItems: caseABAllCogItems(L), mode: 'cog', out: cabOut } });
                 // Triangle 2: LC0 CoG sign + LC1-LC4 CoG points + CCoG of LC0-LC4 (+ CASE line / perpendicular, CCoG dimensions)
                 renderTgCogEnvPreview(base, { targetId: 'tgCaseABAllPrev' + L + 'Ccog', idSuffix: 'All' + L + 'Ccog', cabAll: { L, items: caseABAllItems(L), mode: 'ccog' } });
+                const tblEl = document.getElementById('tgCaseABAllTbl' + L);
+                if (tblEl) tblEl.innerHTML = caseABAllTable(L, caseABAllItems(L), cabOut.cog);
             });
         }
         function renderTgCaseABStab() {
@@ -10170,6 +10184,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const ccogMode = !!(opts && opts.cabAll && opts.cabAll.mode === 'ccog');   // Triangle 2: CCoG + LCx-CCoG only (no CoG sign, no LC1-4 CoG points)
             const noEnv = noLC || ccogMode;
             const cabAllCogRes = ((opts && opts.cabAll && opts.cabAll.cogItems) || []).map(it => ({ it, cab: mkCab(it.k, it.cog.x, it.cog.y, true) }));
+            if (opts && opts.cabAll && opts.cabAll.out) opts.cabAll.out.cog = cabAllCogRes.map(r => ({ lc: r.it.lc, cog: r.it.cog, cb: r.cab }));
+            const cogLc0 = cogMode && cabAllCogRes.some(r => r.it.lc.i === 0);   // LC0 CoG is drawn as its own load-case item (with CASE line + perpendicular)
             // Triangle 2: dimensions of the CCoG of every load case in the LC1/LC4 style ("9601 (LC1, LC4)"): equal values share one line
             const ccDimGroup = ax => {
                 const m = new Map();
@@ -10423,11 +10439,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 regCab(cabCog, cogXmm, cogYmm, dimGreen, '#a3e635', 'CoG ', 'cog');     // CoG line (Single)
             }
             const mkR = useLP ? MK_R : 3, mkX = useLP ? MK_X : 6;
-            const cogMarkerSvg = ccogMode ? '' : `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
+            const cogMarkerSvg = (ccogMode || cogLc0) ? '' : `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
                 `<line x1="${px(cogXmm) - mkX}" y1="${py(cogYmm)}" x2="${px(cogXmm) + mkX}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
                 `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - mkX}" x2="${px(cogXmm)}" y2="${py(cogYmm) + mkX}" stroke="${dimGreen}" stroke-width="1"/>`;
             // CoG / CCoG name tags beside the markers (CoG green, CCoG red) so the two points are told apart at a glance
-            let ccSvg = ccogMode ? '' : useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
+            let ccSvg = (ccogMode || cogLc0) ? '' : useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
                 : `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
             if (showCC) {
                 const r = mkR, xr = mkX, cx = px(ccXmm), cy = py(ccYmm);   // CCoG sign = same radius / crosshair as the CoG sign
@@ -10503,7 +10519,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     bx.push([cx - 4, cy - 4, cx + 4, cy + 4]); segA(cx, cy, kx, ky, 1.5); segA(kx, ky, tx, ky, 1.5);
                     bx.push(tbA(name, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10));
                 });
-                if (!ccogMode) {
+                if (!ccogMode && !cogLc0) {
                     bx.push([px(cogXmm) - 5, py(cogYmm) - 5, px(cogXmm) + 5, py(cogYmm) + 5]);
                     bx.push(tbA('CoG', px(cogXmm) + 9, py(cogYmm) - 6, 'start', 9));
                 }
@@ -10606,7 +10622,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                             `<text x="${ex}" y="${pick.y}" font-size="${fs}" font-weight="${bold ? 700 : 600}" fill="${col}" text-anchor="${an}" ${haloA}>${txt}</text>`;
                     };
                     let out = '';
-                    arr.forEach(o => {
+                    // place the labels from the cluster centre outwards (nearest point first), so the labels of the outer load cases
+                    // stack beyond the inner ones instead of landing on them and the leaders fan out without crossing
+                    arr.slice().sort((a, b) => (Math.abs(a.cy - midY) + Math.abs(a.cx - midX) * 0.01) - (Math.abs(b.cy - midY) + Math.abs(b.cx - midX) * 0.01)).forEach(o => {
                         const { cx, cy, sx, sy, col, cb } = o, P0 = { x: cx, y: cy };
                         const base = (n) => cy + sy * n * fs + (sy > 0 ? fs * 0.8 : 0);   // baseline of the n-th row away from the point
                         out += putRow(escapeHtml(o.nm), cx + sx * offX, base(2.2), sx, sy, col, P0, 4, true);
@@ -10644,7 +10662,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     }
                     signs += `<g><path d="M ${cx} ${cy} L ${cx} ${cy - 3} A 3 3 0 0 1 ${cx + 3} ${cy} Z" fill="${col}" opacity="0.85"/><path d="M ${cx} ${cy} L ${cx} ${cy + 3} A 3 3 0 0 1 ${cx - 3} ${cy} Z" fill="${col}" opacity="0.85"/>` +
                         `<circle cx="${cx}" cy="${cy}" r="3" fill="none" stroke="${col}" stroke-width="1.3"/><line x1="${cx - 6}" y1="${cy}" x2="${cx + 6}" y2="${cy}" stroke="${col}" stroke-width="1"/><line x1="${cx}" y1="${cy - 6}" x2="${cx}" y2="${cy + 6}" stroke="${col}" stroke-width="1"/></g>`;
-                    picItems.push({ col, nm: it.lc.i === 0 ? 'CCoG' : nm + '-CCoG', cx, cy, cb });
+                    picItems.push({ col, nm: nm + '-CCoG', cx, cy, cb });
                 });
                 lbls += pictureLabels(picItems);
                 cabAllSvg = lines + signs + lbls;
