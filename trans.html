@@ -485,6 +485,38 @@
            clicking anywhere in a minimized card's (now header-only)
            area expands it again. */
         .tg-card-header-clickable { cursor: pointer; }
+        /* ---- 🚚 Transport Data w/ CoG Env — A3 sheet viewport (LC2|LC1 top, LC3|LC4 bottom, 5 triangles in the middle) ---- */
+        .tg-a3-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 6px 0; }
+        .tg-a3-bar button { background: var(--tank-box-bg); color: var(--text-main); border: 1px solid var(--panel-border); border-radius: 5px; padding: 3px 9px; font-size: 11px; cursor: pointer; }
+        .tg-a3-bar button:hover { border-color: var(--accent-blue); }
+        .tg-a3-bar .tg-a3-zoom { font-size: 11px; color: var(--text-muted); min-width: 44px; text-align: center; }
+        .tg-a3-bar .tg-a3-hint { font-size: 10.5px; color: var(--text-muted); }
+        #tgA3Viewport { position: relative; width: 100%; aspect-ratio: 420 / 297; max-height: 80vh; overflow: hidden; border: 1px solid var(--panel-border); border-radius: 6px; background: rgba(120,130,145,0.28); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+        #tgA3Viewport.tg-a3-drag { cursor: grabbing; }
+        #tgA3Sheet {
+            --panel-bg: #ffffff; --panel-border: #94a3b8; --tank-box-bg: #e5e7eb; --input-bg: #ffffff;
+            --text-main: #111827; --text-muted: #374151; --accent-blue: #009fda; --accent-green: #047857;
+            position: absolute; left: 0; top: 0; width: 1587px; height: 1123px; transform-origin: 0 0;
+            background: #ffffff; color: #111827; box-shadow: 0 2px 12px rgba(0,0,0,0.45); box-sizing: border-box; padding: 14px;
+            display: grid; grid-template-columns: 31% minmax(0, 1fr) 31%; grid-template-rows: 1fr 1fr; column-gap: 10px; row-gap: 8px;
+        }
+        #tgA3Sheet .tg-drawing-table-wrap { border: none; border-radius: 0; overflow: visible; background: #ffffff; margin: 0 !important; min-height: 0; }
+        #tgA3Sheet table.tg-drawing-table { font-size: 7px; }
+        #tgA3Sheet table.tg-drawing-table td { padding: 0.5px 3px; line-height: 8.4px; border-bottom: 1px solid #cbd5e1; }
+        #tgA3Sheet table.tg-drawing-table td:first-child { width: 36%; }
+        #tgA3Sheet table.tg-drawing-table tr.tg-dt-title td { font-size: 10px; padding: 3px; letter-spacing: 0.5px; }
+        #tgA3Sheet table.tg-drawing-table tr.tg-dt-spacer td { padding: 1.5px; }
+        #tgTransportLC2 { grid-column: 1; grid-row: 1; }
+        #tgTransportLC1 { grid-column: 3; grid-row: 1; }
+        #tgTransportLC3 { grid-column: 1; grid-row: 2; }
+        #tgTransportLC4 { grid-column: 3; grid-row: 2; }
+        #tgA3Mid { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 4px; min-height: 0; min-width: 0; }
+        #tgA3Mid .tg-a3-tri { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; border-bottom: 1px dashed #cbd5e1; }
+        #tgA3Mid .tg-a3-tri:last-child { border-bottom: none; }
+        #tgA3Mid .tg-a3-cap { font-size: 8px; font-weight: 700; color: #374151; line-height: 9px; }
+        #tgA3Mid .tg-cogenv-preview { flex: 1 1 0; min-height: 0; margin: 0; padding: 0; border: none; background: transparent; overflow: hidden; }
+        #tgA3Mid .tg-cogenv-preview svg { width: 100% !important; height: 100% !important; min-width: 0 !important; display: block; }
+        #tgA3Mid .tg-a3-empty { font-size: 8px; color: #6b7280; padding: 4px; }
         .tg-cogenv-preview {
             margin-top: 10px; border: 1px solid var(--panel-border); border-radius: 8px;
             background: var(--tank-box-bg); padding: 6px; overflow: auto;
@@ -1128,7 +1160,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.193.1)</h1>
+            <h1>🚂 Transport Dashboard (Rev.195)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -1809,11 +1841,31 @@
                             — no need to press its own refresh button separately after that. This is
                             also exactly what the 📐 AutoCAD export below uses for its own LC1-4
                             quadrant tables, so the exported .scr matches what's shown here.
+                            <strong>A3 sheet:</strong> the view is an A3 landscape sheet — LC2 top-left, LC1 top-right, LC3 bottom-left, LC4 bottom-right, and in the middle (top to bottom) the CoG Envelope triangle, then CASE A / CASE B CoG, then CASE A / CASE B CCoG. Mouse wheel zooms, drag moves, double-click fits; 🖨 Print A3 prints it.
                         </p>
-                        <div id="tgTransportLC1" class="tg-drawing-table-wrap"></div>
-                        <div id="tgTransportLC2" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
-                        <div id="tgTransportLC3" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
-                        <div id="tgTransportLC4" class="tg-drawing-table-wrap" style="margin-top:10px;"></div>
+                        <div class="tg-a3-bar">
+                            <button type="button" title="Zoom in" onclick="tgA3ZoomBy(1.25)">＋</button>
+                            <button type="button" title="Zoom out" onclick="tgA3ZoomBy(0.8)">－</button>
+                            <button type="button" title="Fit the whole A3 sheet in the view (or double-click the sheet)" onclick="tgA3Fit(true)">⤢ Fit</button>
+                            <span class="tg-a3-zoom" id="tgA3ZoomLbl">100%</span>
+                            <button type="button" title="Print the A3 sheet (landscape, 420 x 297 mm) — choose 'Save as PDF' in the print dialog for a PDF" onclick="tgA3Print()">🖨 Print A3</button>
+                            <span class="tg-a3-hint">Wheel = zoom · drag = move · double-click = fit</span>
+                        </div>
+                        <div id="tgA3Viewport">
+                            <div id="tgA3Sheet">
+                                <div id="tgTransportLC2" class="tg-drawing-table-wrap"></div>
+                                <div id="tgA3Mid">
+                                    <div class="tg-a3-tri"><div class="tg-a3-cap">CoG ENVELOPE</div><div id="tgA3Env" class="tg-cogenv-preview"></div></div>
+                                    <div class="tg-a3-tri"><div class="tg-a3-cap">CASE A — CoG</div><div id="tgA3CogA" class="tg-cogenv-preview"></div></div>
+                                    <div class="tg-a3-tri"><div class="tg-a3-cap">CASE B — CoG</div><div id="tgA3CogB" class="tg-cogenv-preview"></div></div>
+                                    <div class="tg-a3-tri"><div class="tg-a3-cap">CASE A — CCoG</div><div id="tgA3CcogA" class="tg-cogenv-preview"></div></div>
+                                    <div class="tg-a3-tri"><div class="tg-a3-cap">CASE B — CCoG</div><div id="tgA3CcogB" class="tg-cogenv-preview"></div></div>
+                                </div>
+                                <div id="tgTransportLC1" class="tg-drawing-table-wrap"></div>
+                                <div id="tgTransportLC3" class="tg-drawing-table-wrap"></div>
+                                <div id="tgTransportLC4" class="tg-drawing-table-wrap"></div>
+                            </div>
+                        </div>
                         <div class="tg-train-list-actions">
                             <button type="button" class="tg-add-train-btn" title="Pull all 4 TRANSPORT TABLE LC1-4 tables from Excel 'Drawing_table_LC'"
                                     onclick="pullAllTransportLcTables()">⇩ Refresh All from Excel</button>
@@ -8423,6 +8475,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function renderTgCaseABAll(force) {
             const el = document.getElementById('tgCaseABAllCases');
             if (!el) return;
+            try { scheduleTgA3Mid(); } catch (e) { /* A3 sheet not ready */ }
             const sig = JSON.stringify([Object.keys(tgCabLcSnaps), tgCabLcSnaps[0] && tgCabLcSnaps[0].cc, tgCabLcSnaps[4] && tgCabLcSnaps[4].cc, tgCogEnvGroups, document.body.classList.contains('tg-light-theme')]) + Object.values(tgCabLcSnaps).map(s => (s.caseABRows || []).length).join(',');
             if (!force && sig === tgCabAllSig && el.innerHTML) return;
             tgCabAllSig = sig;
@@ -8905,7 +8958,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // forcedLcLabel is null/undefined, falls back to the original
         // 📋 Transport Data behavior of appending tgActiveDrawingLC
         // instead. Display-only; never written back to Excel.
-        function buildDrawingTableHtml(rows, forcedLcLabel) {
+        function buildDrawingTableHtml(rows, forcedLcLabel, hideRanges) {
             const fmt = v => {
                 if (v === null || v === undefined || v === '') return '';
                 if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
@@ -8918,6 +8971,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             let html = '<table class="tg-drawing-table">';
             rows.forEach((row, i) => {
                 const rowNum = i + 1; // 1-indexed, matching Excel row numbers
+                if (hideRanges && hideRanges.some(h => rowNum >= h.from && rowNum <= h.to)) return; // display-only trim (A3 sheet) — row numbering of the others is unchanged
                 const isEmpty = row.every(v => v === null || v === undefined || v === '');
                 if (isEmpty) { html += `<tr class="tg-dt-spacer"><td colspan="6"></td></tr>`; return; }
                 if (rowNum === DRAWING_TABLE_TITLE_ROW) {
@@ -8958,6 +9012,112 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             el.innerHTML = buildDrawingTableHtml(tgDrawingTableRows, null);
         }
 
+        // ---- 🚚 Transport Data w/ CoG Env — A3 sheet: the 4 LC tables sit in the corners (renderTransportLcTable) and the
+        // 5 triangles in the middle column are drawn here with the same renderer as their source cards:
+        // CoG Envelope triangle (📊 CoG Envelope Table), then CASE A / CASE B CoG, then CASE A / CASE B CCoG
+        // (CASE A & CASE B w/ CoG Env triangles 1 and 2). Zoom / move work like the 2D drawing: wheel = zoom at the cursor,
+        // drag (left or middle button) = move, double-click = fit. 420 x 297 mm = 1587 x 1123 px at 96 dpi.
+        const TG_A3_W = 1587, TG_A3_H = 1123;
+        let tgA3View = { z: 1, x: 0, y: 0 }, tgA3User = false, tgA3Timer = null, tgA3Bound = false;
+        function tgA3Apply() {
+            const sh = document.getElementById('tgA3Sheet');
+            if (!sh) return;
+            sh.style.transform = `translate(${tgA3View.x}px, ${tgA3View.y}px) scale(${tgA3View.z})`;
+            const lbl = document.getElementById('tgA3ZoomLbl');
+            if (lbl) lbl.textContent = Math.round(tgA3View.z * 100) + '%';
+        }
+        function tgA3Fit(manual) {
+            const vp = document.getElementById('tgA3Viewport');
+            if (!vp || !vp.clientWidth || !vp.clientHeight) return;
+            const z = Math.min((vp.clientWidth - 8) / TG_A3_W, (vp.clientHeight - 8) / TG_A3_H);
+            tgA3View = { z, x: (vp.clientWidth - TG_A3_W * z) / 2, y: (vp.clientHeight - TG_A3_H * z) / 2 };
+            if (manual) tgA3User = false;
+            tgA3Apply();
+        }
+        function tgA3ZoomAt(factor, px, py) {
+            const v = tgA3View, nz = Math.min(8, Math.max(0.1, v.z * factor));
+            const k = nz / v.z;
+            tgA3View = { z: nz, x: px - (px - v.x) * k, y: py - (py - v.y) * k };
+            tgA3User = true;
+            tgA3Apply();
+        }
+        function tgA3ZoomBy(factor) {
+            const vp = document.getElementById('tgA3Viewport');
+            if (vp) tgA3ZoomAt(factor, vp.clientWidth / 2, vp.clientHeight / 2);
+        }
+        function tgA3Bind() {
+            const vp = document.getElementById('tgA3Viewport');
+            if (!vp || tgA3Bound) return;
+            tgA3Bound = true;
+            vp.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const r = vp.getBoundingClientRect();
+                tgA3ZoomAt(Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top);
+            }, { passive: false });
+            let drag = null;
+            vp.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0 && e.button !== 1) return;
+                e.preventDefault();
+                drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: tgA3View.x, oy: tgA3View.y };
+                try { vp.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+                vp.classList.add('tg-a3-drag');
+            });
+            vp.addEventListener('pointermove', (e) => {
+                if (!drag || e.pointerId !== drag.id) return;
+                tgA3View.x = drag.ox + (e.clientX - drag.sx);
+                tgA3View.y = drag.oy + (e.clientY - drag.sy);
+                tgA3User = true;
+                tgA3Apply();
+            });
+            const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; vp.classList.remove('tg-a3-drag'); } };
+            vp.addEventListener('pointerup', end);
+            vp.addEventListener('pointercancel', end);
+            vp.addEventListener('dblclick', () => tgA3Fit(true));
+            vp.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+            if (window.ResizeObserver) new ResizeObserver(() => { if (!tgA3User) tgA3Fit(false); }).observe(vp);   // also fits once the card is expanded
+            tgA3Fit(false);
+        }
+        function scheduleTgA3Mid() {
+            clearTimeout(tgA3Timer);
+            tgA3Timer = setTimeout(() => { try { renderTgA3Mid(); } catch (e) { console.warn('A3 sheet triangles could not be drawn', e); } }, 60);
+        }
+        function renderTgA3Mid() {
+            tgA3Bind();
+            const ids = ['tgA3Env', 'tgA3CogA', 'tgA3CogB', 'tgA3CcogA', 'tgA3CcogB'];
+            if (!ids.every(id => document.getElementById(id))) return;
+            const base = tgCogEnvCalculated ? (tgCogEnvComputed || undefined) : undefined;
+            renderTgCogEnvPreview(base, { targetId: 'tgA3Env', idSuffix: 'A3Env' });
+            const have = Object.keys(tgCabLcSnaps).length > 0;
+            ['A', 'B'].forEach(L => {
+                const cogEl = document.getElementById('tgA3Cog' + L), ccEl = document.getElementById('tgA3Ccog' + L);
+                if (!have) {
+                    const msg = '<div class="tg-a3-empty">No load case recorded yet — press 🧮 Calculate CoG Envelope.</div>';
+                    cogEl.innerHTML = msg; ccEl.innerHTML = msg;
+                    return;
+                }
+                renderTgCogEnvPreview(base, { targetId: 'tgA3Cog' + L, idSuffix: 'A3' + L + 'Cog', cabAll: { L, items: [], cogItems: caseABAllCogItems(L), mode: 'cog', out: {} } });
+                renderTgCogEnvPreview(base, { targetId: 'tgA3Ccog' + L, idSuffix: 'A3' + L + 'Ccog', cabAll: { L, items: caseABAllItems(L), mode: 'ccog' } });
+            });
+        }
+        // Print the sheet alone on an A3 landscape page (the browser's print dialog also offers 'Save as PDF').
+        function tgA3Print() {
+            const sh = document.getElementById('tgA3Sheet');
+            if (!sh) return;
+            const w = window.open('', '_blank');
+            if (!w) { alert('The print window was blocked — allow pop-ups for this page and try again.'); return; }
+            const styles = Array.from(document.querySelectorAll('style')).map(st => st.outerHTML).join('\n');
+            const clone = sh.cloneNode(true);
+            clone.style.transform = 'none';
+            w.document.open();
+            w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Transport Data w/ CoG Env — A3</title>' + styles +
+                '<style>@page{size:A3 landscape;margin:0}html,body{margin:0!important;padding:0!important;background:#fff!important;display:block!important;width:420mm;height:297mm}' +
+                '#tgA3Sheet{position:static!important;transform:none!important;width:420mm!important;height:297mm!important;box-shadow:none!important;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>' +
+                '</head><body>' + clone.outerHTML + '</body></html>');
+            w.document.close();
+            setTimeout(() => { try { w.focus(); w.print(); } catch (e) { /* user can print manually */ } }, 500);
+        }
+        window.addEventListener('load', () => { try { scheduleTgA3Mid(); } catch (e) { /* ignore */ } });
+
         // ---- 🚚 Transport Data w/ CoG Env — 4 read-only tables (LC1-4),
         // each pulled straight from its own block in "Drawing_table_LC"
         // (see drawingTableLcColStart()/DRAWING_TABLE_LC_SHEET_NAME).
@@ -8968,12 +9128,13 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         function renderTransportLcTable(lcIndex) {
             const el = document.getElementById(`tgTransportLC${lcIndex}`);
             if (!el) return;
+            try { scheduleTgA3Mid(); } catch (e) { /* A3 sheet not ready */ }
             const rows = tgTransportLcRows[lcIndex];
             if (!rows || !rows.length) {
                 el.innerHTML = `<div class="tg-modal-sub" style="margin:0;">TRANSPORT TABLE LC${lcIndex}: no data pulled yet — click "⇩ Refresh All from Excel" below (or open this add-in inside Excel) to load it from '${DRAWING_TABLE_LC_SHEET_NAME}'.</div>`;
                 return;
             }
-            el.innerHTML = buildDrawingTableHtml(rows, `LC${lcIndex}`);
+            el.innerHTML = buildDrawingTableHtml(rows, `LC${lcIndex}`, LC_EXPORT_HIDDEN_ROWS);   // same rows the AutoCAD LC1-4 quadrant tables show (A3 sheet)
         }
         async function pullTransportTableLC(lcIndex, opts = {}) {
             const silent = opts.silent === true;
@@ -10110,6 +10271,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // its own live preview from the not-yet-calculated fields.
             renderTgCogEnvPreview(calculated ? c : undefined);
             renderTgCaseABPreview();   // same drawing (no LC1-4) above the CASE A & CASE B table
+            try { scheduleTgA3Mid(); } catch (e) { /* A3 sheet not ready */ }
         }
 
         // ---- CoG Envelope 2D preview — an AutoCAD-style callout
