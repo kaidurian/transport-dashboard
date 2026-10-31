@@ -1160,7 +1160,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.198)</h1>
+            <h1>🚂 Transport Dashboard (Rev.198.1)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -6615,11 +6615,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         // open/refresh (seedInitialOffsetsFromExcel) and alongside the
         // cargo pull (pullCargoFromExcel), in its own try/catch so a
         // missing "Display" sheet never blocks either of those.
-        async function pullCogSignsFromExcel() {
+        async function pullCogSignsFromExcel(opts = {}) {
             if (!isOfficeInitialized) return;
             try {
                 let rows = null;
                 await Excel.run(async (context) => {
+                    if (opts.recalc) { try { context.workbook.application.calculate(Excel.CalculationType.recalculate); } catch (e0) { /* older hosts */ } }   // Rev.198: make sure Display!B15:E16 reflects the load case that was just pushed
                     const sheet = context.workbook.worksheets.getItem(DISPLAY_SHEET_NAME);
                     const range = sheet.getRange(COG_SIGNS_RANGE);
                     range.load('values');
@@ -9857,7 +9858,15 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // need to press its own "⇩ Refresh All from Excel"
                 // button separately after a "🧮 Calculate CoG Envelope"
                 // press.
-                await pushTipArmTablesToExcel(c);   // CoG TIPPING ARM VALUE (F67:F73, F75:F81) + CCoG table (B85:G91, B93:G99)
+                // Rev.198: the sequence ends on LC0 -> re-read Display!B15:E16 once with a forced recalculation and use that SAME read for the live
+                // CCoG sign (CoG triangle) and for the LC0 record of the CCoG table / triangle, so both triangles show the identical CCoG location.
+                await pullCogSignsFromExcel({ recalc: true });
+                if (cogCombinedSignLoaded && tgCogTip['CoG-LC0']) {
+                    tgCogTip['CoG-LC0'].cc = { x: cogCombinedSign.x, y: cogCombinedSign.y, z: cogCombinedSign.z };
+                    logMsg(`📐 LC0: CCoG = Display!B16:D16 → X ${cogCombinedSign.x}, Y ${cogCombinedSign.y}, Z ${cogCombinedSign.z} (mm).`);
+                }
+                try { renderTgCogEnvTable(); } catch (eR) { /* card not built yet */ }
+                await pushTipArmTablesToExcel(c);   // CoG TIPPING ARM VALUE (F67:F73, F75:F81), side (G70:G73, G78:G81) + CCoG table (B85:G91, B93:G99)
                 await pullAllTransportLcTables({ silent: true });
             } else {
                 const failedRanges = [mainErr ? COGENV_TABLE_RANGE_MAIN : null, slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
@@ -9899,11 +9908,12 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const cogCol = names => ['N/A', 'N/A', 'N/A', ...names.map(n => { const t = tgCogTip[n] && tgCogTip[n].cog; return [t ? t.val : '']; }).map(r => r[0])].map(v => [v]);
             const slopeCol = ['N/A', 'N/A', 'N/A', ...COGENV_LC_SLOPE_NAMES.map(n => { const t = tgCogTip[n] && tgCogTip[n].cog; return t ? t.val : ''; })].map(v => [v]);
             const mainCol = ['N/A', 'N/A', 'N/A', ...COGENV_LC_MAIN_NAMES.map(n => { const t = tgCogTip[n] && tgCogTip[n].cog; return t ? t.val : ''; })].map(v => [v]);
+            const sideCol = names => names.map(n => { const t = tgCogTip[n] && tgCogTip[n].cog; return [t ? t.side : '']; });
             const d = buildCcogTableData(c);
             const blank = () => ['', '', '', '', '', ''];
             const ccMain = clean(d.main.map(r => r || blank()));
             const ccSlope = clean(d.slope.map(r => r || blank()));
-            const jobs = [[COGENV_TIP_RANGE_MAIN, clean(mainCol)], [COGENV_TIP_RANGE_SLOPE, clean(slopeCol)], [COGENV_CC_RANGE_MAIN, ccMain], [COGENV_CC_RANGE_SLOPE, ccSlope]];
+            const jobs = [[COGENV_TIP_RANGE_MAIN, clean(mainCol)], [COGENV_TIP_RANGE_SLOPE, clean(slopeCol)], [COGENV_SIDE_RANGE_MAIN, sideCol(COGENV_LC_MAIN_NAMES)], [COGENV_SIDE_RANGE_SLOPE, sideCol(COGENV_LC_SLOPE_NAMES)], [COGENV_CC_RANGE_MAIN, ccMain], [COGENV_CC_RANGE_SLOPE, ccSlope]];
             for (const [addr, vals] of jobs) {
                 try {
                     await Excel.run(async (context) => {
@@ -10371,7 +10381,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
         //   CCoG shift on slope = CoG shift * (CCoG envelope X / CoG envelope X)  (the combined CoG moves by the cargo's weight fraction)
         // Returns the 7-row grids (cols B..G = X, Y, Z, Z-from-deck, TIPPING ARM VALUE, GROUP SIDE) for Excel rows 85-91 / 93-99 and for the table.
         const COGENV_CC_RANGE_MAIN = 'B85:G91', COGENV_CC_RANGE_SLOPE = 'B93:G99';     // 'Check CASE A & CASE B' CCoG table (same sheet as COGENV_TABLE_SHEET)
-        const COGENV_TIP_RANGE_MAIN = 'F67:F73', COGENV_TIP_RANGE_SLOPE = 'F75:F81';   // CoG TIPPING ARM VALUE column of the CoG table
+        const COGENV_TIP_RANGE_MAIN = 'F67:F73', COGENV_TIP_RANGE_SLOPE = 'F75:F81';
+        const COGENV_SIDE_RANGE_MAIN = 'G70:G73', COGENV_SIDE_RANGE_SLOPE = 'G78:G81';   // CoG TIPPING ARM GROUP SIDE (LC1-LC4 rows only)   // CoG TIPPING ARM VALUE column of the CoG table
         function buildCcogTableData(c) {
             const m = v => (Number.isFinite(v) ? v / 1000 : null);
             const ccOf = key => { const t = tgCogTip[key]; return t && t.cc ? { x: m(t.cc.x), y: m(t.cc.y), z: m(t.cc.z) } : null; };
@@ -10446,7 +10457,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 return { name, x: t.cc.x, y: t.cc.y, val: t.ccog ? t.ccog.val : NaN, side: t.ccog ? t.ccog.side : '', color: lcCol[name] };
             }).filter(Boolean) : [];
             const t0 = calculated ? tgCogTip['CoG-LC0'] : null;
-            renderTgCogEnvPreview(calculated ? c : undefined, { targetId: 'tgCcogEnvPreview', idSuffix: 'CcEnv', ccEnv: { items, cc0: t0 && t0.cc ? { x: t0.cc.x, y: t0.cc.y } : null } });
+            renderTgCogEnvPreview(calculated ? c : undefined, { targetId: 'tgCcogEnvPreview', idSuffix: 'CcEnv', ccEnv: { items, cc0: cogCombinedSignLoaded ? { x: cogCombinedSign.x, y: cogCombinedSign.y } : (t0 && t0.cc ? { x: t0.cc.x, y: t0.cc.y } : null) } });   // CCoG sign = live Display!B16:C16, exactly like the CoG triangle
         }
 
         // ---- CoG Envelope 2D preview — an AutoCAD-style callout
@@ -10823,7 +10834,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 : `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
             if (showCC) {
                 const r = mkR, xr = mkX, cx = px(ccXmm), cy = py(ccYmm);   // CCoG sign = same radius / crosshair as the CoG sign
-                ccSvg += `<g>` +
+                ccSvg += `<g><title>CCoG sign = Display!B16:C16: X ${Math.round(ccXmm * 10) / 10}, Y ${Math.round(ccYmm * 10) / 10} (mm)</title>` +
                     `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
                     `<path d="M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${ccColor}" opacity="0.85"/>` +
                     `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ccColor}" stroke-width="1.3"/>` +
