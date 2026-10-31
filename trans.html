@@ -1160,7 +1160,7 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.197)</h1>
+            <h1>🚂 Transport Dashboard (Rev.198)</h1>
             <div class="header-subtitle">Trailer / axle line generator</div>
         </div>
         <div class="tg-header-right">
@@ -9857,6 +9857,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 // need to press its own "⇩ Refresh All from Excel"
                 // button separately after a "🧮 Calculate CoG Envelope"
                 // press.
+                await pushTipArmTablesToExcel(c);   // CoG TIPPING ARM VALUE (F67:F73, F75:F81) + CCoG table (B85:G91, B93:G99)
                 await pullAllTransportLcTables({ silent: true });
             } else {
                 const failedRanges = [mainErr ? COGENV_TABLE_RANGE_MAIN : null, slopeErr ? COGENV_TABLE_RANGE_SLOPE : null].filter(Boolean).join(' and ');
@@ -9888,6 +9889,32 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 logMsg(`⚠️ Could not push CoG Envelope Table to '${COGENV_TABLE_SHEET}' — ${detail}${sheetNamesNote}`);
                 alert(`CoG Envelope Table calculated and shown locally, but could not push ${failedRanges} to sheet "${COGENV_TABLE_SHEET}".\n\n${detail}${sheetNamesNote}\n\nMake sure a sheet with that EXACT name exists and those cells aren't merged or protected.`);
                 throw (mainErr || slopeErr);
+            }
+        }
+        // Rev.197: pushes the tipping-arm results back to 'Check CASE A & CASE B' — CoG TIPPING ARM VALUE column F (F67:F73 / F75:F81, N/A on the
+        // rows without a load case) and the whole CCoG table (B85:G91 / B93:G99). Four independent Excel.run calls, best-effort (logs, never throws).
+        async function pushTipArmTablesToExcel(c) {
+            if (!isOfficeInitialized || !c) return;
+            const clean = grid => grid.map(r => r.map(v => (v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v))) ? '' : (typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : v)));
+            const cogCol = names => ['N/A', 'N/A', 'N/A', ...names.map(n => { const t = tgCogTip[n] && tgCogTip[n].cog; return [t ? t.val : '']; }).map(r => r[0])].map(v => [v]);
+            const slopeCol = ['N/A', 'N/A', 'N/A', ...COGENV_LC_SLOPE_NAMES.map(n => { const t = tgCogTip[n] && tgCogTip[n].cog; return t ? t.val : ''; })].map(v => [v]);
+            const mainCol = ['N/A', 'N/A', 'N/A', ...COGENV_LC_MAIN_NAMES.map(n => { const t = tgCogTip[n] && tgCogTip[n].cog; return t ? t.val : ''; })].map(v => [v]);
+            const d = buildCcogTableData(c);
+            const blank = () => ['', '', '', '', '', ''];
+            const ccMain = clean(d.main.map(r => r || blank()));
+            const ccSlope = clean(d.slope.map(r => r || blank()));
+            const jobs = [[COGENV_TIP_RANGE_MAIN, clean(mainCol)], [COGENV_TIP_RANGE_SLOPE, clean(slopeCol)], [COGENV_CC_RANGE_MAIN, ccMain], [COGENV_CC_RANGE_SLOPE, ccSlope]];
+            for (const [addr, vals] of jobs) {
+                try {
+                    await Excel.run(async (context) => {
+                        context.workbook.worksheets.getItem(COGENV_TABLE_SHEET).getRange(addr).values = vals;
+                        await context.sync();
+                    });
+                    logMsg(`📤 Pushed tipping arm data to '${COGENV_TABLE_SHEET}'!${addr}.`);
+                } catch (e) {
+                    console.warn(`Could not push tipping arm data to '${COGENV_TABLE_SHEET}'!${addr}`, e);
+                    logMsg(`⚠️ Could not push tipping arm data to '${COGENV_TABLE_SHEET}'!${addr} — ${e && e.code ? `${e.code}: ${e.message || e}` : (e && e.message) || e}`);
+                }
             }
         }
         // "🧮 Calculate CoG Envelope" button — pulses tgCalcCogEnvBtn
@@ -10286,13 +10313,19 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // (there's nothing computed yet to push).
             // CoG TIPPING ARM VALUE / GROUP SIDE (Display!B23:B25 minimum + its A-label) — only LC1-LC4 rows (both sections) carry
             // a value, every other row is N/A. tipKey = the load case's push name (see tgCogTip).
+            const wMain = calculated ? cogTipWorstIdx('cog', COGENV_LC_MAIN_NAMES) : -1;      // worst case = minimum tipping arm per section (same rule as CASE A & CASE B w/ CoG Env)
+            const wSlope = calculated ? cogTipWorstIdx('cog', COGENV_LC_SLOPE_NAMES) : -1;
+            const isWorst = k => { const i1 = COGENV_LC_MAIN_NAMES.indexOf(k), i2 = COGENV_LC_SLOPE_NAMES.indexOf(k); return (i1 >= 0 && wMain === i1 + 1) || (i2 >= 0 && wSlope === i2 + 1); };
             const tipTds = (tipKey) => {
                 if (!calculated) return '<td>—</td><td>—</td>';
                 if (!tipKey) return '<td>N/A</td><td></td>';
                 const t = tgCogTip[tipKey] && tgCogTip[tipKey].cog;
-                return t ? `<td>${(Math.round(t.val * 10) / 10).toFixed(1)}</td><td>${escapeHtml(t.side)}</td>` : '<td>—</td><td>—</td>';
+                const st = isWorst(tipKey) ? ` style="${COG_TIP_HL}"` : '';
+                return t ? `<td${st}>${(Math.round(t.val * 10) / 10).toFixed(1)}</td><td${st}>${escapeHtml(t.side)}</td>` : '<td>—</td><td>—</td>';
             };
+            const wTag = k => (calculated && isWorst(k)) ? ` <span style="${COG_TIP_HL}padding:0 3px;border-radius:2px;">(WORST CASE)</span>` : '';
             const row = (label, x, y, z, z2, bold, pushName, tipKey) => {
+                if (tipKey) label += wTag(tipKey);
                 if (!calculated) {
                     return `<tr${bold ? ' class="tg-dt-bold"' : ''}><td>${label}</td><td>—</td><td>—</td><td>—</td><td>—</td>${tipTds(tipKey)}</tr>`;
                 }
@@ -10331,39 +10364,89 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             try { scheduleTgA3Mid(); } catch (e) { /* A3 sheet not ready */ }
         }
 
-        // ---- 📊 CCoG table + triangle — same layout as the CoG Envelope Table, for the Combined CoG ----
-        // Rows = the load cases that were pushed to Excel (CoG-LC0, LC1-LC4, LC1-Slope..LC4-Slope); X/Y/Z = Display!B16:D16 right after
-        // that load case was pushed (mm, same frame as G1-G3), tipping arm = minimum of Display!C23:C25 + its side (A23:A25).
+        // ---- 📊 CCoG table + triangle — same layout / rows as the CoG Envelope Table, for the Combined CoG ----
+        // X/Y/Z = Display!B16:D16 right after that load case was pushed (mm there, shown in m like the CoG table); the tipping arm is the
+        // minimum of Display!C23:C25 + its side (A23:A25). Rows that have no CCoG value of their own are derived from the load-case points:
+        //   CCoG envelope X = |X(LC1) - X(LC2)|, Y = |Y(LC3) - Y(LC1)|, Z = 2 * (Z(LC1) - Z(LC0))   (full extent, like the CoG envelope row)
+        //   CCoG shift on slope = CoG shift * (CCoG envelope X / CoG envelope X)  (the combined CoG moves by the cargo's weight fraction)
+        // Returns the 7-row grids (cols B..G = X, Y, Z, Z-from-deck, TIPPING ARM VALUE, GROUP SIDE) for Excel rows 85-91 / 93-99 and for the table.
+        const COGENV_CC_RANGE_MAIN = 'B85:G91', COGENV_CC_RANGE_SLOPE = 'B93:G99';     // 'Check CASE A & CASE B' CCoG table (same sheet as COGENV_TABLE_SHEET)
+        const COGENV_TIP_RANGE_MAIN = 'F67:F73', COGENV_TIP_RANGE_SLOPE = 'F75:F81';   // CoG TIPPING ARM VALUE column of the CoG table
+        function buildCcogTableData(c) {
+            const m = v => (Number.isFinite(v) ? v / 1000 : null);
+            const ccOf = key => { const t = tgCogTip[key]; return t && t.cc ? { x: m(t.cc.x), y: m(t.cc.y), z: m(t.cc.z) } : null; };
+            const tipOf = key => { const t = tgCogTip[key] && tgCogTip[key].ccog; return t ? { val: t.val, side: t.side } : null; };
+            const NA = 'N/A';
+            const lcRow = key => { const p = ccOf(key), t = tipOf(key); return p ? [p.x, p.y, p.z, NA, t ? t.val : null, t ? t.side : null] : null; };
+            const envRow = (k1, k2, k3, k0) => {
+                const a1 = ccOf(k1), a2 = ccOf(k2), a3 = ccOf(k3), a0 = ccOf(k0);
+                if (!(a1 && a2 && a3 && a0)) return null;
+                return [Math.abs(a1.x - a2.x), Math.abs(a3.y - a1.y), 2 * (a1.z - a0.z), NA, NA, ''];
+            };
+            const cc0 = ccOf('CoG-LC0');
+            const envMain = envRow('LC1', 'LC2', 'LC3', 'CoG-LC0');
+            const envSlope = envRow('LC1-Slope', 'LC2-Slope', 'LC3-Slope', 'CoG-LC0');
+            const ratio = (envMain && c && c.envX > 0) ? envMain[0] / c.envX : null;
+            const shiftRow = v => [ratio !== null && Number.isFinite(v) ? v * ratio : NA, NA, NA, NA, NA, ''];
+            return {
+                main: [
+                    c ? [c.dimX, c.dimY, c.dimZ, NA, NA, ''] : null,
+                    cc0 ? [cc0.x, cc0.y, cc0.z, NA, NA, ''] : null,
+                    envMain,
+                    ...COGENV_LC_MAIN_NAMES.map(lcRow),
+                ],
+                slope: [
+                    c ? shiftRow(c.upSlope) : null,
+                    c ? shiftRow(c.downSlope) : null,
+                    envSlope,
+                    ...COGENV_LC_SLOPE_NAMES.map(lcRow),
+                ],
+            };
+        }
+        // worst case = LC (1-4) of a section with the minimum tipping arm (CASE A & CASE B w/ CoG Env rule: compared at 0.1 mm, tie -> lowest LC)
+        function cogTipWorstIdx(kind, names) {
+            return caseABWorstLc(names.map((n, i) => { const t = tgCogTip[n] && tgCogTip[n][kind]; return t ? { i: i + 1, m: t.val } : null; }));
+        }
+        const COG_TIP_HL = 'background:#fde047;color:#111827;font-weight:700;';   // same yellow as the CASE A & CASE B w/ CoG Env worst case
         function renderTgCcogEnv() {
             const elT = document.getElementById('tgCcogEnvTable');
             if (!elT) return;
             const calculated = tgCogEnvCalculated;
+            const c = calculated ? (tgCogEnvComputed || calcCogEnvelope()) : null;
+            const d = calculated ? buildCcogTableData(c) : null;
+            const fmt = v => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')) : v);
             const f1 = v => (Math.round(v * 10) / 10).toFixed(1);
-            const fmtMmV = v => String(Math.round(v * 10) / 10);
-            const row = (label, key) => {
-                const t = calculated ? tgCogTip[key] : null;
-                if (!t) return `<tr><td>${label}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
-                return `<tr><td>${label}</td><td>${fmtMmV(t.cc.x)}</td><td>${fmtMmV(t.cc.y)}</td><td>${fmtMmV(t.cc.z)}</td>` +
-                    (t.ccog ? `<td>${f1(t.ccog.val)}</td><td>${escapeHtml(t.ccog.side)}</td>` : '<td>—</td><td>—</td>') + '</tr>';
+            const wMain = calculated ? cogTipWorstIdx('ccog', COGENV_LC_MAIN_NAMES) : -1;
+            const wSlope = calculated ? cogTipWorstIdx('ccog', COGENV_LC_SLOPE_NAMES) : -1;
+            const row = (label, r, hl) => {
+                const tag = hl ? ` <span style="${COG_TIP_HL}padding:0 3px;border-radius:2px;">(WORST CASE)</span>` : '';
+                if (!r) return `<tr><td>${label}${tag}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+                const st = hl ? ` style="${COG_TIP_HL}"` : '';
+                const fv = typeof r[4] === 'number' ? f1(r[4]) : (r[4] === null ? '—' : r[4]);
+                const gv = r[5] === null ? '—' : escapeHtml(String(r[5]));
+                return `<tr><td>${label}${tag}</td><td>${fmt(r[0])}</td><td>${fmt(r[1])}</td><td>${fmt(r[2])}</td><td>${r[3]}</td><td${st}>${fv}</td><td${st}>${gv}</td></tr>`;
             };
             let html = '<table class="tg-drawing-table">';
-            html += `<tr class="tg-dt-title"><td colspan="6">CCoG ENVELOPE (mm)${calculated ? '' : ' — press 🧮 Calculate above to fill in'}</td></tr>`;
-            html += `<tr class="tg-dt-bold"><td></td><td>X</td><td>Y</td><td>Z</td><td>CCoG TIPPING ARM VALUE</td><td>CCoG TIPPING ARM GROUP SIDE</td></tr>`;
-            html += row('CCoG — LC0 (cargo CoG in axis)', 'CoG-LC0');
-            COGENV_LC_MAIN_NAMES.forEach(name => { html += row('CCoG ' + name, name); });
-            html += `<tr class="tg-dt-spacer"><td colspan="6"></td></tr>`;
-            html += `<tr class="tg-dt-bold"><td colspan="6">CCoG with slope</td></tr>`;
-            COGENV_LC_SLOPE_NAMES.forEach(name => { html += row('CCoG ' + name, name); });
+            html += `<tr class="tg-dt-title"><td colspan="7">CCoG ENVELOPE${calculated ? '' : ' — press 🧮 Calculate above to fill in'}</td></tr>`;
+            html += `<tr class="tg-dt-bold"><td></td><td>X</td><td>Y</td><td>Z</td><td>Z (From trailer top deck)</td><td>CCoG TIPPING ARM VALUE</td><td>CCoG TIPPING ARM GROUP SIDE</td></tr>`;
+            const mainLbl = ['CARGO DIM. In Axis', 'CARGO CCoG. In Axis-LC0', `CCoG envelope (${fmt(tgCogEnv.envPercent)}%)`];
+            mainLbl.forEach((l, i) => { html += row(l, d && d.main[i]); });
+            COGENV_LC_MAIN_NAMES.forEach((n, i) => { html += row(n, d && d.main[3 + i], wMain === i + 1); });
+            html += `<tr class="tg-dt-spacer"><td colspan="7"></td></tr>`;
+            html += `<tr class="tg-dt-bold"><td colspan="7">CCoG envelope with slope</td></tr>`;
+            ['Shift of CCoG on slope — Uphill (LC1&4)', 'Shift of CCoG on slope — Downhill (LC2&3)', `CCoG envelope (${fmt(tgCogEnv.envPercent)}%) with slope`].forEach((l, i) => { html += row(l, d && d.slope[i]); });
+            COGENV_LC_SLOPE_NAMES.forEach((n, i) => { html += row(n, d && d.slope[3 + i], wSlope === i + 1); });
             html += '</table>';
             elT.innerHTML = html;
-            // triangle: CCoG of LC1-LC4 + the tipping arm of each
+            // triangle: CoG + CCoG sign (LC0), CCoG of LC1-LC4 and the tipping arm of each
             const lcCol = { LC1: '#f97316', LC2: '#a855f7', LC3: '#ec4899', LC4: '#eab308' };
             const items = calculated ? COGENV_LC_MAIN_NAMES.map(name => {
                 const t = tgCogTip[name];
                 if (!t || !t.cc) return null;
                 return { name, x: t.cc.x, y: t.cc.y, val: t.ccog ? t.ccog.val : NaN, side: t.ccog ? t.ccog.side : '', color: lcCol[name] };
             }).filter(Boolean) : [];
-            renderTgCogEnvPreview(calculated ? (tgCogEnvComputed || undefined) : undefined, { targetId: 'tgCcogEnvPreview', idSuffix: 'CcEnv', ccEnv: { items } });
+            const t0 = calculated ? tgCogTip['CoG-LC0'] : null;
+            renderTgCogEnvPreview(calculated ? c : undefined, { targetId: 'tgCcogEnvPreview', idSuffix: 'CcEnv', ccEnv: { items, cc0: t0 && t0.cc ? { x: t0.cc.x, y: t0.cc.y } : null } });
         }
 
         // ---- CoG Envelope 2D preview — an AutoCAD-style callout
@@ -10422,9 +10505,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // together whenever G1's Excel-pulled position changes.
             const apex = g1;
             // CCoG (Combined CoG, Display!B16:C16 — same mm frame as G1-G3) — same red as the 2D drawing's CCoG sign
-            const showCC = !!cogCombinedSignLoaded && !(opts && opts.cabAll) && !ccEnvMode;   // 🅰🅱 CASE A & B w/ CoG Env: the live CCoG is replaced by one CCoG per load case (drawn below)
-            const ccXmm = showCC ? (parseFloat(cogCombinedSign.x) || 0) : 0;
-            const ccYmm = showCC ? (parseFloat(cogCombinedSign.y) || 0) : 0;
+            // CCoG triangle (ccEnvMode): the CCoG sign sits on the CCoG of load case LC0 (recorded while the sequence ran), next to the CoG sign
+            const showCC = ccEnvMode ? !!(opts.ccEnv.cc0) : (!!cogCombinedSignLoaded && !(opts && opts.cabAll));   // 🅰🅱 CASE A & B w/ CoG Env: the live CCoG is replaced by one CCoG per load case (drawn below)
+            const ccSrc = ccEnvMode ? (opts.ccEnv.cc0 || { x: 0, y: 0 }) : cogCombinedSign;
+            const ccXmm = showCC ? (parseFloat(ccSrc.x) || 0) : 0;
+            const ccYmm = showCC ? (parseFloat(ccSrc.y) || 0) : 0;
 
             // CASE A / CASE B construction (CCoG -> CASE line -> perpendicular to the Side line), only in the CASE A & CASE B card
             const groupPtsAll = { G1: g1, G2: g2, G3: g3 };
@@ -10541,7 +10626,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const hStack = [
                 { v: g1.x, label: `${fmtMm(g1.x)} (G1)`, color: dimBlue },
                 ...(noEnv ? [] : [{ v: cogXmm - halfEnvXmm, label: `${fmtMm(cogXmm - halfEnvXmm)} (LC2, LC3)`, color: lcColors.LC2 }]),
-                ...((ccogMode || ccEnvMode) ? [] : [{ v: cogXmm, label: `${fmtMm(cogXmm)} (CoG)`, color: dimGreen }]),
+                ...(ccogMode ? [] : [{ v: cogXmm, label: `${fmtMm(cogXmm)} (CoG)`, color: dimGreen }]),
                 ...(noEnv ? [] : [{ v: cogXmm + halfEnvXmm, label: `${fmtMm(cogXmm + halfEnvXmm)} (LC1, LC4)`, color: lcColors.LC1 }]),
                 { v: Math.max(g2.x, g3.x), label: `${fmtMm(Math.max(g2.x, g3.x))} (G2, G3)`, color: dimBlue },
                 ...(showCC ? [{ v: ccXmm, label: `${fmtMm(ccXmm)} (CCoG)`, color: ccColor }] : []),
@@ -10568,7 +10653,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             const vStack = [
                 ...(noEnv ? [] : [{ v: cogYmm - halfEnvYmm, label: `${fmtMm(cogYmm - halfEnvYmm)} (LC1, LC2)`, color: lcColors.LC1 }]),
                 { v: g1.y, label: `${fmtMm(g1.y)} (G1)`, color: dimBlue },
-                ...((ccogMode || ccEnvMode) ? [] : [{ v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)`, color: dimGreen }]),
+                ...(ccogMode ? [] : [{ v: cogYmm, label: `${fmtMm(cogYmm)} (CoG)`, color: dimGreen }]),
                 ...(noEnv ? [] : [{ v: cogYmm + halfEnvYmm, label: `${fmtMm(cogYmm + halfEnvYmm)} (LC3, LC4)`, color: lcColors.LC3 }]),
                 ...(showCC ? [{ v: ccYmm, label: `${fmtMm(ccYmm)} (CCoG)`, color: ccColor }] : []),
                 ...(cab ? [{ v: cab.F.y, label: `${caseABFmtNum(Math.round(cab.F.y * 10) / 10)} (CCoG end)`, color: cabEndCol }] : []),
@@ -10639,6 +10724,9 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
             // drawing (CoG, CCoG, CASE A1-A4 line, perpendicular mm, X/Y of its end, CCoG->end dimension, Side names, G1-G3)
             // is placed by a small collision-avoiding placer so no text sits on another text, a sign or a line.
             const useLP = !!(opts && opts.caseAB && showCC);
+            // envDraw = the two "envelope" drawings (📊 CoG Envelope Table triangle + A3 sheet, and the CCoG triangle): CoG / CCoG names sit BESIDE
+            // (left or right of) their signs, LC points are named LCx-CoG / LCx-CCoG, tipping arms are drawn and the minimum is highlighted
+            const envDraw = ccEnvMode || (!(opts && opts.noLC) && !(opts && (opts.caseAB || opts.cabAll)));
             const hiColPre = '#eab308';
             const MK_R = 2.5, MK_X = 3.5;   // shared radius / crosshair half-length of the CoG and CCoG signs (CASE A & B card)
             const lpBoxes = [];
@@ -10727,11 +10815,11 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 regCab(cabCog, cogXmm, cogYmm, dimGreen, '#a3e635', 'CoG ', 'cog');     // CoG line (Single)
             }
             const mkR = useLP ? MK_R : 3, mkX = useLP ? MK_X : 6;
-            const cogMarkerSvg = (ccogMode || cogLc0 || ccEnvMode) ? '' : `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
+            const cogMarkerSvg = (ccogMode || cogLc0) ? '' : `<circle cx="${px(cogXmm)}" cy="${py(cogYmm)}" r="${mkR}" fill="none" stroke="${dimGreen}" stroke-width="1.5"/>` +
                 `<line x1="${px(cogXmm) - mkX}" y1="${py(cogYmm)}" x2="${px(cogXmm) + mkX}" y2="${py(cogYmm)}" stroke="${dimGreen}" stroke-width="1"/>` +
                 `<line x1="${px(cogXmm)}" y1="${py(cogYmm) - mkX}" x2="${px(cogXmm)}" y2="${py(cogYmm) + mkX}" stroke="${dimGreen}" stroke-width="1"/>`;
             // CoG / CCoG name tags beside the markers (CoG green, CCoG red) so the two points are told apart at a glance
-            let ccSvg = (ccogMode || cogLc0 || ccEnvMode) ? '' : useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
+            let ccSvg = (ccogMode || cogLc0 || envDraw) ? '' : useLP ? lpDraw('CoG', px(cogXmm), py(cogYmm), dimGreen, 9)
                 : `<text x="${px(cogXmm) + 9}" y="${py(cogYmm) - 6}" font-size="9" font-weight="700" fill="${dimGreen}">CoG</text>`;
             if (showCC) {
                 const r = mkR, xr = mkX, cx = px(ccXmm), cy = py(ccYmm);   // CCoG sign = same radius / crosshair as the CoG sign
@@ -10741,9 +10829,22 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${ccColor}" stroke-width="1.3"/>` +
                     `<line x1="${cx - xr}" y1="${cy}" x2="${cx + xr}" y2="${cy}" stroke="${ccColor}" stroke-width="1"/>` +
                     `<line x1="${cx}" y1="${cy - xr}" x2="${cx}" y2="${cy + xr}" stroke="${ccColor}" stroke-width="1"/>` +
-                    (useLP ? lpDraw('CCoG', cx, cy, ccColor, 9) : `<text x="${cx + 10}" y="${cy + 14}" font-size="9" font-weight="700" fill="${ccColor}">CCoG</text>`) +
+                    (envDraw ? '' : useLP ? lpDraw('CCoG', cx, cy, ccColor, 9) : `<text x="${cx + 10}" y="${cy + 14}" font-size="9" font-weight="700" fill="${ccColor}">CCoG</text>`) +
                     `</g>`;
             }
+            // tipping arm of every LC point (CoG triangle: LC1-LC4 of the envelope; CCoG triangle: CCoG of LC1-LC4) + worst case (minimum)
+            let tipItems = [];
+            if (ccEnvMode) tipItems = ccEnvItems.filter(i => Number.isFinite(i.val) && i.side);
+            else if (envDraw) {
+                tipItems = lcBaseMm.map(lc => {
+                    const t = tgCogTip[lc.name] && tgCogTip[lc.name].cog;
+                    return t ? { name: lc.name, x: lc.x, y: lc.y, val: t.val, side: t.side, color: lcColors[lc.name] || dimGreen } : null;
+                }).filter(i => i && Number.isFinite(i.val) && i.side);
+            }
+            const tipOn = tipItems.length > 0;
+            const worstTipI = tipOn ? caseABWorstLc(tipItems.map(it => ({ i: parseInt(String(it.name).replace(/\D+/g, ''), 10) || 0, m: it.val }))) : -1;
+            const isWorstTip = nm => worstTipI > 0 && (parseInt(String(nm).replace(/\D+/g, ''), 10) || 0) === worstTipI;
+            const lcSfx = ccEnvMode ? '-CCoG' : '-CoG';
             const leaderDir = { LC1: [1, -1], LC2: [-1, -1], LC3: [-1, 1], LC4: [1, 1] };
             let lcSvg = '';
             const lcPts = ccEnvMode ? ccEnvItems.map(i => ({ name: i.name, x: i.x, y: i.y })) : lcBaseMm;   // CCoG triangle: LC1-LC4 markers sit on the CCoG of each load case
@@ -10757,7 +10858,8 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${color}"/>` +
                     `<line x1="${cx}" y1="${cy}" x2="${kx}" y2="${ky}" stroke="${color}" stroke-width="1"/>` +
                     `<line x1="${kx}" y1="${ky}" x2="${tx}" y2="${ky}" stroke="${color}" stroke-width="1"/>` +
-                    `<text x="${tx + (dx > 0 ? 3 : -3)}" y="${ky + 3}" font-size="10" font-weight="700" text-anchor="${dx > 0 ? 'start' : 'end'}" fill="${color}">${lc.name}</text>` +
+                    (envDraw && isWorstTip(lc.name) ? `<rect x="${dx > 0 ? tx + 1 : tx - 3 - (lc.name + lcSfx).length * 7.2 - 2}" y="${ky - 7}" width="${(lc.name + lcSfx).length * 7.2 + 4}" height="12" rx="2" fill="#fde047"/>` : '') +
+                    `<text x="${tx + (dx > 0 ? 3 : -3)}" y="${ky + 3}" font-size="10" font-weight="700" text-anchor="${dx > 0 ? 'start' : 'end'}" fill="${envDraw && isWorstTip(lc.name) ? '#111827' : color}">${lc.name}${envDraw ? lcSfx : ''}</text>` +
                     `</g>`;
             });
 
@@ -10787,20 +10889,14 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     `</g>`;
             });
 
-            // ---- TIPPING ARM of every load case (Rev.196): perpendicular from the LC point to the triangle side that Excel reports as the
-            // minimum (Display!A23:C25 -> tgCogTip) with a "LCx TIPPING ARM=nnn.n" label. CoG triangle: LC1-LC4 of the envelope; CCoG triangle: CCoG of LC1-LC4.
-            let tipItems = [];
-            if (ccEnvMode) tipItems = ccEnvItems.filter(i => Number.isFinite(i.val) && i.side);
-            else if (!noLC && !(opts && (opts.caseAB || opts.cabAll))) {
-                tipItems = lcBaseMm.map(lc => {
-                    const t = tgCogTip[lc.name] && tgCogTip[lc.name].cog;
-                    return t ? { name: lc.name, x: lc.x, y: lc.y, val: t.val, side: t.side, color: lcColors[lc.name] || dimGreen } : null;
-                }).filter(i => i && Number.isFinite(i.val) && i.side);
-            }
-            const tipOn = tipItems.length > 0;
+            // ---- envelope drawings (Rev.197): obstacles -> CoG / CCoG names beside their signs -> tipping arms + labels ----
+            // Tipping arm = perpendicular from the LC point to the triangle side that Excel reports as the minimum (Display!A23:C25 -> tgCogTip);
+            // label "LCx TIPPING ARM=nnn.n". LC1's label always sits ABOVE LC2's label. The worst case (minimum, tie -> lowest LC, same rule as
+            // 🅰🅱 CASE A & CASE B w/ CoG Env) is highlighted yellow.
             let tipSvg = '';
-            if (tipOn) {
-                // obstacles for the label placer: rail, wedge, origin sign, G markers + labels, LC markers + labels
+            if (envDraw) {
+                const LBL = (txt, x, y, anchor, fs) => lpBox(txt, x, y, anchor, fs);
+                // obstacles: rail, wedge, origin sign, G markers + labels, LC markers + labels, CoG / CCoG signs, envelope call-outs
                 lpSeg(px(0), py(0), px(spanX * 1.03), py(0), 2);
                 [[apex, g2], [g2, g3], [g3, apex]].forEach(([a, b]) => lpSeg(px(a.x), py(a.y), px(b.x), py(b.y), 2));
                 lpAdd(ox - 6, oy - 8, ox + axisLen + 16, oy + axisLen + 20);
@@ -10808,17 +10904,50 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const cx = px(pt.x), cy = py(pt.y), [dx, dy] = groupDir[name];
                     const kx = cx + dx * 22, ky = cy + dy * 16, tx = kx + dx * 16;
                     lpAdd(cx - 4, cy - 4, cx + 4, cy + 4); lpSeg(cx, cy, kx, ky, 1.5); lpSeg(kx, ky, tx, ky, 1.5);
-                    const bx0 = lpBox(name, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10);
+                    const bx0 = LBL(name, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10);
                     lpAdd(bx0[0], bx0[1], bx0[2], bx0[3]);
                 });
                 lcPts.forEach(lc => {
                     const cx = px(lc.x), cy = py(lc.y), [dx, dy] = leaderDir[lc.name] || [1, 1];
                     const kx = cx + dx * 26, ky = cy + dy * 18, tx = kx + dx * 18;
                     lpAdd(cx - 4, cy - 4, cx + 4, cy + 4); lpSeg(cx, cy, kx, ky, 1.5); lpSeg(kx, ky, tx, ky, 1.5);
-                    const bx0 = lpBox(lc.name, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10);
-                    lpAdd(bx0[0], bx0[1], bx0[2], bx0[3]);
+                    const bx0 = LBL(lc.name + lcSfx, tx + (dx > 0 ? 3 : -3), ky + 3, dx > 0 ? 'start' : 'end', 10);
+                    lpAdd(bx0[0] - 2, bx0[1], bx0[2] + 2, bx0[3]);
                 });
-                // geometry first (so every arm is an obstacle for the labels), labels second
+                lpAdd(px(cogXmm) - 5, py(cogYmm) - 5, px(cogXmm) + 5, py(cogYmm) + 5);
+                if (showCC) lpAdd(px(ccXmm) - 5, py(ccYmm) - 5, px(ccXmm) + 5, py(ccYmm) + 5);
+                if (!noEnv) {   // 806 / 201 envelope-size call-outs of the CoG envelope drawing
+                    lpSeg(px(cogXmm - halfEnvXmm), envCallY, px(cogXmm + halfEnvXmm), envCallY, 2);
+                    const t1 = LBL(fmtMm(envXmm), (px(cogXmm - halfEnvXmm) + px(cogXmm + halfEnvXmm)) / 2, envCallY + 12, 'middle', 9); lpAdd(t1[0], t1[1], t1[2], t1[3]);
+                    lpSeg(px(cogXmm + halfEnvXmm) + 16, py(cogYmm - halfEnvYmm), px(cogXmm + halfEnvXmm) + 16, py(cogYmm + halfEnvYmm), 2);
+                    const t2 = LBL(fmtMm(envYmm), px(cogXmm + halfEnvXmm) + 22, (py(cogYmm - halfEnvYmm) + py(cogYmm + halfEnvYmm)) / 2 + 3, 'start', 9); lpAdd(t2[0], t2[1], t2[2], t2[3]);
+                }
+                // CoG / CCoG names BESIDE the signs (left or right, never above / below). When both signs are drawn the one with the smaller X is
+                // named on the left, the other on the right; a side that is blocked by another label / line is skipped, then the distance grows.
+                const placeSide = (txt, ax, ay, fs, firstLeft) => {
+                    let first = null;
+                    for (const r of [8, 13, 20, 30, 44, 62]) {
+                        for (const sgn of (firstLeft ? [-1, 1] : [1, -1])) {
+                            const x = ax + sgn * r, y = ay + fs * 0.35, an = sgn > 0 ? 'start' : 'end';
+                            const b = lpBox(txt, x, y, an, fs), cand = { x, y, anchor: an, r, box: b };
+                            if (!first) first = cand;
+                            if (b[0] < ox - 2 || b[2] > px(spanX) + 8 || b[1] < oy - 3) continue;
+                            if (!lpHit(b)) { lpAdd(b[0], b[1], b[2], b[3]); return cand; }
+                        }
+                    }
+                    lpAdd(first.box[0], first.box[1], first.box[2], first.box[3]);
+                    return first;
+                };
+                const drawSide = (txt, ax, ay, col) => {
+                    const c = placeSide(txt, ax, ay, 9, signLeft(txt));
+                    const lead = c.r >= 20 ? `<line x1="${ax}" y1="${ay}" x2="${c.anchor === 'start' ? c.box[0] : c.box[2]}" y2="${c.y - 3}" stroke="${col}" stroke-width="0.8" opacity="0.85"/>` : '';
+                    return lead + `<text x="${c.x}" y="${c.y}" font-size="9" font-weight="700" fill="${col}" text-anchor="${c.anchor}" paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="3" stroke-linejoin="round">${txt}</text>`;
+                };
+                const signLeft = txt => showCC ? (txt === 'CoG' ? cogXmm <= ccXmm : ccXmm < cogXmm) : false;
+                tipSvg += drawSide('CoG', px(cogXmm), py(cogYmm), dimGreen);
+                if (showCC) tipSvg += drawSide('CCoG', px(ccXmm), py(ccYmm), ccColor);
+
+                // tipping arms: geometry first (every arm is an obstacle for the labels), labels second
                 const arms = [];
                 tipItems.forEach(it => {
                     const m = /(\d)\D+(\d)/.exec(String(it.side));
@@ -10829,15 +10958,56 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                     const F = { x: A.x + t * dx, y: A.y + t * dy };
                     const x0 = px(it.x), y0 = py(it.y), x1 = px(F.x), y1 = py(F.y);
                     lpSeg(x0, y0, x1, y1, 2); lpAdd(x1 - 3, y1 - 3, x1 + 3, y1 + 3);
-                    arms.push({ it, x0, y0, x1, y1, geo: Math.hypot(F.x - it.x, F.y - it.y) });
+                    const hl = isWorstTip(it.name);
+                    arms.push({ it, x0, y0, x1, y1, hl, geo: Math.hypot(F.x - it.x, F.y - it.y),
+                        txt: `${escapeHtml(it.name)} TIPPING ARM=${(Math.round(it.val * 10) / 10).toFixed(1)}${hl ? ' (WORST CASE)' : ''}`,
+                        tip: `${escapeHtml(it.name)}: tipping arm ${(Math.round(it.val * 10) / 10).toFixed(1)} mm to ${escapeHtml(it.side)} (Display minimum; drawn geometry ${Math.round(a0geo(it, F) * 10) / 10} mm)` });
                 });
+                function a0geo(it, F) { return Math.hypot(F.x - it.x, F.y - it.y); }
+                const FS = 8, ROWH = FS * 1.4;
+                const dirs = [[1, -1], [-1, -1], [1, 1], [-1, 1], [1, 0], [-1, 0], [0, -1], [0, 1]];
+                // places n rows of text as ONE block (row 0 on top) near (ax, ay); returns row positions or null
+                const placeRows = (txts, ax, ay) => {
+                    const n = txts.length;
+                    let first = null;
+                    for (const r of [7, 14, 24, 36, 50, 68, 90]) {
+                        for (const [dx, dy] of dirs) {
+                            const k = (dx && dy) ? 0.71 : 1;
+                            const x = ax + dx * r * k;
+                            const yb = dy < 0 ? ay + dy * r * k - (n - 1) * ROWH : dy > 0 ? ay + dy * r * k + FS * 0.85 : ay + FS * 0.35 - (n - 1) * ROWH / 2;
+                            const an = dx > 0 ? 'start' : dx < 0 ? 'end' : 'middle';
+                            const boxes = txts.map((t, i) => lpBox(t + 'xxx', x, yb + i * ROWH, an, FS));
+                            const cand = { x, yb, an, r, boxes };
+                            if (!first) first = cand;
+                            if (boxes.some(b => b[0] < ox - 2 || b[2] > px(spanX) + 8 || b[1] < oy - 3)) continue;
+                            if (!boxes.some(b => lpHit(b))) { boxes.forEach(b => lpAdd(b[0], b[1], b[2], b[3])); return cand; }
+                        }
+                    }
+                    first.boxes.forEach(b => lpAdd(b[0], b[1], b[2], b[3]));
+                    return first;
+                };
+                const drawRow = (a, x, y, an, box, withLead) => {
+                    const col = a.it.color || dimGreen;
+                    const lx = Math.min(Math.max(a.x1, box[0]), box[2]), ly = Math.min(Math.max(a.y1, box[1]), box[3]);
+                    return (withLead ? `<line x1="${a.x1}" y1="${a.y1}" x2="${lx}" y2="${ly}" stroke="${col}" stroke-width="0.8" opacity="0.85"/>` : '') +
+                        (a.hl ? (() => { const w = a.txt.length * FS * 0.68 + 6; return `<rect x="${an === 'start' ? x - 3 : an === 'end' ? x - w + 3 : x - w / 2}" y="${box[1] - 1}" width="${w}" height="${box[3] - box[1] + 2}" rx="2" fill="#fde047"/>`; })() : '') +
+                        `<text x="${x}" y="${y}" font-size="${FS}" font-weight="700" fill="${a.hl ? '#111827' : col}" text-anchor="${an}" ${a.hl ? '' : 'paint-order="stroke" stroke="var(--tank-box-bg, #0f172a)" stroke-width="3" stroke-linejoin="round"'}><title>${a.tip}</title>${a.txt}</text>`;
+                };
                 arms.forEach(a => {
-                    const { it } = a, col = it.color || dimGreen;
-                    const txt = `${escapeHtml(it.name)} TIPPING ARM=${(Math.round(it.val * 10) / 10).toFixed(1)}`;
-                    const tip = `${escapeHtml(it.name)}: tipping arm ${(Math.round(it.val * 10) / 10).toFixed(1)} mm to ${escapeHtml(it.side)} (Display minimum; drawn geometry ${Math.round(a.geo * 10) / 10} mm)`;
-                    tipSvg += `<g opacity="0.95"><line x1="${a.x0}" y1="${a.y0}" x2="${a.x1}" y2="${a.y1}" stroke="${col}" stroke-width="1.4" stroke-dasharray="4 3"><title>${tip}</title></line>` +
-                        `<rect x="${a.x1 - 2.5}" y="${a.y1 - 2.5}" width="5" height="5" fill="${col}"/></g>` +
-                        lpDraw(txt, a.x1, a.y1, col, 8, tip);
+                    const col = a.it.color || dimGreen;
+                    tipSvg += `<g opacity="0.95"><line x1="${a.x0}" y1="${a.y0}" x2="${a.x1}" y2="${a.y1}" stroke="${col}" stroke-width="${a.hl ? 2 : 1.4}" stroke-dasharray="4 3"><title>${a.tip}</title></line>` +
+                        `<rect x="${a.x1 - 2.5}" y="${a.y1 - 2.5}" width="5" height="5" fill="${col}"/></g>`;
+                });
+                // LC1 above LC2: both labels are placed as one two-row block (LC1 = top row), anchored between their feet
+                const a1 = arms.find(a => a.it.name === 'LC1'), a2 = arms.find(a => a.it.name === 'LC2');
+                const rest = arms.filter(a => a !== a1 && a !== a2);
+                if (a1 && a2) {
+                    const cand = placeRows([a1.txt.replace(/&[a-z]+;/g, '_'), a2.txt.replace(/&[a-z]+;/g, '_')], (a1.x1 + a2.x1) / 2, (a1.y1 + a2.y1) / 2);
+                    [a1, a2].forEach((a, i) => { tipSvg += drawRow(a, cand.x, cand.yb + i * ROWH, cand.an, cand.boxes[i], cand.r >= 14); });
+                } else rest.push(...[a1, a2].filter(Boolean));
+                rest.forEach(a => {
+                    const cand = placeRows([a.txt.replace(/&[a-z]+;/g, '_')], a.x1, a.y1);
+                    tipSvg += drawRow(a, cand.x, cand.yb, cand.an, cand.boxes[0], cand.r >= 14);
                 });
             }
             // ---- CASE A / CASE B lines: Side 1-2 / 2-3 / 1-3 names, the highlighted Side, CCoG -> CASE line, perpendicular ----
@@ -11090,7 +11260,7 @@ const COG_SIGNS_RANGE = `${COG_SIGN_X_COL}${COG_TRAILER_ROW}:${COG_COMBINED_WEIG
                 showCC ? py(ccYmm) + 22 : 0,
                 cab ? Math.max(py(cab.P.y), py(cab.F.y)) + 22 : 0,
                 cabCog ? Math.max(py(cabCog.P.y), py(cabCog.F.y)) + 22 : 0,
-                (useLP || tipOn) ? lpMaxY + 6 : 0,
+                (useLP || envDraw) ? lpMaxY + 6 : 0,
                 cabAllBottom,
                 ccogMode ? 0 : py(cogYmm) + 14
             );
