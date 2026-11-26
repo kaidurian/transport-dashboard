@@ -1161,8 +1161,29 @@
 
     <header>
         <div>
-            <h1>🚂 Transport Dashboard (Rev.199)</h1>
-            <div class="header-subtitle">Trailer / axle line generator</div>
+            <h1>🚂 Transport Dashboard (Rev.199.1)</h1>
+            <div class="header-subtitle">Trailer / axle line generator <span id="sourceBadge" style="display:inline-block; margin-left:6px; padding:1px 7px; border-radius:9px; font-size:10px; font-weight:700; letter-spacing:.3px; vertical-align:middle; color:#0f141c; background:#94a3b8;">...</span></div>
+            <script>
+            // Shows which copy of the page is running: LOCAL (offline, localhost) or ONLINE (GitHub).
+            (function () {
+                var b = document.getElementById('sourceBadge');
+                if (!b) return;
+                var h = location.hostname;
+                var local = (h === 'localhost' || h === '127.0.0.1' || h === '[::1]');
+                var online = /github\.io$/i.test(h);
+                b.textContent = local ? 'LOCAL \u00B7 OFFLINE' : (online ? 'ONLINE \u00B7 GITHUB' : h.toUpperCase());
+                b.style.background = local ? '#10b981' : (online ? '#38bdf8' : '#eab308');
+                b.title = 'Page loaded from: ' + location.origin;
+                // After everything loads, add where office.js / three.js came from (local file or internet)
+                window.addEventListener('load', function () {
+                    try {
+                        var src = Array.prototype.map.call(document.querySelectorAll('script[src]'), function (x) { return x.src; });
+                        var cdn = src.some(function (u) { return /appsforoffice\.microsoft\.com|cdnjs\.cloudflare\.com/i.test(u); });
+                        b.title += '\nLibraries: ' + (cdn ? 'loaded from the internet (CDN)' : 'loaded from local files');
+                    } catch (e) {}
+                });
+            })();
+            </script>
         </div>
         <div class="tg-header-right">
             <span id="connectionStatus">Status: <span style="color:#eab308;">● Connecting...</span></span>
